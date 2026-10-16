@@ -23,8 +23,11 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 5. Bei bestehenden, auftragsfremden Fehlern klar unterscheiden zwischen:
    - durch den Auftrag verursacht,
    - bereits vorher vorhanden.
-6. Alte Tool-, Browser-, Launcher- oder Laufwerksfehler niemals automatisch als aktuellen Blocker übernehmen. Den aktuellen Zustand neu prüfen.
-7. Keine Browser-, Deployment- oder Produktionsaktionen ausführen, sofern der Auftrag dies nicht ausdrücklich verlangt.
+6. Vergangene Tool-, Browser-, Chrome-, MXC-/Launcher-, Laufwerks- oder Berechtigungsfehler niemals ungeprüft als aktuellen Blocker übernehmen. Gespeicherte Diagnosen sind nur historische Hinweise, kein aktueller Status.
+7. Wenn ein Auftrag Browser-/Chrome-Zugriff benötigt oder ein früherer Browserfehler relevant erscheint, den aktuellen Chrome-Zugang zuerst neu testen. Nur ein aktuell reproduzierbarer Fehler darf als Blocker gemeldet werden.
+8. Das frühere Problem mit Laufwerk `E:` darf nicht automatisch als bestehender Blocker verwendet werden. `E:` ist für MOSA-Aufträge fachlich ausgeschlossen, sofern der Auftrag keinen ausdrücklichen Bezug dazu hat.
+9. Eine Sicherheits-, Freigabe- oder Zugriffssperre auf eine konkrete MOSA-Seite ist getrennt von der grundsätzlichen Chrome-Verfügbarkeit zu bewerten. Aus einer gesperrten MOSA-Seite darf nicht auf fehlenden Chrome-Zugang geschlossen werden.
+10. Keine Browser-, Deployment- oder Produktionsaktionen ausführen, sofern der Auftrag dies nicht ausdrücklich verlangt.
 
 ## Abschlussmeldung
 
