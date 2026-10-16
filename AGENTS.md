@@ -29,6 +29,18 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 9. Eine Sicherheits-, Freigabe- oder Zugriffssperre auf eine konkrete MOSA-Seite ist getrennt von der grundsätzlichen Chrome-Verfügbarkeit zu bewerten. Aus einer gesperrten MOSA-Seite darf nicht auf fehlenden Chrome-Zugang geschlossen werden.
 10. Keine Browser-, Deployment- oder Produktionsaktionen ausführen, sofern der Auftrag dies nicht ausdrücklich verlangt.
 
+## Token- und Kontingentverbrauch
+
+- Token-/Kontingentverbrauch aktiv beachten und so niedrig wie sinnvoll halten.
+- Nur den für Auftrag und Akzeptanzkriterien notwendigen Kontext laden und verarbeiten.
+- Keine unnötigen Vollscans des Repositories, wenn gezielte Datei-/Symbolsuche ausreicht.
+- Keine Wiederholungsanalysen, redundanten Zusammenfassungen oder langen Rohprotokolle erzeugen.
+- Bereits bekannte und verifizierte Informationen wiederverwenden, statt sie ohne Anlass erneut vollständig zu prüfen.
+- Browser-, Test- und Toolläufe nur starten, wenn sie für Umsetzung oder Nachweis erforderlich sind.
+- Einen ausreichenden Prüfnachweis nicht durch zusätzliche Prüfungen nur „zur Sicherheit“ verdoppeln.
+- Relevante Tests weiterhin vollständig ausführen; Tokensparen darf nicht zu schlechter Qualität, fehlender Sicherheit oder ausgelassenen Akzeptanzkriterien führen.
+- Bei mehreren gleichwertigen Wegen den mit geringerem Kontext-, Tool- und Tokenaufwand bevorzugen.
+
 ## Abschlussmeldung
 
 Am Ende kompakt melden:
