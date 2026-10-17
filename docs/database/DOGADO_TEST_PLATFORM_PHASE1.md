@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** Phase 1A: Plattform, HTTPS und neutrale Startseite live bestätigt · Phase 1B bleibt offen
+**Status:** Phase 1A abgeschlossen · begrenzte Phase 1B (PDO/Rechte/Transaktionen) abgeschlossen · weitere Testblöcke und Issue #5 offen
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -130,6 +130,63 @@ Die nächste praktische Testphase umfasst die kontrollierte Verbindungskonfigura
 Die technischen Live-Kriterien dieser Phase 1A sind erfüllt. **Phase 1B und Issue #5 bleiben offen.** Die spätere Phase umfasst weiterhin insbesondere PDO-/CLI-Nachweise, Testschema, synthetische Daten, Lastmessungen und Backup/Restore.
 
 Der Abschluss-Commit enthält `[skip ci]`, damit der Main-Push kein ausgeschlossenes Deployment auf eine bestehende Domain auslöst. `git diff --check HEAD^ HEAD` wird separat im unveränderten vorhandenen Validierungsjob auf einem Prüfbranch ausgeführt; der Deploy-Job ist dort durch seine bestehende Main-Bedingung ausgeschlossen. Ergebnis und Lauf werden in Issue #5 zum Abschluss-Commit dokumentiert.
+
+## Phase 1B – PDO, Rechte und Transaktionen
+
+**Nachweisstand: 17.10.2026, 16:21 Europe/Berlin (MESZ).** Der ausdrücklich freigegebene Umfang dieser Phase ist abgeschlossen. Die weiteren Testblöcke und **Issue #5 bleiben offen**.
+
+### Gemeinsamer Testkern und sichere Ausführung
+
+- Wiederverwendbarer, geheimnisfreier Code: [probe.php](../../scripts/phase1b/probe.php) für Verbindung, Zielprüfung und Tests; [entry.php](../../scripts/phase1b/entry.php) als gemeinsamer FPM-/CLI-Adapter. Es gab zuvor keinen passenden PDO-Testkern im Repository.
+- Vor jedem Schreibzugriff wurden ausgewählte Testdatenbank, zugeordneter authentifizierter Testbenutzer, MySQL-8.0-Server und der fest im Code begrenzte lokale TCP-Endpunkt geprüft. Unerwartete Ziele brechen vor Test-DDL ab; accountbezogene Namen bleiben außerhalb GitHubs.
+- Das bestehende Testpasswort wurde vom Nutzer im maskierten HTTPS-Formular eingegeben. Laufzeitkonfiguration, Passwort, Zeilenbudget und Sitzungen lagen ausschließlich in einem eigenen privaten Verzeichnis außerhalb aller öffentlichen Dokumentstämme. Verzeichnisrechte `0700`, Passwortdatei `0600`; keine fremden Anwendungskonfigurationen gelesen und kein Passwort zurückgesetzt.
+- Der temporäre FPM-Einstieg wurde vor Nutzung durch IP-Beschränkung auf Webserver- und PHP-Ebene geschützt. Ein Aufruf außerhalb der erlaubten Herkunft wurde tatsächlich mit **HTTP 403** abgewiesen. Zusätzlich: bestehendes DB-Passwort, HTTPS-/Host-/Origin-Prüfung, kurzlebige Secure/HttpOnly/SameSite-Sitzung und einmaliges CSRF-Token für den Test-POST. GET zeigte ausschließlich das maskierte Anmeldeformular und führte keine Datenbanktests aus. Keine öffentliche Diagnoseausgabe.
+- CLI lief ausschließlich über Plesks **„Jetzt ausführen“** im ungespeicherten, inaktiven Aufgabenformular mit ausgeschalteten Benachrichtigungen. Kein Cronjob gespeichert; vorher und nachher **neun** bestehende Aufgaben.
+- Browserzugriff und Repository-Zugriff erfolgten über die verbundenen Browser beziehungsweise GitHub. Lokal wurde ausschließlich der ausdrücklich erlaubte Statussender mit seinen JSON-Meldungen verwendet; keine lokalen fachlichen Prüfungen oder Launcher und kein Zugriff auf E:.
+
+### Tatsächliche Ergebnisse beider Laufzeiten
+
+| Prüfung | FPM | CLI |
+| --- | --- | --- |
+| PHP-Version / SAPI | `8.4.26` / `fpm-fcgi` | `8.4.12` / `cli` |
+| PDO-MySQL, Zielprüfung und zwei unabhängige Verbindungen | bestanden | bestanden |
+| CREATE, ALTER, Indexanlage und DROP | bestanden | bestanden |
+| INSERT, SELECT mit Umlauten/Emoji, UPDATE und DELETE | bestanden | bestanden |
+| Ungültiger Integer im strikten Modus abgewiesen, keine Restzeile | bestanden | bestanden |
+| Unbestätigte Änderung für zweite Verbindung unsichtbar | bestanden | bestanden |
+| Rollback: beide Verbindungen sehen anschließend null Zeilen | bestanden | bestanden |
+| Commit: bestehender REPEATABLE-READ-Snapshot bleibt stabil | bestanden | bestanden |
+| Neue Lesetransaktion sieht den Commit | bestanden | bestanden |
+| Eigene Tabelle entfernt und Abwesenheit geprüft | bestanden | bestanden |
+
+Der benötigte Rechteumfang **CREATE, ALTER, INDEX, INSERT, SELECT, UPDATE, DELETE und DROP** wurde ermittelt und praktisch bestätigt. Keine Rechte erweitert. Die erste konservative Vorprüfung stoppte ohne DDL, weil MySQL Datenbankrechte als Muster mit maskierten Unterstrichen ausweist. Der Kern berücksichtigt jetzt serverseitige Grant-Muster statt eines reinen Namensvergleichs; die korrigierten Tests liefen danach erfolgreich unter beiden SAPIs.
+
+Beide Verbindungen lasen identisch zurück:
+
+- Zeichensatz `utf8mb4`, Kollation `utf8mb4_0900_as_cs`, Isolation `REPEATABLE-READ`, Session-Zeitzone `+00:00` (UTC).
+- SQL-Modus: `STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY` (Reihenfolge beim Rücklesen normalisiert).
+- Eigene Tabelle: `InnoDB`, explizit `utf8mb4_0900_as_cs`. Diese Unicode-9-Kollation unterscheidet Akzente und Groß-/Kleinschreibung und macht die Testvergleiche eindeutig; sie ist noch keine Kollationsentscheidung für das endgültige Core-Schema.
+
+Alle Einstellungen waren verbindungsbezogen. Globale Servereinstellungen und bestehende Datenbankstandards blieben unverändert. DDL lief außerhalb der Transaktionstests.
+
+### Umfang und Bereinigung
+
+Pro Laufzeit wurde eine kollisionsfrei benannte eigene Tabelle mit Präfix `mosa2_tmp_` und Zufallssuffix verwendet. Insgesamt **sechs erfolgreiche synthetische INSERT-Anweisungen**, davon zwei zurückgerollt; höchstens **eine Zeile gleichzeitig je Tabelle**. Das über beide SAPIs gemeinsame private Budget zählte **acht Reservierungen** einschließlich zweier absichtlich abgewiesener Integer-Inserts; die harte Grenze von 100 wurde eingehalten.
+
+Abschließend tatsächlich bestätigt:
+
+- **Null Tabellen** in der isolierten Testdatenbank; beide eigenen Tabellen zuvor jeweils durch den Testkern entfernt.
+- Privater Code, Zielkonfiguration, Passwortdatei, Budget, Sitzungen, öffentlicher Wrapper und dessen Zugriffsschutz vollständig entfernt; ausschließlich eigene Testobjekte bereinigt.
+- Temporärer HTTP-Einstieg antwortet danach mit **404**. Neutrale Startseite weiterhin **HTTP 200**, sichtbar unverändert und bytegenau identisch mit dem vorhandenen Repository-Fixture.
+- Bestehende MOSA-/fixlab-Ressourcen, Zertifikate und die neutrale Startseite nicht verändert. Kein Produktionsdeployment.
+
+### Prüfungen und nächste Freigabe
+
+PHP-Lint aller drei wiederverwendbaren PHP-Dateien lief auf Dogado PHP 8.4 erfolgreich; nach der Rechtekorrektur wurde der betroffene Kern erneut gelintet und der Offline-Test erneut ausgeführt. **17 Offline-Grenzprüfungen** bestanden ohne Datenbankverbindung, einschließlich falscher Ziele/Laufzeiten, unsicherer Tabellennamen sowie erschöpftem und beschädigtem Zeilenbudget.
+
+[tests/test_phase1b.py](../../tests/test_phase1b.py) bindet PHP-Lint und diese Grenzprüfungen in den bestehenden Validierungsworkflow ein. Der einzelne Abschluss-Commit enthält `[skip ci]`; derselbe Commit wird auf einem Prüfbranch mit dem unveränderten Workflow validiert, einschließlich `git diff --check HEAD^ HEAD`. Der Deploy-Job muss dort übersprungen sein, bevor genau dieser Commit nach Main übernommen wird. Konkreter Workflow-Lauf und Abschlussergebnis stehen in Issue #5.
+
+**Keine fehlenden Live-Nachweise innerhalb dieses begrenzten Phase-1B-Auftrags.** Nicht geprüft und weiterhin ausdrücklich freizugeben: endgültiges Core-Schema, repräsentative Current-/History-Muster, größere Datenstufen, Query-Pläne, Performance/Last, Backup/Restore und Migration echter Daten. Die nachfolgenden Testblöcke sind Planungsumfang und keine Freigabe zur Ausführung. Das Schema bleibt unfreigegeben.
 
 ## Testblöcke
 
