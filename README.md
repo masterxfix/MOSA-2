@@ -31,6 +31,7 @@ Autonomie wird später schrittweise und kontrolliert erweitert. Mehr Freiheiten 
 - **MOSA bleibt bestehen und nutzbar.** Es dient weiterhin als Spielwiese/Labor für neue Ideen und Funktionen.
 - **Nur ausgereifte und bestätigte Funktionen werden nach MOSA 2 übernommen.**
 - **Prio 1 für die Datenbank ist eine saubere, nachvollziehbare Migration wertvoller MOSA-Daten nach MOSA 2.**
+- **Sicherheit ist ein Architekturgrundsatz.** Der normale Zugang zu MOSA 2 wird auf FIDO2/WebAuthn aufgebaut; Recovery und Fernzugriff werden bewusst separat und ohne schwachen Passwort-Fallback geplant.
 
 ## Ziel
 
@@ -39,3 +40,7 @@ Ein stabiler, nachvollziehbarer und testbarer Entwicklungsworkflow zwischen Nutz
 ## Datenbank
 
 Die geplante MOSA-2-Datenbankarchitektur, Ziele und Grundregeln werden unter [`docs/database/README.md`](docs/database/README.md) geführt.
+
+## Sicherheit
+
+Die Leitlinien für Zugang, FIDO2/WebAuthn, Fernzugriff, Recovery und spätere Sicherheitsfreigaben werden unter [`docs/security/README.md`](docs/security/README.md) geführt.
