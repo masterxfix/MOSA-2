@@ -8,6 +8,21 @@ Der normale Zugang zu MOSA 2 soll **nur über FIDO2 / WebAuthn** möglich sein. 
 
 Ein klassischer Passwort-Login ist **nicht als normaler Fallback** vorgesehen.
 
+## Vertraulichkeitsgrenze für lokale Daten
+
+Lokale private Daten, die nicht ausdrücklich Bestandteil eines MOSA-Auftrags sind, gehören nicht in den Arbeitsbereich von MOSA oder Codex.
+
+Für Laufwerk `E:` gilt ausdrücklich:
+
+- `E:` ist **streng vertraulich** und fachlich nicht Teil von MOSA.
+- MOSA/Codex darf `E:` weder lesen, auflisten, scannen, indexieren, initialisieren, entsperren noch verändern.
+- Auch automatische Laufwerksinventarisierung durch Tools oder Launcher ist für MOSA nicht akzeptabel, wenn dabei `E:` berührt wird.
+- Werkzeuge, die diese Grenze technisch nicht einhalten können, werden für MOSA nicht verwendet.
+- Inhalte oder Metadaten von `E:` dürfen nicht in Logs, Diagnosen oder Projektdokumentation gelangen.
+- Ein `E:`-bezogener interner Werkzeugfehler darf niemals zu einer Aufforderung führen, das Laufwerk zu entsperren oder zugänglich zu machen.
+
+Diese Grenze ist unabhängig von der späteren MOSA-2-Zugangsarchitektur und gilt bereits für Entwicklung und Codex-Aufträge.
+
 ## Zielbild
 
 ```text
