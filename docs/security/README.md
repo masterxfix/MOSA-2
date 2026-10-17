@@ -2,6 +2,14 @@
 
 Sicherheit ist ein Grundbestandteil von MOSA 2 und wird von Anfang an mitgeplant.
 
+## Dokumentierter Sicherheitsvorfall
+
+Der mögliche Privacy-/Security-Boundary-Fehler vom 17.10.2026 ist hier vollständig dokumentiert:
+
+- [`INCIDENT_2026-10-17_CODEX_DRIVE_E.md`](INCIDENT_2026-10-17_CODEX_DRIVE_E.md)
+
+Dort stehen bestätigte Beobachtungen, ausdrücklich nicht bewiesene Punkte, Chronologie, offene Fragen an OpenAI sowie der vorbereitete englische Bericht.
+
 ## Grundsatz
 
 Der normale Zugang zu MOSA 2 soll **nur über FIDO2 / WebAuthn** möglich sein. Die bereits getestete FIDO-Karte ist dabei der primäre Zugangsschlüssel.
