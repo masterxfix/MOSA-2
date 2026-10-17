@@ -102,6 +102,12 @@ Die Namen sind zunächst Arbeitsnamen.
 8. **DB-Änderungen sind eigene, kontrollierte Schritte.** Preview → Check → ausdrückliche Freigabe → Apply → Postcheck.
 9. **KI-Autonomie wird stufenweise vergeben.** Jede erlaubte Aktion besitzt einen klaren Scope und wird protokolliert.
 
+## Phase 0: Hosting-Plattform qualifizieren
+
+Bevor das endgültige MOSA-2-Schema gebaut wird, prüfen wir die tatsächlichen Möglichkeiten und Grenzen des Dogado-Webhostings. Erst danach werden DB-Version, PHP-Version und technische Grundlagen festgelegt.
+
+Der Prüfauftrag und die späteren Ergebnisse stehen unter [`DOGADO_PLATFORM_QUALIFICATION.md`](DOGADO_PLATFORM_QUALIFICATION.md).
+
 ## Parallelaufbau
 
 1. Leeres MOSA-2-Schema und Performance-Grundtests.
