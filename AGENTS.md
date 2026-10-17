@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 17.10.2026, 17:23:47 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 17.10.2026, 20:03:45 Uhr — Europe/Berlin (MESZ, UTC+02:00).
 
 ## Geltungsbereich
 
@@ -21,6 +21,13 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Keine produktiven Zugangsdaten, Secrets oder Datenbankzugänge hinzufügen oder verändern, sofern dies nicht ausdrücklich beauftragt wurde.
 - Keine Änderungen außerhalb dieses Repositories vornehmen.
 - Keine Änderungen an `masterxfix/fixlab`.
+
+## Vorabinformation bei notwendigen Nutzeraktionen
+
+- Wenn ein Codex-/MOSA-Auftrag voraussichtlich eine manuelle Nutzeraktion erfordert (z. B. Passwort eingeben, Formular absenden, Freigabe bestätigen oder sichtbare Browseraktion), muss ChatGPT den Nutzer **vor Ausgabe des Auftrags** kurz und verständlich darüber informieren.
+- Die Vorabinformation muss konkret sagen: **was** der Nutzer voraussichtlich tun muss, **wo** dies geschieht und **warum** es erforderlich ist. Keine überraschenden Nutzeraktionen erst während des Codex-Laufs.
+- Codex soll soweit technisch möglich bis unmittelbar vor den unvermeidbaren Nutzerschritt selbst navigieren/vorbereiten und den Nutzer erst dann mit einer klaren Ein-Schritt-Anweisung auffordern.
+- Der Nutzer soll nicht selbst nach Tabs, Formularen oder Einstellungen suchen müssen, wenn Codex diese Vorbereitung übernehmen kann.
 
 ## MOSA-Auftragsstandard
 
@@ -131,6 +138,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 17.10.2026 | 20:03:45 Uhr (MESZ, UTC+02:00) | Vorabinformation für notwendige Nutzeraktionen ergänzt: ChatGPT muss vor jedem Auftrag klar ankündigen, was der Nutzer wo und warum selbst tun muss; Codex soll bis unmittelbar vor diesen Schritt selbst vorbereiten. |
 | 17.10.2026 | 17:23:47 Uhr (MESZ, UTC+02:00) | Verständliche Einordnung nach jedem Testblock ergänzt: fachliches Ergebnis, Bedeutung, Messwerte gegenüber Zielwerten, Aussagegrenzen und getrennter Status von Werkzeug-/Kontrollzentrumproblemen. |
 | 17.10.2026 | 15:43:26 Uhr (MESZ, UTC+02:00) | Zeitstempelpflicht, Kopfzeile und Änderungsprotokoll eingeführt; Zeitpunkt der vorherigen Regel nachgetragen. |
 | 17.10.2026 | 15:40:15 Uhr (MESZ, UTC+02:00) | Nachtrag zu Commit `86b0423`: Vor jedem Codex-Auftrag kurze verständliche Erklärung und Schwierigkeitsgrad mit knapper Begründung, zusammen höchstens zwei kurze Sätze. |
