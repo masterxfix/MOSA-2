@@ -30,7 +30,7 @@ function settings(): array
     ensure(is_string($public) && is_string($private), 'root_check_failed');
     ensure($private !== $public && !str_starts_with($private, $public . DIRECTORY_SEPARATOR), 'configuration_inside_public_root');
     ensure(is_string($target['allowed_ip'] ?? null) && filter_var($target['allowed_ip'], FILTER_VALIDATE_IP) !== false, 'allowed_ip_required');
-    $route = defined('MOSA2_HISTORY_10000') ? 'phase1c' : 'phase1b';
+    $route = defined('MOSA2_HISTORY_PROFILE') ? 'phase1d' : (defined('MOSA2_HISTORY_10000') ? 'phase1c' : 'phase1b');
     ensure((bool) preg_match('~\A/' . $route . '-[a-f0-9]+/\z~D', (string) ($target['entry_path'] ?? '')), 'entry_path_invalid');
     ensure(is_string($target['public_host'] ?? null) && (bool) preg_match('/\A[a-z0-9.-]+\z/D', $target['public_host']), 'public_host_invalid');
     return $target;
@@ -71,8 +71,8 @@ function rememberPassword(string $password): void
 
 function executeProfile(array $target, string $password): array
 {
-    if (defined('MOSA2_HISTORY_10000')) {
-        ensure(MOSA2_HISTORY_10000 === true, 'unknown_profile');
+    if (defined('MOSA2_HISTORY_10000') || defined('MOSA2_HISTORY_PROFILE')) {
+        \Mosa2\History10000\profileSpec();
         return \Mosa2\History10000\dispatch(
             $target, $password, __DIR__,
             PHP_SAPI === 'cli' ? (string) ($GLOBALS['argv'][2] ?? '') : '--measure'

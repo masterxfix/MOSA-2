@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** Phase 1A, begrenzte Phase 1B und Current-/History-Block mit 10.000 History-Zeilen abgeschlossen · weitere Testblöcke und Issue #5 offen
+**Status:** 100.000er-Test durchgeführt und bereinigt · Korrektheit bestätigt, breites Zeitfenster über Zielwert · Issue #5 und weitere Freigaben offen
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -291,6 +291,112 @@ InnoDB meldet belegte Daten-/Indexseiten, keine exakte Nutzdaten-/Backupgröße:
 Der 10.000er-Block ist positiv. Als **gesondert freizugebender** nächster Schritt ist ein begrenztes 100.000er-Profil mit erneuten Korrektheits-, EXPLAIN-, Größen- und Laufzeitprüfungen sinnvoll; insbesondere Filesort und Schätzabweichungen beobachten. Das 10.000er-Profil und der 100-Zeilen-Basistest werden nicht stillschweigend erweitert.
 
 Keine Ausführungs-/Lastfreigabe aus diesem Ergebnis. 100.000/1.000.000 Zeilen, parallele Last, Restore, endgültiges Schema und Migration bleiben unausgeführt. **Issue #5 bleibt offen.**
+
+## Phase 1D – 100.000 synthetische History-Zeilen
+
+**Nachweisstand: 17.10.2026, 18:07:24 Europe/Berlin (MESZ, UTC+02:00), nach Live-Bereinigung. Fachliches Ergebnis: teilweise erfolgreich.** Korrektheit und Bereinigung bestanden; das neue breite Zeitfenster verfehlt das 100-ms-Ziel. Testauftrag ausgeführt, keine allgemeine Skalierungs-/Produktivfreigabe. Issue #5 bleibt offen.
+
+### Auftragsnachweis und Profiltrennung
+
+Der neue native Auftrag wurde vor Facharbeit nachgewiesen. Describe und Plan über den vorgegebenen E:-freien Statusadapter quittiert; im bestehenden KI-Kontrollzentrum waren der genaue Betreff **„Datenbank-Testplattform: 100.000 synthetische History-Zeilen“**, nativer Eingang, Auftrag/Verständnis und alle sechs Arbeitsschritte sichtbar. Konkrete Step-Wechsel einschließlich Wartephase, Live-Befund und Bereinigung wurden quittiert und sichtbar kontrolliert. Keine Starts/Stopps rekonstruiert und keine Kennung eines Altauftrags wiederverwendet.
+
+Ausgangsstand: fde17e6dd4ceec714b58fa8ea6bac9daab3164f0. [Gemeinsamer Testkern](../../scripts/phase1c/profile.php) gezielt erweitert; keine kopierte Sonderlösung. [Neuer Einstieg](../../scripts/phase1d/entry.php) wählt ausschließlich serverseitig history100000_v1. Der 100-Zeilen-Basistest und history10000_v1 behalten ihre Grenzen, deterministischen Daten und dokumentierten Ergebnisse. HTTP kann weder Profil noch Zeilenzahl frei bestimmen.
+
+Whitelist der Profile, Generator/IDs/Zeitbezug, SQL-CHECKs, Sollwerte, Manifest und Prüfsummen sind konsistent profilabhängig. Das 100.000er-Manifest verlangt passende Mengen-, Sequenz- und Sollwertfelder; manipulierte oder profilfremde Zustände werden abgewiesen. Erzeugung, Laden und Prüfsummen arbeiten in begrenzten Blöcken, kein vollständiger 100.000er-History-Array im Live-Ladeweg.
+
+Abfrage-Statistik bleibt auf **30 Werte** begrenzt. Eine getrennte Batchstatistik erlaubt für dieses Profil höchstens **200 Batchzeiten**, für das 10.000er-Profil weiterhin höchstens 20. Die neue Prüfung bestätigt 200 Werte und weist 201 sowie 31 Abfragemesswerte ab.
+
+### Tatsächlicher Bestand und Korrektheit
+
+**Einmal per PHP 8.4.12 CLI** aufgebaut; derselbe Bestand anschließend unter **PHP 8.4.26 FPM**, jeweils PDO-MySQL, verwendet:
+
+| Tabelle | Tatsächlicher Bestand | Unveränderte/ausdrückliche Grenze |
+| --- | ---: | ---: |
+| Entity | 100 | 100 |
+| Identity | 100 | 100 |
+| History | 100.000 = 100 Objekte × 1.000 | 100.000 |
+| Current | 100 | 100 |
+| Migrationsprotokoll | 1 | 10 |
+
+Fester Seed mosa2-synthetic-v1 und fester UTC-Zeitbezug 2020-01-01T00:00:00Z; keine echten Daten. Je zwei Sequenzen haben gleiche Zeitstempel. Neuester Eintrag wird über Zeit und ID eindeutig bestimmt; letzte Sequenz 1.000 liegt um 08:19 UTC. Exakte Testdatenbank, zugeordneter authentifizierter Benutzer und lokaler Endpunkt vor Schreibzugriffen geprüft. InnoDB, utf8mb4_0900_as_cs, strikte Session-SQL-Modi, UTC und REPEATABLE-READ beibehalten; keine globalen Änderungen.
+
+200 History-INSERT-Batches mit je 500 Zeilen plus vier Nebenbatches, zusammen 204; eine Datentransaktion, DDL getrennt. Privates Manifest, festes Profil und exklusives Schloss verhindern Anhängen und parallele Ausführung. Bestehende Abbruchgrenzen unverändert: Aufbau 90 s, Messung/Inspektion/Bereinigung je 30 s, PHP zusätzlich 120 s, SELECT- und Lock-Wartegrenzen je 3 s.
+
+Beide SAPIs bestätigten exakte Zeilenzahlen, eindeutige Zuordnungen, keine verwaisten Daten und Current = eindeutig neueste History. Einzel-/Batch-/History-/Chart-/Identity- und beide Zeitfenster-Abfragen lieferten exakt erwartete Ergebnisse. Leere Ergebnisse, Zeitgrenzen und Gleichstände bestanden. Current-Upsert erzeugte keine Duplikate und ließ ältere Werte nicht überschreiben; Änderungen zurückgerollt. History blieb nach dem Laden unverändert: Soll-Prüfsumme vor/nach Schreibprüfungen bestätigt. Der 100.000er-Sollhash wird zusätzlich gegen eine unabhängig erzeugte feste Offline-Referenz geprüft.
+
+### Messumfang und tatsächliche EXPLAIN-Pläne
+
+Je **sieben Abfragetypen und SAPI elf Messungen**: erste separat, Median/p95 aus zehn Folgewerten (Nearest-Rank, p95 hier Maximum). Mit zusätzlichen Korrektheitsabfragen höchstens 15 Ausführungen beim schmalen Fenster, sonst höchstens 12; unter der Grenze von 30. Kein wiederholter Aufbau oder zweiter Messlauf.
+
+Zeitmessung: PHP-Wandzeit für PDO execute und Abruf der begrenzten Ergebnismenge, ohne Verbindung/Statement-Vorbereitung. Kein Cache-Leeren oder Parallelbetrieb; erster Wert kein nachgewiesener Kaltstart. Gleiche Methode wie beim 10.000er-Test.
+
+| Abfrage | CLI erste / Median / p95 (ms) | FPM erste / Median / p95 (ms) | EXPLAIN: Zugriff / Index / geschätzte Zeilen / Sortierung |
+| --- | ---: | ---: | --- |
+| current_single | 0.3383 / 0.1729 / 0.2729 | 0.2403 / 0.1457 / 0.1715 | const / PRIMARY / 1 / kein Filesort |
+| current_batch | 0.2707 / 0.2419 / 0.3022 | 0.3008 / 0.1389 / 0.2800 | range / PRIMARY / 6 / kein Filesort |
+| history_latest | 0.7302 / 0.4485 / 3.6958 | 0.4462 / 0.2991 / 0.3949 | ref / history_time / 1.000 / kein Filesort |
+| history_window | 0.4901 / 0.2512 / 1.5959 | 0.3285 / 0.2579 / 0.3344 | range / history_time / 10 / Filesort |
+| chart | 0.4236 / 0.3767 / 0.4497 | 0.3993 / 0.4447 / 0.6744 | ref / history_time / 1.000 / kein Filesort |
+| identity_lookup | 0.2384 / 0.1191 / 0.1640 | 0.2500 / 0.1191 / 0.1539 | const / identity_lookup und PRIMARY / je 1 / kein Filesort |
+| history_wide_window | 133.1552 / 123.2527 / 152.6096 | 124.4720 / 134.3951 / 168.0070 | index / history_time / CLI 5.000, FPM 5.003 / kein Filesort; Backward index scan |
+
+Gemeinsame SQL-Definitionen/Parameter/Erwartungen stehen in querySet()/expectedQueries(). Bestehendes schmales Fenster: 00:10 inklusive bis 00:15 exklusive, aufsteigend nach Zeit/ID, LIMIT 20. **Neues breites Fenster:** Entity 7, 00:00 inklusive bis 07:30 exklusive, aufsteigend nach Zeit/ID, festes LIMIT 50; 900 passende Verlaufseinträge, davon die ersten 50 erwartet. Chart bleibt auf 25 Ergebnisse absteigend bis zum jeweils neuesten Zeitpunkt begrenzt. Alle Zeiten am festen UTC-Testtag.
+
+**Wichtiger Befund:** LIMIT begrenzt die Ausgabe, garantiert aber keinen kleinen Suchaufwand. Beim breiten Fenster wählt der Optimizer einen rückwärts gerichteten Indexscan statt range/ref. Das 100-ms-Ziel wird schon vom ersten Wert und von beiden Medianen verfehlt. Kein Filesort bedeutet hier keine ausreichende Effizienz. EXPLAIN-Zeilen sind Schätzungen, tatsächliche untersuchte Zeilen wurden nicht gemessen. Kein zusätzlicher EXPLAIN-ANALYZE-, Optimierungs- oder Lasttest ausgeführt.
+
+Die Laufzeitberichte mit ok=true bestätigen Korrektheit/Schutzprüfungen, **nicht** die Einhaltung sämtlicher Laufzeitziele. Für das breite Fenster ist die Freigabe eines hinreichend selektiven Leseplans offen.
+
+### Vergleich mit 10.000 Zeilen und Zielwerten
+
+Median jeweils CLI / FPM in ms:
+
+| Muster | 10.000 History-Zeilen | 100.000 History-Zeilen | Einordnung |
+| --- | ---: | ---: | --- |
+| Current einzeln | 0.2226 / 0.1362 | 0.1729 / 0.1457 | klar unter Idealziel 20 ms |
+| Neueste History | 0.4615 / 0.3126 | 0.4485 / 0.2991 | unter Ziel 100 ms |
+| Schmales Fenster | 0.3940 / 0.2414 | 0.2512 / 0.2579 | unter Ziel 100 ms; Filesort weiter vorhanden |
+| Chart, LIMIT 25 | 0.5006 / 0.3825 | 0.3767 / 0.4447 | unter Ziel 100 ms |
+| Breites Fenster, LIMIT 50 | nicht Bestandteil der 10.000er-Messung | 123.2527 / 134.3951 | Ziel 100 ms verfehlt |
+
+Größter p95 der vergleichbaren begrenzten History-Muster: CLI 3.6958 ms statt zuvor 1.7417 ms; weiterhin unter 100 ms. Schwankungen dieser kleinen, zeitlich getrennten Hosting-Stichproben belegen weder allgemeine Beschleunigung noch Skalierbarkeit. Das breite Fenster besitzt keinen direkten 10.000er-Vergleichswert. Keine Seitenladezeitbehauptung oder Freigabe für Parallel-/Produktivbetrieb.
+
+### Batch-Schreiben und Größen
+
+INSERT-Ausführung ohne DDL, Vorbereitung und Commit:
+
+| Tabelle | Batches × maximale Zeilen | Summe ms | Batch-Median ms | Batch-p95 ms |
+| --- | ---: | ---: | ---: | ---: |
+| Entity | 1 × 100 | 1.2492 | 1.2492 | 1.2492 |
+| Identity | 1 × 100 | 1.7132 | 1.7132 | 1.7132 |
+| History | 200 × 500 | 1762.3435 | 7.3126 | 12.5630 |
+| Current | 1 × 100 | 1.7790 | 1.7790 | 1.7790 |
+| Migrationsprotokoll | 1 × 1 | 0.2000 | 0.2000 | 0.2000 |
+
+Zuvor History: 20 × 500, Summe 255.3558 ms, Median 12.1051 ms, p95 20.6671 ms. Zehnfache Datenmenge bei ungefähr 6,9-facher INSERT-Ausführungssumme in diesen einzelnen Läufen; keine Durchsatz-/Lastprognose.
+
+Spätere, mit Session-Statistikablauf 0 gelesene **FPM-Metadaten**, ausdrücklich näherungsweise:
+
+| Tabelle | Daten KiB | Sekundärindizes KiB | Geschätzte Zeilen |
+| --- | ---: | ---: | ---: |
+| Entity | 16 | 16 | 100 |
+| Identity | 16 | 32 | 100 |
+| History | 4.624 | 6.176 | 100.076 |
+| Current | 16 | 16 | 100 |
+| Migrationsprotokoll | 16 | 16 | 1 |
+
+Zusammen ungefähr **10.944 KiB = 10,69 MiB**, vorher ungefähr 960 KiB. History allein ungefähr 10.800 KiB, vorher 816 KiB. InnoDB-Seitenbelegung ist keine exakte Nutzdaten-/Backupgröße; erste CLI-Größen direkt nach dem Laden waren noch nicht aussagekräftig. Die Schätzung 100.076 ersetzt nicht den bestätigten COUNT **100.000**. Keine Daten-Cache-Leerung, kein ANALYZE und keine globale Statistikänderung.
+
+### Bereinigung, Prüfungen und Entscheidung
+
+- FPM-Schutz vor Nutzung mit tatsächlichem HTTP 403 für nicht erlaubte Herkunft geprüft; bestehenden Passwort-/HTTPS-/IP-/Origin-/CSRF-/POST-Schutz wiederverwendet. Passwort nur vom Nutzer im maskierten Formular eingegeben; private Konfiguration außerhalb öffentlicher Verzeichnisse/GitHubs, Verzeichnisse 0700 und Passwortdatei 0600.
+- Ausschließlich fünf eigene, im Manifest gespeicherte Tabellen nach Eigentumsprüfung entfernt. Ausgangsstand **null Tabellen** wiederhergestellt; keine Präfix-Pauschallöschung.
+- Eigene Quellen vor Entfernung gegen GitHub-Hashes geprüft. Danach sämtliche privaten Testdateien, Passwort/Konfiguration, Manifest, Berichte, Schloss/Sitzungen sowie öffentlicher Einstieg und Zugriffsschutz entfernt.
+- Einstieg danach **HTTP 404**, HTTPS-Startseite **HTTP 200** und vollständig bytegenau wie vorhandenes Fixture. Weiterhin **neun** geplante Aufgaben; keine gespeichert.
+- Alle acht beteiligten PHP-Dateien unter Dogado PHP 8.4.12 gelintet. **17** Basisschutzprüfungen, unveränderte **80** 10.000er-Prüfungen und **264** neue Prüfungen bestanden; Offline-Tests ohne DB-Verbindung. Neue Tests decken Profiltrennung, Streaming, Grenzen, 200 Batchzeiten, feste Prüfsummen und fehlerhafte Manifeste ab.
+- [Neue CI-Einbindung](../../tests/test_history_100000.py) ergänzt die vorhandenen Tests. Ein Abschluss-Commit mit [skip ci], identisch auf Prüfbranch einschließlich git diff --check HEAD^ HEAD validieren, Deploy überspringen, anschließend genau diesen Commit nach Main übernehmen. Endgültiger Lauf und Ergebnis stehen in Issue #5.
+- Keine Änderungen an AGENTS.md, Workflows, Deployment-Secrets, fixlab oder bestehenden MOSA-Ressourcen; kein Produktionsdeployment, keine Million Zeilen, Parallel- oder Restore-Tests.
+
+**Nächster sinnvoller Schritt:** das breite Zeitfenster und die Planwahl gezielt in einem gesondert freizugebenden Optimierungsauftrag untersuchen. In diesem Auftrag keine Abfrage-/Indexvarianten nachgetestet und keine weitere Datenstufe begonnen. Korrekte 100.000er-Datenverarbeitung ist belegt; der breite Leseweg ist vor weiterer Skalierung zu klären. **Issue #5 bleibt offen**, endgültiges Schema unfreigegeben.
 
 ## Testblöcke
 

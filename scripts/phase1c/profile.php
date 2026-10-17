@@ -22,51 +22,97 @@ const BASE_TIME = 1577836800; // 2020-01-01 00:00:00 UTC.
 const SAMPLES = 11; // First execution reported separately; ten subsequent samples.
 const BATCH = 500;
 
-function stamp(int $sequence): string
+function profileSpec(?string $id = null): array
 {
-    ensure($sequence >= 1 && $sequence <= 100, 'sequence_out_of_profile');
+    if ($id === null) {
+        ensure(!(defined('MOSA2_HISTORY_PROFILE') && defined('MOSA2_HISTORY_10000')), 'ambiguous_profile');
+        $id = defined('MOSA2_HISTORY_PROFILE') ? MOSA2_HISTORY_PROFILE : 'history10000_v1';
+        if (defined('MOSA2_HISTORY_10000')) ensure(MOSA2_HISTORY_10000 === true, 'unknown_profile');
+    }
+    ensure(is_string($id) && in_array($id, ['history10000_v1','history100000_v1'], true), 'unknown_profile');
+    $per = $id === 'history100000_v1' ? 1000 : 100;
+    $limits = LIMITS; $limits['history'] = 100 * $per;
+    $expected = EXPECTED; $expected['history'] = 100 * $per;
+    return ['id'=>$id,'per_entity'=>$per,'limits'=>$limits,'expected'=>$expected];
+}
+
+function generatedRows(string $kind, ?string $profile = null): \Generator
+{
+    $spec=profileSpec($profile);
+    ensure(isset($spec['limits'][$kind]), 'unknown_table_kind');
+    if ($kind === 'migration') {
+        yield [1,'synthetic_schema_v1','2020-01-01 00:00:00.000000'];
+        return;
+    }
+    for ($e=1;$e<=100;++$e) {
+        if ($kind==='entity') yield [$e,sprintf('object_%04d',$e)];
+        if ($kind==='identity') yield [$e,$e,'synthetic_v1',substr(hash('sha256',SEED.':'.$e),0,24)];
+        if ($kind==='current') {
+            $h=historyRow($e,$spec['per_entity'],$spec['id']);
+            yield [$e,$h[0],$h[3],$h[4]];
+        }
+        if ($kind==='history') for ($s=1;$s<=$spec['per_entity'];++$s) yield historyRow($e,$s,$spec['id']);
+    }
+}
+
+function boundedBatches(string $kind, ?string $profile = null): \Generator
+{
+    $spec=profileSpec($profile); $batch=[]; $seen=0;
+    foreach (generatedRows($kind,$spec['id']) as $row) {
+        validateCount($kind,++$seen,$spec['id']); $batch[]=$row;
+        if (count($batch)===BATCH) { yield $batch; $batch=[]; }
+    }
+    if ($batch!==[]) yield $batch;
+    ensure($seen===$spec['expected'][$kind],'generated_count_mismatch');
+}
+
+function stamp(int $sequence, ?string $profile = null): string
+{
+    ensure($sequence >= 1 && $sequence <= profileSpec($profile)['per_entity'], 'sequence_out_of_profile');
     return gmdate('Y-m-d H:i:s', BASE_TIME + intdiv($sequence - 1, 2) * 60) . '.000000';
 }
 
-function historyRow(int $entity, int $sequence): array
+function historyRow(int $entity, int $sequence, ?string $profile = null): array
 {
     ensure($entity >= 1 && $entity <= 100, 'entity_out_of_profile');
-    return [($entity - 1) * 100 + $sequence, $entity, $sequence, stamp($sequence), $entity * 1000 + $sequence];
+    $spec=profileSpec($profile);
+    return [($entity - 1) * $spec['per_entity'] + $sequence, $entity, $sequence, stamp($sequence,$spec['id']), $entity * 1000 + $sequence];
 }
 
-function rows(string $kind): array
+function rows(string $kind, ?string $profile = null): array
 {
-    ensure(isset(LIMITS[$kind]), 'unknown_table_kind');
-    $rows = [];
-    for ($e = 1; $e <= 100; ++$e) {
-        if ($kind === 'entity') $rows[] = [$e, sprintf('object_%04d', $e)];
-        if ($kind === 'identity') $rows[] = [$e, $e, 'synthetic_v1', substr(hash('sha256', SEED . ':' . $e), 0, 24)];
-        if ($kind === 'current') {
-            $h = historyRow($e, 100);
-            $rows[] = [$e, $h[0], $h[3], $h[4]];
-        }
-        if ($kind === 'history') {
-            for ($seq = 1; $seq <= 100; ++$seq) $rows[] = historyRow($e, $seq);
-        }
-    }
-    if ($kind === 'migration') $rows = [[1, 'synthetic_schema_v1', '2020-01-01 00:00:00.000000']];
-    return $rows;
+    $spec=profileSpec($profile);
+    ensure($kind!=='history' || $spec['limits']['history']<=10000, 'large_history_requires_streaming');
+    return iterator_to_array(generatedRows($kind,$spec['id']),false);
 }
 
-function validateCount(string $kind, int $count): void
+function validateCount(string $kind, int $count, ?string $profile = null): void
 {
-    ensure(isset(LIMITS[$kind]) && $count >= 0 && $count <= LIMITS[$kind], 'row_limit_exceeded');
+    $limits=profileSpec($profile)['limits'];
+    ensure(isset($limits[$kind]) && $count>=0 && $count<=$limits[$kind], 'row_limit_exceeded');
 }
 
 function chunks(array $rows): array
 {
-    ensure(count($rows) <= 10000, 'batch_total_exceeded');
+    ensure(count($rows) <= profileSpec()['limits']['history'], 'batch_total_exceeded');
     return array_chunk($rows, BATCH);
 }
 
 function statistics(array $values): array
 {
-    ensure(count($values) >= 1 && count($values) <= 30, 'sample_limit_exceeded');
+    ensure(count($values)>=1 && count($values)<=30,'sample_limit_exceeded');
+    return distribution($values);
+}
+
+function batchStatistics(array $values, ?string $profile = null): array
+{
+    $maximum=(int)ceil(profileSpec($profile)['limits']['history']/BATCH);
+    ensure(count($values)>=1 && count($values)<=$maximum,'batch_sample_limit_exceeded');
+    return distribution($values);
+}
+
+function distribution(array $values): array
+{
     sort($values, SORT_NUMERIC);
     $n = count($values);
     $median = $n % 2 ? $values[intdiv($n, 2)] : ($values[$n / 2 - 1] + $values[$n / 2]) / 2;
@@ -108,7 +154,7 @@ function tableNames(PDO $pdo): array
 
 function ownedName(array $state, string $kind): string
 {
-    ensure(isset(LIMITS[$kind], $state['tables'][$kind]), 'manifest_table_missing');
+    ensure(isset(profileSpec()['limits'][$kind], $state['tables'][$kind]), 'manifest_table_missing');
     return tableIdentifier($state['tables'][$kind]);
 }
 
@@ -122,9 +168,13 @@ function proveOwnership(PDO $pdo, array $state, string $kind): bool
     return true;
 }
 
-function validateState(array $state): void
+function validateState(array $state, ?string $profile = null): void
 {
-    ensure(($state['profile'] ?? '') === 'history10000_v1', 'manifest_profile_mismatch');
+    $spec=profileSpec($profile);
+    ensure(($state['profile'] ?? '') === $spec['id'], 'manifest_profile_mismatch');
+    if ($spec['id']==='history100000_v1' || isset($state['per_entity'],$state['limits'],$state['expected'])) {
+        ensure(($state['per_entity']??null)===$spec['per_entity'] && ($state['limits']??null)===$spec['limits'] && ($state['expected']??null)===$spec['expected'],'manifest_bounds_mismatch');
+    }
     ensure((bool) preg_match('/\A[a-f0-9]{32}\z/D', (string) ($state['owner'] ?? '')), 'manifest_owner_invalid');
     ensure(array_keys($state['tables'] ?? []) === array_keys(LIMITS), 'manifest_tables_invalid');
     foreach ($state['tables'] as $name) tableIdentifier($name);
@@ -137,11 +187,11 @@ function validateState(array $state): void
 function counts(PDO $pdo, array $state): array
 {
     $counts = [];
-    foreach (LIMITS as $kind => $limit) {
+    foreach (profileSpec()['limits'] as $kind => $limit) {
         $counts[$kind] = (int) $pdo->query('SELECT COUNT(*) FROM ' . ownedName($state, $kind))->fetchColumn();
         validateCount($kind, $counts[$kind]);
     }
-    ensure($counts === EXPECTED, 'unexpected_row_counts');
+    ensure($counts === profileSpec()['expected'], 'unexpected_row_counts');
     return $counts;
 }
 
@@ -150,8 +200,9 @@ function build(PDO $pdo, string $path, float $deadline): array
     ensure(!file_exists($path), 'build_already_started');
     $available = rights($pdo);
     ensure(!in_array(false, $available, true), 'required_privilege_missing');
-    $state = ['profile' => 'history10000_v1', 'owner' => bin2hex(random_bytes(16)), 'tables' => [], 'baseline' => tableNames($pdo), 'used' => ['cli' => false, 'fpm-fcgi' => false], 'ready' => false];
-    foreach (LIMITS as $kind => $limit) {
+    $spec=profileSpec();
+    $state = ['profile' => $spec['id'], 'per_entity'=>$spec['per_entity'], 'limits'=>$spec['limits'], 'expected'=>$spec['expected'], 'owner' => bin2hex(random_bytes(16)), 'tables' => [], 'baseline' => tableNames($pdo), 'used' => ['cli' => false, 'fpm-fcgi' => false], 'ready' => false];
+    foreach (profileSpec()['limits'] as $kind => $limit) {
         do { $name = 'mosa2_tmp_' . bin2hex(random_bytes(8)); } while (in_array($name, $state['baseline'], true) || in_array($name, $state['tables'], true));
         $state['tables'][$kind] = $name;
     }
@@ -159,10 +210,11 @@ function build(PDO $pdo, string $path, float $deadline): array
     saveState($path, $state); // Reserve exact names before DDL; comments prove actual ownership.
     $e = ownedName($state, 'entity'); $i = ownedName($state, 'identity');
     $h = ownedName($state, 'history'); $c = ownedName($state, 'current'); $m = ownedName($state, 'migration');
+    $historyMax=$spec['limits']['history']; $perEntity=$spec['per_entity'];
     $definitions = [
         'entity' => "(id SMALLINT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 100), code VARCHAR(32) NOT NULL UNIQUE)",
         'identity' => "(id SMALLINT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 100), entity_id SMALLINT UNSIGNED NOT NULL UNIQUE, namespace VARCHAR(20) NOT NULL, external_key VARCHAR(24) NOT NULL, UNIQUE KEY identity_lookup(namespace,external_key), FOREIGN KEY(entity_id) REFERENCES $e(id))",
-        'history' => "(id INT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 10000), entity_id SMALLINT UNSIGNED NOT NULL, sequence_no SMALLINT UNSIGNED NOT NULL CHECK(sequence_no BETWEEN 1 AND 100), observed_at DATETIME(6) NOT NULL, synthetic_value INT NOT NULL, UNIQUE KEY history_sequence(entity_id,sequence_no), KEY history_time(entity_id,observed_at DESC,id DESC), FOREIGN KEY(entity_id) REFERENCES $e(id))",
+        'history' => "(id INT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND $historyMax), entity_id SMALLINT UNSIGNED NOT NULL, sequence_no SMALLINT UNSIGNED NOT NULL CHECK(sequence_no BETWEEN 1 AND $perEntity), observed_at DATETIME(6) NOT NULL, synthetic_value INT NOT NULL, UNIQUE KEY history_sequence(entity_id,sequence_no), KEY history_time(entity_id,observed_at DESC,id DESC), FOREIGN KEY(entity_id) REFERENCES $e(id))",
         'current' => "(entity_id SMALLINT UNSIGNED PRIMARY KEY, history_id INT UNSIGNED NOT NULL, observed_at DATETIME(6) NOT NULL, synthetic_value INT NOT NULL, FOREIGN KEY(entity_id) REFERENCES $e(id), FOREIGN KEY(history_id) REFERENCES $h(id))",
         'migration' => "(id SMALLINT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 10), version_tag VARCHAR(32) NOT NULL UNIQUE, applied_at DATETIME(6) NOT NULL)",
     ];
@@ -179,15 +231,16 @@ function build(PDO $pdo, string $path, float $deadline): array
     $pdo->beginTransaction();
     try {
         foreach (['entity', 'identity', 'history', 'current', 'migration'] as $kind) {
-            $data = rows($kind); validateCount($kind, count($data)); $ms = [];
-            foreach (chunks($data) as $batch) {
+            $loaded=0; $ms = [];
+            foreach (boundedBatches($kind) as $batch) {
                 checkpoint($deadline); ensure(count($batch) <= BATCH, 'batch_limit_exceeded');
                 $marks = '(' . implode(',', array_fill(0, count($batch[0]), '?')) . ')';
                 $query = $pdo->prepare('INSERT INTO ' . ownedName($state, $kind) . '(' . $columns[$kind] . ') VALUES ' . implode(',', array_fill(0, count($batch), $marks)));
                 $start = hrtime(true); $query->execute(array_merge(...$batch));
-                $ms[] = (hrtime(true) - $start) / 1e6;
+                $ms[] = (hrtime(true) - $start) / 1e6; $loaded+=count($batch);
             }
-            $timings[$kind] = ['rows' => count($data), 'batches' => count($ms), 'max_batch_rows' => min(BATCH, count($data)), 'total_ms' => round(array_sum($ms), 4)] + statistics($ms);
+            ensure($loaded===$spec['expected'][$kind],'loaded_count_mismatch');
+            $timings[$kind] = ['rows' => $loaded, 'batches' => count($ms), 'max_batch_rows' => min(BATCH, $loaded), 'total_ms' => round(array_sum($ms), 4)] + batchStatistics($ms);
         }
         counts($pdo, $state);
         $pdo->commit();
@@ -196,27 +249,27 @@ function build(PDO $pdo, string $path, float $deadline): array
         throw $error;
     }
     $state['ready'] = true;
-    $state['build'] = ['counts' => EXPECTED, 'seed' => SEED, 'base_utc' => '2020-01-01T00:00:00Z', 'batch_write' => $timings];
+    $state['build'] = ['counts' => $spec['expected'], 'seed' => SEED, 'base_utc' => '2020-01-01T00:00:00Z', 'batch_write' => $timings];
     saveState($path, $state);
-    return ['ok' => true, 'phase' => 'build', 'counts' => EXPECTED, 'batches' => 24, 'maximum_batch_rows' => BATCH];
+    return ['ok' => true, 'phase' => 'build', 'counts' => $spec['expected'], 'batches' => (int)ceil($spec['limits']['history']/BATCH)+4, 'maximum_batch_rows' => BATCH];
 }
 
 function canonical(array $row): string { return implode('|', $row) . "\n"; }
 
-function expectedDigest(): string
+function expectedDigest(?string $profile = null): string
 {
     $hash = hash_init('sha256');
-    foreach (rows('history') as $row) hash_update($hash, canonical($row));
+    foreach (generatedRows('history',$profile) as $row) hash_update($hash, canonical($row));
     return hash_final($hash);
 }
 
 function actualDigest(PDO $pdo, array $state, float $deadline): string
 {
-    $hash = hash_init('sha256'); $last = 0; $seen = 0;
+    $hash = hash_init('sha256'); $last = 0; $seen = 0; $maximum=profileSpec()['limits']['history'];
     $q = $pdo->prepare('SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM ' . ownedName($state, 'history') . ' WHERE id > ? ORDER BY id LIMIT 500');
-    while ($seen < 10000) {
+    while ($seen < $maximum) {
         checkpoint($deadline); $q->execute([$last]); $batch = $q->fetchAll(PDO::FETCH_NUM);
-        ensure(count($batch) > 0 && count($batch) <= 500 && $seen + count($batch) <= 10000, 'history_scan_limit');
+        ensure(count($batch) > 0 && count($batch) <= 500 && $seen + count($batch) <= $maximum, 'history_scan_limit');
         foreach ($batch as $row) { hash_update($hash, canonical($row)); $last = (int) $row[0]; }
         $seen += count($batch);
     }
@@ -226,27 +279,31 @@ function actualDigest(PDO $pdo, array $state, float $deadline): string
 function querySet(array $state): array
 {
     $c = ownedName($state, 'current'); $h = ownedName($state, 'history'); $i = ownedName($state, 'identity'); $e = ownedName($state, 'entity');
-    return [
+    $set = [
         'current_single' => ["SELECT entity_id,history_id,observed_at,synthetic_value FROM $c WHERE entity_id=? LIMIT 1", [7]],
         'current_batch' => ["SELECT entity_id,history_id,observed_at,synthetic_value FROM $c WHERE entity_id IN (1,2,3,10,50,100) ORDER BY entity_id LIMIT 6", []],
         'history_latest' => ["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? ORDER BY observed_at DESC,id DESC LIMIT 1", [7]],
         'history_window' => ["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<? ORDER BY observed_at,id LIMIT 20", [7, stamp(21), stamp(31)]],
-        'chart' => ["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<=? ORDER BY observed_at DESC,id DESC LIMIT 25", [7, stamp(1), stamp(100)]],
+        'chart' => ["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<=? ORDER BY observed_at DESC,id DESC LIMIT 25", [7, stamp(1), stamp(profileSpec()['per_entity'])]],
         'identity_lookup' => ["SELECT e.id FROM $i i JOIN $e e ON e.id=i.entity_id WHERE i.namespace=? AND i.external_key=? LIMIT 1", ['synthetic_v1', rows('identity')[6][3]]],
     ];
+    if (profileSpec()['id']==='history100000_v1') $set['history_wide_window']=["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<? ORDER BY observed_at,id LIMIT 50",[7,stamp(1),stamp(901)]];
+    return $set;
 }
 
 function expectedQueries(): array
 {
-    $current = rows('current');
-    return [
+    $current = rows('current'); $per=profileSpec()['per_entity'];
+    $set = [
         'current_single' => [$current[6]],
         'current_batch' => array_map(fn(int $e): array => $current[$e - 1], [1,2,3,10,50,100]),
-        'history_latest' => [historyRow(7,100)],
+        'history_latest' => [historyRow(7,$per)],
         'history_window' => array_map(fn(int $seq): array => historyRow(7,$seq), range(21,30)),
-        'chart' => array_map(fn(int $seq): array => historyRow(7,$seq), range(100,76)),
+        'chart' => array_map(fn(int $seq): array => historyRow(7,$seq), range($per,$per-24)),
         'identity_lookup' => [[7]],
     ];
+    if (profileSpec()['id']==='history100000_v1') $set['history_wide_window']=array_map(fn(int $seq):array=>historyRow(7,$seq),range(1,50));
+    return $set;
 }
 
 function upsert(PDO $pdo, array $state, array $row): void
@@ -260,14 +317,14 @@ function upsert(PDO $pdo, array $state, array $row): void
 
 function correctness(PDO $pdo, array $state, float $deadline): array
 {
-    $n = counts($pdo, $state); $checks = ['exact_counts' => $n === EXPECTED];
+    $n = counts($pdo, $state); $checks = ['exact_counts' => $n === profileSpec()['expected']];
     $h = ownedName($state, 'history'); $e = ownedName($state, 'entity'); $i = ownedName($state, 'identity'); $c = ownedName($state, 'current');
     $orphans = (int) $pdo->query("SELECT COUNT(*) FROM $h h LEFT JOIN $e e ON e.id=h.entity_id WHERE e.id IS NULL")->fetchColumn();
     $orphans += (int) $pdo->query("SELECT COUNT(*) FROM $i i LEFT JOIN $e e ON e.id=i.entity_id WHERE e.id IS NULL")->fetchColumn();
     $orphans += (int) $pdo->query("SELECT COUNT(*) FROM $c c LEFT JOIN $h h ON h.id=c.history_id AND h.entity_id=c.entity_id WHERE h.id IS NULL")->fetchColumn();
     ensure($orphans === 0, 'orphan_rows'); $checks['no_orphans'] = true;
     $pairs = (int) $pdo->query("SELECT COUNT(*) FROM (SELECT entity_id,sequence_no FROM $h GROUP BY entity_id,sequence_no) pairs")->fetchColumn();
-    ensure($pairs === 10000, 'history_duplicates'); $checks['unique_history_mapping'] = true;
+    ensure($pairs === profileSpec()['expected']['history'], 'history_duplicates'); $checks['unique_history_mapping'] = true;
     $all = $pdo->query("SELECT entity_id,history_id,observed_at,synthetic_value FROM $c ORDER BY entity_id LIMIT 100")->fetchAll(PDO::FETCH_NUM);
     ensure($all === rows('current'), 'current_not_latest'); $checks['all_current_latest'] = true;
     ensure(hash_equals(expectedDigest(), actualDigest($pdo, $state, $deadline)), 'history_digest_mismatch'); $checks['history_seed_digest'] = true;
@@ -277,7 +334,7 @@ function correctness(PDO $pdo, array $state, float $deadline): array
         ensure($q->fetchAll(PDO::FETCH_NUM) === $expected[$kind], 'query_result_' . $kind); $checks[$kind] = true;
     }
     $q = $pdo->prepare("SELECT id FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<? ORDER BY observed_at,id LIMIT 20");
-    foreach ([[101,stamp(1),stamp(100)], [7,stamp(21),stamp(21)], [7,'2021-01-01 00:00:00.000000','2021-01-02 00:00:00.000000']] as $params) {
+    foreach ([[101,stamp(1),stamp(profileSpec()['per_entity'])], [7,stamp(21),stamp(21)], [7,'2021-01-01 00:00:00.000000','2021-01-02 00:00:00.000000']] as $params) {
         $q->execute($params); ensure($q->fetchAll() === [], 'empty_boundary_failed');
     }
     $checks['empty_and_time_boundaries'] = true;
@@ -287,9 +344,10 @@ function correctness(PDO $pdo, array $state, float $deadline): array
         $first = historyRow(7,1);
         $q = $pdo->prepare("UPDATE $c SET history_id=?,observed_at=?,synthetic_value=? WHERE entity_id=7");
         $q->execute([$first[0],$first[3],$first[4]]);
-        foreach ([2,1,100,98,99,100] as $seq) {
+        $per=profileSpec()['per_entity'];
+        foreach ([2,1,$per,$per-2,$per-1,$per] as $seq) {
             checkpoint($deadline); upsert($pdo, $state, historyRow(7,$seq));
-            $expectedSeq = $seq <= 2 ? 2 : 100;
+            $expectedSeq = $seq <= 2 ? 2 : $per;
             $row = $pdo->query("SELECT history_id,observed_at,synthetic_value FROM $c WHERE entity_id=7 LIMIT 1")->fetch(PDO::FETCH_NUM);
             $want = historyRow(7,$expectedSeq);
             ensure($row === [$want[0],$want[3],$want[4]], 'upsert_recency_failed');
@@ -307,7 +365,7 @@ function measure(PDO $pdo, array &$state, string $path, float $deadline): array
     ensure(($state['ready'] ?? false) === true && !($state['cleaned'] ?? false), 'dataset_not_ready');
     ensure(isset($state['used'][PHP_SAPI]) && $state['used'][PHP_SAPI] === false, 'runtime_already_measured');
     $state['used'][PHP_SAPI] = true; saveState($path, $state); // Reserve whole bounded run before any samples.
-    foreach (LIMITS as $kind => $limit) ensure(proveOwnership($pdo,$state,$kind), 'owned_table_missing');
+    foreach (profileSpec()['limits'] as $kind => $limit) ensure(proveOwnership($pdo,$state,$kind), 'owned_table_missing');
     $report = ['ok' => true, 'runtime' => ['php' => PHP_VERSION, 'sapi' => PHP_SAPI, 'pdo_mysql' => true], 'session' => sessionState($pdo), 'build' => $state['build'], 'checks' => [], 'queries' => []];
     $expected = expectedQueries();
     foreach (querySet($state) as $kind => [$sql,$params]) {
@@ -335,7 +393,7 @@ function tableStatistics(PDO $pdo, array $state): array
     // Bypass only this session's information-schema statistics cache; never flush data caches.
     $pdo->exec('SET SESSION information_schema_stats_expiry=0');
     $sizes=[]; $q=$pdo->prepare('SELECT TABLE_ROWS,DATA_LENGTH,INDEX_LENGTH FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?');
-    foreach (LIMITS as $kind=>$limit) {
+    foreach (profileSpec()['limits'] as $kind=>$limit) {
         ensure(proveOwnership($pdo,$state,$kind),'owned_table_missing');
         $q->execute([$state['tables'][$kind]]); $r=$q->fetch();
         $sizes[$kind]=['estimated_rows'=>(int)$r['TABLE_ROWS'],'data_bytes'=>(int)$r['DATA_LENGTH'],'index_bytes'=>(int)$r['INDEX_LENGTH']];
@@ -364,9 +422,9 @@ function dispatch(array $target, string $password, string $private, string $acti
     $deadline=microtime(true)+($action==='--build'?90:30);
     $pdo=connect($target,$password); unset($password);
     $pdo->exec('SET SESSION max_execution_time=3000');
-    $path=$private.'/history10000.json';
-    $lock=fopen($private.'/history10000.lock','c');
-    ensure($lock!==false && chmod($private.'/history10000.lock',0600),'profile_lock_unavailable');
+    $spec=profileSpec(); $path=$private.'/'.str_replace('_v1','',$spec['id']).'.json';
+    $lock=fopen($private.'/history-profile.lock','c');
+    ensure($lock!==false && chmod($private.'/history-profile.lock',0600),'profile_lock_unavailable');
     ensure(flock($lock,LOCK_EX|LOCK_NB),'profile_already_running');
     $state=null;
     try {
