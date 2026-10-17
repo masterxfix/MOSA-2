@@ -1,8 +1,16 @@
 # MOSA 2 – Agent Instructions
 
+**Letzte Änderung:** 17.10.2026, 15:43:26 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+
 ## Geltungsbereich
 
 Diese Regeln gelten für alle Arbeiten in diesem Repository.
+
+## Pflege dieser Datei
+
+- Jede Änderung an `AGENTS.md` muss im selben Commit mit Datum, Uhrzeit und kurzer Änderungsbeschreibung im Änderungsprotokoll am Dateiende dokumentiert werden. Die Kopfzeile **Letzte Änderung** ist ebenfalls zu aktualisieren.
+- Den tatsächlichen Bearbeitungszeitpunkt verwenden und in der Zeitzone **Europe/Berlin** mit der zum Datum passenden UTC-Abweichung angeben. Datum oder Uhrzeit nicht schätzen.
+- Bei nachträglich dokumentierten Änderungen den belegten ursprünglichen Commit-Zeitpunkt verwenden und den Nachtrag samt Commit kenntlich machen. Vorhandene Protokolleinträge bleiben erhalten.
 
 ## Grundprinzipien
 
@@ -108,3 +116,12 @@ Am Ende kompakt melden:
 - verbleibende Blocker
 
 Keine langen Rohprotokolle, wenn sie für die Bewertung nicht nötig sind.
+
+## Änderungsprotokoll
+
+Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zuletzt ergänzte Regel anhand ihres ursprünglichen GitHub-Commit-Zeitpunkts.
+
+| Datum | Uhrzeit und UTC-Abweichung | Änderung |
+| --- | --- | --- |
+| 17.10.2026 | 15:43:26 Uhr (MESZ, UTC+02:00) | Zeitstempelpflicht, Kopfzeile und Änderungsprotokoll eingeführt; Zeitpunkt der vorherigen Regel nachgetragen. |
+| 17.10.2026 | 15:40:15 Uhr (MESZ, UTC+02:00) | Nachtrag zu Commit `86b0423`: Vor jedem Codex-Auftrag kurze verständliche Erklärung und Schwierigkeitsgrad mit knapper Begründung, zusammen höchstens zwei kurze Sätze. |
