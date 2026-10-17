@@ -2,6 +2,23 @@
 
 MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des MOSA-Dashboards.
 
+## Zielbild
+
+MOSA 2 soll langfristig eine **persönliche, finanzorientierte KI-Plattform** werden.
+
+Der wichtigste fachliche Schwerpunkt bleibt:
+- Depot und Vermögensentwicklung,
+- laufende Finanzen, Cashflows, Ausgaben und Risiken,
+- verständliche persönliche Einordnung durch KI.
+
+Weitere Lebensbereiche wie Netzwerk, Smart Home, Mediathek, Dokumente oder später z.B. Immobilien werden modular ergänzt. Sie sollen MOSA 2 ein vollständigeres persönliches Bild geben, ohne den Finanzfokus zu verdrängen.
+
+Die bevorzugte Bedienung soll langfristig über die KI erfolgen: Der Nutzer stellt MOSA 2 Fragen und erhält persönliche, quellenbasierte Antworten aus den eigenen strukturierten Daten.
+
+Die KI darf interpretieren, Zusammenhänge erkennen, erklären und Empfehlungen geben. **Fakten, Berechnungen und finanzielle Werte müssen jedoch deterministisch und nachvollziehbar aus der Datenbasis stammen.**
+
+Autonomie wird später schrittweise und kontrolliert erweitert. Mehr Freiheiten werden nur innerhalb klarer Berechtigungen und mit vollständigem Aktionsprotokoll vergeben.
+
 ## Arbeitsmodell
 
 - Dieses Repository ist die verbindliche Arbeitsbasis für MOSA 2.
