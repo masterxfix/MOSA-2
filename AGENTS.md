@@ -16,7 +16,16 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 
 ## MOSA-Auftragsstandard
 
-- Jeder für Codex formulierte MOSA-2-Auftrag beginnt sichtbar mit **`Auftrag MOSA`**. Dieser Zusatz ist verbindlich, damit der Auftrag im KI-Kontrollzentrum eindeutig erkannt und beobachtet werden kann.
+- Jeder für Codex formulierte MOSA-2-Auftrag beginnt als erste eigenständige, unzitierte Zeile exakt mit **`MOSA-Auftrag`**. Nur diese Markersyntax wird vom KI-Kontrollzentrum erkannt.
+- Der Marker darf nicht in einem Codeblock, Zitat oder Fließtext stehen. Sicheres Format:
+
+  ```text
+  MOSA-Auftrag
+
+  <Auftragstitel und Auftragstext>
+  ```
+
+- Formulierungen wie `Auftrag MOSA`, `Auftrag für MOSA` oder eine bloße Inline-Erwähnung starten keine Anzeige im KI-Kontrollzentrum.
 - Ein vollständig geklärter Auftrag wird in **einem zusammenhängenden Codex-Lauf** bearbeitet.
 - Während der Bearbeitung keine Zwischenmeldungen an den Nutzer senden, sofern nicht zwingend eine Freigabe oder fehlende Information benötigt wird.
 - Keine Rückfragen stellen, wenn der Auftrag und seine Akzeptanzkriterien ausreichend eindeutig sind.
