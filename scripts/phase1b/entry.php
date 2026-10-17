@@ -73,6 +73,7 @@ function executeProfile(array $target, string $password): array
 {
     if (defined('MOSA2_HISTORY_10000') || defined('MOSA2_HISTORY_PROFILE')) {
         \Mosa2\History10000\profileSpec();
+        if (defined('MOSA2_HISTORY_CONCURRENCY')) return \Mosa2\HistoryConcurrency\dispatch($target, $password, __DIR__, PHP_SAPI === 'cli' ? (string) ($GLOBALS['argv'][2] ?? '') : '--measure');
         if (defined('MOSA2_HISTORY_OPTIMIZATION')) return \Mosa2\HistoryOptimization\dispatch($target, $password, __DIR__, PHP_SAPI === 'cli' ? (string) ($GLOBALS['argv'][2] ?? '') : '--measure');
         return \Mosa2\History10000\dispatch(
             $target, $password, __DIR__,

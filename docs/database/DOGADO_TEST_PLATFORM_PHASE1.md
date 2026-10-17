@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** 100.000er-Test und gezielte History-Optimierung durchgeführt und bereinigt · breiter Leseweg mit ASC-Index unter Zielwert · Issue #5 und weitere Freigaben offen
+**Status:** 100.000er-Test, History-Optimierung und begrenzte überlappende Transaktionsszenarien durchgeführt und bereinigt · Ziele erfüllt · Issue #5 und weitere Freigaben offen
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -498,6 +498,108 @@ Die erfolgreiche Lösung ist **ASC als allgemeine Voreinstellung des gemeinsamen
 - Veröffentlichungsschranke: genau ein Abschluss-Commit mit [skip ci], derselbe SHA auf Prüfbranch im unveränderten Validierungsworkflow einschließlich git diff --check HEAD^ HEAD; Deploy muss übersprungen sein, erst danach derselbe Commit auf main. Konkreter Lauf und Resultat werden in Issue #5 festgehalten.
 
 **Entscheidung:** ASC-Index allgemein im gemeinsamen Testkern übernehmen. Die gestellte begrenzte Optimierung ist fachlich erfolgreich; die vorherige offene Planwahl ist für diesen 100.000er-Leseweg geklärt. Keine Freigabe für Million Zeilen, Parallelbetrieb, Last, Backup/Restore, endgültiges Core-Schema oder Produktion. Nächste Testphase wurde nicht begonnen. **Issue #5 bleibt offen.**
+
+## Phase 1F – überlappende Lese-/Schreibtransaktionen und kontrollierter Konflikt
+
+**Nachweisstand: 17.10.2026, 19:26:06 Europe/Berlin (MESZ, UTC+02:00), nach Live-Bereinigung. Fachliches Ergebnis: erfolgreich im ausdrücklich begrenzten Szenarioumfang.** Parallele logische Transaktionen lesen und schreiben im Test sicher: stabile REPEATABLE-READ-Snapshots, keine Dirty Reads, keine Rollback-Reste und keine unerwarteten Sperren oder Datenfehler. Je SAPI ein erwarteter Lock-Wait wurde vollständig beendet und genau einmal erfolgreich wiederholt. Kein allgemeiner Last-/Produktivnachweis; Issue #5 bleibt offen.
+
+### Auftragsnachweis und gemeinsame Grundlage
+
+Ausgangsstand: d62573a43a6f8b358cd6fb740907f23e060ee7dc. Vor Facharbeit neuer nativer Eingang **19:05:32**, Serverempfang **19:05:34 Europe/Berlin** bestätigt. Describe und Plan quittiert und genau der neue Betreff **„Datenbank-Testplattform: parallele Zugriffe und Transaktionskonflikte“** mit sechs eigenen Schritten im vorhandenen KI-Kontrollzentrum sichtbar. Wartephase, tatsächliche Live-Ergebnisse und Bereinigung ebenfalls quittiert und sichtbar kontrolliert. Keine alten Turn-Kennungen oder künstlichen Start-/Stop-Ereignisse.
+
+Die vollständige native Nachricht ist die Auftragsgrundlage. **Kein Anhang gelesen**, kein lokaler fachlicher Datei-/Shell-/Launcherzugriff; lokal ausschließlich der freigegebene Statusadapter und seine JSON-Meldungen. Kein Zugriff auf E:.
+
+[Phase-1B-Verbindungs-/Zielprüfung](../../scripts/phase1b/probe.php), [geschützter gemeinsamer Adapter](../../scripts/phase1b/entry.php), [Phase-1C/D/E-Aufbau, ASC-Index, Abfragen, Upsert, Korrektheit und Bereinigung](../../scripts/phase1c/profile.php) wiederverwendet. [Phase-1F-Szenarien](../../scripts/phase1f/concurrency.php) werden über einen optionalen serverseitigen Mess-Callback innerhalb desselben Manifest-/Schloss-/Fehlerbereinigungsablaufs ausgeführt. Keine zweite Testarchitektur.
+
+Der gemeinsame Messhelfer akzeptiert nun eine begrenzte Stichprobengröße. **Bestehende Voreinstellung elf und bestehende 100-/10.000-/100.000-Grenzen unverändert**; dieser Auftrag wählt ausdrücklich zehn Ausführungen. HTTP kann weder Callback, Profil, Verbindungszahl noch Wiederholungen frei bestimmen.
+
+### Tatsächlicher Umfang und Ablauf
+
+Einmaliger CLI-Aufbau mit bestehendem history100000_v1 und allgemeinem ASC-Zeitindex: **100.000 synthetische History-Zeilen**, 100 Objekte × 1.000; Entity/Identity/Current jeweils 100, Migrationsprotokoll 1. 200 History-Batches à 500 plus vier Nebenbatches. Derselbe Bestand unter **PHP 8.4.12 CLI** und **PHP 8.4.26 FPM**, jeweils PDO-MySQL, geprüft. Kein weiterer Aufbau und kein History-DML nach dem Laden.
+
+Je SAPI **genau vier unabhängig bestätigte PDO-Verbindungen**, keine fünfte Verbindung. Alle vier mit identischer strikter utf8mb4-/UTC-/REPEATABLE-READ-Konfiguration; genaue isolierte Datenbank, bestehender Testbenutzer und 127.0.0.1:3307 vor Schreibblöcken geprüft. Keine Rechte oder globalen Einstellungen geändert.
+
+Die Verbindungen werden in einem PHP-Lauf gezielt ineinander verschachtelt: Transaktionen überlappen wirklich im Datenbankserver und halten ihre Sperren, während eine andere Verbindung arbeitet. Dies sind **kontrolliert orchestrierte Transaktionsüberschneidungen**, keine gleichzeitig gestarteten HTTP-Worker, keine CPU-/Durchsatz- oder Anfragelastmessung.
+
+| Szenario | Durchläufe CLI / FPM | Tatsächlicher Nachweis |
+| --- | ---: | --- |
+| Snapshot, Dirty Read und Commit-Sichtbarkeit | 3 / 3 | Alter Leser sieht vor und nach Writer-Commit weiter den alten Stand. Zweite unabhängige Verbindung sieht keine uncommittete Änderung. Neue Lesertransaktionen sehen den bestätigten neuen Stand. |
+| Rollback | 3 / 3 | Eigene Current-Zeile innerhalb der Writer-Transaktion gelöscht; zweite Verbindung sieht sie weiterhin. Nach Rollback sehen alle vier Verbindungen exakt den ursprünglichen Zustand. Kein Restzustand. |
+| Writer auf verschiedenen Entities | 3 / 3 | Writer A hält Entity 3, Writer C schreibt Entity 4 bei weiter offener A-Transaktion. Beide bleiben gleichzeitig offen; andere Leser sehen keinen Dirty Read. Beide Commits erfolgreich, Current danach eindeutig und vollständig auf dem neuesten Sollstand. **Null unerwartete Lock-Konflikte.** |
+| Derselbe Current-Datensatz | 1 / 1 | A hält Entity 5; C wartet auf dieselbe Zeile und erhält erwarteten MySQL-Fehler 1205/HY000. Ganze wartende Transaktion explizit zurückgerollt. A committed; C startet genau einen neuen Versuch und committed erfolgreich den eindeutig neueren Stand. |
+
+Damit sechs Wiederholungen je normalem Szenario über beide SAPIs (unter zehn) und insgesamt **zwei** absichtliche Konflikte (unter drei). Keine automatische Wiederholung normaler Szenarien oder beliebiger SQL-Fehler; Deadlocks/andere Fehler gelten nicht als erwarteter Lock-Wait.
+
+Für beobachtbare Zustandsübergänge werden ausschließlich eigene Current-Testzeilen als Fixture auf den vorhandenen synthetischen History-Stand Sequenz 998 gesetzt. Der eigentliche Upsert führt wieder zu Sequenz 1.000; beim Konflikt A zu 999 und der einzige Retry zu 1.000. Die beiden letzten Sequenzen besitzen denselben Zeitstempel und werden über die History-ID geordnet. Diese ausdrücklich künstliche Fixture-Vorbereitung ist keine fachliche Rückwärtsmigration; sie verändert keine History-Zeile. Nach abgeschlossenen normalen Szenarien und nach dem Konflikt-Retry stimmen alle 100 Current-Zeilen wieder exakt mit der jeweils neuesten History überein.
+
+### Erwarteter Konflikt und begrenzter Retry
+
+| Messpunkt | CLI | FPM |
+| --- | ---: | ---: |
+| Zurückgelesenes Session-innodb_lock_wait_timeout des wartenden Writers | 1 s | 1 s |
+| Tatsächliche Dauer des erwarteten Fehlversuchs | **2001,0694 ms** | **2001,0494 ms** |
+| Erwarteter Fehler | 1205 / HY000 | 1205 / HY000 |
+| Ganze wartende Transaktion explizit zurückgerollt | ja | ja |
+| Retry-Anzahl | **genau 1** | **genau 1** |
+| Erfolgreicher Retry einschließlich Upsert und Commit | **0,7533 ms** | **0,6474 ms** |
+| Neuester Current-Stand nach Retry | bestätigt | bestätigt |
+
+Die tatsächlich gemessene Wartezeit lag trotz zurückgelesenem Sessionwert von einer Sekunde bei etwa **zwei Sekunden**. Keine Behauptung einer exakt einsekündigen Wandzeitgrenze; die Ursache dieser Zeitabweichung wurde im begrenzten Auftrag nicht weiter untersucht. Der Konflikt selbst ist ausdrücklich erwartet und endet mit Fehler 1205. Transaktions-/Anwendungsabbruchgrenzen bleiben begrenzt; keine globalen Timeout-Änderungen.
+
+Ein Lock-Wait kann nur das Statement zurückrollen. Deshalb endet der Test unabhängig von der Server-Timeout-Rollback-Politik die vollständige fehlgeschlagene Transaktion, bevor genau eine neue Transaktion beginnt. Im tatsächlichen Lauf war jeweils ein expliziter Rollback erforderlich. Keine blind fortgesetzte Transaktion, kein zweiter Retry, kein abgefangener beliebiger SQL-Fehler als scheinbarer Erfolg.
+
+Upsert-Ausführung auf verschiedenen Entities bei gleichzeitig offenen Transaktionen, jeweils A/C in ms:
+
+| Durchlauf | CLI | FPM |
+| --- | ---: | ---: |
+| 1 | 0,3830 / 0,4168 | 0,4411 / 0,4663 |
+| 2 | 0,3182 / 0,3540 | 0,5064 / 0,7060 |
+| 3 | 0,3122 / 0,3269 | 0,4116 / 0,3696 |
+
+Diese Upsert-Zeiten enthalten Statement-Vorbereitung und Ausführung, aber keinen Commit oder Verbindungsaufbau. Keine Durchsatzprognose.
+
+### Normale Reads bei zwei offenen Schreibtransaktionen
+
+Während Writer A und C die verschiedenen Current-Zeilen von Entity 3/4 uncommittet halten, liest eine dritte Verbindung die unveränderten gemeinsamen Abfragen für **Entity 7**. Beide Writer bleiben während der gesamten Messung offen; eine vierte Verbindung bestätigt die Unsichtbarkeit ihrer uncommitteten Zustände.
+
+Je fünf Muster und SAPI **zehn** reguläre Messungen, erste separat; Median/p95 aus neun Folgewerten (Nearest-Rank, p95 hier Maximum). Insgesamt 100 begrenzte Leseausführungen über beide SAPIs, kein zusätzlicher Last-/Wiederholungslauf. Gleiche PDO-execute-plus-fetch-Methode wie zuvor; ohne Verbindung/Vorbereitung, ohne Cache-Leerung und ohne nachgewiesenen Kaltstart.
+
+| Abfrage auf Entity 7 | CLI erste / Median / p95 (ms) | FPM erste / Median / p95 (ms) | Ziel |
+| --- | ---: | ---: | ---: |
+| Current einzeln | 0.1655 / 0.0954 / 0.1230 | 0.1797 / 0.1652 / 0.2319 | <20 ms |
+| Neueste History | 0.3501 / 0.2596 / 0.3088 | 0.4228 / 0.3023 / 0.3655 | <100 ms |
+| Schmales History-Fenster | 0.2309 / 0.1909 / 0.2214 | 0.2965 / 0.2391 / 0.2471 | <100 ms |
+| Chart, LIMIT 25 | 0.3299 / 0.3031 / 0.3752 | 0.4030 / 0.4430 / 0.6994 | <100 ms |
+| Breites History-Fenster, LIMIT 50 | 0.3669 / 0.3244 / 0.3392 | 0.4577 / 0.4067 / 0.6330 | <100 ms |
+
+Alle Median- und p95-Werte liegen unter den vereinbarten Zielen. **Current-Median CLI/FPM 0,0954 / 0,1652 ms gegenüber ideal <20 ms**; höchster History-p95 **0,6994 ms gegenüber <100 ms**. Das breite Fenster bleibt mit Median **0,3244 / 0,4067 ms** und p95 **0,3392 / 0,6330 ms** schnell.
+
+EXPLAIN bestätigt unverändert: Current const/PRIMARY; neueste History ref/history_time, rückwärts; schmales Fenster range/history_time mit geschätzt zehn Zeilen; Chart ref/history_time rückwärts; breites Fenster ref/history_time mit Indexbedingung. Bei diesen Mustern kein Filesort und kein ungebundener Full Scan. EXPLAIN-Zeilen sind Schätzungen; keine zusätzliche EXPLAIN-ANALYZE-Serie in diesem Auftrag.
+
+### History, Current und Bereinigung
+
+Beide Laufzeiten bestätigten **vor/nach jeweils 100.000 History-Zeilen** und exakt dieselbe SHA-256-Prüfsumme:
+
+9d1be385cdc925c8a5968ffd1ea899fa9aa3b2e82369ef14d47e233dfbf98d68
+
+Die History wurde nach dem Aufbau ausschließlich gelesen; die Szenarien schreiben nur eigene Current-Zeilen. Nachweis ist die Unverändertheit dieses Bestands, keine behauptete allgemeine technische Erzwingung von Append-only-Rechten. Keine Update-/Delete-Rechte geändert. Alle gemeinsamen Integritäts-, eindeutigen Zuordnungs-, Current-Recency-, Zeitgrenzen-/Gleichstands-, Upsert-/Rollback- und Prüfsummenprüfungen vor/nach bestanden. Nach Szenarien keine offenen Transaktionen.
+
+- FPM vor Nutzung tatsächlich durch **HTTP 403** für nicht erlaubte Herkunft geschützt. Bestehende HTTPS-/Host-/IP-/Origin-/POST-/CSRF-Prüfungen und kurzlebige Sitzung verwendet. Keine öffentlichen Schreib-GETs oder Diagnosen.
+- Nutzer gab das bestehende Testpasswort ausschließlich im maskierten Formular ein. Konfiguration/Passwort und Code nur im eigenen privaten Bereich außerhalb öffentlicher Dokumentstämme/GitHubs; Verzeichnisse 0700, Passwortdatei 0600. Kein Passwort zurückgesetzt, keine fremden Anwendungskonfigurationen gelesen.
+- Abgelaufene Plesk-Sitzung über vorhandenen oneHome-Zugang regulär erneuert. CLI ausschließlich über ungespeichertes, inaktives „Jetzt ausführen“-Formular ohne Benachrichtigungen; abschließend abgebrochen. **Neun geplante Aufgaben vor/nachher**, keine gespeichert.
+- Ausschließlich fünf eigene Tabellen nach Manifest/Eigentumsmerkmal entfernt; **null Tabellen** wiederhergestellt. Vierzehn Quellen gegen GitHub-Hashes und beide erfolgreiche Berichte vor Entfernung geprüft.
+- Privater Code, Zielkonfiguration/Passwort, Manifest, Ergebnisse, Schloss/Sitzungen und öffentlicher Einstieg vollständig entfernt. Einstieg anschließend **HTTP 404**; neutrale HTTPS-Startseite **HTTP 200**, sichtbar und vollständig bytegenau unverändert.
+- Keine Änderungen an fixlab, Workflows, Deployment-Secrets, Zertifikaten, Startseite oder Produktivressourcen. Keine Million Zeilen, Last-/Dauertests oder Restore-Tests; keine nächste Phase begonnen.
+
+### Offline-Prüfung und Veröffentlichungsschranke
+
+**Vierzehn PHP-Dateien gelintet**, **17** Basis-, **80** 10.000er-, **264** 100.000er-, **54** Optimierungs- sowie **48** neue Transaktionsprüfungen erfolgreich, jeweils ohne Datenbankverbindung. Angepasste Timeout-Rollback-Behandlung vor den Live-Tests erneut gelintet und durch die betroffenen 48 Offline-Prüfungen bestätigt.
+
+[Neue Offline-Prüfung](../../tests/test_concurrency.py) deckt Verbindungs-/Szenario-/Konflikt-/Lesebudgets, exakte Fehlerklassifikation statt beliebigem Retry, unveränderte gemeinsame Mess-Voreinstellung, sichere Abfrageauswahl und vorhandenen ASC-Index ab. Tatsächliche Transaktions-/Lock-Nachweise stammen ausschließlich aus den oben beschriebenen Live-Läufen.
+
+Genau ein Abschluss-Commit mit [skip ci]; derselbe SHA ist vor Übernahme auf main im unveränderten vorhandenen Prüfbranch-Workflow einschließlich git diff --check HEAD^ HEAD zu validieren, Deploy muss übersprungen sein. Konkreter Lauf und Resultat stehen im abschließenden Issue-#5-Kommentar.
+
+**Einordnung:** Die geprüften überlappenden Transaktionen funktionieren sicher und schnell; der erwartete Konflikt wird kontrolliert mit genau einem Retry aufgelöst. Die Messung ist **kein allgemeiner Last-, Worker-Parallelitäts-, Dauer-, Skalierungs- oder Produktivnachweis**. Weitere Tests bleiben gesondert freizugeben; in diesem Auftrag keine nächste Phase. **Issue #5 bleibt offen.**
 
 ## Testblöcke
 

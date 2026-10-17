@@ -367,8 +367,9 @@ function correctness(PDO $pdo, array $state, float $deadline): array
     return $checks;
 }
 
-function measureQueries(PDO $pdo, array $state, float $deadline, ?array $only = null): array
+function measureQueries(PDO $pdo, array $state, float $deadline, ?array $only = null, int $samples = SAMPLES): array
 {
+    ensure($samples>=2 && $samples<=SAMPLES, 'invalid_measurement_budget');
     $queries=[];
     $expected = expectedQueries();
     $set=querySet($state);
@@ -376,7 +377,7 @@ function measureQueries(PDO $pdo, array $state, float $deadline, ?array $only = 
     foreach ($set as $kind => [$sql,$params]) {
         if ($only!==null && !in_array($kind,$only,true)) continue;
         $times = []; $q = $pdo->prepare($sql);
-        for ($n=0; $n<SAMPLES; ++$n) {
+        for ($n=0; $n<$samples; ++$n) {
             checkpoint($deadline); $start=hrtime(true); $q->execute($params); $actual=$q->fetchAll(PDO::FETCH_NUM); $times[]=(hrtime(true)-$start)/1e6;
             ensure($actual === $expected[$kind], 'measured_result_mismatch');
         }
@@ -386,7 +387,7 @@ function measureQueries(PDO $pdo, array $state, float $deadline, ?array $only = 
             if (str_starts_with($kind,'history_') || $kind==='chart') ensure($row['type'] !== 'ALL' && $row['key'] !== null, 'history_index_not_used');
         }
         $first=array_shift($times);
-        $queries[$kind]=['first_ms'=>round($first,4), 'total_executions'=>SAMPLES, 'subsequent'=>statistics($times), 'explain'=>$plan];
+        $queries[$kind]=['first_ms'=>round($first,4), 'total_executions'=>$samples, 'subsequent'=>statistics($times), 'explain'=>$plan];
     }
     return $queries;
 }
@@ -430,7 +431,7 @@ function cleanup(PDO $pdo, array &$state, string $path, float $deadline): array
     return ['ok'=>true,'phase'=>'cleanup','baseline_restored'=>true,'baseline_table_count'=>count($state['baseline']),'remaining_table_count'=>count(tableNames($pdo))];
 }
 
-function dispatch(array $target, string $password, string $private, string $action): array
+function dispatch(array $target, string $password, string $private, string $action, ?callable $measurer = null): array
 {
     ensure(in_array($action,['--build','--measure','--statistics','--cleanup'],true),'explicit_profile_action_required');
     ensure(PHP_SAPI==='cli'||$action==='--measure','fpm_read_profile_only');
@@ -455,7 +456,7 @@ function dispatch(array $target, string $password, string $private, string $acti
             ensure(hash_equals(expectedDigest(),actualDigest($pdo,$state,$deadline)), 'history_modified');
             return ['ok'=>true,'phase'=>'statistics','counts'=>$counts,'history_unchanged'=>true,'approximate_table_statistics'=>tableStatistics($pdo,$state)];
         }
-        $report=measure($pdo,$state,$path,$deadline);
+        $report=$measurer===null ? measure($pdo,$state,$path,$deadline) : $measurer($pdo,$state,$path,$deadline);
         if (PHP_SAPI==='fpm-fcgi' && is_file($private.'/result-cli.json')) {
             $report['cli_result']=json_decode(file_get_contents($private.'/result-cli.json'),true,32,JSON_THROW_ON_ERROR);
         }
