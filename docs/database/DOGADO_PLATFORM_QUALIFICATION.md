@@ -2,106 +2,126 @@
 
 ## 1. Kurzfazit
 
-**Prüfstand: 17.10.2026 · Status: teilweise; Kontoprüfung ausstehend.**
+**Prüfstand: 17.10.2026 · Status: read-only Konto-Bestandsaufnahme abgeschlossen.**
 
-Die offizielle Dogado-Dokumentation beschreibt MySQL 5.7/8.0, PHP 8.4,
-DB-Zugriffssteuerung, SSH/SFTP, Cron und Backup/Restore. Das belegt das allgemeine
-Angebot, aber weder den gebuchten Tarif noch die tatsächlich verfügbaren Optionen
-im bereitgestellten Konto. Eine endgültige Plattformfreigabe ist deshalb offen.
+Die vorhandene angemeldete interne Browser-Sitzung wurde inventarisiert und genutzt.
+Das Konto bietet **WEB M 3.0, 50 Datenbanken, 150 GB Speicher, MySQL 5.7 und MySQL 8
+sowie PHP bis 8.5**. Der Expertenzugang zu Plesk und phpMyAdmin funktioniert.
+Die bisherigen Browserblockaden beschreiben nicht mehr den aktuellen Zustand.
 
-Vorläufiger Testkandidat: **MySQL 8.0 + PHP 8.4 + lokaler DB-Zugriff**, vorbehaltlich
-Kontobestätigung, Wartungsstatus und Kompatibilität. Keine Änderung der DB-Architektur.
+Empfehlung für die ausdrücklich erst später freizugebende Testumgebung:
+**MySQL 8.0 + PHP 8.4/FPM + lokaler DB-Zugriff** als Ausgangspunkt;
+PHP 8.5 zusätzlich auf Kompatibilität vergleichen. Die Bestandsaufnahme ist keine
+Freigabe einer endgültigen DB-Architektur oder eines produktiven Versionswechsels.
 
-In diesem Lauf wurden keine Aktionen im Dogado-Konto ausgeführt, Konfigurationen, Datenbanken,
-Benutzer oder Dateien auf Dogado verändert, Zugangsdaten erfasst oder Tests auf dem
-Hosting ausgeführt. Kein Deployment. Die nächste Testphase ist nicht freigegeben.
+Es wurden keine Datenbanken, Benutzer, Rechte, Einstellungen oder Hostingdateien
+verändert, keine Passwörter angezeigt oder kopiert und keine SQL-, Import-, Export-,
+Restore-, Cron- oder Lasttests ausgeführt. Formulare und Restore-Assistenten wurden
+nur gelesen und ohne Speichern bzw. Ausführung verlassen. Kein Deployment.
 
 ## 2. Im Dogado-Konto bestätigt
 
-**Keine account-spezifischen Befunde.** Der aktuelle Browserzugang wurde in diesem
-Lauf neu geprüft: Sowohl die Browser-Inventarisierung über `cua_repl` als auch die
-alternative Computer-Use-Initialisierung über `node_repl` scheiterten bereits am
-Start der Werkzeuglaufzeit. Eine Chrome-Tab-Liste und der angemeldete Dogado-Zustand
-konnten nicht gelesen werden. Das ist kein Nachweis eines Fehlers bei Dogado oder
-einer abgelaufenen Anmeldung. Konkret fehlt der aktuelle Chrome-Zugriff.
+Nachweisweg: vorhandener interner Dogado-Tab → oneHome → jeweiliger Menüpunkt;
+über den bestehenden Expertenzugang zusätzlich Plesk und dessen Web Admin.
+Accountnummern, Benutzernamen, DB-Namen und individuelle Serveradressen bleiben
+aus dieser Dokumentation ausgespart. Angaben sind Beobachtungen dieses Prüfstands.
 
-GitHub und der auf C: begrenzte Dateizugriff waren verfügbar; die unabhängige
-Dokumentationsprüfung wurde fortgesetzt. Allgemeine Quellen werden ausdrücklich
-nicht zu Kontobefunden hochgestuft. Issue #4 bleibt bis zur Kontoprüfung offen.
-
-## 3. Durch Dogado-Dokumentation bestätigt
-
-Alle folgenden Quellen wurden am 17.10.2026 gelesen. Angaben gelten ausschließlich
-als allgemeine Dokumentation; Kontozustand und Vertragsumfang sind noch abzugleichen.
-
-| Bereich | Offiziell dokumentierter Befund und Grenze |
+| Bereich / gelesene Ansicht | Tatsächlicher Kontobefund |
 | --- | --- |
-| DB-Versionen / Host / Port | Dogado führt MySQL 5.7 und 8.0 in seiner [Datenbankübersicht](https://help.dogado.de/hc/de/sections/40680531398801-Datenbanken). Die [Verbindungsdokumentation](https://help.dogado.de/hc/de/articles/30150113244817) nennt beispielhaft `localhost:3306` für 5.7 und `127.0.0.1:3307` für 8.0; maßgeblich bleiben die tatsächlichen Verbindungsdetails. Das bestätigt keine aktuelle Auswahlliste oder weiteren Versionen im Konto. |
-| DB-Verwaltung / Rechte | oneHome zeigt SQL-Version, zugeordnete Benutzer und Datenbanken sowie einen phpMyAdmin-Zugang. Eine Benutzerverwaltung ist beschrieben; konkrete SQL-GRANT-Rechte und verfügbare Quoten sind damit nicht bewiesen. [Übersicht](https://help.dogado.de/hc/de/articles/28701086312209) |
-| DB-Zugriff | Pro DB-Benutzer sind lokaler Zugriff, zusätzlicher externer Zugriff oder festgelegte IP-Adressen dokumentiert. Die tatsächliche Einstellung, externe Adresse, TLS-Unterstützung und Erreichbarkeit bleiben ungeprüft. [Zugriffssteuerung](https://help.dogado.de/hc/de/articles/27402680955409) |
-| Migration / Import / Export | Ein Versionswechsel 5.7 → 8.0 wird als Export/Import statt direkter Umstellung beschrieben. phpMyAdmin unterstützt SQL-Export und Import; bei zu großen Dateien oder Zeitlimits wird SSH-Import genannt. Keine konkreten Importgrenzen oder verlustfreie Migration zugesichert. [Versionswechsel](https://help.dogado.de/hc/de/articles/24039454806289), [Export](https://help.dogado.de/hc/de/articles/25399634267665), [Import](https://help.dogado.de/hc/de/articles/25399928393489) |
-| PHP | Die [PHP-Info-Übersicht](https://help.dogado.de/hc/de/articles/30783660021265) verlinkt unter anderem 8.4, 8.3, 8.2 und 8.1; das ist keine vollständige aktuelle Konto-Auswahlliste oder Supportzusage. `memory_limit`, `max_execution_time` und `upload_max_filesize` werden als tarifabhängig und nicht individuell anpassbar beschrieben. [PHP-Einstellungen](https://help.dogado.de/hc/de/articles/23639059019921) dokumentieren PHP-Wahl pro Domain/Subdomain sowie `allow_url_fopen`, `allow_url_include`, `display_errors` und OPcache. Werte und aktive Module im Konto bleiben offen. |
-| Cron / Scheduler | oneHome dokumentiert URL-Aufruf, PHP-Skript und Befehlsausführung, Zeitplanung und Benachrichtigungen. Im Webhosting nennt Dogado Verfügbarkeit ab WEB M; daraus folgt keine Zusage für den vorhandenen Vertrag. Mindestintervall, Parallelität und Laufzeitlimits sind nicht belegt. [Cron-Jobs](https://help.dogado.de/hc/de/articles/22596259479697) |
-| SSH / SFTP | SSH und SFTP sind über Port 22 mit dem primären FTP-Benutzer beschrieben; zusätzliche FTP-Benutzer sind dafür nicht nutzbar. Das begrenzt die dokumentierte Trennung eigener Transferkonten. Kein Nachweis für Root-Rechte, freie Paketinstallation, dauerhafte Prozesse oder die Freischaltung im Konto. [SSH](https://help.dogado.de/hc/de/articles/28529974109457), [SFTP](https://help.dogado.de/hc/de/articles/28533569940113) |
-| Backup / Restore | Das Help Center beschreibt automatische Sicherung von Webdaten, Datenbanken und E-Mails alle 3 Stunden mit mindestens 7 Tagen Aufbewahrung. DB-Restore ist überschreibend oder in eine separate DB beschrieben; Webdaten zusätzlich in einen separaten Ordner oder als ZIP. Takt, Historie, freie Restore-Quota, Konsistenz und Wiederherstellungszeit im vorhandenen Vertrag sind unbestätigt. [Backup und Datensicherung](https://help.dogado.de/hc/de/articles/22559232450833) |
-| Weitere Funktionen | Die [Hosting-Anleitungen](https://help.dogado.de/hc/de/articles/27369694900753) dokumentieren Subdomains, Let's Encrypt, WAF, Logs und Statistiken. Sinnvolle Prüfkandidaten für getrennte Testumgebung, HTTPS und Fehleranalyse; keine Konto-Bestätigung. |
+| Tarif / Ressourcen: oneHome-Dashboard, Plesk → Konto → Ressourcen | WEB M 3.0 aktiv; **3 von 50 Datenbanken**, rechnerisch 47 freie Plätze. **150 GB Speicher**. oneHome zeigt 6,32 GB belegt, Plesk 7725,7 MB; die unterschiedlichen Nutzungsanzeigen werden nicht gleichgesetzt. Plesk bezeichnet Traffic als unbegrenzt und erlaubt laut Ressourcenansicht Überbeanspruchung von Speicher/Traffic; daraus folgt keine höhere vertragliche Speicherquote. |
+| Weitere Quoten | oneHome: 4 von 50 FTP-Accounts. Plesk: 3 zusätzliche FTP-Konten genutzt, maximal 50 zusätzliche. Diese Zählweisen unterscheiden sich. Kein separates DB-Größen-, Connection-, Inode- oder CPU-/IOPS-Limit in den geprüften Ressourcenansichten ausgewiesen. |
+| DB-Versionen: oneHome → Datenbanken → Anlageformular | Die aufgeklappte Auswahl enthält **MySQL 5.7** und **MySQL 8**, keine weitere Version und kein MariaDB. phpMyAdmin bezeichnet den zweiten Server als **MySQL 8.0**. Es wurde keine DB erstellt und keine Version umgestellt; die genaue 8.x-Patchversion bleibt ungeprüft. |
+| DB-Host / Port: DB-Liste, Pfade und Ports | Alle drei vorhandenen DBs sind als **MySQL 5.7, localhost:3306** ausgewiesen. Das Konto nennt für externen Zugriff **3306 für 5.7 und 3307 für MySQL 8**. Die konkrete lokale MySQL-8-Verbindungsadresse wurde mangels bestehender 8er-Test-DB nicht verifiziert; 127.0.0.1:3307 bleibt hierfür zunächst Dokumentationsangabe. |
+| DB-Größen / phpMyAdmin-Strukturübersicht | Eine vorhandene DB wird mit **6,1 GiB** und InnoDB-Tabellen angezeigt. Das ist eine Ist-Größe, keine zugesicherte Maximalgröße. Tabelleninhalt wurde nicht geöffnet; angezeigte InnoDB-Zeilenzahlen sind Schätzwerte und kein Benchmark. |
+| DB-Benutzer / Rollen | Zwei Benutzer werden verwaltet; einer ist einer konkreten DB zugeordnet, beim anderen steht „Beliebige Datenbank“. Rollenwahl im Anlageformular: **Lesen und Schreiben, Nur lesen, Nur schreiben**. In einer vorhandenen Benutzeransicht sind „Lesen und Schreiben“ und „Nur lokalen Zugriff zulassen“ eingestellt. Dies ist eine Stichprobe, keine Aussage über sämtliche Benutzer oder SQL-GRANT-Details. |
+| Lokaler / externer / IP-Zugriff | Im Konto sind **Nur lokalen Zugriff zulassen, Externen Zugriff zulassen, Benutzerdefinierte Verbindungen zulassen** angeboten. Plesk → Konto → Berechtigungen weist Remotezugriff für DB-Benutzer und Datenbankserverauswahl als erlaubt aus. Es wurde keine Zugriffsart geändert; konkrete IP-Freigaben, TLS und externe Verbindungsfähigkeit bleiben ungeprüft. |
+| phpMyAdmin / Import / Export | Web Admin öffnet angemeldet **phpMyAdmin 5.2.3**. Sichtbar: Struktur, SQL, Suche, Abfrage, Import und Export. Export bietet Schnell/Angepasst und unter anderem SQL, CSV, JSON, XML und YAML. Import bietet unter anderem SQL/CSV/XML, gzip/zip sowie Teilimport bei nahendem PHP-Timeout mit Hinweis auf mögliche Transaktionsunterbrechung. Das Importformular nennt **„Maximal: 2.048 MiB“**. Keine Datei ausgewählt, kein Import/Export gestartet, keine SQL-Abfrage ausgeführt. |
+| PHP-Auswahl: Domains → PHP-Einstellungen | Aufgeklappt verfügbar: **5.2/5.3 FastCGI; 5.4, 5.5, 5.6, 7.0–7.4, 8.0–8.5 FPM**. Bis einschließlich 8.1 mit Hinweis auf erforderlichen erweiterten Support. Eine bestehende Domain ist mit 8.4, weitere mit 8.3 ausgewiesen. Keine Version ausgewählt oder gespeichert. |
+| PHP-Limits / Optionen | Die geprüfte oneHome-PHP-Ansicht zeigt nicht bearbeitbare Paketwerte: **max_memory_limit 256 MB; max_execution_time 900 s; max_input_time 900 s; upload_max_filesize 64 MB; post_max_size 64 MB**. Sichtbare Optionen: allow_url_fopen, allow_url_include, display_errors und opcache_enable. Das Versionsfeld zeigt zunächst „Bitte auswählen“; deshalb werden Formular-Schalterwerte nicht als verifizierte Laufzeitkonfiguration ausgegeben. Die Werte sind kein CLI- oder phpMyAdmin-Limitnachweis. |
+| PHP / Werkzeuge: Pfade und Ports | Das Konto listet versionierte PHP-CLI-Pfade bis **/opt/plesk/php/8.5/bin/php**, darunter /opt/plesk/php/8.4/bin/php, sowie Python, Perl und ImageMagick. Vorhandene Pfadangaben beweisen keine getestete Version, Modulausstattung oder freie Paketinstallation. |
+| Cron / Scheduler: Plesk → Geplante Aufgaben | **9 Aufgaben** sichtbar; darunter aktivierte Minutentakte und weitere periodische Zeitpläne. Das ungespeicherte Anlageformular bietet **Befehl ausführen, URL abrufen, PHP-Skript ausführen**, Cron-Stil sowie Stunden-/Tages-/Wochen-/Monats-/Jahresplanung. Angezeigte Zeitzone: **Europe/Berlin (UTC+02:00 zum Prüfzeitpunkt)**. Benachrichtigung: keine, nur Fehler oder jedes Mal. Keine Aufgabe angelegt, geändert, deaktiviert oder gestartet. Ein konfigurierter Minutentakt beweist keine Ausführungsgarantie. |
+| SSH / SFTP / FTP | Port 22 und die Funktion „SSH/SFTP einrichten“ sind vorhanden. Plesk erlaubt die Verwaltung von SSH-Zugriff mit „Zugriff auf jeden Shell-Typ erlauben“. Primäre/sekundäre FTP-Konten und unterschiedliche Basisverzeichnisse sind sichtbar. Die Einrichtungsschaltfläche wurde nicht betätigt; aktueller Shell-Typ, Login, SFTP und Netzwerkzugriff wurden nicht praktisch getestet. |
+| Backup-Historie: Sicherheit → Backups | **15 angebotene Kalendertage vom 03. bis 17.10.2026**. Für den 17.10. sind 03:50, 06:54 und 09:56 auswählbar. Das ist eine sichtbare Historie, keine vertragliche Retentions- oder exakte RPO-Garantie. Die separate Liste „Abgeschlossene Backups“ ist leer; dies bedeutet nicht, dass keine Sicherungspunkte vorhanden sind. |
+| DB-Restore | Der Assistent bietet alle drei vorhandenen DBs aus dem gewählten Sicherungspunkt an. Schritt 3/4 zeigt **Überschreiben** oder **Wiederherstellen in einer neuen Datenbank**. Keine dieser Ausführungsarten ausgewählt oder gestartet; Assistent abgebrochen. |
+| Webspace-Restore | Verzeichnisse sind einzeln auswählbar. Schritt 3/4 bietet **Überschreiben**, **Wiederherstellen in einem separaten Verzeichnis** und **Archivieren als ZIP im Stammverzeichnis**. Nur die Modi gelesen, anschließend abgebrochen; keine Dateien wiederhergestellt oder Archive erstellt. |
+| Weitere sinnvolle Funktionen | Plesk-Expertenpanel, Web-FTP, Verzeichnisschutz, WAF-Verwaltung, Domain-/Subdomain-Verwaltung und Logs sind vorhanden. Dashboard meldet Firewall aktiv; Vertragsoptionen melden SSL/TLS-Unterstützung an. Plesk-Berechtigungen nennen zusätzlich REST-API sowie Ruby-Verwaltung; Funktions- und Sicherheitsumfang sind nicht praktisch geprüft. |
 
-## 4. Noch offen / praktisch zu testen
+**Relevante Unterschiede:** PHP 8.5 ist im Konto verfügbar, obwohl die bisher
+verwendete PHP-Info-Übersicht nur bis 8.4 verlinkt. Die sichtbare Backup-Historie
+reicht weiter als die allgemein dokumentierten mindestens sieben Tage; daraus
+entsteht keine zusätzliche Vertragszusage. Die Web-PHP-Uploadgrenze 64 MB und die
+phpMyAdmin-Anzeige 2.048 MiB gehören zu unterschiedlichen Oberflächen.
+Speicher- und FTP-Zählweisen unterscheiden sich zwischen oneHome und Plesk.
+Für konkrete Planung gelten die jeweils bestätigte Kontoansicht und deren Kontext.
 
-| Noch lesend im Konto zu klären | Später gesondert praktisch zu testen |
+## 3. Nur durch offizielle Dokumentation bestätigt
+
+Die vorhandenen offiziellen Quellen aus der Vorarbeit bleiben ergänzend gültig;
+in diesem Lauf fand keine allgemeine Ersatzrecherche statt.
+
+| Nur dokumentierter Punkt | Quelle / Grenze |
 | --- | --- |
-| Vollständige DB-Auswahlliste: 5.7, 8.0, gegebenenfalls weitere MySQL-/MariaDB-Versionen; zugehöriges Host/Port-Modell, Wartungs- und Upgradepolitik | Treiberkompatibilität, SQL-Modi, Zeichensätze/Kollationen, Transaktionen, JSON, Index- und Queryverhalten der gewählten Version |
-| Vertragliche und freie DB-Anzahl, DB-Größenlimit, Benutzerzuordnung und verfügbare Rechte | Verbindungs-/Benutzerlimits, konkurrierende Transaktionen, Lock-Wartezeiten und Verhalten bei Fehlern |
-| Lokaler/externer/IP-beschränkter Zugriff, DB-TLS und sichtbare phpMyAdmin-Funktionen und Importgrenzen | Lokaler TCP-Zugriff, nötige externe Verbindung ausschließlich mit begrenzter Freigabe; Import-/Exportdauer und Speicherbedarf |
-| Vollständige PHP-Auswahlliste, Handler, OPcache, PDO/MySQL-, cURL-, mbstring-/intl-Module; Speicher-, Upload-, POST- und Laufzeitwerte; CLI-Pfade/-Versionen | Gleichheit und Unterschiede von Web- und CLI-Laufzeit, ausgehende HTTPS-Verbindungen und Fehlerbehandlung |
-| Cron-Verfügbarkeit, Jobanzahl, Mindestintervall, Zeitzone und sichtbare Laufzeit-/Parallelitätsgrenzen; SSH-/SFTP-Einschränkungen | Überlappungsschutz, Wiederanlauf, begrenzte Collector-/KI-Jobs, Logs und Abbruch nach Zeitbudget |
-| Webspace gesamt/frei, mögliche Datei-/Inode-/Dateigrößenlimits und Nutzungsvorgaben für Medien/Dokumente | Große Dateien nur nach eigener Freigabe; Durchsatz, Quota-Verhalten und Wiederherstellbarkeit |
-| DB-/Webspace-Sicherungspunkte, Retention, Restore-Optionen und benötigte freie Quota | Konsistenter DB-/Dateistand, Restore ausschließlich in isoliertes Ziel, Vollständigkeit, gemessene RPO/RTO und unabhängiger Export |
-| Ausgehende Ports/Netzwerkgrenzen, gegebenenfalls erlaubte VPN-/Worker-Funktionen | Erreichbarkeit erforderlicher Datenquellen; Anbindung eines Heimnetzes ist nicht nachgewiesen |
+| MySQL 8.0 lokal beispielhaft 127.0.0.1:3307; konkrete Verbindungsdetails maßgeblich | [Verbindungsdaten](https://help.dogado.de/hc/de/articles/30150113244817). Port 3307 ist zusätzlich im Konto bestätigt; die lokale Adresse für eine neue Test-DB noch nicht. |
+| Wechsel 5.7 → 8.0 über Export/Import, kein direkter Versionswechsel | [Versionswechsel](https://help.dogado.de/hc/de/articles/24039454806289). Keine Migration durchgeführt. |
+| IP-Adressen für benutzerdefinierten DB-Zugriff; größere Importe alternativ per SSH | [Zugriffssteuerung](https://help.dogado.de/hc/de/articles/27402680955409), [Import](https://help.dogado.de/hc/de/articles/25399928393489). UI-Optionen bestätigt, Verbindungen und Importe ungetestet. |
+| SSH/SFTP mit primärem FTP-Benutzer, zusätzliche FTP-Benutzer dafür nicht nutzbar | [SSH](https://help.dogado.de/hc/de/articles/28529974109457), [SFTP](https://help.dogado.de/hc/de/articles/28533569940113). Diese konkrete Einschränkung wurde nicht durch Login getestet. |
+| Allgemein Sicherungen alle drei Stunden, mindestens sieben Tage Aufbewahrung | [Backup](https://help.dogado.de/hc/de/articles/22559232450833). Konto-Historie und Restore-Modi sind oben separat belegt; Konsistenz und Wiederherstellungszeit nicht. |
+| PHP-Ressourcenlimits paketabhängig; Versions-/Optionsverwaltung | [PHP-Info](https://help.dogado.de/hc/de/articles/30783660021265), [PHP-Einstellungen](https://help.dogado.de/hc/de/articles/23639059019921). Tatsächliche Auswahl und sichtbare Paketwerte stehen oben. |
+| Cron-Anwendungsfälle und allgemeine Verfügbarkeit ab WEB M | [Cron](https://help.dogado.de/hc/de/articles/22596259479697). Im vorhandenen Konto zusätzlich durch Plesk-Scheduler bestätigt. |
 
-Für ausgehende Ports lieferte der verlinkte Help-Center-Artikel beim Abruf HTTP 404;
-daraus wird weder Erreichbarkeit noch eine Portsperre abgeleitet.
-Abweichungen zwischen Konto und Dokumentation konnten mangels Kontosicht nicht
-geprüft werden. Beim späteren Abgleich hat der tatsächliche Kontozustand Vorrang.
+## 4. Noch offen / später praktisch zu testen
 
-## 5. Empfehlung für MOSA-2-Testplattform
+Die folgenden Punkte sind **kein ausstehender Browserzugriff**, sondern Grenzen der
+zulässigen Bestandsaufnahme oder spätere Messaufgaben:
 
-**Planungsvorschlag, keine endgültige technische Festlegung:** MySQL 8.0 und PHP 8.4
-zuerst prüfen, weil diese Kombination öffentlich dokumentiert ist. Vor Freigabe die
-aktuellen Kontooptionen einschließlich neuerer Versionen sowie deren Wartungsdauer
-vergleichen. MySQL 5.7 nur als mögliche Migrationsquelle behandeln.
+- MySQL-8-Patchversion, tatsächlicher lokaler Host, SQL-Modi, Kollationen, TLS,
+  SQL-Einzelrechte sowie Wartungs-/Upgradepolitik; keine neue DB nur zur Ermittlung angelegt.
+- Maximale DB-Größe, Verbindungs-/Benutzerlimits, Lock-Zeiten, CPU, RAM, IOPS,
+  Prozesse, Datei-/Inodegrenzen und Speicherabrechnung; aus Ist-Größen nichts ableiten.
+- Web-/CLI-PHP-Versionen und Module, effektive OPcache-Konfiguration,
+  CLI-Laufzeitgrenzen, ausgehendes HTTPS und weitere Ports. Die Pfadliste ersetzt keine Messung.
+- Tatsächliche lokale/externe/IP-beschränkte DB-Verbindungen und SFTP/SSH-Anmeldung.
+  Keine Freigaben, Passwörter oder Shell-Einstellungen geändert.
+- Scheduler-Ausführungsdauer, Parallelität, Jobanzahl-Limit, Überlappungsschutz,
+  Wiederanlauf und Ausführungsgarantie. Bestehende Aufgaben nicht testweise gestartet.
+- Upload/Import über angezeigte Grenzwerte, große Exporte und Datenmigration,
+  konsistenter DB-/Dateistand, Restore-Prüfung, freie Quota beim Restore sowie RPO/RTO.
+- Medien-/Dateidurchsatz, Eignung für große Archive, dauerhafte Worker,
+  Docker/Root/Paketinstallation sowie VPN-/Heimnetz-Anbindung nicht zugesichert.
+- Unterschiedliche Belegungsanzeigen vor einer kapazitätskritischen Migration klären;
+  Vertragsgarantien zur Backup-Retention gesondert von sichtbaren Sicherungstagen behandeln.
 
-Nach Kontobestätigung lokal verbinden, einen eigenen Testbereich und getrennte
-DB-Zuordnung vorsehen und Cron für kurze, wiederaufnehmbare Jobs bewerten.
-SFTP/SSH, OPcache, Logs und getrennten Restore nur nutzen, soweit tatsächlich
-verfügbar. Produktionsdaten und MOSA bleiben unberührt.
+## 5. Empfehlung für die MOSA-2-Testplattform
 
-Nicht voraussetzen: unbegrenzte DB-/Dateigröße, garantierte CPU/IOPS oder Parallelität,
-Root-Zugriff, Docker, dauerhafte Worker, VPN/Heimnetzzugriff, beliebige ausgehende
-Ports, ausreichend große Browserimporte oder ein bereits bewiesenes Restore.
+**MySQL 8.0, PHP 8.4/FPM und versionierte PHP-8.4-CLI** zunächst isoliert testen.
+MySQL 8.0 ist im Serverselektor ausdrücklich benannt; MySQL 5.7 bleibt Quelle.
+PHP 8.4 ist bereits für eine bestehende Domain ausgewiesen. **PHP 8.5** als
+zusätzlichen Kandidaten vergleichen, bevor der endgültige Laufzeitstandard feststeht.
+Die Verfügbarkeit alleine entscheidet weder Kompatibilität noch langfristigen Support.
 
-Wesentliche Risiken: unbekannte Ressourcen für große Historientabellen; Kollations-
-und SQL-Unterschiede bei Migrationen; fehlende freie Quota für parallele DBs/Restore;
-unklare Konsistenz von DB- und Dateibackup; Medienwachstum und lange KI-/Collector-Jobs.
-Große Dateien gemäß bestehender Planung außerhalb der DB halten. Ein externer
-Worker oder separater Dateispeicher bleibt eine spätere Entscheidung nach Messung.
+Nach ausdrücklicher Freigabe: eigene Test-DB und eigener Testbereich, lokale
+DB-Verbindung, getrennte Rollen und kurze, wiederaufnehmbare Cron-Jobs. Logs,
+OPcache, SSH/SFTP und Restore in getrennte Ziele nur nach erforderlicher Prüfung nutzen.
+Große Dateien entsprechend dem bestehenden Datenbankplan außerhalb der DB ablegen.
 
-## 6. Nächste Testphase
+Risiken bleiben Shared-Hosting-Ressourcen für große Historien, SQL-/Kollationswechsel,
+lange KI-/Collector-Jobs, ungemessene Parallelität, Backups von DB und Dateien sowie
+wachsende Medienbestände. Root, dauerhafte Worker und Heimnetzzugriff nicht voraussetzen.
+Keine bestehende Architektur oder produktive Laufzeit wurde geändert.
 
-**Nur vorbereitet, nicht durchgeführt; ausdrücklich gesondert freizugeben.**
+## 6. Nächste ausdrücklich freizugebende Testphase
 
-1. Zuerst die offene Konto-Bestandsaufnahme vervollständigen, Vertragslimits und
-   freie Quota bestätigen; Testversionen und einen begrenzten Ressourcenrahmen festlegen.
-2. Danach isolierte MOSA-2-Test-DB und Testbereich mit synthetischen Daten vorsehen.
-   Vorschlag: zunächst 10.000, dann 100.000 Historienzeilen; 1 Million erst nach
-   gesonderter Größen-/Lastfreigabe. Current-Lesewege und History-Abfragen getrennt messen.
-3. Indizes und EXPLAIN, Sortierung/Pagination, Migration mit Checkpoints und
+**Nur vorbereitet, nicht durchgeführt.**
+
+1. Isolierte MySQL-8-Test-DB und Testbereich mit begrenztem Ressourcenbudget vorsehen;
+   lokale Verbindung und Rechte, genaue DB-/PHP-Versionen sowie Module prüfen.
+2. Synthetische Historien mit zunächst 10.000 und 100.000 Zeilen; 1 Million erst nach
+   eigener Größen-/Lastfreigabe. Current-Lesewege und History getrennt messen.
+3. EXPLAIN/Indizes, Filter, Sortierung/Pagination, Checkpoint-Migration und
    Wiederholbarkeit prüfen; paralleles Lesen/Schreiben zunächst mit zwei Clients.
-4. p50/p95 für Abfragen und Seiten sowie DB-Zeit messen; gegen die bestehenden
-   Ziele im [Datenbank-README](README.md#performance-budget) vergleichen. Abbruchgrenzen
-   vorab festlegen; keine Lastannahmen aus allgemeinen Hosting-Angaben ableiten.
-5. Synthetischen Export/Import und Restore in getrennte Ziele samt Prüfsummen,
-   Zeilenzahlen und Zeitmessung testen. Cron/CLI-Version, Jobüberlappung,
-   Wiederanlauf und ausgehendes HTTPS begrenzt prüfen.
-6. Erst nach Konto- und Messnachweis DB-Version, Laufzeit und Betriebsgrenzen
-   verbindlich festlegen. Issue #4 erst nach erfüllter Kontoprüfung abschließen.
+4. p50/p95 und gesamte DB-Zeit gegen die [bestehenden Performanceziele](README.md#performance-budget)
+   messen; Abbruchgrenzen vorab festlegen. PHP 8.4 und 8.5 vergleichen.
+5. Synthetischen Export/Import und DB-/Datei-Restore ausschließlich in getrennte
+   Ziele samt Zeilenzahlen, Prüfsummen, Konsistenz- und Zeitprüfung testen.
+6. Begrenzte Cron-/CLI-Jobs, Überlappungsschutz, Wiederanlauf und nötige
+   Netzwerkverbindungen prüfen. Erst nach diesen Ergebnissen die Plattform festlegen.
