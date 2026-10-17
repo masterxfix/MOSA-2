@@ -73,6 +73,7 @@ function executeProfile(array $target, string $password): array
 {
     if (defined('MOSA2_HISTORY_10000') || defined('MOSA2_HISTORY_PROFILE')) {
         \Mosa2\History10000\profileSpec();
+        if (defined('MOSA2_HISTORY_OPTIMIZATION')) return \Mosa2\HistoryOptimization\dispatch($target, $password, __DIR__, PHP_SAPI === 'cli' ? (string) ($GLOBALS['argv'][2] ?? '') : '--measure');
         return \Mosa2\History10000\dispatch(
             $target, $password, __DIR__,
             PHP_SAPI === 'cli' ? (string) ($GLOBALS['argv'][2] ?? '') : '--measure'
@@ -154,6 +155,13 @@ try {
     ensure(is_string($_POST['csrf'] ?? null) && isset($_SESSION['csrf']) && hash_equals($_SESSION['csrf'], $_POST['csrf']), 'csrf_rejected');
     unset($_SESSION['csrf']);
     $report = executeProfile($target, storedPassword());
+    if (defined('MOSA2_HISTORY_OPTIMIZATION') && ($report['ok'] ?? false) && ($report['stage'] ?? '') !== 'ascending') {
+        // Keep the same bounded authenticated session for the next server-prepared stage.
+        // No GET executes a test; a fresh one-use CSRF token is required for every POST.
+        $_SESSION['csrf'] = bin2hex(random_bytes(32));
+        $token = htmlspecialchars($_SESSION['csrf'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        page('<h1>History-Vergleich</h1><pre>' . htmlspecialchars(reportJson($report), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre><form method="post"><input type="hidden" name="action" value="run"><input type="hidden" name="csrf" value="' . $token . '"><button type="submit">Nächste vorbereitete Variante einmal messen</button></form>');
+    }
     $_SESSION = [];
     session_destroy();
     setcookie(session_name(), '', ['expires' => time() - 3600, 'path' => $target['entry_path'], 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);

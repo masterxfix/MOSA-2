@@ -195,7 +195,13 @@ function counts(PDO $pdo, array $state): array
     return $counts;
 }
 
-function build(PDO $pdo, string $path, float $deadline): array
+function historyTimeIndex(string $direction = 'ASC'): string
+{
+    ensure(in_array($direction, ['ASC', 'DESC'], true), 'invalid_index_direction');
+    return "KEY history_time(entity_id,observed_at $direction,id $direction)";
+}
+
+function build(PDO $pdo, string $path, float $deadline, string $indexDirection = 'ASC'): array
 {
     ensure(!file_exists($path), 'build_already_started');
     $available = rights($pdo);
@@ -211,10 +217,11 @@ function build(PDO $pdo, string $path, float $deadline): array
     $e = ownedName($state, 'entity'); $i = ownedName($state, 'identity');
     $h = ownedName($state, 'history'); $c = ownedName($state, 'current'); $m = ownedName($state, 'migration');
     $historyMax=$spec['limits']['history']; $perEntity=$spec['per_entity'];
+    $timeIndex=historyTimeIndex($indexDirection);
     $definitions = [
         'entity' => "(id SMALLINT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 100), code VARCHAR(32) NOT NULL UNIQUE)",
         'identity' => "(id SMALLINT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 100), entity_id SMALLINT UNSIGNED NOT NULL UNIQUE, namespace VARCHAR(20) NOT NULL, external_key VARCHAR(24) NOT NULL, UNIQUE KEY identity_lookup(namespace,external_key), FOREIGN KEY(entity_id) REFERENCES $e(id))",
-        'history' => "(id INT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND $historyMax), entity_id SMALLINT UNSIGNED NOT NULL, sequence_no SMALLINT UNSIGNED NOT NULL CHECK(sequence_no BETWEEN 1 AND $perEntity), observed_at DATETIME(6) NOT NULL, synthetic_value INT NOT NULL, UNIQUE KEY history_sequence(entity_id,sequence_no), KEY history_time(entity_id,observed_at DESC,id DESC), FOREIGN KEY(entity_id) REFERENCES $e(id))",
+        'history' => "(id INT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND $historyMax), entity_id SMALLINT UNSIGNED NOT NULL, sequence_no SMALLINT UNSIGNED NOT NULL CHECK(sequence_no BETWEEN 1 AND $perEntity), observed_at DATETIME(6) NOT NULL, synthetic_value INT NOT NULL, UNIQUE KEY history_sequence(entity_id,sequence_no), $timeIndex, FOREIGN KEY(entity_id) REFERENCES $e(id))",
         'current' => "(entity_id SMALLINT UNSIGNED PRIMARY KEY, history_id INT UNSIGNED NOT NULL, observed_at DATETIME(6) NOT NULL, synthetic_value INT NOT NULL, FOREIGN KEY(entity_id) REFERENCES $e(id), FOREIGN KEY(history_id) REFERENCES $h(id))",
         'migration' => "(id SMALLINT UNSIGNED PRIMARY KEY CHECK(id BETWEEN 1 AND 10), version_tag VARCHAR(32) NOT NULL UNIQUE, applied_at DATETIME(6) NOT NULL)",
     ];
@@ -360,15 +367,14 @@ function correctness(PDO $pdo, array $state, float $deadline): array
     return $checks;
 }
 
-function measure(PDO $pdo, array &$state, string $path, float $deadline): array
+function measureQueries(PDO $pdo, array $state, float $deadline, ?array $only = null): array
 {
-    ensure(($state['ready'] ?? false) === true && !($state['cleaned'] ?? false), 'dataset_not_ready');
-    ensure(isset($state['used'][PHP_SAPI]) && $state['used'][PHP_SAPI] === false, 'runtime_already_measured');
-    $state['used'][PHP_SAPI] = true; saveState($path, $state); // Reserve whole bounded run before any samples.
-    foreach (profileSpec()['limits'] as $kind => $limit) ensure(proveOwnership($pdo,$state,$kind), 'owned_table_missing');
-    $report = ['ok' => true, 'runtime' => ['php' => PHP_VERSION, 'sapi' => PHP_SAPI, 'pdo_mysql' => true], 'session' => sessionState($pdo), 'build' => $state['build'], 'checks' => [], 'queries' => []];
+    $queries=[];
     $expected = expectedQueries();
-    foreach (querySet($state) as $kind => [$sql,$params]) {
+    $set=querySet($state);
+    ensure($only===null || ($only!==[] && count(array_unique($only))===count($only) && array_diff($only,array_keys($set))===[]), 'invalid_query_selection');
+    foreach ($set as $kind => [$sql,$params]) {
+        if ($only!==null && !in_array($kind,$only,true)) continue;
         $times = []; $q = $pdo->prepare($sql);
         for ($n=0; $n<SAMPLES; ++$n) {
             checkpoint($deadline); $start=hrtime(true); $q->execute($params); $actual=$q->fetchAll(PDO::FETCH_NUM); $times[]=(hrtime(true)-$start)/1e6;
@@ -380,8 +386,19 @@ function measure(PDO $pdo, array &$state, string $path, float $deadline): array
             if (str_starts_with($kind,'history_') || $kind==='chart') ensure($row['type'] !== 'ALL' && $row['key'] !== null, 'history_index_not_used');
         }
         $first=array_shift($times);
-        $report['queries'][$kind]=['first_ms'=>round($first,4), 'total_executions'=>SAMPLES, 'subsequent'=>statistics($times), 'explain'=>$plan];
+        $queries[$kind]=['first_ms'=>round($first,4), 'total_executions'=>SAMPLES, 'subsequent'=>statistics($times), 'explain'=>$plan];
     }
+    return $queries;
+}
+
+function measure(PDO $pdo, array &$state, string $path, float $deadline): array
+{
+    ensure(($state['ready'] ?? false) === true && !($state['cleaned'] ?? false), 'dataset_not_ready');
+    ensure(isset($state['used'][PHP_SAPI]) && $state['used'][PHP_SAPI] === false, 'runtime_already_measured');
+    $state['used'][PHP_SAPI] = true; saveState($path, $state); // Reserve whole bounded run before any samples.
+    foreach (profileSpec()['limits'] as $kind => $limit) ensure(proveOwnership($pdo,$state,$kind), 'owned_table_missing');
+    $report = ['ok' => true, 'runtime' => ['php' => PHP_VERSION, 'sapi' => PHP_SAPI, 'pdo_mysql' => true], 'session' => sessionState($pdo), 'build' => $state['build'], 'checks' => [], 'queries' => []];
+    $report['queries']=measureQueries($pdo,$state,$deadline);
     $report['checks'] = correctness($pdo,$state,$deadline);
     $report['approximate_table_statistics']=tableStatistics($pdo,$state);
     saveState(dirname($path).'/result-'.(PHP_SAPI==='cli'?'cli':'fpm').'.json',$report);

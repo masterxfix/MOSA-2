@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** 100.000er-Test durchgeführt und bereinigt · Korrektheit bestätigt, breites Zeitfenster über Zielwert · Issue #5 und weitere Freigaben offen
+**Status:** 100.000er-Test und gezielte History-Optimierung durchgeführt und bereinigt · breiter Leseweg mit ASC-Index unter Zielwert · Issue #5 und weitere Freigaben offen
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -397,6 +397,107 @@ Zusammen ungefähr **10.944 KiB = 10,69 MiB**, vorher ungefähr 960 KiB. History
 - Keine Änderungen an AGENTS.md, Workflows, Deployment-Secrets, fixlab oder bestehenden MOSA-Ressourcen; kein Produktionsdeployment, keine Million Zeilen, Parallel- oder Restore-Tests.
 
 **Nächster sinnvoller Schritt:** das breite Zeitfenster und die Planwahl gezielt in einem gesondert freizugebenden Optimierungsauftrag untersuchen. In diesem Auftrag keine Abfrage-/Indexvarianten nachgetestet und keine weitere Datenstufe begonnen. Korrekte 100.000er-Datenverarbeitung ist belegt; der breite Leseweg ist vor weiterer Skalierung zu klären. **Issue #5 bleibt offen**, endgültiges Schema unfreigegeben.
+
+## Phase 1E – breiten History-Leseweg gezielt optimieren
+
+**Nachweisstand: 17.10.2026, 18:41:17 Europe/Berlin (MESZ, UTC+02:00), nach Live-Bereinigung. Fachliches Ergebnis: erfolgreich innerhalb dieses begrenzten Optimierungsauftrags.** Das breite Fenster erreicht unter CLI und FPM sowohl Median als auch p95 unter 100 ms. Ergebnissemantik und schnelle Vergleichsabfragen bleiben erhalten. Keine allgemeine Skalierungs-/Produktivfreigabe; Issue #5 bleibt offen.
+
+### Neuer Auftrag und kontrollierter Vergleich
+
+Ausgangsstand: 8b14363dabf0a596949c9172f343f10fc52193e5. Vor Facharbeit wurde **genau die neue native Nachricht** bestätigt: Eingang 18:24:18, Serverempfang 18:24:20 Europe/Berlin; quittiertes Describe/Plan und neuer Betreff **„Datenbank-Testplattform: breiten History-Leseweg optimieren“** mit sieben eigenen Schritten im bestehenden Kontrollzentrum sichtbar. Keine alten Turn-Kennungen oder künstlichen Start-/Stop-Ereignisse. Eine eigene unzulässige Step-Reihenfolge wurde abgewiesen und im selben Lauf über gültige Zustandsübergänge korrigiert; dies war kein Datenbankfehler. Nachfolgende Live-Befunde und Bereinigung wurden quittiert und sichtbar geprüft.
+
+[Gemeinsamer Phase-1B-Kern](../../scripts/phase1b/probe.php), [Phase-1B-Adapter](../../scripts/phase1b/entry.php) und [Phase-1C/1D-Profil](../../scripts/phase1c/profile.php) wiederverwendet. Der [begrenzte Vergleichsablauf](../../scripts/phase1e/optimization.php) verwendet dieselbe gemeinsame Abfrage-, Mess-, Korrektheits-, Aufbau- und Bereinigungslogik. Keine parallele Testarchitektur.
+
+**Einmaliger erneuter CLI-Aufbau:** genau 100.000 synthetische History-Zeilen, 100 künstliche Objekte × 1.000; Entity/Identity/Current jeweils 100, Migrationsprotokoll 1. Genau 200 gestreamte History-Batches à 500 und vier Nebenbatches. Keine weiteren Datenstufen, kein Anhängen, keine Wiederholungs- oder Parallelmessung. Alle drei Zustände nutzten denselben Bestand.
+
+Ausgangsindex ausdrücklich wie im vorherigen Lauf aufgebaut: history_time(entity_id, observed_at DESC, id DESC). Unveränderte Baseline zuerst unter beiden SAPIs gemessen, danach **zwei** Kandidaten in fester Reihenfolge:
+1. Nur in der Testverbindung prefer_ordering_index=off setzen; Index und SQL unverändert.
+2. Den vorhandenen Index durch history_time(entity_id, observed_at ASC, id ASC) ersetzen; normale Optimizer-Präferenz wieder on. Kein zusätzlicher Index und keine SQL-Änderung.
+
+Serverseitige Whitelist und privates Manifest begrenzen Reihenfolge und genau einen Lauf je Zustand/SAPI. FPM kann nur den zuvor per CLI vorbereiteten Zustand messen; HTTP kann weder Variante, Datenmenge noch Profil frei bestimmen. Neue Stage-Statistiken umgehen weder die bestehenden Profilgrenzen noch die unveränderte Grenze von 30 Werten je Statistik.
+
+### Ursache mit geschätzter und tatsächlicher Sucharbeit
+
+Tatsächlich **MySQL 8.0.26-16**, CLI **PHP 8.4.12**, FPM **PHP 8.4.26**, jeweils PDO-MySQL. EXPLAIN ANALYZE wurde sicher unterstützt und genau einmal je Zustand/SAPI zusätzlich zur regulären Messung ausgeführt, mit SELECT-Zeitgrenze 3 s. Es führt die begrenzte SELECT tatsächlich aus; seine instrumentierten Zeiten gehören nicht zu den elf normalen Laufzeitwerten.
+
+| Zustand | EXPLAIN breite Abfrage | EXPLAIN ANALYZE, beide SAPIs |
+| --- | --- | --- |
+| Baseline | index / history_time; geschätzt CLI 5.000, FPM 5.003; Using where; Backward index scan; kein Filesort | Rückwärts-Indexscan liefert tatsächlich **93.050 Zeilen** an den Filter; Filter/LIMIT geben 50 aus. Instrumentierter Gesamtabschluss CLI 136,267 ms / FPM 128,605 ms. |
+| Kandidat 1 | ref / history_sequence; geschätzt 1.000; Using where; Using filesort | Entity-Lookup liefert 1.000 Zeilen, Zeitfilter 900, Top-50-Sortierung/LIMIT 50. |
+| Kandidat 2 | ref / history_time; geschätzt 1.000; Using index condition; kein Filesort | Selektiver Entity-Lookup mit Zeitbedingung liefert dem LIMIT **50 Zeilen**, ein Durchlauf. Instrumentierter Gesamtabschluss CLI 0,140 ms / FPM 0,152 ms. |
+
+Die Ursache ist im gemessenen Lauf die **unselektive Planwahl zugunsten der vorhandenen Sortierreihenfolge**: Der rückwärts gerichtete Gesamtindexscan filtert die Entity erst nach vielen anderen Objekten. LIMIT 50 begrenzt die Ausgabe und verhindert diese Sucharbeit nicht. Das reine Abschalten der Sortierindex-Präferenz beseitigt den schlechten Plan bereits, benötigt aber mehr Entity-Zeilen und eine Sortierung. Die strukturelle ASC-Variante ermöglicht bei normaler Optimizer-Konfiguration einen selektiven Zugriff ohne Filesort.
+
+Die tatsächlichen Zeilen oben sind die vom jeweiligen ANALYZE-Operator ausgegebenen Zeilen, getrennt von Optimizer-Schätzungen. Interne InnoDB-Prüfschritte, physische Seitenzugriffe und Cache-Treffer wurden nicht separat gemessen. Es wird kein allgemeiner MySQL-Fehler oder Vorteil aller Vorwärts- gegenüber Rückwärtsscans behauptet.
+
+### Laufzeiten auf identischem Bestand
+
+Je fünf Abfragetypen, drei Zustände und SAPI elf reguläre Ausführungen: **erste separat; Median/p95 aus zehn Folgewerten**, Nearest-Rank (p95 hier Maximum). Insgesamt 330 reguläre, begrenzte SELECT-Messungen. Zusätzlich gemeinsame Korrektheitsprüfungen und die sechs genannten ANALYZE-Ausführungen; keine weiteren Kandidaten oder Messwiederholungen.
+
+PHP-Wandzeit für PDO execute plus begrenzten Abruf; Vorbereitung/Verbindung/DDL nicht enthalten. Keine Cache-Leerung; erster Wert kein nachgewiesener Kaltstart. Sequenzielle Hosting-Stichprobe, kein Last-/Paralleltest.
+
+#### Baseline: DESC, Optimizer normal
+
+| Abfrage | CLI erste / Median / p95 (ms) | FPM erste / Median / p95 (ms) |
+| --- | ---: | ---: |
+| Current einzeln | 0.3859 / 0.1435 / 0.1895 | 0.2121 / 0.0957 / 0.1637 |
+| Neueste History | 0.4506 / 0.3039 / 1.0191 | 0.3858 / 0.3024 / 0.3789 |
+| Schmales Zeitfenster | 0.3028 / 0.3643 / 0.5574 | 0.2553 / 0.2083 / 0.2486 |
+| Chart, LIMIT 25 | 0.3818 / 0.4721 / 0.6281 | 0.3464 / 0.3579 / 1.0415 |
+| Breites Zeitfenster, LIMIT 50 | 130.4747 / 118.4536 / 124.1564 | 124.9075 / 121.8794 / 125.0455 |
+
+#### Kandidat 1: DESC, prefer_ordering_index=off
+
+| Abfrage | CLI erste / Median / p95 (ms) | FPM erste / Median / p95 (ms) |
+| --- | ---: | ---: |
+| Current einzeln | 0.2394 / 0.0990 / 0.1388 | 0.2952 / 0.1229 / 0.2347 |
+| Neueste History | 0.3517 / 0.2733 / 0.3864 | 0.4014 / 0.2852 / 0.3600 |
+| Schmales Zeitfenster | 0.2400 / 0.1924 / 0.2260 | 0.2379 / 0.1853 / 0.2286 |
+| Chart, LIMIT 25 | 0.3779 / 0.3328 / 0.3667 | 0.3377 / 0.3215 / 0.3679 |
+| Breites Zeitfenster, LIMIT 50 | 1.8552 / 1.7399 / 40.8880 | 1.7223 / 1.6035 / 1.7269 |
+
+#### Kandidat 2: ASC, Optimizer normal
+
+| Abfrage | CLI erste / Median / p95 (ms) | FPM erste / Median / p95 (ms) |
+| --- | ---: | ---: |
+| Current einzeln | 0.2608 / 0.0986 / 0.1710 | 0.2024 / 0.0965 / 0.1247 |
+| Neueste History | 0.8378 / 0.2796 / 0.3311 | 0.3727 / 0.2656 / 0.3433 |
+| Schmales Zeitfenster | 0.2441 / 0.1865 / 0.2223 | 0.2622 / 0.1890 / 0.2411 |
+| Chart, LIMIT 25 | 0.3684 / 0.3333 / 0.4016 | 0.3573 / 0.3221 / 0.8414 |
+| Breites Zeitfenster, LIMIT 50 | 0.4120 / 0.3575 / 0.4157 | 0.4530 / 0.3814 / 0.4315 |
+
+**Zielvergleich:** breite Abfrage vorher in diesem Lauf Median CLI/FPM **118,4536 / 121,8794 ms**, p95 **124,1564 / 125,0455 ms**; nach ASC-Umstellung Median **0,3575 / 0,3814 ms**, p95 **0,4157 / 0,4315 ms**. Beide Kennwerte beider SAPIs klar unter **100 ms**, auch die ersten Werte. Zum älteren Phase-1D-Lauf (123,2527 / 134,3951 ms Median und 152,6096 / 168,0070 ms p95) passt die erneut langsame Baseline; maßgeblich für den Optimierungsvergleich ist die Baseline desselben Laufs.
+
+Die vier bisherigen kritischen Vergleichsmuster zeigen keine wesentliche Regression: Current-Median CLI 0,1435 → 0,0986 ms, FPM 0,0957 → 0,0965 ms; neueste History 0,3039 → 0,2796 bzw. 0,3024 → 0,2656 ms; schmales Fenster 0,3643 → 0,1865 bzw. 0,2083 → 0,1890 ms; Chart 0,4721 → 0,3333 bzw. 0,3579 → 0,3221 ms. Alle Vergleichs-p95 nach ASC unter 1 ms. Diese kleinen Schwankungen belegen keine allgemeine Beschleunigung aller Seiten.
+
+Gewählter Index: Current weiter const/PRIMARY; neueste History ref/history_time mit Backward index scan; schmales Fenster range/history_time, geschätzt zehn Zeilen und kein Filesort; Chart ref/history_time mit Backward index scan. Kein ungebundener Full Scan in diesen normalen Lesewegen.
+
+### Semantik, allgemeine Integration und Indexaufwand
+
+Alle sechs Stage-/SAPI-Berichte bestätigten vollständige Korrektheit: exakte Mengen, eindeutige Zuordnungen, keine verwaisten Daten, Current = neueste History, erwartete Ergebnisse aller gemeinsamen Abfragen, leere/Zeitgrenzenfälle und Zeitstempelgleichstände, kein Current-Duplikat oder Rückschritt, erfolgreiches Rollback und unveränderte History-Prüfsumme.
+
+Die breite Abfrage ist **bytegleich unverändert**: eine gebundene Entity, untere Zeitgrenze inklusive, obere exklusiv, ORDER BY observed_at,id aufsteigend, LIMIT 50. Dieselben Parameter und exakt dieselben vollständigen 50 erwarteten Zeilen in Baseline und beiden Kandidaten. Im Testzeitraum liegen 900 passende History-Zeilen; Gleichstände werden unverändert nach ID aufgelöst.
+
+Die erfolgreiche Lösung ist **ASC als allgemeine Voreinstellung des gemeinsamen Index-Builders** für beide vorhandenen Profile. Die explizite DESC-Option dient dem reproduzierbaren alten Ausgangszustand dieses Vergleichs. Keine Bedingung für Entity 7, Datum oder Zeilenzahl, keine FORCE-INDEX-Dauerlösung, kein dauerhaft geänderter Optimizer-Schalter, keine neue Summary-/Cache-Tabelle und kein endgültiges Core-Schema. Absteigende Latest-/Chart-Abfragen verwenden denselben ASC-Index rückwärts und bleiben schnell.
+
+- History behält PRIMARY und **dieselben zwei Sekundärindizes** (eindeutiger Sequenzindex und Zeitindex), mit denselben Spalten/Breiten. **Kein zusätzlicher dauerhafter Indexspeicher durch einen weiteren Index.**
+- Einmaliger DROP/ADD-Umbau ausschließlich der eigenen History-Tabelle: **335,4381 ms**. Temporärer DDL-Arbeitsraum/Spitzenspeicher und künftige Schreiblast wurden nicht gemessen; dies ist keine kostenfreie Produktionsmigration.
+- Näherungsweise Metadaten vor/nach Umbau: History **4.734.976 Bytes Daten + 6.324.224 Bytes Sekundärindizes**; fünf Tabellen zusammen **10.944 KiB**. Kein erkennbarer Mehrverbrauch in diesen Metadaten. Direkt nach Laden gelesene CLI-Größen waren noch veraltet; spätere FPM-Werte verwenden.
+- InnoDB-Seitenbelegung ist keine exakte Nutzdaten-/Backupgröße; Metadaten können zeitlich nachlaufen. Keine Cache-Leerung, kein globales ANALYZE/Flush und keine globale Einstellung verändert. Der Umbau ersetzt die Indexrichtung; seine gemeldeten Größen beweisen keine allgemein identische physische Belegung.
+
+### Schutz, Bereinigung und Prüfungen
+
+- Exakte isolierte Testdatenbank, bestehender Testbenutzer und 127.0.0.1:3307 vor Schreibblöcken geprüft. Keine Rechte erweitert; utf8mb4_0900_as_cs, strikte Session-Modi, UTC und REPEATABLE-READ beibehalten.
+- Derselbe bestehende Passwort-/HTTPS-/IP-/Host-/Origin-/POST-/CSRF-Schutz; **vor Nutzung tatsächlich HTTP 403** für nicht erlaubte Herkunft. Nutzer gab das bestehende Passwort ausschließlich im maskierten Formular ein. Keine Secrets in GitHub, Statusmeldungen oder Ausgaben.
+- Derselbe kurzlebige geschützte Browser-Login für die drei serverseitig vorbereiteten Zustände; jedes Mal ein frisches einmaliges CSRF-Token, keine öffentliche Variantenwahl, keine Tests durch GET. Nach der letzten Variante Sitzung zerstört.
+- Privater Code und Konfiguration außerhalb öffentlicher Dokumentstämme/GitHubs, Verzeichnisse 0700 und Passwortdatei 0600. CLI ausschließlich über das ungespeicherte inaktive Plesk-„Jetzt ausführen“-Formular ohne Benachrichtigungen; anschließend abgebrochen. **Neun geplante Aufgaben vor/nachher**, keine gespeichert.
+- Ausschließlich fünf eigene Tabellen nach Manifest-/Eigentumsprüfung entfernt; **null Tabellen** wiederhergestellt. Elf Quellen gegen GitHub-Hashes und sechs erfolgreiche Berichte vor Entfernung geprüft. Danach eigener Code, Passwort/Konfiguration, Manifest, Berichte, Schloss/Sitzungen und öffentlicher Einstieg vollständig entfernt.
+- Einstieg anschließend **HTTP 404**, neutrale HTTPS-Startseite **HTTP 200**, sichtbar und vollständig bytegenau wie vorhandenes Fixture. Keine Zertifikats-/Startseitenänderung.
+- **Elf PHP-Dateien gelintet**, **17** bestehende Basis-, **80** unveränderte 10.000er-, **264** unveränderte 100.000er- sowie **54** neue Offline-Prüfungen erfolgreich, ohne Datenbankverbindung. Angepasster Sitzungsadapter anschließend erneut erfolgreich gelintet.
+- [Neue CI-Prüfung](../../tests/test_history_optimization.py) prüft PHP-Lint und Offline-Schutz für Indexrichtung, Zustand/SAPI-Reihenfolge, Wiederholungs-/Kandidatenbudget, unveränderte Query-Semantik und Trennung geschätzter/tatsächlicher ANALYZE-Zeilen.
+- Veröffentlichungsschranke: genau ein Abschluss-Commit mit [skip ci], derselbe SHA auf Prüfbranch im unveränderten Validierungsworkflow einschließlich git diff --check HEAD^ HEAD; Deploy muss übersprungen sein, erst danach derselbe Commit auf main. Konkreter Lauf und Resultat werden in Issue #5 festgehalten.
+
+**Entscheidung:** ASC-Index allgemein im gemeinsamen Testkern übernehmen. Die gestellte begrenzte Optimierung ist fachlich erfolgreich; die vorherige offene Planwahl ist für diesen 100.000er-Leseweg geklärt. Keine Freigabe für Million Zeilen, Parallelbetrieb, Last, Backup/Restore, endgültiges Core-Schema oder Produktion. Nächste Testphase wurde nicht begonnen. **Issue #5 bleibt offen.**
 
 ## Testblöcke
 
