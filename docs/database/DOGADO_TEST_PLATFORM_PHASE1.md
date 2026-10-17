@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** Phase 1A abgeschlossen · begrenzte Phase 1B (PDO/Rechte/Transaktionen) abgeschlossen · weitere Testblöcke und Issue #5 offen
+**Status:** Phase 1A, begrenzte Phase 1B und Current-/History-Block mit 10.000 History-Zeilen abgeschlossen · weitere Testblöcke und Issue #5 offen
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -187,6 +187,110 @@ PHP-Lint aller drei wiederverwendbaren PHP-Dateien lief auf Dogado PHP 8.4 erfol
 [tests/test_phase1b.py](../../tests/test_phase1b.py) bindet PHP-Lint und diese Grenzprüfungen in den bestehenden Validierungsworkflow ein. Der einzelne Abschluss-Commit enthält `[skip ci]`; derselbe Commit wird auf einem Prüfbranch mit dem unveränderten Workflow validiert, einschließlich `git diff --check HEAD^ HEAD`. Der Deploy-Job muss dort übersprungen sein, bevor genau dieser Commit nach Main übernommen wird. Konkreter Workflow-Lauf und Abschlussergebnis stehen in Issue #5.
 
 **Keine fehlenden Live-Nachweise innerhalb dieses begrenzten Phase-1B-Auftrags.** Nicht geprüft und weiterhin ausdrücklich freizugeben: endgültiges Core-Schema, repräsentative Current-/History-Muster, größere Datenstufen, Query-Pläne, Performance/Last, Backup/Restore und Migration echter Daten. Die nachfolgenden Testblöcke sind Planungsumfang und keine Freigabe zur Ausführung. Das Schema bleibt unfreigegeben.
+
+## Phase 1C – Current/History mit 10.000 synthetischen History-Zeilen
+
+**Dokumentiert am 17.10.2026, 17:10:42 Europe/Berlin (MESZ, UTC+02:00), nach erfolgreicher Live-Bereinigung.** Dieser freigegebene Testblock ist abgeschlossen. Issue #5 und die endgültige Schemafreigabe bleiben offen.
+
+### Wiederverwendung und begrenztes Profil
+
+Verbindung, exakte Zielprüfung, Session-Konfiguration, getestete Kollation und Identifier-Prüfung aus [phase1b/probe.php](../../scripts/phase1b/probe.php) bleiben unverändert. Der vorhandene [FPM-/CLI-Adapter](../../scripts/phase1b/entry.php) wählt das Zusatzprofil nur über eine serverseitige Konstante; HTTP-Parameter können es nicht umschalten. Das **100-Zeilen-Budget des Phase-1B-Basistests bleibt unverändert**.
+
+[Gemeinsamer Testkern](../../scripts/phase1c/profile.php), [Einstieg](../../scripts/phase1c/entry.php) und [Offline-Prüfungen](../../scripts/phase1c/self_test.php) sind geheimnisfrei. Kein endgültiges Fachtabellenschema und keine sichtbare Anwendung.
+
+Fünf kollisionsfreie eigene Tabellen mit mosa2_tmp_-Zufallsnamen wurden vor DDL in einem privaten Manifest reserviert. Vor CREATE wurde die Abwesenheit geprüft, danach ein zufälliges Eigentumsmerkmal im Tabellenkommentar bestätigt. DROP prüft dieses Merkmal und verwendet ausschließlich die gespeicherten exakten Namen.
+
+| Logische Tabelle | Schlüssel und minimale Struktur | Tatsächliche Zeilen / harte Grenze |
+| --- | --- | ---: |
+| Entity | numerische ID, eindeutiger künstlicher Code | 100 / 100 |
+| Identity | ID, eindeutige Entity-Zuordnung, eindeutiges Paar Namespace/externer Schlüssel | 100 / 100 |
+| History | ID, Entity, Sequenz, UTC-Zeit, künstlicher Integer; UNIQUE(Entity,Sequenz); Index history_time(entity_id,observed_at DESC,id DESC) | 10.000 / 10.000 |
+| Current | Entity als Primärschlüssel, History-Verweis, UTC-Zeit, künstlicher Integer | 100 / 100 |
+| Migrationsprotokoll | ID, eindeutige synthetische Versionskennung, fester Testzeitpunkt | 1 / 10 |
+
+InnoDB, utf8mb4 und utf8mb4_0900_as_cs ausdrücklich gesetzt; CHECK-/Schlüsselgrenzen und Fremdschlüssel sichern Bestand und Zuordnungen zusätzlich. Beide SAPIs lasen dieselben bereits getesteten strikten Session-SQL-Modi, UTC +00:00 und REPEATABLE-READ zurück. Keine globalen Einstellungen oder bestehenden Datenbankstandards verändert.
+
+Fester Seed **mosa2-synthetic-v1**, fester Zeitbezug **2020-01-01T00:00:00Z**. 100 künstliche Objekte mit je 100 History-Einträgen; absichtlich gleiche Zeitstempel für benachbarte Sequenzen. Eindeutige Reihenfolge über (observed_at,id). Keine echten Namen, Kurse oder MOSA-Daten.
+
+**Genau einmal per CLI aufgebaut**, 24 INSERT-Batches in einer Datentransaktion, davon 20 History-Batches mit jeweils 500 Zeilen. DDL getrennt außerhalb der Transaktion. Ein bestehendes Manifest verhindert erneuten Aufbau/Anhängen; beide SAPIs nutzen denselben Bestand.
+
+Feste Grenzen: Aufbau 90 Sekunden, Mess-/Inspektions-/Bereinigungsschritt je 30 Sekunden, PHP zusätzlich 120 Sekunden; SELECT-Grenze 3 Sekunden und Lock-Wartegrenzen je 3 Sekunden pro DB-Session. Privates exklusives Profilschloss verhindert parallele Ausführung. Ein ganzer Messlauf wird vor Beginn je SAPI im Manifest reserviert. Fehlerpfade versuchen nur nachgewiesen eigene Tabellen zu bereinigen und melden verbleibende eigene Reste.
+
+### Tatsächlich bestandene Korrektheit
+
+PHP **8.4.12 CLI** und **8.4.26 FPM**, jeweils PDO-MySQL, bestanden dieselbe gemeinsame Logik:
+
+- exakte Zeilenzahlen, eindeutige Zuordnungen, keine verwaisten Datensätze;
+- alle 100 Current-Zustände entsprechen dem eindeutig neuesten History-Eintrag;
+- Einzel-/Batch-Abfragen, letzter History-Eintrag, Zeitfenster, begrenztes Chart und Identity-Lookup liefern exakt erwartete synthetische Ergebnisse;
+- gleiche Zeitstempel eindeutig nach ID sortiert; leere Entity-Ergebnisse, leeres Intervall, exklusives Zeitfensterende und Zeitraum außerhalb des Bestands geprüft;
+- Current-Upsert aktualisiert neuere Werte, erzeugt keine Duplikate und lässt ältere Zeitpunkte beziehungsweise ältere IDs bei gleichem Zeitpunkt nicht überschreiben; Teständerungen zurückgerollt;
+- History blieb nach dem Laden unverändert: erwartete SHA-256-Prüfsumme vor/nach Schreibprüfungen unter beiden SAPIs und bei der Größenprüfung bestätigt. Der Audit liest begrenzte 500er-Blöcke; er ist kein normaler Leseweg.
+
+### Messungen und EXPLAIN
+
+Je Abfragetyp und SAPI **elf gemessene Ausführungen**: erste separat, danach zehn für Median/p95. Nearest-Rank-p95 entspricht bei zehn Werten dem Maximum. Zusätzliche Korrektheitsprüfungen bleiben innerhalb von 30; der mehrfach geprüfte Zeitfenstertyp erreicht höchstens 15 SELECT-Ausführungen je SAPI.
+
+PHP-Wandzeit von PDO execute plus vollständigem Abruf begrenzter Ergebnisse; Verbindung und Statement-Vorbereitung ausgeschlossen. Keine Cache-Leerung oder parallele Last. „Erste“ ist kein nachgewiesener Kaltstart. Kleine Stichprobe, keine Seitenladezeit- oder allgemeine Lastfreigabe.
+
+| Abfrage | CLI: erste / Median / p95 (ms) | FPM: erste / Median / p95 (ms) | EXPLAIN (beide SAPIs) |
+| --- | ---: | ---: | --- |
+| current_single | 0.6051 / 0.2226 / 0.3154 | 0.4609 / 0.1362 / 0.2663 | const, PRIMARY, ≈1 Zeile, kein Filesort |
+| current_batch | 0.2929 / 0.2472 / 0.2965 | 0.2012 / 0.1253 / 0.1884 | range, PRIMARY, ≈6 Zeilen, kein Filesort |
+| history_latest | 0.6827 / 0.4615 / 1.7417 | 0.3467 / 0.3126 / 0.4536 | ref, history_time, ≈100 Zeilen, kein Filesort |
+| history_window | 0.4617 / 0.3940 / 0.4286 | 0.3369 / 0.2414 / 0.3439 | range, history_time, ≈10 Zeilen, Filesort |
+| chart | 0.6134 / 0.5006 / 0.6614 | 0.3914 / 0.3825 / 0.4319 | ref, history_time, ≈100 Zeilen, kein Filesort |
+| identity_lookup | 0.2498 / 0.1372 / 0.1761 | 0.2277 / 0.1680 / 0.3288 | const, identity_lookup, ≈1 Zeile; const, PRIMARY, ≈1 Zeile; kein Filesort |
+
+SQL/Parameter/Erwartungen stehen gemeinsam in querySet()/expectedQueries(). Current: Einzel-ID, LIMIT 1, beziehungsweise sechs feste IDs, aufsteigend, LIMIT 6. History für ein Objekt: neuester Eintrag absteigend nach Zeit/ID, LIMIT 1; Zeitfenster 00:10 inklusive bis 00:15 exklusive, aufsteigend nach Zeit/ID, LIMIT 20; Chart 00:00 bis 00:49 inklusive, absteigend nach Zeit/ID, LIMIT 25. Zeitangaben gehören zum festen UTC-Testtag.
+
+Alle kritischen History-Lesewege verwenden einen Index, keinen ungebundenen Full Scan. **Abweichung:** Das Zeitfenster nutzt zusätzlich Filesort über geschätzt zehn Treffer; bei größeren Datenstufen beobachten. EXPLAIN-Zeilen sind Optimizer-Schätzwerte, keine gemessenen gelesenen Zeilen.
+
+Current liegt hier unter 20 ms, begrenzte History unter 100 ms. Daraus folgt keine Aussage zu Parallelbetrieb, Seitenaufbau oder größeren Beständen.
+
+### Schreiben und Größen
+
+CLI-INSERT-Batchzeiten ohne DDL, Vorbereitung und Commit:
+
+| Tabelle | Batches × maximale Zeilen | Summe (ms) | Median je Batch (ms) | p95 je Batch (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Entity | 1 × 100 | 0.9517 | 0.9517 | 0.9517 |
+| Identity | 1 × 100 | 1.6947 | 1.6947 | 1.6947 |
+| History | 20 × 500 | 255.3558 | 12.1051 | 20.6671 |
+| Current | 1 × 100 | 1.7822 | 1.7822 | 1.7822 |
+| Migrationsprotokoll | 1 × 1 | 0.2651 | 0.2651 | 0.2651 |
+
+Die erste Metadatenabfrage nach dem Laden zeigte veraltete Größen. Ein begrenzter CLI-Inspektionsschritt las anschließend mit **SET SESSION information_schema_stats_expiry=0** frisch: nur Statistik-Cache dieser Session umgangen, kein Daten-Cache geleert, kein ANALYZE und keine globale Änderung. Zeilenzahlen und unveränderte History-Prüfsumme erneut bestätigt.
+
+| Tabelle | Daten (KiB, näherungsweise) | Sekundärindizes (KiB, näherungsweise) | Geschätzte Zeilen |
+| --- | ---: | ---: | ---: |
+| Entity | 16 | 16 | 100 |
+| Identity | 16 | 32 | 100 |
+| History | 432 | 384 | 9.986 |
+| Current | 16 | 16 | 100 |
+| Migrationsprotokoll | 16 | 16 | 1 |
+
+InnoDB meldet belegte Daten-/Indexseiten, keine exakte Nutzdaten-/Backupgröße: zusammen ungefähr **960 KiB**. Die Schätzung 9.986 ersetzt nicht den bestätigten COUNT **10.000**.
+
+### Schutz, Bereinigung und Prüfungen
+
+- Passwort nur vom Nutzer im maskierten HTTPS-Formular eingegeben, geschützt außerhalb öffentlicher Dokumentstämme gespeichert. Verzeichnisse 0700, Passwortdatei 0600; keine Geheimnisse/vollständigen Verbindungsdaten in GitHub.
+- Vor Nutzung tatsächlicher HTTP-403-Nachweis für nicht erlaubte Herkunft. Bestehende IP-/Host-/HTTPS-/Origin-Prüfung, Passwort und einmaliger CSRF-Test-POST wiederverwendet. GET führt keine Schreibtests aus und liefert keine Diagnosen.
+- CLI nur über Plesks ungespeichertes, inaktives „Jetzt ausführen“-Formular. Vorher/nachher **neun** geplante Aufgaben, keine gespeichert.
+- Alle fünf eigenen Tabellen anhand Eigentumsnachweis entfernt; Ausgangsstand **null Tabellen** wiederhergestellt.
+- Quellen vor Entfernung gegen GitHub-Blob-Hashes geprüft. Eigener privater Code, Konfiguration, Passwort, Manifest, Ergebnisse, Schloss, Sitzungen sowie öffentlicher Einstieg und Zugriffsschutz vollständig entfernt.
+- Einstieg danach **HTTP 404**; neutrale HTTPS-Startseite **HTTP 200**, sichtbar und gesamter ausgelieferter Inhalt bytegenau wie bestehendes Fixture. Keine Zertifikats-/Startseitenänderung.
+- PHP-Lint aller sechs beteiligten PHP-Dateien erfolgreich; nach Größenanpassung betroffenen Code erneut gelintet. Unveränderte **17 Phase-1B-Grenzprüfungen** und **80 neue Profilprüfungen** bestanden ohne Datenbankverbindung.
+- [Neue CI-Einbindung](../../tests/test_history_profile.py) im vorhandenen Validierungsworkflow; keine Workflow-/Deployment-Secret-Änderung. Ein Abschluss-Commit mit [skip ci], identisch auf Prüfbranch einschließlich git diff --check HEAD^ HEAD prüfen, Deploy überspringen, erst danach denselben Commit nach Main übernehmen. Endgültiger Lauf und Ergebnis stehen in Issue #5.
+- Keine AGENTS.md-, fixlab-, bestehenden MOSA-/Produktivänderungen; keine größeren Datenstufen, Restore-Tests oder Produktionsdeployments.
+
+**Erfassungslücke:** Der vorhandene freigegebene Statussender meldete für die native Nachricht mit Auftragsanhang keinen offenen Auftrag. Kein Ersatzweg und keine erfundenen Ereignisse/Zeitpunkte; fachliche Nachweise stammen aus tatsächlichen Browser-/Provider-/GitHub-Prüfungen.
+
+### Empfehlung
+
+Der 10.000er-Block ist positiv. Als **gesondert freizugebender** nächster Schritt ist ein begrenztes 100.000er-Profil mit erneuten Korrektheits-, EXPLAIN-, Größen- und Laufzeitprüfungen sinnvoll; insbesondere Filesort und Schätzabweichungen beobachten. Das 10.000er-Profil und der 100-Zeilen-Basistest werden nicht stillschweigend erweitert.
+
+Keine Ausführungs-/Lastfreigabe aus diesem Ergebnis. 100.000/1.000.000 Zeilen, parallele Last, Restore, endgültiges Schema und Migration bleiben unausgeführt. **Issue #5 bleibt offen.**
 
 ## Testblöcke
 

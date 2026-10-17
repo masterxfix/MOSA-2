@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/probe.php';
+require_once __DIR__ . '/probe.php';
 
 use Mosa2\Phase1B\Failure;
 use function Mosa2\Phase1B\connect;
@@ -30,7 +30,8 @@ function settings(): array
     ensure(is_string($public) && is_string($private), 'root_check_failed');
     ensure($private !== $public && !str_starts_with($private, $public . DIRECTORY_SEPARATOR), 'configuration_inside_public_root');
     ensure(is_string($target['allowed_ip'] ?? null) && filter_var($target['allowed_ip'], FILTER_VALIDATE_IP) !== false, 'allowed_ip_required');
-    ensure((bool) preg_match('~\A/phase1b-[a-f0-9]+/\z~D', (string) ($target['entry_path'] ?? '')), 'entry_path_invalid');
+    $route = defined('MOSA2_HISTORY_10000') ? 'phase1c' : 'phase1b';
+    ensure((bool) preg_match('~\A/' . $route . '-[a-f0-9]+/\z~D', (string) ($target['entry_path'] ?? '')), 'entry_path_invalid');
     ensure(is_string($target['public_host'] ?? null) && (bool) preg_match('/\A[a-z0-9.-]+\z/D', $target['public_host']), 'public_host_invalid');
     return $target;
 }
@@ -68,6 +69,18 @@ function rememberPassword(string $password): void
     }
 }
 
+function executeProfile(array $target, string $password): array
+{
+    if (defined('MOSA2_HISTORY_10000')) {
+        ensure(MOSA2_HISTORY_10000 === true, 'unknown_profile');
+        return \Mosa2\History10000\dispatch(
+            $target, $password, __DIR__,
+            PHP_SAPI === 'cli' ? (string) ($GLOBALS['argv'][2] ?? '') : '--measure'
+        );
+    }
+    return run($target, $password, __DIR__ . '/budget.txt');
+}
+
 function reportJson(array $report): string
 {
     return json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -85,7 +98,7 @@ try {
     $target = settings();
     if (PHP_SAPI === 'cli') {
         ensure(($argv[1] ?? null) === '--run', 'explicit_run_argument_required');
-        $report = run($target, storedPassword(), __DIR__ . '/budget.txt');
+        $report = executeProfile($target, storedPassword());
         echo reportJson($report), PHP_EOL;
         exit($report['ok'] ? 0 : 1);
     }
@@ -140,7 +153,7 @@ try {
     ensure((int) ($_SESSION['authenticated_until'] ?? 0) >= time(), 'session_authentication_required');
     ensure(is_string($_POST['csrf'] ?? null) && isset($_SESSION['csrf']) && hash_equals($_SESSION['csrf'], $_POST['csrf']), 'csrf_rejected');
     unset($_SESSION['csrf']);
-    $report = run($target, storedPassword(), __DIR__ . '/budget.txt');
+    $report = executeProfile($target, storedPassword());
     $_SESSION = [];
     session_destroy();
     setcookie(session_name(), '', ['expires' => time() - 3600, 'path' => $target['entry_path'], 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
