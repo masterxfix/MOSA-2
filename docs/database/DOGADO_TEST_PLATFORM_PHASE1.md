@@ -601,6 +601,44 @@ Genau ein Abschluss-Commit mit [skip ci]; derselbe SHA ist vor Übernahme auf ma
 
 **Einordnung:** Die geprüften überlappenden Transaktionen funktionieren sicher und schnell; der erwartete Konflikt wird kontrolliert mit genau einem Retry aufgelöst. Die Messung ist **kein allgemeiner Last-, Worker-Parallelitäts-, Dauer-, Skalierungs- oder Produktivnachweis**. Weitere Tests bleiben gesondert freizugeben; in diesem Auftrag keine nächste Phase. **Issue #5 bleibt offen.**
 
+## Phase 1G – Backup-/Restore-Fortsetzung: Zugang fehlt
+
+**Prüfzeitpunkt: 17.10.2026, 20:09:01 Uhr Europe/Berlin (MESZ, UTC+02:00). Fachliches Ergebnis: nicht durchgeführt; Backup/Restore weiterhin offen.**
+
+### Bestätigt
+
+- Der neue native Fortsetzungsauftrag ist im KI-Kontrollzentrum sichtbar: Eingang 20:04:58 Uhr, Serverempfang 20:05:00 Uhr; Describe und Plan wurden zugestellt.
+- Dogado bestätigt die bereits erfolgte Anlage der einen getrennten MySQL-8-Restore-Testdatenbank samt eigenem Benutzer am lokalen Testendpunkt. Insgesamt werden fünf von 50 Datenbanken angezeigt. Die vorhandene Restore-Datenbank und das vom Nutzer gesetzte Passwort wurden unverändert belassen.
+- Eine einmalige providerseitige Prüfung bestätigt PHP **8.4.12 CLI** und den PDO-MySQL-Treiber. Ausschließlich das Vorhandensein eigener Test-Konfiguration wurde geprüft, ohne Passwortinhalte zu öffnen oder auszugeben.
+- Die vorgesehenen privaten Passwortdateien für Quelle und Restore fehlen. Auch die eigene Passwortdatei der vorigen Transaktionsphase ist nicht mehr vorhanden; deren Entfernung war Bestandteil der dort nachgewiesenen Bereinigung. Ein bei Dogado gesetztes DB-Passwort wird dadurch nicht automatisch zu einer geschützten PHP-Testkonfiguration.
+- Der Nutzer schließt eine erneute Passwortabfrage ausdrücklich aus. Daher keine Passwortabfrage, kein Zurücksetzen, keine neue Datenbank, kein Durchsuchen fremder Anwendungskonfigurationen und kein Versuch mit anderen Zugangsdaten.
+
+### Fehlender Nachweis und Aussagegrenze
+
+Ohne verfügbare geschützte Zugangskonfiguration kann der gemeinsame Phase-1B–1F-Testkern weder Quelle noch Restore-Ziel authentifizieren. Deshalb **kein Aufbau des synthetischen Bestands, kein Backup und kein Restore** in dieser Fortsetzung.
+
+| Erforderlicher Nachweis | Ergebnis |
+| --- | --- |
+| 100 Entity, 100 Identity, 100.000 History, 100 Current, 1 Migration | Nicht aufgebaut |
+| Quellstruktur, Indizes, exakte Zeilenzahlen und Prüfsummen | Nicht erhoben |
+| Backup-Verfahren, Dateigröße und Backup-Dauer | Nicht praktisch geprüft / nicht erhoben |
+| Restore in getrenntes leeres Ziel und Restore-Dauer | Nicht durchgeführt / nicht erhoben |
+| Gleichheit aller fünf Tabellen, Strukturen, Zeilenzahlen und Prüfsummen | Offen |
+| Current = neueste History, keine verwaisten oder doppelten Datensätze | Für diesen Testbestand offen |
+| Einmalige funktionale Reads im Restore-Ziel | Nicht durchgeführt |
+| Beide Datenbanken aktuell mit null Tabellen | Ohne authentifizierte Verbindung nicht neu nachgewiesen |
+
+### Unveränderter Zustand und Veröffentlichung
+
+- Dieser Lauf hat keine Testtabellen, Backups, privaten Testdateien oder öffentlichen Testeinstiege erzeugt. Der vorgesehene eigene Backup-Testbereich und Einstieg sind providerseitig nachweislich nicht vorhanden.
+- Neutrale HTTPS-Startseite: **HTTP 200**, sichtbar „Technische Testumgebung aktiv“, vollständiger Antworttext gegen den bestehenden Git-Blob bytegenau unverändert.
+- Providerprüfung ausschließlich über „Jetzt ausführen“ im ungespeicherten, deaktivierten Plesk-Dialog; anschließend abgebrochen. Kein dauerhafter Cronjob angelegt. Die Aufgabenliste zeigt weiterhin neun Einträge.
+- Keine Änderungen an Produktivressourcen, fixlab, Workflows, Deployment-Secrets, Zertifikaten oder Startseite. Keine lokalen fachlichen Shell-/Laufwerkszugriffe.
+- Ausschließlich diese Phasendokumentation wird geändert. Die vorbereiteten Codeentwürfe werden nicht als geprüfte Backup-/Restore-Implementierung veröffentlicht.
+- Ein Abschluss-Commit mit [skip ci] dokumentiert den **unvollständigen** Stand. Vor Übernahme desselben SHA auf main muss der unveränderte Validierungsworkflow auf dem Prüfbranch erfolgreich sein und Deploy überspringen. Die konkreten Prüfergebnisse und der Lauf stehen im Kommentar zu Issue #5.
+
+**Blocker:** Ein vorhandener sicherer Authentifizierungsweg für beide Testdatenbanken fehlt. Das gesetzte Passwort allein ersetzt diesen Weg nicht. Der vollständige Wiederherstellungsnachweis bleibt erforderlich; keine Schema- oder Produktivfreigabe. **Issue #5 bleibt offen.** Keine nächste Testphase gestartet.
+
 ## Testblöcke
 
 ### 1. Plattform-Fingerprint
