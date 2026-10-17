@@ -15,3 +15,7 @@ MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des
 ## Ziel
 
 Ein stabiler, nachvollziehbarer und testbarer Entwicklungsworkflow zwischen Nutzer, ChatGPT, GitHub und Codex.
+
+## Datenbank
+
+Die geplante MOSA-2-Datenbankarchitektur, Ziele und Grundregeln werden unter [`docs/database/README.md`](docs/database/README.md) geführt.
