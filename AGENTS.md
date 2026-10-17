@@ -14,6 +14,19 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Keine Änderungen außerhalb dieses Repositories vornehmen.
 - Keine Änderungen an `masterxfix/fixlab`.
 
+## MOSA-Auftragsstandard
+
+- Jeder für Codex formulierte MOSA-2-Auftrag beginnt sichtbar mit **`Auftrag MOSA`**. Dieser Zusatz ist verbindlich, damit der Auftrag im KI-Kontrollzentrum eindeutig erkannt und beobachtet werden kann.
+- Ein vollständig geklärter Auftrag wird in **einem zusammenhängenden Codex-Lauf** bearbeitet.
+- Während der Bearbeitung keine Zwischenmeldungen an den Nutzer senden, sofern nicht zwingend eine Freigabe oder fehlende Information benötigt wird.
+- Keine Rückfragen stellen, wenn der Auftrag und seine Akzeptanzkriterien ausreichend eindeutig sind.
+- Keine freiwilligen Zusatzarbeiten, Verbesserungen oder Analysen außerhalb des ausdrücklich beauftragten Scopes durchführen.
+- Eigene, durch den Auftrag verursachte Fehler im selben Lauf korrigieren.
+- Relevante Tests nach der Umsetzung gesammelt ausführen. Falls eine eigene Korrektur nötig war, die betroffenen Tests im selben Lauf erneut ausführen.
+- Wenn Repository-Änderungen erforderlich sind, am Ende **genau einen Abschluss-Commit** für den Auftrag erstellen.
+- Diesen Abschluss-Commit nach `origin/main` pushen, sofern der Auftrag nicht ausdrücklich einen anderen Zielbranch oder keinen Push vorgibt.
+- Nach erfolgreichem Abschluss, Tests, Commit und Push stoppen. Keine weitere ungefragte Arbeit anschließen.
+
 ## Arbeitsweise für Codex
 
 1. Auftrag vollständig lesen und Akzeptanzkriterien identifizieren.
