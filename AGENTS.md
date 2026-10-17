@@ -17,15 +17,15 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 ## MOSA-Auftragsstandard
 
 - Jeder für Codex formulierte MOSA-2-Auftrag beginnt als erste eigenständige, unzitierte Zeile exakt mit **`MOSA-Auftrag`**. Nur diese Markersyntax wird vom KI-Kontrollzentrum erkannt.
-- Der Marker darf nicht in einem Codeblock, Zitat oder Fließtext stehen. Sicheres Format:
-
-  ```text
-  MOSA-Auftrag
-
-  <Auftragstitel und Auftragstext>
-  ```
-
+- Der Marker darf im tatsächlichen Codex-Prompt nicht in einem Zitat, Markdown-Codeblock oder Fließtext stehen.
 - Formulierungen wie `Auftrag MOSA`, `Auftrag für MOSA` oder eine bloße Inline-Erwähnung starten keine Anzeige im KI-Kontrollzentrum.
+- Jeder Codex-Auftrag wird dem Nutzer als **genau ein vollständiger, direkt kopierbarer `text`-Codeblock** ausgegeben. Der Nutzer muss nur einmal auf „Kopieren“ klicken und den Inhalt einmal als native Textnachricht in Codex einfügen.
+- Die erste Inhaltszeile dieses kopierbaren Blocks lautet exakt `MOSA-Auftrag`; nach dem Kopieren stehen keine Markdown-Zäune im Codex-Prompt.
+- Kein fachlich notwendiger Teil des Auftrags darf außerhalb dieses einen kopierbaren Blocks stehen.
+- Einen Auftrag niemals auf mehrere Codeblöcke, Anhänge oder aufeinanderfolgende Nachrichten verteilen.
+- Keine verschachtelten Markdown-Codeblöcke im Auftrag verwenden; Beispiele und Befehle innerhalb des Auftrags als normalen eingerückten Text darstellen.
+- Codex-Aufträge standardmäßig **nicht als Datei oder Anhang** übergeben. Ein Anhang ist nur zulässig, wenn der Nutzer ihn ausdrücklich verlangt und der Auftragstext trotzdem im nativen Prompt eindeutig verfügbar bleibt.
+- Der Auftrag muss vollständig in sich geschlossen sein und darf nicht auf „den Text oben“, einen nicht lesbaren Anhang oder eine frühere Chatnachricht als einzige Quelle verweisen.
 - Ein vollständig geklärter Auftrag wird in **einem zusammenhängenden Codex-Lauf** bearbeitet.
 - Während der Bearbeitung keine Zwischenmeldungen an den Nutzer senden, sofern nicht zwingend eine Freigabe oder fehlende Information benötigt wird.
 - Keine Rückfragen stellen, wenn der Auftrag und seine Akzeptanzkriterien ausreichend eindeutig sind.
