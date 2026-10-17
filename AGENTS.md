@@ -27,27 +27,36 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Diesen Abschluss-Commit nach `origin/main` pushen, sofern der Auftrag nicht ausdrücklich einen anderen Zielbranch oder keinen Push vorgibt.
 - Nach erfolgreichem Abschluss, Tests, Commit und Push stoppen. Keine weitere ungefragte Arbeit anschließen.
 
-## Verbindliche Werkzeug- und E:-Fehlerregel
+## Streng vertrauliche Daten- und Laufwerksgrenze
 
-Diese Regeln haben für alle MOSA-Aufträge Vorrang:
+Diese Grenze ist verbindlich und hat Vorrang vor Komfort, Toolwahl oder Automatisierung:
 
-- Laufwerk `E:` gehört **nicht** zum MOSA-Arbeitsbereich. Es darf weder geprüft, aufgelistet, eingehängt, entsperrt noch verändert werden, sofern ein Auftrag nicht ausdrücklich `E:` betrifft.
-- Ein Shell-, MXC-, Launcher-, Browser- oder Toolfehler, der durch eine interne `E:`-Initialisierung entsteht oder `E:` erwähnt, ist **kein fachlicher MOSA-Blocker**.
-- Niemals den Nutzer auffordern, `E:` zu entsperren, zu ändern oder für Codex verfügbar zu machen.
-- Wegen eines `E:`-bezogenen Toolfehlers einen MOSA-Auftrag nicht abbrechen, solange ein anderer geeigneter Werkzeugweg verfügbar ist.
-- Für Repository-Inhalte bevorzugt den GitHub-Zugriff verwenden, wenn die lokale Shell nicht benötigt wird.
-- Für Web-/Dogado-Aufträge den aktuell bereitgestellten Browser-/Chrome-Zugang verwenden. Ein lokaler Shell-Start ist für eine reine Browser-Bestandsaufnahme **nicht erforderlich**.
+- Laufwerk `E:` ist **streng vertraulich** und vollständig außerhalb des MOSA-/Codex-Arbeitsbereichs.
+- Für MOSA-Aufträge ist jeder Zugriff auf `E:` verboten: kein Lesen, Öffnen, Auflisten, Scannen, Indexieren, Traversieren, Mounten, Entsperren, Schreiben oder Verändern.
+- Auch ein **rein technisches Enumerieren oder Initialisieren** von `E:` durch einen Launcher, eine Shell, einen Browser-Wrapper, einen Recorder oder ein anderes Werkzeug ist für MOSA nicht zulässig.
+- Ein Tool, das für seinen Start oder seine Berechtigungsinitialisierung `E:` berührt oder voraussetzt, darf für MOSA-Aufträge **nicht verwendet** werden.
+- Niemals versuchen, den Zustand, Inhalt, freien Speicher, Verschlüsselungsstatus oder sonstige Eigenschaften von `E:` zu ermitteln.
+- Niemals den Nutzer auffordern, `E:` zu entsperren, bereitzustellen, freizugeben oder zu verändern.
+- Informationen von `E:` dürfen weder in Prompts, Logs, Diagnosen, Commits, Issues noch in Abschlussmeldungen übernommen werden.
+- Ein interner Tool- oder Launcherfehler im Zusammenhang mit `E:` ist ausschließlich ein **Werkzeugproblem** und niemals ein fachlicher MOSA-Blocker.
+- Falls die einzige verfügbare Werkzeugroute diese Vertraulichkeitsgrenze nicht sicher einhalten kann, diese Werkzeugroute nicht verwenden. Stattdessen eine fachlich gleichwertige, E:-freie Route nutzen oder exakt die fehlende sichere Werkzeugfähigkeit melden.
+- Diese Regel gilt unabhängig davon, ob ein Tool `E:` absichtlich, automatisch oder als Teil einer generischen Laufwerksinventarisierung berühren würde.
+
+## Verbindliche Browser- und Werkzeugregel
+
+- Für Repository-Inhalte bevorzugt den GitHub-Zugriff verwenden, wenn keine lokale Shell erforderlich ist.
+- Für Web-/Dogado-Aufträge den vom Nutzer bereitgestellten verbundenen Browser-/Chrome-Zugang verwenden.
+- Bei bereitgestelltem Chrome-Zugang zuerst an die **bestehende verbundene Browser-Sitzung** anbinden und deren offene Tabs inventarisieren.
+- Nicht zuerst versuchen, einen neuen lokalen Chrome-Prozess über Shell, CUA-, Node-, MXC- oder ähnliche Launcher zu starten.
+- Lokale Browser-/Computer-Use-Launcher, die bei ihrer Initialisierung Laufwerke enumerieren oder `E:` berühren könnten, sind für MOSA unzulässig.
+- Das Scheitern eines lokalen Browser-Launchers beweist **nicht**, dass der bereitgestellte Chrome-Zugang fehlt.
+- Ein Browser-Auftrag darf erst mit „verbundene Browser-Sitzung nicht verfügbar“ blockiert werden, wenn genau diese vorhandene Sitzung aktuell geprüft und nicht erreichbar ist.
+- Ist die Browser-Sitzung erreichbar, aber der benötigte Dogado-Tab bzw. die Anmeldung fehlt, ist exakt das zu melden: „Dogado-Tab/Anmeldung nicht vorhanden“.
 - Für Anhänge oder Projektdateien alternative verfügbare Datei-/GitHub-Zugriffe verwenden, bevor ein Auftrag als blockiert gilt.
-- Wenn Auftragstext, GitHub-Issue oder Auftragsdokument bereits vorhanden sind, **niemals verlangen, dass der Nutzer den Auftrag erneut in den Chat einfügt**.
+- Wenn Auftragstext, GitHub-Issue oder Auftragsdokument bereits vorhanden sind, niemals verlangen, dass der Nutzer den Auftrag erneut in den Chat einfügt.
 - Ein ausgefallener Recorder oder ein nicht lesbarer Anhang blockiert den Auftrag nicht, wenn die notwendigen Informationen bereits im Auftrag, Repository oder GitHub-Issue vorliegen.
-- Ein echter Blocker darf erst gemeldet werden, wenn die für das Akzeptanzkriterium **tatsächlich erforderliche** Fähigkeit aktuell neu getestet wurde und alle sinnvollen, fachlich gleichwertigen Alternativen ohne `E:` ausgeschöpft sind.
-- Falls danach wirklich eine Werkzeugfähigkeit fehlt, nur die konkret fehlende Fähigkeit benennen, zum Beispiel „aktueller Chrome-Zugriff nicht verfügbar“ oder „GitHub-Schreibzugriff fehlt“. `E:` darf nicht als Ursache oder notwendige Nutzeraktion ausgegeben werden.
-- Historische Fehlerdiagnosen sind niemals ein aktueller Status. Jeder erforderliche Browser-/Toolzugang ist im aktuellen Lauf neu zu prüfen.
-- Bei Aufträgen mit vom Nutzer **bereitgestelltem Chrome-Zugang** ist zuerst an die bereits vorhandene verbundene Browser-Sitzung anzubinden und deren offene Tabs zu inventarisieren. Nicht zuerst versuchen, einen neuen lokalen Chrome-Prozess über Shell, CUA-, Node-, MXC- oder ähnliche Launcher zu starten.
-- Das Scheitern eines lokalen Browser-Launchers beweist **nicht**, dass der bereitgestellte Chrome-Zugang fehlt. Diese Aussagen sind strikt zu trennen.
-- Ein Browser-Auftrag darf erst mit „Chrome-Zugriff nicht verfügbar“ blockiert werden, wenn der Zugriff auf die **bestehende verbundene Browser-Sitzung** selbst aktuell geprüft und fehlgeschlagen ist.
-- Ist die Browser-Sitzung erreichbar, aber der benötigte Dogado-Tab bzw. die Anmeldung fehlt, ist exakt das zu melden: „Dogado-Tab/Anmeldung nicht vorhanden“. Nicht „Chrome nicht verfügbar“.
-- Wenn die account-spezifische Browserprüfung das zentrale Akzeptanzkriterium eines Auftrags ist, darf ein reiner Dokumentations-/Webrecherche-Ersatz **nicht** als teilweise Erfüllung dieses Kernziels gewertet und nicht als Abschluss des Auftrags behandelt werden.
+- Wenn die account-spezifische Browserprüfung das zentrale Akzeptanzkriterium eines Auftrags ist, darf ein reiner Dokumentations-/Webrecherche-Ersatz nicht als teilweise Erfüllung dieses Kernziels gewertet und nicht als Abschluss behandelt werden.
+- Historische Fehlerdiagnosen sind niemals ein aktueller Status. Jeder tatsächlich benötigte Zugang ist im aktuellen Lauf neu und über einen zulässigen, E:-freien Werkzeugweg zu prüfen.
 
 ## Arbeitsweise für Codex
 
@@ -58,10 +67,10 @@ Diese Regeln haben für alle MOSA-Aufträge Vorrang:
 5. Bei bestehenden, auftragsfremden Fehlern klar unterscheiden zwischen:
    - durch den Auftrag verursacht,
    - bereits vorher vorhanden.
-6. Vergangene Tool-, Browser-, Chrome-, MXC-/Launcher-, Laufwerks- oder Berechtigungsfehler niemals ungeprüft als aktuellen Blocker übernehmen. Gespeicherte Diagnosen sind nur historische Hinweise, kein aktueller Status.
-7. Wenn ein Auftrag Browser-/Chrome-Zugriff benötigt oder ein früherer Browserfehler relevant erscheint, den aktuellen Chrome-Zugang zuerst neu testen. Nur ein aktuell reproduzierbarer Fehler der tatsächlich erforderlichen Fähigkeit darf als Blocker gemeldet werden.
-8. Das frühere Problem mit Laufwerk `E:` ist durch die verbindliche Werkzeug- und E:-Fehlerregel oben geregelt und darf nicht als MOSA-Blocker verwendet werden.
-9. Eine Sicherheits-, Freigabe- oder Zugriffssperre auf eine konkrete MOSA-Seite ist getrennt von der grundsätzlichen Chrome-Verfügbarkeit zu bewerten. Aus einer gesperrten MOSA-Seite darf nicht auf fehlenden Chrome-Zugang geschlossen werden.
+6. Vergangene Tool-, Browser-, Chrome-, MXC-/Launcher-, Laufwerks- oder Berechtigungsfehler niemals ungeprüft als aktuellen Blocker übernehmen.
+7. Für Browser-Aufträge ausschließlich einen zulässigen, E:-freien Zugriffspfad verwenden.
+8. Laufwerk `E:` darf unter keinen Umständen als notwendige Voraussetzung, Ursache einer Nutzeraktion oder MOSA-Arbeitsbereich behandelt werden.
+9. Eine Sicherheits-, Freigabe- oder Zugriffssperre auf eine konkrete MOSA-Seite ist getrennt von der grundsätzlichen Browser-Verfügbarkeit zu bewerten.
 10. Keine Browser-, Deployment- oder Produktionsaktionen ausführen, sofern der Auftrag dies nicht ausdrücklich verlangt.
 
 ## Token- und Kontingentverbrauch
