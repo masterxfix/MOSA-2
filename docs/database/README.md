@@ -1,6 +1,26 @@
 # MOSA 2 – Datenbank
 
-Dieser Bereich beschreibt die geplante Datenbank für MOSA 2. Die neue Struktur wird **parallel zu MOSA** aufgebaut. MOSA bleibt dabei zunächst unverändert.
+Dieser Bereich beschreibt die geplante Datenbank für MOSA 2. Die neue Struktur wird **parallel zu MOSA** aufgebaut. MOSA wird nicht abgeschaltet, sondern bleibt weiterhin nutzbar und dient als Spielwiese/Labor für neue Ideen und Funktionen.
+
+## Priorität 1: saubere Datenmigration
+
+Die bereits in MOSA vorhandenen, wertvollen Daten müssen kontrolliert nach MOSA 2 übernommen werden. Dabei gilt:
+
+- keine 1:1-Kopie der alten Datenbank;
+- MOSA wird nur **read-only** als Quelle gelesen;
+- Daten werden auf die neue MOSA-2-Struktur abgebildet, geprüft und erst dann übernommen;
+- Migrationen müssen wiederholbar sein und dürfen keine Dubletten erzeugen;
+- große Datenmengen werden schrittweise mit Checkpoints übernommen;
+- nach jedem Import werden fachliche Ergebnisse zwischen MOSA und MOSA 2 verglichen;
+- technische Altlasten werden nicht automatisch mitmigriert.
+
+MOSA bleibt während der gesamten Migration eigenständig nutzbar.
+
+## Arbeitsmodell MOSA → MOSA 2
+
+MOSA bleibt die experimentelle Umgebung. Neue Ideen können dort weiter ausprobiert und entwickelt werden. **Nur ausgereifte und fachlich bestätigte Funktionen oder Datenmodelle werden gezielt in MOSA 2 übernommen.**
+
+MOSA 2 ist damit nicht der sofortige Ersatz für MOSA, sondern die stabile, saubere Zielarchitektur.
 
 ## Ziele
 
@@ -51,17 +71,17 @@ Die Namen sind zunächst Arbeitsnamen.
 3. **Keine Asset-Sonderlogik.** Unterschiede zwischen Assets und Datenquellen werden über Daten und Konfiguration abgebildet.
 4. **Indizes werden mit dem Query geplant.** Kritische Abfragen erhalten von Anfang an einen Index passend zu Filter und Sortierung.
 5. **History-Abfragen sind begrenzt.** Immer Asset/Zeitraum/LIMIT statt ungebundener Vollsuche.
-6. **MOSA und MOSA 2 bleiben zunächst getrennt.** Kein Trigger- oder Dual-Write-Zwang. Daten werden kontrolliert und mit Checkpoints übernommen.
+6. **MOSA und MOSA 2 bleiben getrennt.** Kein Trigger- oder Dual-Write-Zwang. Daten werden kontrolliert und mit Checkpoints übernommen.
 7. **DB-Änderungen sind eigene, kontrollierte Schritte.** Preview → Check → ausdrückliche Freigabe → Apply → Postcheck.
 
 ## Parallelaufbau
 
 1. Leeres MOSA-2-Schema und Performance-Grundtests.
 2. Asset- und Identitätsmodell aufbauen.
-3. Wenige MOSA-Daten testweise übernehmen.
+3. Wertvolle MOSA-Daten kontrolliert und zunächst in kleinen Paketen übernehmen.
 4. MOSA 2 im Shadow-Modus gegen MOSA vergleichen.
 5. Historie schrittweise und per Checkpoint übernehmen.
-6. Funktionen erst nach erfolgreichem Vergleich auf MOSA 2 umstellen.
+6. Nur ausgereifte Funktionen nach fachlicher Bestätigung in MOSA 2 übernehmen.
 
 ## Performance-Budget
 
