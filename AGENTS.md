@@ -43,6 +43,11 @@ Diese Regeln haben für alle MOSA-Aufträge Vorrang:
 - Ein echter Blocker darf erst gemeldet werden, wenn die für das Akzeptanzkriterium **tatsächlich erforderliche** Fähigkeit aktuell neu getestet wurde und alle sinnvollen, fachlich gleichwertigen Alternativen ohne `E:` ausgeschöpft sind.
 - Falls danach wirklich eine Werkzeugfähigkeit fehlt, nur die konkret fehlende Fähigkeit benennen, zum Beispiel „aktueller Chrome-Zugriff nicht verfügbar“ oder „GitHub-Schreibzugriff fehlt“. `E:` darf nicht als Ursache oder notwendige Nutzeraktion ausgegeben werden.
 - Historische Fehlerdiagnosen sind niemals ein aktueller Status. Jeder erforderliche Browser-/Toolzugang ist im aktuellen Lauf neu zu prüfen.
+- Bei Aufträgen mit vom Nutzer **bereitgestelltem Chrome-Zugang** ist zuerst an die bereits vorhandene verbundene Browser-Sitzung anzubinden und deren offene Tabs zu inventarisieren. Nicht zuerst versuchen, einen neuen lokalen Chrome-Prozess über Shell, CUA-, Node-, MXC- oder ähnliche Launcher zu starten.
+- Das Scheitern eines lokalen Browser-Launchers beweist **nicht**, dass der bereitgestellte Chrome-Zugang fehlt. Diese Aussagen sind strikt zu trennen.
+- Ein Browser-Auftrag darf erst mit „Chrome-Zugriff nicht verfügbar“ blockiert werden, wenn der Zugriff auf die **bestehende verbundene Browser-Sitzung** selbst aktuell geprüft und fehlgeschlagen ist.
+- Ist die Browser-Sitzung erreichbar, aber der benötigte Dogado-Tab bzw. die Anmeldung fehlt, ist exakt das zu melden: „Dogado-Tab/Anmeldung nicht vorhanden“. Nicht „Chrome nicht verfügbar“.
+- Wenn die account-spezifische Browserprüfung das zentrale Akzeptanzkriterium eines Auftrags ist, darf ein reiner Dokumentations-/Webrecherche-Ersatz **nicht** als teilweise Erfüllung dieses Kernziels gewertet und nicht als Abschluss des Auftrags behandelt werden.
 
 ## Arbeitsweise für Codex
 
