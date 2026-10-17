@@ -16,6 +16,9 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 
 ## MOSA-Auftragsstandard
 
+- Vor jedem neuen Codex-Auftrag erhält der Nutzer eine kurze, allgemein verständliche Vorabinformation außerhalb des kopierbaren Auftragsblocks: **Was Codex jetzt baut oder prüft.**
+- Dazu gehört immer eine Einschätzung **Schwierigkeitsgrad: einfach / mittel / anspruchsvoll**, mit einer knappen Begründung. Erklärung und Einschätzung zusammen auf höchstens zwei kurze Sätze begrenzen; unnötigen Fachjargon vermeiden.
+- Die Vorabinformation ist nur eine Zusammenfassung; alle fachlich notwendigen Inhalte bleiben vollständig im einzigen kopierbaren Auftragsblock.
 - Jeder für Codex formulierte MOSA-2-Auftrag beginnt als erste eigenständige, unzitierte Zeile exakt mit **`MOSA-Auftrag`**. Nur diese Markersyntax wird vom KI-Kontrollzentrum erkannt.
 - Der Marker darf im tatsächlichen Codex-Prompt nicht in einem Zitat, Markdown-Codeblock oder Fließtext stehen.
 - Formulierungen wie `Auftrag MOSA`, `Auftrag für MOSA` oder eine bloße Inline-Erwähnung starten keine Anzeige im KI-Kontrollzentrum.
