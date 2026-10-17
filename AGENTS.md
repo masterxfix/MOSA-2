@@ -27,6 +27,23 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Diesen Abschluss-Commit nach `origin/main` pushen, sofern der Auftrag nicht ausdrücklich einen anderen Zielbranch oder keinen Push vorgibt.
 - Nach erfolgreichem Abschluss, Tests, Commit und Push stoppen. Keine weitere ungefragte Arbeit anschließen.
 
+## Verbindliche Werkzeug- und E:-Fehlerregel
+
+Diese Regeln haben für alle MOSA-Aufträge Vorrang:
+
+- Laufwerk `E:` gehört **nicht** zum MOSA-Arbeitsbereich. Es darf weder geprüft, aufgelistet, eingehängt, entsperrt noch verändert werden, sofern ein Auftrag nicht ausdrücklich `E:` betrifft.
+- Ein Shell-, MXC-, Launcher-, Browser- oder Toolfehler, der durch eine interne `E:`-Initialisierung entsteht oder `E:` erwähnt, ist **kein fachlicher MOSA-Blocker**.
+- Niemals den Nutzer auffordern, `E:` zu entsperren, zu ändern oder für Codex verfügbar zu machen.
+- Wegen eines `E:`-bezogenen Toolfehlers einen MOSA-Auftrag nicht abbrechen, solange ein anderer geeigneter Werkzeugweg verfügbar ist.
+- Für Repository-Inhalte bevorzugt den GitHub-Zugriff verwenden, wenn die lokale Shell nicht benötigt wird.
+- Für Web-/Dogado-Aufträge den aktuell bereitgestellten Browser-/Chrome-Zugang verwenden. Ein lokaler Shell-Start ist für eine reine Browser-Bestandsaufnahme **nicht erforderlich**.
+- Für Anhänge oder Projektdateien alternative verfügbare Datei-/GitHub-Zugriffe verwenden, bevor ein Auftrag als blockiert gilt.
+- Wenn Auftragstext, GitHub-Issue oder Auftragsdokument bereits vorhanden sind, **niemals verlangen, dass der Nutzer den Auftrag erneut in den Chat einfügt**.
+- Ein ausgefallener Recorder oder ein nicht lesbarer Anhang blockiert den Auftrag nicht, wenn die notwendigen Informationen bereits im Auftrag, Repository oder GitHub-Issue vorliegen.
+- Ein echter Blocker darf erst gemeldet werden, wenn die für das Akzeptanzkriterium **tatsächlich erforderliche** Fähigkeit aktuell neu getestet wurde und alle sinnvollen, fachlich gleichwertigen Alternativen ohne `E:` ausgeschöpft sind.
+- Falls danach wirklich eine Werkzeugfähigkeit fehlt, nur die konkret fehlende Fähigkeit benennen, zum Beispiel „aktueller Chrome-Zugriff nicht verfügbar“ oder „GitHub-Schreibzugriff fehlt“. `E:` darf nicht als Ursache oder notwendige Nutzeraktion ausgegeben werden.
+- Historische Fehlerdiagnosen sind niemals ein aktueller Status. Jeder erforderliche Browser-/Toolzugang ist im aktuellen Lauf neu zu prüfen.
+
 ## Arbeitsweise für Codex
 
 1. Auftrag vollständig lesen und Akzeptanzkriterien identifizieren.
@@ -37,8 +54,8 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
    - durch den Auftrag verursacht,
    - bereits vorher vorhanden.
 6. Vergangene Tool-, Browser-, Chrome-, MXC-/Launcher-, Laufwerks- oder Berechtigungsfehler niemals ungeprüft als aktuellen Blocker übernehmen. Gespeicherte Diagnosen sind nur historische Hinweise, kein aktueller Status.
-7. Wenn ein Auftrag Browser-/Chrome-Zugriff benötigt oder ein früherer Browserfehler relevant erscheint, den aktuellen Chrome-Zugang zuerst neu testen. Nur ein aktuell reproduzierbarer Fehler darf als Blocker gemeldet werden.
-8. Das frühere Problem mit Laufwerk `E:` darf nicht automatisch als bestehender Blocker verwendet werden. `E:` ist für MOSA-Aufträge fachlich ausgeschlossen, sofern der Auftrag keinen ausdrücklichen Bezug dazu hat.
+7. Wenn ein Auftrag Browser-/Chrome-Zugriff benötigt oder ein früherer Browserfehler relevant erscheint, den aktuellen Chrome-Zugang zuerst neu testen. Nur ein aktuell reproduzierbarer Fehler der tatsächlich erforderlichen Fähigkeit darf als Blocker gemeldet werden.
+8. Das frühere Problem mit Laufwerk `E:` ist durch die verbindliche Werkzeug- und E:-Fehlerregel oben geregelt und darf nicht als MOSA-Blocker verwendet werden.
 9. Eine Sicherheits-, Freigabe- oder Zugriffssperre auf eine konkrete MOSA-Seite ist getrennt von der grundsätzlichen Chrome-Verfügbarkeit zu bewerten. Aus einer gesperrten MOSA-Seite darf nicht auf fehlenden Chrome-Zugang geschlossen werden.
 10. Keine Browser-, Deployment- oder Produktionsaktionen ausführen, sofern der Auftrag dies nicht ausdrücklich verlangt.
 
