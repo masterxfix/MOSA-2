@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** geplant · noch keine Datenbank angelegt  
+**Status:** Phase 1A umgesetzt · isolierte Testplattform angelegt · praktische Testblöcke von Phase 1 noch offen  
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -18,9 +18,93 @@ PHP 8.5 wird später als zusätzlicher Kompatibilitätskandidat verglichen. Es w
 
 ## Sicherheits- und Freigabegrenze
 
-Die Anlage einer Datenbank, eines Benutzers oder einer Testdomain ist eine Dogado-Änderung und erfolgt erst nach ausdrücklicher Freigabe.
+Die Anlage einer Datenbank, eines Benutzers oder einer Testdomain ist eine Dogado-Änderung und erfolgt erst nach ausdrücklicher Freigabe. Die begrenzte Plattformanlage wurde am 17.10.2026 ausdrücklich freigegeben; Umfang und Grenzen sind in [Issue #5](https://github.com/masterxfix/MOSA-2/issues/5#issuecomment-6233907983) dokumentiert.
 
 Zugangsdaten bleiben außerhalb von GitHub. Externer Datenbankzugriff bleibt zunächst deaktiviert. Alle Testtabellen erhalten einen eindeutig als temporär erkennbaren Präfix.
+
+## Phase 1A – tatsächlich angelegte Plattform
+
+**Nachweisstand:** 17.10.2026, ca. 14:44 Europe/Berlin. Prüfung ausschließlich über die vorhandene angemeldete Chrome-Sitzung, oneHome, Plesk und phpMyAdmin. Keine lokalen Laufwerke, Shells oder Launcher verwendet.
+
+### Anlage und Zugriff
+
+- Eigene neue Testdatenbank mit Suffix `mosa2_test` auf dem MySQL-8-Server; accountbezogene Präfixe bleiben hier ausgespart.
+- Eigener neuer Benutzer mit demselben Test-Suffix. Die Benutzerübersicht ordnet ihn ausschließlich dieser Testdatenbank zu; im gespeicherten Formular ist die Rolle **Lesen und Schreiben** ausgewählt.
+- Gespeicherte Zugriffskontrolle: **Nur lokalen Zugriff zulassen**. Externer Zugriff und benutzerdefinierte externe Verbindungen sind nicht ausgewählt.
+- Lokaler TCP-Endpunkt: `127.0.0.1:3307`. Der vorhandene MySQL-5.7-Bestand bleibt auf Port 3306.
+- Vorher drei, nachher vier Datenbanken; keine bestehende Datenbank oder bestehender Benutzer verändert.
+- Das neue Passwort wurde vom Nutzer direkt im Dogado-Formular gesetzt und die Anlage von ihm abgesendet. Es wurde weder ausgelesen noch in GitHub übernommen.
+- Neuer separater Webbereich `mosa2-test.<Testdomain>` mit eigenem Dokumentstamm `mosa2-test.<Testdomain>` außerhalb der bestehenden MOSA-Verzeichnisse.
+- Nur für diesen neuen Webbereich wurde PHP 8.4 mit **FPM-Anwendung (Apache)** gespeichert. Keine bestehende Domain oder Anwendung umgestellt.
+- Die Trennung erfolgt durch eine eigene Datenbank, einen darauf begrenzten Benutzer und einen eigenen Dokumentstamm im bestehenden Hosting-Abonnement. Ein eigener Server oder eigener Betriebssystembenutzer wurde nicht eingerichtet.
+- Keine MOSA-Daten übernommen, keine Testtabellen oder Anwendung hochgeladen, kein produktives Deployment.
+
+### Praktischer Datenbanknachweis
+
+Die folgende reine Leseabfrage wurde im WebAdmin-Kontext der neuen Testdatenbank erfolgreich ausgeführt:
+
+```sql
+SELECT
+    VERSION() AS mysql_version,
+    @@port AS port,
+    DATABASE() AS selected_database,
+    @@session.sql_mode AS sql_mode,
+    @@character_set_database AS db_charset,
+    @@collation_database AS db_collation,
+    @@session.time_zone AS session_time_zone,
+    @@global.time_zone AS global_time_zone,
+    @@default_storage_engine AS default_engine,
+    @@max_allowed_packet AS max_allowed_packet,
+    (
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+    ) AS table_count;
+```
+
+| Messpunkt | Im neuen Testkontext bestätigt |
+| --- | --- |
+| MySQL-Version | `8.0.26-16` |
+| Port | `3307` |
+| Ausgewählte Datenbank | ausschließlich die neu angelegte Testdatenbank |
+| Tabellenzahl | `0` |
+| SQL-Modus | `NO_ENGINE_SUBSTITUTION` |
+| Datenbank-Zeichensatz | `utf8mb3` |
+| Datenbank-Kollation | `utf8_general_ci` |
+| Session-/globale Zeitzone | jeweils `SYSTEM` |
+| Standard-Storage-Engine | `InnoDB` |
+| `max_allowed_packet` | `67108864` Bytes = 64 MiB |
+
+phpMyAdmin zeigt im durch Plesk geöffneten WebAdmin-Kontext irreführend das Serverlabel „MySQL 5.7“, obwohl Port 3307 verwendet wird. Maßgeblich ist das erfolgreiche Ergebnis von `VERSION()`: **8.0.26-16**. Es wurde keine andere Datenbank ausgewählt.
+
+Die Provider-Voreinstellungen wurden unverändert erfasst. Vor dem Testschema sind **utf8mb4 mit ausdrücklich gewählter Kollation**, ein geeigneter strikter Session-SQL-Modus und eine ausdrückliche UTC-Strategie festzulegen und im isolierten Testkontext zu prüfen. `SYSTEM` belegt keine konkrete UTC-Zeitzone; `NO_ENGINE_SUBSTITUTION` ist kein Nachweis eines strikten SQL-Modus. Diese Einstellungen sind noch keine Schemafreigabe.
+
+### Praktischer PHP-FPM-Nachweis
+
+Nach dem Speichern der neuen Domain-Konfiguration wurde die von Plesk angebotene phpinfo-Ansicht ausschließlich auf die folgenden Laufzeitdaten und Modulnamen ausgewertet. Es wurde keine öffentliche phpinfo-Datei angelegt und keine vollständige Ausgabe übernommen.
+
+| Messpunkt | Im neuen Webbereich bestätigt |
+| --- | --- |
+| Tatsächliche PHP-Version | `8.4.26` |
+| Server API | `FPM/FastCGI` |
+| PDO | aktiviert; Treiber `mysql` vorhanden |
+| MySQL-Client | `mysqlnd 8.4.26` |
+| `memory_limit` | `256M` |
+| `max_execution_time` / `max_input_time` | jeweils `900` Sekunden |
+| `post_max_size` / `upload_max_filesize` | jeweils `64M` |
+| OPcache | aktiviert |
+
+Bestätigte relevante Module: `curl`, `date`, `dom`, `fileinfo`, `filter`, `hash`, `intl`, `json`, `mbstring`, `mysqli`, `mysqlnd`, `openssl`, `PDO`, `pdo_mysql`, `session`, `sodium`, `zip` und `Zend OPcache`.
+
+### Prüfung, offene Nachweise und nächste Phase
+
+**Phase 1A geprüft:** Anlage vorhanden und nicht mehr als ausstehend markiert; Benutzerzuordnung ausschließlich zur neuen Datenbank; lokale Zugriffsbeschränkung gespeichert; erfolgreiche SQL-Leseabfrage mit null Tabellen; PHP 8.4.26 tatsächlich als FPM im neuen Dokumentstamm bestätigt.
+
+**Noch offen:** PDO-Verbindung vom Test-Webbereich zur Datenbank mit dem neuen Benutzer, CLI-Laufzeit und PDO-CLI-Verbindung, genauer SQL-Rechteumfang einschließlich DDL sowie Transaktions-, Schreib- und Isolationstests. Die WebAdmin-Leseabfrage ersetzt diese Anwendungsnachweise nicht.
+
+Die nächste praktische Testphase umfasst die kontrollierte Verbindungskonfiguration außerhalb von GitHub, Testschema mit festgelegtem Zeichensatz/SQL-Modus/Zeitzone, synthetische Datenstufen, Query-Pläne, begrenzte Lastmessungen und Backup/Restore in einem eigenen Ziel. Diese Schritte wurden in Phase 1A nicht vorgezogen. Eine Million Zeilen bleibt an eine positive Zwischenbewertung und die erforderliche Freigabe gebunden.
+
+**Issue #5 bleibt offen.** Die Plattformanlage ist umgesetzt; die nachfolgend beschriebenen praktischen Testblöcke und die endgültige Schemafreigabe sind damit nicht abgeschlossen.
 
 ## Testblöcke
 
