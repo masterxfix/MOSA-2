@@ -185,6 +185,13 @@ function save(string $path,array $report): void {
     $json=json_encode($report,JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
     check(file_put_contents($path,$json,LOCK_EX)===strlen($json)&&chmod($path,0600),'report_write');
 }
+function reviewablePostcheck(string $stage,array $structureCounts,array $rowCounts): bool {
+    $expected=['tables'=>13,'columns'=>96,'primary'=>13,'unique'=>7,'secondary'=>16,'foreign_keys'=>14,'checks'=>9];
+    ksort($structureCounts);ksort($expected);
+    $names=array_keys($rowCounts);sort($names);$tables=TABLES;sort($tables);
+    return $stage==='practical'&&$structureCounts===$expected&&$names===$tables
+        &&count(array_filter($rowCounts,static fn($count)=>$count!==0))===0;
+}
 function run(string $root,bool $resume=false): array {
     check(PHP_SAPI==='cli'&&!is_link($root)&&(fileperms($root)&0077)===0,'private_cli');
     check(is_file($root.'/secret.php')&&!is_link($root.'/secret.php')&&(fileperms($root.'/secret.php')&0077)===0,'private_secret');
@@ -192,13 +199,13 @@ function run(string $root,bool $resume=false): array {
     $sql=file_get_contents($root.'/migration.sql');$schema=contract($sql);$p=connection(require $root.'/secret.php');
     if($resume){
         $report=json_decode(file_get_contents($root.'/report.json'),true,512,JSON_THROW_ON_ERROR);
-        check(($report['awaiting_check_review']??false)===true&&($report['ok']??true)===false,'not_review_state');
+        check((($report['awaiting_check_review']??false)===true||($report['awaiting_postcheck_review']??false)===true)&&($report['ok']??true)===false,'not_review_state');
         same($report['migration_sha256'],DIGEST,'resume_digest');same($report['created'],TABLES,'resume_ownership');
         $expected=TABLES;sort($expected);same(tables($p),$expected,'resume_table_set');
         preflight($p,false);
         foreach(TABLES as $name)same((int)$p->query('SELECT COUNT(*) FROM '.qi($name))->fetchColumn(),0,'resume_not_empty');
         $created=TABLES;
-        unset($report['awaiting_check_review'],$report['failure']);
+        unset($report['awaiting_check_review'],$report['awaiting_postcheck_review'],$report['failure'],$report['structure']);
         $report['postcheck_resumed_at_utc']=gmdate('c');
     }else{
         $report=['ok'=>false,'started_at_utc'=>gmdate('c'),'migration_sha256'=>hash('sha256',$sql),'preflight'=>preflight($p),'created'=>[]];
@@ -206,9 +213,12 @@ function run(string $root,bool $resume=false): array {
     }
     $lock=fopen($root.'/run.lock',$resume?'c':'x');check($lock!==false&&flock($lock,LOCK_EX|LOCK_NB),'run_lock');
     if(!$resume)save($root.'/started.json',$report);
+    $stage='ddl';
     try{
         if(!$resume)foreach($schema as $name=>$t){$p->exec($t['ddl']);$created[]=$name;$report['created']=$created;save($root.'/report.json',$report);}
-        $report['structure']=structure($p,$schema,$root.'/check-diagnostics.json');$report['practical']=practical($p);
+        $stage='structure';$report['structure']=structure($p,$schema,$root.'/check-diagnostics.json');
+        $stage='practical';$report['practical']=practical($p);
+        $stage='ledger';
         $p->beginTransaction();
         $q=$p->prepare('INSERT INTO m2_schema_migrations (version,migration_key,checksum,applied_at) VALUES (1,?,UNHEX(?),UTC_TIMESTAMP(6))');$q->execute(['0001_core_asset_identity',DIGEST]);
         $ledger=$p->query('SELECT version,migration_key,LOWER(HEX(checksum)) AS checksum,applied_at FROM m2_schema_migrations')->fetchAll();
@@ -227,6 +237,14 @@ function run(string $root,bool $resume=false): array {
             return $report;
         }
         $present=tables($p);$allowed=$created;sort($allowed);
+        if($stage==='practical'&&$present===$allowed&&count($created)===13){
+            $rowCounts=[];
+            foreach(TABLES as $name)$rowCounts[$name]=(int)$p->query('SELECT COUNT(*) FROM '.qi($name))->fetchColumn();
+            if(reviewablePostcheck($stage,$report['structure']['counts']??[],$rowCounts)){
+                $report['awaiting_postcheck_review']=true;$report['review_empty_counts']=$rowCounts;
+                save($root.'/report.json',$report);return $report;
+            }
+        }
         if($present===$allowed){foreach(array_reverse($created) as $name)$p->exec('DROP TABLE '.qi($name));$report['cleanup_tables_remaining']=count(tables($p));}
         else $report['cleanup_blocked']='unexpected_tables_ownership_not_proven';
         save($root.'/report.json',$report);

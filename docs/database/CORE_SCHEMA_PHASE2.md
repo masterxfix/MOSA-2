@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 2: Core- und Asset-Identitätsmodell
 
-**Status:** fachlich und technisch spezifiziert · noch nicht als Datenbankschema angewendet  
+**Status:** live technisch validiert auf der isolierten Testdatenbank am 18.10.2026; keine Produktivfreigabe
 **Grundlage:** Phase 1 erfolgreich abgeschlossen; Issue #5 geschlossen  
 **Ziel:** Den stabilen gemeinsamen Core und das Finanz-Identitätsmodell festlegen, bevor Markt-, Depot-, News- oder Migrationsdaten in MOSA 2 übernommen werden.
 
@@ -348,14 +348,15 @@ Keine dieser Abfragen darf einen ungebundenen Full Scan als vorgesehenen Normalw
 
 ## Phase-2-Migrationsartefakte
 
-Die spätere technische Umsetzung soll zunächst ausschließlich Repository-Artefakte erzeugen:
+Die technische Umsetzung umfasst die folgenden Repository-Artefakte:
 
 - versionierte SQL-Migration für das leere Phase-2-Schema;
 - deterministische Offline-Schema-/Index-Tests;
 - DDL-Validierung gegen MySQL 8;
 - dokumentierte Down-/Cleanup-Strategie ausschließlich für die isolierte Testdatenbank.
 
-Noch keine Anwendung auf eine Datenbank ohne separaten ausdrücklich freigegebenen Testauftrag.
+Der separat freigegebene Apply-/Postcheck wurde erfolgreich abgeschlossen; siehe
+[finaler Live-Nachweis](PHASE2_FINAL_LIVE.md). Weitere Anwendungen benötigen eine eigene Freigabe.
 
 ## Akzeptanzkriterien für die Schema-Spezifikation
 
@@ -372,4 +373,6 @@ Noch keine Anwendung auf eine Datenbank ohne separaten ausdrücklich freigegeben
 
 ## Nächster Schritt
 
-Die Spezifikation wird als versionierte SQL-Migration und automatisierte Offline-Tests umgesetzt. Danach folgt ein separater, kontrollierter Apply-/Postcheck-Test ausschließlich auf der leeren isolierten MOSA-2-Testdatenbank.
+Das Core-/Asset-Identitätsschema ist technisch für die weitere MOSA-2-Testentwicklung
+freigegeben. 13 Tabellen bleiben bestehen, ausschließlich der Ledger enthält eine
+Zeile. Keine nächste Fachphase, Datenmigration oder Produktion ist damit freigegeben.
