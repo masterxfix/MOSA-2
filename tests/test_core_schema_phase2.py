@@ -13,7 +13,7 @@ MIGRATIONS = ROOT / 'docs/database/migrations'
 SQL = (MIGRATIONS / '0001_core_asset_identity.sql').read_text(encoding='utf-8')
 SPEC = (ROOT / 'docs/database/CORE_SCHEMA_PHASE2.md').read_text(encoding='utf-8')
 IDENT = r'[a-z][a-z0-9_]*'
-TYPE = r'(?:BIGINT UNSIGNED|SMALLINT UNSIGNED|INT UNSIGNED|TINYINT\(1\)|VARCHAR\(\d+\)|CHAR\(\d+\)|DATETIME\(6\)|BINARY\(32\)|JSON)'
+TYPE = r'(?:BIGINT UNSIGNED|SMALLINT UNSIGNED|INT UNSIGNED|TINYINT\(1\)|VARCHAR\(\d+\)|CHAR\(\d+\)|DATETIME\(6\)|BINARY\(32\)|DECIMAL\(\d+,\d+\)|JSON)'
 
 
 def split_sql(text, delimiter):
@@ -113,9 +113,9 @@ def parse(sql):
     return tables
 
 
-def specification_columns():
+def specification_columns(spec=SPEC):
     result = {}
-    for match in re.finditer(r'### \d+\. `(m2_\w+)`\n(.*?)(?=\n### |\n## |\Z)', SPEC, re.S):
+    for match in re.finditer(r'### \d+\. `(m2_\w+)`\n(.*?)(?=\n### |\n## |\Z)', spec, re.S):
         columns = {}
         for row in re.finditer(r'^\| `(\w+)` \| ([^|]+) \|', match[2], re.M):
             datatype = row[2].strip()
@@ -325,7 +325,8 @@ class CoreSchemaTests(unittest.TestCase):
         section = readme.split('<!-- cleanup-order -->')[1].split('<!-- /cleanup-order -->')[0]
         order = re.findall(r'^\d+\. `(m2_\w+)`', section, re.M)
         self.assertEqual(order, list(reversed(self.tables)))
-        self.assertEqual([p.name for p in MIGRATIONS.glob('*.sql')], ['0001_core_asset_identity.sql'])
+        self.assertEqual(sorted(p.name for p in MIGRATIONS.glob('*.sql')),
+                         ['0001_core_asset_identity.sql', '0002_market_current_history.sql'])
 
 
 if __name__ == '__main__':

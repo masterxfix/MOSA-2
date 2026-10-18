@@ -1,4 +1,38 @@
-# Phase-2-Migrationen
+# Versionierte Migrationen
+
+## Version 0002 – Marktdaten (Phase 3A)
+
+`0002_market_current_history.sql` ist ausschließlich ein **Repository-Artefakt,
+noch NICHT live angewendet**. Reihenfolge: **0001 → 0002**. Dies ist keine
+Live-Apply-Freigabe; Version 2 wurde nicht in den Ledger geschrieben.
+Grundlage: [MARKET_DATA_PHASE3.md](../MARKET_DATA_PHASE3.md).
+
+Genau drei Tabellen: `m2_market_current` (ein Zustand je Asset),
+`m2_market_observations` (append-only Beobachtungen, eindeutiger BINARY(32)-Dedupe)
+und `m2_market_bars` (OHLCV, eindeutige Asset/Route/Intervall/Start-Identität).
+Neun FKs referenzieren Assets, Sources und Routes mit ON DELETE RESTRICT.
+Finanzwerte sind DECIMAL, Zeiten explizite UTC-Eingaben in DATETIME(6).
+CHECKs prüfen positive Preise, Bid/Ask, Tagesrange, Intervallgrenzen und
+OHLC-Grenzen; kanonische Intervalle sind ausschließlich 1m, 5m, 1h und 1d.
+Nullable Vergleichswerte dürfen fehlen (SQL-CHECK akzeptiert UNKNOWN).
+
+Die spezifizierten Asset-/Zeit-/Source-Indizes sind vollständig enthalten.
+Zusätzlich existiert je Tabelle ein expliziter `route_id`-Index für den FK,
+damit MySQL keinen impliziten Index erzeugen muss. Keine redundanten Composite-FKs.
+Route/Asset/Source-Konsistenz, ISO-Währungskanonisierung, Append-only-Rechte,
+Dedupe-Bildung und monotone Current-Aktualisierung bleiben spätere zentrale
+Anwendungs-/Validierungsregeln; keine Trigger oder Schreiblogik in dieser Phase.
+Offline-Modelltests beschreiben Dedupe, ältere Beobachtungen, deterministischen
+Gleichstand und Rollback, ohne einen produktiven Schreibpfad zu implementieren.
+
+Offline-Test: `python -m unittest discover -s tests -p test_market_schema_phase3.py -v`.
+Kein MySQL-Ausführungs-, EXPLAIN- oder Performance-Nachweis; diese folgen nur
+mit eigener Phase-3B-Freigabe. Migration 0001 bleibt byte-identisch.
+Die unten stehende Cleanup-Reihenfolge betrifft ausschließlich Phase 2 vor
+einem Apply von 0002; nach dessen Apply sind die abhängigen Markttabellen in
+einem separat freizugebenden Cleanup zu berücksichtigen.
+
+## Version 0001 – Core (Phase 2)
 
 Status: **Live technisch validiert auf der isolierten Testdatenbank am 18.10.2026.**
 
