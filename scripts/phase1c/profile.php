@@ -29,8 +29,8 @@ function profileSpec(?string $id = null): array
         $id = defined('MOSA2_HISTORY_PROFILE') ? MOSA2_HISTORY_PROFILE : 'history10000_v1';
         if (defined('MOSA2_HISTORY_10000')) ensure(MOSA2_HISTORY_10000 === true, 'unknown_profile');
     }
-    ensure(is_string($id) && in_array($id, ['history10000_v1','history100000_v1'], true), 'unknown_profile');
-    $per = $id === 'history100000_v1' ? 1000 : 100;
+    ensure(is_string($id) && in_array($id, ['history10000_v1','history100000_v1', ...(defined('MOSA2_HISTORY_MILLION') && MOSA2_HISTORY_MILLION === true ? ['history1000000_v1'] : [])], true), 'unknown_profile');
+    $per = match ($id) { 'history1000000_v1' => 10000, 'history100000_v1' => 1000, default => 100 };
     $limits = LIMITS; $limits['history'] = 100 * $per;
     $expected = EXPECTED; $expected['history'] = 100 * $per;
     return ['id'=>$id,'per_entity'=>$per,'limits'=>$limits,'expected'=>$expected];
@@ -172,7 +172,7 @@ function validateState(array $state, ?string $profile = null): void
 {
     $spec=profileSpec($profile);
     ensure(($state['profile'] ?? '') === $spec['id'], 'manifest_profile_mismatch');
-    if ($spec['id']==='history100000_v1' || isset($state['per_entity'],$state['limits'],$state['expected'])) {
+    if ($spec['id']!=='history10000_v1' || isset($state['per_entity'],$state['limits'],$state['expected'])) {
         ensure(($state['per_entity']??null)===$spec['per_entity'] && ($state['limits']??null)===$spec['limits'] && ($state['expected']??null)===$spec['expected'],'manifest_bounds_mismatch');
     }
     ensure((bool) preg_match('/\A[a-f0-9]{32}\z/D', (string) ($state['owner'] ?? '')), 'manifest_owner_invalid');
@@ -294,7 +294,7 @@ function querySet(array $state): array
         'chart' => ["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<=? ORDER BY observed_at DESC,id DESC LIMIT 25", [7, stamp(1), stamp(profileSpec()['per_entity'])]],
         'identity_lookup' => ["SELECT e.id FROM $i i JOIN $e e ON e.id=i.entity_id WHERE i.namespace=? AND i.external_key=? LIMIT 1", ['synthetic_v1', rows('identity')[6][3]]],
     ];
-    if (profileSpec()['id']==='history100000_v1') $set['history_wide_window']=["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<? ORDER BY observed_at,id LIMIT 50",[7,stamp(1),stamp(901)]];
+    if (profileSpec()['per_entity']>=1000) $set['history_wide_window']=["SELECT id,entity_id,sequence_no,observed_at,synthetic_value FROM $h WHERE entity_id=? AND observed_at>=? AND observed_at<? ORDER BY observed_at,id LIMIT 50",[7,stamp(1),stamp(profileSpec()['per_entity']-99)]];
     return $set;
 }
 
@@ -309,7 +309,7 @@ function expectedQueries(): array
         'chart' => array_map(fn(int $seq): array => historyRow(7,$seq), range($per,$per-24)),
         'identity_lookup' => [[7]],
     ];
-    if (profileSpec()['id']==='history100000_v1') $set['history_wide_window']=array_map(fn(int $seq):array=>historyRow(7,$seq),range(1,50));
+    if (profileSpec()['per_entity']>=1000) $set['history_wide_window']=array_map(fn(int $seq):array=>historyRow(7,$seq),range(1,50));
     return $set;
 }
 

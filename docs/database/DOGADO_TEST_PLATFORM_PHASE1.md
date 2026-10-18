@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** 100.000er-Test, History-Optimierung und begrenzte überlappende Transaktionsszenarien durchgeführt und bereinigt · Ziele erfüllt · Issue #5 und weitere Freigaben offen
+**Status:** Million-Zeilen-Skalierungstest und Backup/Restore durchgeführt und bereinigt · begrenzte Testziele erfüllt · Issue #5 und Schema-/Produktivfreigaben offen
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -697,6 +697,99 @@ Im Restore genau einmal je gefordertem Funktionsmuster ausgeführt: Current einz
 - Ein Abschluss-Commit mit [skip ci]. Derselbe Commit wird auf einem Prüfbranch mit dem bestehenden Workflow validiert, Deploy muss übersprungen sein; erst danach Übernahme nach main. Konkreter SHA und Prüflauf stehen im Abschlusskommentar zu Issue #5.
 
 **Aussagegrenze:** Vollständige Sicherung und Wiederherstellung dieses isolierten synthetischen Fünf-Tabellen-Bestands ist nachgewiesen. Kein Backup einer vollständigen produktiven MOSA-Anwendung, kein Online-Backup unter konkurrierenden Schreibern, keine langfristige Aufbewahrungs-/Desaster-Recovery-, Schema- oder Produktivfreigabe. **Issue #5 bleibt offen.** Keine nächste Testphase gestartet.
+
+
+## Phase 1H – abschließender Million-Zeilen-Skalierungstest
+
+**18.10.2026, Europe/Berlin (MESZ, UTC+02:00). Fachlich erfolgreich für den begrenzten synthetischen Test.** Aufbauabschluss 10:43:20; CLI-Messbeginn 10:43:37; FPM-Messbeginn 10:44:46; abschließender Leerstands-/Dateibereinigungsnachweis 10:46:26.
+
+### Vorprüfung, Profil und Grenzen
+
+Ausschließlich die bestehende Quell-Testdatenbank und ihr zugeordneter Benutzer am festen lokalen Endpunkt 127.0.0.1:3307. Authentifizierung und **null Tabellen** vor Aufbau bestätigt. Restore-Testdatenbank nicht verbunden oder verändert, kein erneuter Backup/Restore, keine neue Datenbank und kein Passwortreset.
+
+Providerkonto: oneHome 7,05 GB von 150 GB belegt; Plesk 7.856,6 MB von 150 GB (abweichende Anzeigezeitpunkte/Einheiten). Aus 10,69 MiB bei 100.000 Zeilen zunächst ungefähr 107 MiB abgeleitet; deutlicher Spielraum gegenüber der sichtbaren Abonnementgrenze. Providerseitig im privaten Verzeichnis gemeldeter freier Dateisystemraum 1.486.569.500.672 Bytes ist **keine persönliche DB-Quota**. MySQL 8.0.26-16, Port 3307, max_allowed_packet 67.108.864 Bytes, max_user_connections 30, InnoDB-Seite 16.384 Bytes bestätigt. Keine separate per-DB-Bytequota aus diesen Nachweisen ableitbar; keine erkennbare Provider-/Speichergrenze. Nur eine Testverbindung pro sequenziellem Lauf, keine Rechte-/globalen Einstellungen geändert.
+
+Gemeinsamer Phase-1B-Verbindungskern und Phase-1C-Profilgenerator, Batch-Lader, Messungen, Korrektheit, Manifest und Bereinigung wiederverwendet. Phase-1E-Indexinspektion und EXPLAIN-ANALYZE-Parser ebenfalls wiederverwendet, **keine Optimierungsstufen ausgeführt**. Neues festes history1000000_v1 nur mit ausdrücklich serverseitig aktiviertem MOSA2_HISTORY_MILLION; alte Einstiege weisen es weiterhin ab. Alte Profiltests unverändert. Keine freie HTTP-Mengen-/Profilwahl, kein Anhängen oder Wiederaufbau.
+
+Genau 100 Entity, 100 Identity, **1.000.000 History (10.000 je Entity)**, 100 Current und 1 Migration. Fester Seed mosa2-synthetic-v1, UTC-Basis 2020-01-01T00:00:00Z; gleiche Zeitstempel deterministisch nach ID. Einmaliger CLI-Aufbau, 2.000 History-Batches zu höchstens 500 plus vier Nebenbatches, eine Datentransaktion. Allgemeiner ASC-Index history_time(entity_id,observed_at ASC,id ASC), kein Zusatzindex. Query-Statistik weiterhin höchstens 30 Werte; eigene Batchstatistik maximal 2.000. Bestehende Laufgrenzen bleiben 90 s Aufbau, 30 s Messung/Bereinigung, PHP 120 s und SELECT-/Lock-Grenzen 3 s.
+
+### Korrektheit
+
+CLI PHP 8.4.12 und FPM PHP 8.4.26, beide PDO-MySQL, jeweils alle 16 gemeinsamen Prüfmerkmale erfolgreich: exakte Mengen, keine verwaisten Daten, eindeutige History-/Identity-Zuordnung, alle 100 Current-Zeilen exakt neueste History, sämtliche sieben Abfrageergebnisse, leere/Zeitgrenzenfälle und ID-Gleichstandsauflösung. Current-Upserts erzeugen keine Duplikate oder Rückschritte; Prüfschreibungen zurückgerollt. History nach Aufbau ausschließlich gelesen.
+
+Vollständiger SHA-256 vor/nach Schreibprüfungen unter **beiden SAPIs identisch** und passend zur deterministischen Erwartung:
+
+`3a80ac0ad6741320a1477cf250c3268a5a1f41d12298b27f033c1cd4030057b9`
+
+Kanonische Pipe-Zeilen in ID-Reihenfolge, wie Phase 1D. Zusätzlich unabhängig in JavaScript aus festen Formeln/UTC-Zeiten berechnet und als feste Offline-Regression übernommen. Keine Passwort-/Produktivdaten in Prüfsummen oder Berichten.
+
+### Laufzeiten und Pläne
+
+Je sieben Abfragetypen und SAPI **erste Ausführung separat plus zehn Folgemessungen**, Median/p95 (Nearest-Rank, bei zehn Werten Maximum). Alle Ergebnisse jeder Ausführung vollständig gegen Sollwerte geprüft. Zeit umfasst PDO execute plus begrenzten Abruf, nicht Verbindung/Prepare. Keine Cache-Leerung; erster Wert ist kein nachgewiesener Kaltstart. Insgesamt 154 reguläre Query-Messungen, zusätzlich begrenzte Korrektheits-/Integritätsabfragen, vollständige Prüfsummenscans und je ein EXPLAIN ANALYZE.
+
+| Muster | CLI erste / Median / p95 ms | FPM erste / Median / p95 ms | EXPLAIN beider SAPIs: Zugriff / Index / geschätzte Zeilen |
+| --- | ---: | ---: | --- |
+| Current einzeln | 0,3219 / 0,1075 / 0,1683 | 0,2128 / 0,1150 / 0,1444 | const / PRIMARY / 1 |
+| Current Batch | 0,1718 / 0,1271 / 0,1441 | 0,1549 / 0,1216 / 0,1358 | range / PRIMARY / 6 |
+| Neueste History | 0,5203 / 0,2908 / 1,6627 | 0,4217 / 0,2855 / 0,3605 | ref / history_time / 10.000; rückwärts |
+| Schmales Fenster | 0,3043 / 0,2166 / 1,2897 | 0,2587 / 0,2039 / 0,2335 | range / history_time / 10; Indexbedingung |
+| Chart LIMIT 25 | 0,3621 / 0,3331 / 0,3780 | 0,3681 / 0,3233 / 0,3391 | ref / history_time / 10.000; rückwärts |
+| Identity | 0,1790 / 0,1238 / 0,2640 | 0,2117 / 0,1282 / 0,1521 | const / identity_lookup + PRIMARY / je 1 |
+| Breites Fenster LIMIT 50 | 0,4491 / 0,3845 / 0,4361 | 0,4491 / 0,3558 / 0,3926 | ref / history_time / 10.000; Indexbedingung |
+
+Alle ersten Werte, Median und p95 unter den Zielen **Current <20 ms**, **begrenzte History <100 ms**. Kein Filesort oder ungeeigneter ungebundener Full Scan im normalen Leseweg. Vollständige Integritäts-/Prüfsummenscans sind gesonderte Prüfungen, keine normalen Seitenabfragen.
+
+Breites Fenster: Entity gebunden wie bisher, UTC 2020-01-01 00:00 inklusive bis 2020-01-04 10:30 exklusive; **9.900 passende History-Zeilen**, gegenüber 900 in Phase 1D/E. ORDER BY observed_at,id, LIMIT 50, keine entityspezifische Sonderlösung, kein FORCE INDEX und keine Optimizer-Umschaltung.
+
+EXPLAIN ANALYZE unterstützt. Beide SAPIs: selektiver Index-Lookup auf history_time mit Zeitbedingung, tatsächlich **50 vom Indexoperator an LIMIT ausgegebene Zeilen, ein Durchlauf**; Schätzung 10.000 am Lookup und 50 am LIMIT. Instrumentierter LIMIT-Abschluss CLI 0,145 ms, FPM 0,128 ms; Lookup-Ende 0,141 / 0,123 ms. Das sind Operator-Ausgabezeilen, **kein separater Nachweis interner InnoDB-Zeilenprüfungen oder physischer Seitenzugriffe**.
+
+Vergleich zur erfolgreichen allgemeinen ASC-Stufe 1E bei 100.000 Zeilen: Current-Median CLI/FPM 0,0986/0,0965 → 0,1075/0,1150 ms; breite History 0,3575/0,3814 → 0,3845/0,3558 ms, p95 0,4157/0,4315 → 0,4361/0,3926 ms. Kein unerwarteter Planwechsel: ref/history_time bleibt, Entity-Kardinalität geschätzt 1.000 → 10.000; schmales range-Fenster weiter zehn. Höchster History-p95 jetzt 1,6627 ms (CLI Latest), weiterhin weit unter 100 ms. Kleine zeitlich getrennte Hosting-Stichproben belegen keine allgemeine Beschleunigung oder Verschlechterung. Die ursprüngliche langsame DESC-Stufe 1D ist nicht der maßgebliche ASC-Vergleich.
+
+### Aufbau und Speicher
+
+Gesamter Aufruf für Verbindung, Vorprüfung, DDL, Generator, Inserts, Commit und Manifest: **20.668,1901 ms**. Für Phase 1D ist keine methodisch identische Gesamtaufbauzeit dokumentiert; daher kein erfundener Gesamtzeitfaktor.
+
+| Schreiben | Batches | INSERT-Summe ms | Median ms | p95 ms |
+| --- | ---: | ---: | ---: | ---: |
+| Entity | 1 | 0,9734 | 0,9734 | 0,9734 |
+| Identity | 1 | 1,6060 | 1,6060 | 1,6060 |
+| History | 2.000 | 11.312,4964 | 5,1527 | 8,6196 |
+| Current | 1 | 1,9508 | 1,9508 | 1,9508 |
+| Migration | 1 | 0,1786 | 0,1786 | 0,1786 |
+
+History-INSERT-Summe gegenüber Phase 1D 1.762,3435 ms etwa **6,42-fach bei zehnfacher Menge**. Keine allgemeine Durchsatzprognose; getrennte Läufe, keine Parallel-/Dauerlast.
+
+CLI- und spätere FPM-Metadaten stimmen überein; ausdrücklich InnoDB-Seitenbelegung, keine exakte Nutzdaten-/Backupgröße:
+
+| Tabelle | Daten Bytes | Sekundärindizes Bytes | Geschätzte Zeilen |
+| --- | ---: | ---: | ---: |
+| Entity | 16.384 | 16.384 | 100 |
+| Identity | 16.384 | 32.768 | 100 |
+| History | 41.484.288 | 33.636.352 | 997.926 |
+| Current | 16.384 | 16.384 | 100 |
+| Migration | 16.384 | 16.384 | 1 |
+| Gesamt | 41.549.824 | 33.718.272 | — |
+
+Gesamt **75.268.096 Bytes = 71,78125 MiB** (Daten 39,625 MiB, Sekundärindizes 32,15625 MiB), etwa **6,72-fach** gegenüber 10,6875 MiB bei 100.000. Keine unerwartete Index-/Speicherexplosion; Seitenfüllung und Metadaten sind nicht linear garantiert. History-COUNT ist exakt 1.000.000; 997.926 bleibt ausdrücklich eine Optimizer-Schätzung. Nur bereits vorhandene sessionlokale information_schema_stats_expiry=0-Abfrage, keine Cache-Manipulation, ANALYZE TABLE oder globale Serveränderung.
+
+### Tests, Bereinigung und Veröffentlichung
+
+- 20 PHP-Testquellen unter PHP 8.4.12 gelintet; bestehende 17 Basis-, 80 10.000er-, 264 100.000er-, 54 Optimierungs-, 48 Transaktions- und 30 Backup-Offlineprüfungen erfolgreich, ohne Datenbankzugriff. Backup-Livetest nicht wiederholt.
+- Million-Test zunächst 2.041 Prüfungen; nach zusätzlicher unabhängiger fester Digest-Referenz erneut gelintet und **2.042** Prüfungen erfolgreich. Grenzen 1.000.000/2.000, Generator/UTC/IDs, Streaming, Query-Semantik, Manifest-/Eigentumsschutz und separate Messbudgets abgedeckt. Neue Python-CI-Integration, vorhandene Tests unverändert.
+- Geschütztes Ein-Feld-HTTPS-Formular in bestehendem Chrome sichtbar bestätigt, bestehendes Quellpasswort nur durch Nutzer eingegeben. HTTPS/Host/IP/Origin/POST, signierter kurzlebiger CSRF-Cookie, 0700-Verzeichnisse und 0600-Privatdateien. Fremdzugriff praktisch HTTP 403. Keine Zugangsdaten ausgegeben oder in GitHub übertragen.
+- Beim Übergang von der erfolgreichen Passwort-POST-Seite zur Messung wurde ein Reload mit abgelaufenem CSRF korrekt abgewiesen. Danach frischer GET im bestehenden Chrome und genau eine autorisierte FPM-Messung; keine erneute Passworteingabe und kein doppelter Test.
+- Ausschließlich fünf manifestgebundene eigene Tabellen nach Eigentumsprüfung entfernt; **null Tabellen** anschließend erneut mit eigener authentifizierter Verbindung nachgewiesen. Quell-Datenbank bleibt bestehen; Restore-Datenbank unverändert.
+- Alle 20 Testquellen vor Entfernung gegen GitHub-Blob-Hashes geprüft. Eigene private Passwort-/Konfigurationsdateien, Code, Manifest, Mess-/Offlineberichte, Schlösser und temporärer HTTPS-Einstieg vollständig entfernt. CSRF-Cookie nach FPM abgelaufen, keine serverseitigen Sitzungsdateien angelegt.
+- Einstieg HTTP 404; neutrale Startseite HTTP 200, in Chrome sichtbar und vollständig bytegleich zu Git-Blob 333a115eb2d83a45d7ff0a6a27709826a1a4e94c. Ungespeicherten deaktivierten Plesk-Dialog abgebrochen; weiterhin **neun** Aufgaben, keine neue Cron-Aufgabe.
+- Keine Produktions-, Restore-, fixlab-, AGENTS-, Workflow- oder Deployment-Secret-Änderungen. Kein Zugriff auf E:. Providerarbeit ausschließlich in der bestehenden verbundenen Chrome-Sitzung.
+- Genau ein Abschluss-Commit mit [skip ci]; identischer SHA zuerst über vorhandenen Validierungsworkflow auf Prüfbranch, Deployment übersprungen, danach main. Konkreter Lauf/SHA und Validierungsergebnis im Abschlusskommentar von Issue #5.
+
+### KI-Kontrollzentrum separat
+
+Der reguläre Recorder wurde für den neuen Auftrag aufgerufen. Nachrichteneingang 18.10.2026 **10:29:33,001 MESZ** bestätigt, aber im strukturierten Describe-/Plan-Statusweg blieb der geschlossene frühere Backup-Auftrag. Deshalb kein belegter neuer strukturierter Start, kein bestätigtes Describe/Plan oder laufender Million-Auftrag im Kontrollzentrum. Gemäß ausdrücklich aktualisiertem Nutzerauftrag ist diese Erfassungslücke kein fachliches Abbruchkriterium. Keine IDs, Start-/Stop-Ereignisse, Statushistorie oder Abschlussbewertung erfunden; kein Eingriff in fixlab.
+
+**Einordnung:** Die freigegebene Million-Stufe erfüllt Korrektheits-, begrenzte Query- und Größenkriterien. Kein allgemeiner Last-/Parallelitäts-/Dauer-, Produktiv-, endgültiger Schema- oder Migrationsnachweis. **Issue #5 bleibt offen.** Keine weitere Skalierungs-, Optimierungs-, Schema- oder Produktionsphase begonnen.
+
 
 ## Testblöcke
 
