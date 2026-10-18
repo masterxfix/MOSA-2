@@ -16,6 +16,59 @@ Der normale Zugang zu MOSA 2 soll **nur über FIDO2 / WebAuthn** möglich sein. 
 
 Ein klassischer Passwort-Login ist **nicht als normaler Fallback** vorgesehen.
 
+## Verbindlicher Ausbauplan der MOSA-2-Authentifizierung
+
+Die Sicherheitsarchitektur wird bewusst stufenweise aufgebaut. Die Zwischenstufen sind keine Änderung des Zielbilds, sondern ermöglichen eine kontrollierte Entwicklung und Abnahme, bevor echte MOSA-Daten verwendet werden.
+
+### Stufe 1 – vorgeschalteter Passwortschutz der Testumgebung
+
+- `mosa2-test.scharwerk.de` wird als erste äußere Schutzschicht vollständig serverseitig mit einer Passwortabfrage geschützt.
+- Der Schutz gilt für den gesamten Document Root einschließlich direkter Asset- und Unterseitenzugriffe.
+- Zugangsdaten werden nicht im Repository, in Issues, Logs oder im Seitenquelltext gespeichert.
+- Diese Stufe ist ein Entwicklungs- und Übergangsschutz und **nicht** das endgültige MOSA-2-Login.
+- Solange keine spätere Stufe ausdrücklich freigegeben und verifiziert wurde, bleibt der vorhandene Schutz aktiv.
+
+### Stufe 2 – MOSA-Loginprinzip in MOSA 2 übernehmen
+
+- Das in MOSA bereits erprobte Login-/Session-Prinzip wird für MOSA 2 übernommen und sauber in die neue Architektur integriert.
+- Die bestehende Funktionsweise dient als Referenz; es wird keine parallele Sonderlösung erfunden.
+- Secrets, Altlasten oder produktive Zugangsdaten werden nicht kopiert.
+- Die konkrete technische Umsetzung wird vor der Übernahme gegen die MOSA-2-Architektur und Sicherheitsregeln geprüft.
+- Der serverseitige Schutz aus Stufe 1 wird nicht stillschweigend entfernt; eine Änderung der äußeren Schutzschicht benötigt eine eigene Entscheidung und Prüfung.
+
+### Stufe 3 – FIDO-Karte als starker physischer Faktor
+
+- Die in MOSA bereits erfolgreich getestete FIDO-Funktion wird als primärer starker Authentifizierungsfaktor in MOSA 2 integriert.
+- Ziel bleibt FIDO2 / WebAuthn als normaler Zugangsschlüssel; ein klassisches Passwort wird nicht zum normalen Fallback der endgültigen Anmeldung.
+- Registrierung, Backup-Authenticator, Verlustfall und Step-up-Freigaben werden vor produktiver Nutzung verbindlich abgesichert.
+
+### Stufe 4 – physischen Kartenstatus unterscheiden
+
+MOSA 2 soll nicht nur erkennen, **dass** die FIDO-Karte vorhanden ist, sondern auch den physischen Präsentationszustand unterscheiden:
+
+- **Karte aufgelegt** – kontaktlose Nutzung am Leser;
+- **Karte steckt im Kartenleser** – gesteckte/kontaktbehaftete Nutzung.
+
+Diese beiden Zustände müssen technisch eindeutig erfasst und in MOSA 2 getrennt dargestellt werden. Ob daraus später unterschiedliche Berechtigungs- oder Freigabestufen entstehen, wird ausdrücklich als eigene Sicherheitsregel festgelegt und nicht implizit angenommen.
+
+### Endziel
+
+Der Endausbau besteht damit aus mehreren klar getrennten Ebenen:
+
+```text
+äußerer Zugangsschutz
+       ↓
+MOSA-2 Login / Session
+       ↓
+FIDO2 / WebAuthn mit physischem Authenticator
+       ↓
+Erkennung: Karte aufgelegt oder gesteckt
+       ↓
+Berechtigungen / Step-up für kritische Aktionen
+```
+
+Die Stufen werden einzeln umgesetzt, geprüft und dokumentiert. Keine spätere Stufe darf eine bereits wirksame Schutzebene unbeabsichtigt schwächen.
+
 ## Vertraulichkeitsgrenze für lokale Daten
 
 Lokale private Daten, die nicht ausdrücklich Bestandteil eines MOSA-Auftrags sind, gehören nicht in den Arbeitsbereich von MOSA oder Codex.
