@@ -639,6 +639,65 @@ Ohne verfügbare geschützte Zugangskonfiguration kann der gemeinsame Phase-1B�
 
 **Blocker:** Ein vorhandener sicherer Authentifizierungsweg für beide Testdatenbanken fehlt. Das gesetzte Passwort allein ersetzt diesen Weg nicht. Der vollständige Wiederherstellungsnachweis bleibt erforderlich; keine Schema- oder Produktivfreigabe. **Issue #5 bleibt offen.** Keine nächste Testphase gestartet.
 
+
+## Phase 1G – Backup/Restore praktisch nachgewiesen
+
+**Verifiziert: 18.10.2026, 10:10:30 Uhr Europe/Berlin (MESZ, UTC+02:00). Bereinigung: 10:11:56 Uhr. Fachlich erfolgreich für den isolierten synthetischen Testbestand.**
+
+Die bereits vorhandenen Quell- und Restore-Testdatenbanken wurden mit ihren eigenen bestehenden Benutzern am festen lokalen MySQL-8-Endpunkt 127.0.0.1:3307 authentifiziert und vor Schreibzugriffen als leer bestätigt. Keine Datenbank angelegt, kein Passwort zurückgesetzt. Beide Datenbanken bleiben nach Abschluss leer bestehen.
+
+### Verfahren und Messung
+
+Gemeinsamer Phase-1B-Verbindungskern sowie Phase-1C/D-Profil, Generator, Tabellen-Eigentumsnachweis und Bereinigung wiederverwendet. Einmalig 100 Entity, 100 Identity, **100.000 History**, 100 Current und 1 Migration in 204 Batches (maximal 500 Zeilen) erzeugt. Der allgemeine ASC-History-Index aus Phase 1E bleibt unverändert.
+
+Die neue wiederverwendbare Phase-1G-Logik schreibt providerseitig eine private JSONL-Sicherung: exaktes SHOW CREATE TABLE und typisierte Zeilen in höchstens 500er-Batches, Primärschlüsselreihenfolge, festes Format und Abschlussmarker. Keine Zugangsdaten, CREATE DATABASE, DROP DATABASE oder Datenbankauswahl im Backup. Der Import akzeptiert ausschließlich die im verifizierten Manifest benannten fünf Tabellen, die exakte vertrauenswürdige Quell-DDL und ein unverändertes Backup mit passendem SHA-256; ausschließlich die getrennte leere Restore-Datenbank wird beschrieben. Fremdschlüssel bleiben eingeschaltet. Rechte und globale MySQL-Einstellungen werden nicht geändert.
+
+| Messwert | Tatsächliches Ergebnis |
+| --- | --- |
+| PHP CLI | 8.4.12, PDO-MySQL |
+| Backup-Größe | 4.983.041 Bytes |
+| Backup-Dauer | 211,8804 ms |
+| Restore-Dauer, erfolgreicher korrigierter Lauf | 2.015,2001 ms |
+| Backup-SHA-256 | 5ff3324a0e13075250aeab2510de1e08c4943c79296966796212ca12f8c662ab |
+
+Backup-Dauer umfasst das Schreiben und Flushen der JSONL-Datei, ohne Bestandsaufbau, Vorprüfung oder anschließende Dateihashberechnung. Restore-Dauer umfasst DDL und Import einschließlich Tabellen-Commits, ohne vorgeschaltete Dateihashprüfung und nachgelagerte Gesamtvergleiche. Keine neue Performance-/Lastmessreihe.
+
+### Exakter Vergleich
+
+Vorherige Quelle, wiederhergestelltes Ziel und erneut geprüfte Quelle stimmen in allen fünf Tabellen, Spalten, relevanten Indizes, Constraints, Engine InnoDB, utf8mb4 und Kollation utf8mb4_0900_as_cs überein. Zeilenzahlen exakt 100 / 100 / 100.000 / 100 / 1. Sämtliche Zeilen werden zusätzlich gegen den gemeinsamen deterministischen synthetischen Generator geprüft. Current entspricht der neuesten History; keine verwaisten oder doppelten Zuordnungen.
+
+MySQL stellt nach SHOW-CREATE-Replay bei Textspalten das zuvor implizite CHARACTER SET utf8mb4 zusätzlich explizit dar. Nur diese redundante Angabe wird für den DDL-Vergleich normalisiert; vollständige Spaltenkollationen, Tabellenkollation, Engine, Constraints und Indizes werden separat verglichen. SHOW-INDEX-Kardinalitäten sind Optimizer-Schätzungen und keine Strukturmerkmale; sie werden nicht als Strukturabweichung gewertet. Die ursprünglichen DDL-Texte sind deshalb nicht bytegleich, ihre relevanten Strukturen jedoch gleich.
+
+SHA-256 je Tabelle über alle Zeilen in Primärschlüsselreihenfolge, kanonische JSON-Zeilen mit erhaltenen Typen und Zeilenabschluss. Diese Kodierung unterscheidet sich bewusst vom früheren History-only-Pipe-Format; dessen Digest ist kein Vergleichswert für dieses Format.
+
+| Tabelle | Zeilen | SHA-256 in Quelle und Restore |
+| --- | ---: | --- |
+| Entity | 100 | e0ce2448872620e86c6b202f515b66f4e8d9aa700e4d647130da80339fa92fda |
+| Identity | 100 | 98d560df05ae20d29c1d09b85dc107099c894255f77e66bba4934e444f5c6b25 |
+| History | 100.000 | a52f9793a1a442892364344cf0510ce33d6d902052b965438c74b245ab58a672 |
+| Current | 100 | 7e43a74be62c535c7d5a9e62da03b192fe5470e6da1c37e495e4d8bb2e4b34b9 |
+| Migration | 1 | 284aa24d5f791b818591e86ea3ba36f274b83857310062986a85244f3cc1ba82 |
+
+Im Restore genau einmal je gefordertem Funktionsmuster ausgeführt: Current einzeln (1 Zeile), neueste History (1), schmales Zeitfenster (10), breites Zeitfenster (50), Identity-Lookup (1). Alle Ergebnisse exakt gegen gemeinsame Sollwerte geprüft. Keine Last-/Dauertests und keine Million Zeilen.
+
+### Korrekturen und Nachweisgrenzen im Verlauf
+
+- Das zuerst im In-App-Browser geöffnete Passwortformular war für den Nutzer nicht wie behauptet in Chrome sichtbar. Anschließend im vorhandenen Chrome-Tab geöffnet und das Fenster fokussiert.
+- Eigener Fehler im temporären Formularschutz: Referrer-Policy no-referrer führte beim POST zu Origin null und zur korrekten Ablehnung durch die strikte Origin-Prüfung. Auf same-origin korrigiert; Origin-Prüfung nicht gelockert. Nutzer musste beide Passwörter erneut eingeben. Danach beide Testdatenbanken erfolgreich authentifiziert und leer bestätigt. Passwörter ausschließlich maskiert an den eigenen HTTPS-Testzugang übergeben; privat mit 0600 außerhalb öffentlicher Dokumentstämme gespeichert. HTTPS, Host/IP, POST, signierter kurzlebiger CSRF-Cookie und Einmalübernahme; keine Datenbankschreibaktion per GET. Fremdzugriff HTTP 403 tatsächlich geprüft.
+- Erster Restore importierte fünf Tabellen, der nachfolgende Vergleich scheiterte an der beschriebenen redundanten Charset-Darstellung. Lesende Diagnose, gezielte Normalisierung und drei zusätzliche Regressionstests; anschließend ausschließlich eigene Restore-Tabellen entfernt, Ziel erneut leer nachgewiesen und dasselbe Backup erneut importiert. Quelle und Backup nicht neu aufgebaut. Erfolgreiche Restore-Dauer wird unmittelbar nach Import vor weiteren Vergleichen gespeichert.
+- Native Auftragsanzeige mit Eingang 18.10.2026 09:40:39 Uhr sowie Describe/Plan vor Facharbeit im KI-Kontrollzentrum sichtbar bestätigt. Nach den notwendigen Nutzer-Eingabepausen lehnt der Sender weitere Schritte für die alte native Kennung mit „No open laboratory order for this exact native turn“ ab. Keine neue Kennung erfunden, kein Start/Stop nachgebildet. Deshalb keine lückenlose Statusübertragung oder Abschlussbewertung behauptet.
+
+### Tests, Bereinigung und Veröffentlichung
+
+- Providerseitig 17 PHP-Lints und bestehende 17 Basis-, 80 10.000er-, 264 100.000er-, 54 Optimierungs- und 48 Transaktionsprüfungen ohne DB-Verbindung bestanden. Neue Backup-Prüfungen zunächst 27, nach gezielter Korrektur **30**; drei geänderte PHP-Dateien erneut gelintet. Neue Python-Testintegration übernimmt Lint und Offline-Prüfungen in den unveränderten Validierungsworkflow.
+- Nach Erfolg alle fünf eigenen Quell- und alle fünf eigenen Restore-Tabellen anhand des reservierten Manifests und ihrer Eigentumsmarker entfernt. Beide Datenbanken vor Entfernung der Zugangskonfiguration erneut mit **null Tabellen** geprüft.
+- 17 Testquellen gegen GitHub-Blob-Hashes geprüft; Backup, private Berichte/Manifeste, Sperrdateien, beide Passwortdateien, Zugangskonfiguration, privater Testcode, temporärer Fehlercodebericht und öffentlicher FPM-Einstieg vollständig entfernt. Keine anderen Dateien oder fremden Datenbanken bereinigt. Kurzlebiger Zugangscookie nach erfolgreicher Übernahme abgelaufen; keine serverseitigen Sitzungdateien verwendet.
+- Temporärer HTTPS-Einstieg danach **HTTP 404**. Neutrale HTTPS-Startseite **HTTP 200**, sichtbarer unveränderter Text und vollständiger Antwortinhalt gegen Git-Blob 333a115eb2d83a45d7ff0a6a27709826a1a4e94c bytegenau bestätigt.
+- Ausführung ausschließlich providerseitig über den bestehenden verbundenen Browser und den ungespeicherten deaktivierten Plesk-Aufgabendialog; danach Abbrechen. Keine lokalen Backupdateien, kein Zugriff auf E:, keine Produktions-, fixlab-, Workflow- oder Deployment-Secret-Änderungen.
+- Ein Abschluss-Commit mit [skip ci]. Derselbe Commit wird auf einem Prüfbranch mit dem bestehenden Workflow validiert, Deploy muss übersprungen sein; erst danach Übernahme nach main. Konkreter SHA und Prüflauf stehen im Abschlusskommentar zu Issue #5.
+
+**Aussagegrenze:** Vollständige Sicherung und Wiederherstellung dieses isolierten synthetischen Fünf-Tabellen-Bestands ist nachgewiesen. Kein Backup einer vollständigen produktiven MOSA-Anwendung, kein Online-Backup unter konkurrierenden Schreibern, keine langfristige Aufbewahrungs-/Desaster-Recovery-, Schema- oder Produktivfreigabe. **Issue #5 bleibt offen.** Keine nächste Testphase gestartet.
+
 ## Testblöcke
 
 ### 1. Plattform-Fingerprint
