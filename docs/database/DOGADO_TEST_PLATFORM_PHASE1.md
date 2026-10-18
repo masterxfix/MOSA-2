@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 1: isolierte Datenbank-Testplattform
 
-**Status:** Million-Zeilen-Skalierungstest und Backup/Restore durchgeführt und bereinigt · begrenzte Testziele erfüllt · Issue #5 und Schema-/Produktivfreigaben offen
+**Status:** Phase 1 abgeschlossen · Freigabegate für die MOSA-2-Core-Schema-Phase erfüllt · keine Produktivfreigabe
 **Grundlage:** abgeschlossene Dogado-Plattformqualifikation  
 **Ziel:** MySQL 8.0 und PHP 8.4 unter realen Dogado-Bedingungen prüfen, bevor das endgültige MOSA-2-Schema freigegeben wird.
 
@@ -789,6 +789,37 @@ Gesamt **75.268.096 Bytes = 71,78125 MiB** (Daten 39,625 MiB, Sekundärindizes 3
 Der reguläre Recorder wurde für den neuen Auftrag aufgerufen. Nachrichteneingang 18.10.2026 **10:29:33,001 MESZ** bestätigt, aber im strukturierten Describe-/Plan-Statusweg blieb der geschlossene frühere Backup-Auftrag. Deshalb kein belegter neuer strukturierter Start, kein bestätigtes Describe/Plan oder laufender Million-Auftrag im Kontrollzentrum. Gemäß ausdrücklich aktualisiertem Nutzerauftrag ist diese Erfassungslücke kein fachliches Abbruchkriterium. Keine IDs, Start-/Stop-Ereignisse, Statushistorie oder Abschlussbewertung erfunden; kein Eingriff in fixlab.
 
 **Einordnung:** Die freigegebene Million-Stufe erfüllt Korrektheits-, begrenzte Query- und Größenkriterien. Kein allgemeiner Last-/Parallelitäts-/Dauer-, Produktiv-, endgültiger Schema- oder Migrationsnachweis. **Issue #5 bleibt offen.** Keine weitere Skalierungs-, Optimierungs-, Schema- oder Produktionsphase begonnen.
+
+
+## Phase 1 – Abschlussbewertung und Freigabeentscheidung
+
+**Entscheidung vom 18.10.2026:** Die isolierte Dogado-Datenbankqualifikation ist fachlich abgeschlossen. Alle sechs Freigabekriterien für den Beginn der MOSA-2-Core-Schema-Phase sind erfüllt.
+
+| Freigabekriterium | Bewertung | Nachweis |
+| --- | --- | --- |
+| Current- und History-Muster erreichen die Zielwerte | erfüllt | Bei 1.000.000 History-Zeilen Current-Median/p95 CLI 0,1075/0,1683 ms und FPM 0,1150/0,1444 ms; breites History-Fenster Median/p95 CLI 0,3845/0,4361 ms und FPM 0,3558/0,3926 ms. |
+| Kritische Queries nutzen passende Indizes | erfüllt | Allgemeiner ASC-History-Index bleibt auch bei 1.000.000 Zeilen aktiv; kein unerwarteter Planwechsel, kein ungebundener Full Scan, kein Filesort im breiten Leseweg. |
+| Tests sind reproduzierbar | erfüllt | Deterministische Generatoren, feste Profile, Prüfsummen und wiederholbare Offline-/CI-Prüfungen für 10.000, 100.000 und 1.000.000 History-Zeilen. |
+| Backup und Restore praktisch nachgewiesen | erfüllt | Getrenntes Restore-Ziel, identische Zeilenzahlen und kanonische Prüfsummen aller fünf Tabellen sowie erfolgreiche Struktur- und Funktionsvergleiche. |
+| Keine produktiven MOSA-Daten verändert | erfüllt | Ausschließlich isolierte Testdatenbanken und synthetische Daten; Produktions- und Restore-Bestand blieben bei den jeweiligen Skalierungstests unberührt. |
+| Technische Dogado-Grenzen ausreichend verstanden | erfüllt für die Schema-Phase | MySQL 8.0.26-16 auf lokalem Port 3307, PHP 8.4 CLI/FPM, PDO-MySQL, InnoDB, lokale DB-Zugriffsgrenze, Provider-Limits, Rechteumfang, Session-Zeitzone, SQL-Modus sowie Backup-/Restore-Verhalten praktisch geprüft. |
+
+### Empfohlener Betriebsstandard für die Core-Schema-Phase
+
+- MySQL **8.0.26-16** auf dem isolierten MySQL-8-Endpunkt `127.0.0.1:3307`.
+- PHP **8.4** als Standard für CLI und FPM; PHP 8.5 bleibt ein späterer separater Kompatibilitätskandidat.
+- PDO-MySQL/mysqlnd und InnoDB.
+- Verbindungsbezogen `utf8mb4`, explizite Kollation im späteren Core-Schema, UTC mit `+00:00` und der praktisch geprüfte strikte Session-SQL-Modus.
+- Current-/append-only-History-/Identity-/Migration-Muster mit dem getesteten allgemeinen ASC-History-Index als technische Ausgangsbasis.
+- Datenbankzugriff weiterhin lokal; keine Ableitung einer externen oder produktiven Freigabe aus den Labortests.
+
+Die im Test verwendete Kollation `utf8mb4_0900_as_cs` ist **keine vorweggenommene fachliche Kollationsentscheidung** für das endgültige Core-Schema. Die endgültige fachliche Kollation wird in der Core-Schema-Phase explizit festgelegt.
+
+### Aussagegrenze
+
+Diese Freigabe beendet die Plattformqualifikation und erlaubt den **Beginn der Core-Schema-Phase**. Sie ist keine Produktiv-, Migrations-, Dauerlast- oder Disaster-Recovery-Freigabe für MOSA 2. End-to-End-Seitenzeiten und ein späteres produktionsnahes Lastbild bleiben getrennte Themen.
+
+**Issue #5 kann damit als abgeschlossen geschlossen werden.** Nächster Schritt ist die fachliche und technische Definition des endgültigen MOSA-2-Core-Schemas; erst danach folgt eine kontrollierte MOSA→MOSA-2-Datenmigration.
 
 
 ## Testblöcke
