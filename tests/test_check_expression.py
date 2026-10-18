@@ -70,6 +70,22 @@ class CheckExpressionTests(unittest.TestCase):
             result = subprocess.run(['php', '-l', str(path)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_practical_review_requires_verified_structure_and_empty_owned_schema(self):
+        script = r'''
+require $argv[1];
+$counts=['tables'=>13,'columns'=>96,'primary'=>13,'unique'=>7,'secondary'=>16,'foreign_keys'=>14,'checks'=>9];
+$rows=array_fill_keys(\Mosa2\Phase2\TABLES,0);
+$results=[\Mosa2\Phase2\reviewablePostcheck('practical',$counts,$rows)];
+foreach(['ddl','structure','ledger'] as $stage)$results[]=\Mosa2\Phase2\reviewablePostcheck($stage,$counts,$rows);
+$changed=$rows;$changed['m2_entities']=1;$results[]=\Mosa2\Phase2\reviewablePostcheck('practical',$counts,$changed);
+$changed=$rows;$changed['m2_schema_migrations']=1;$results[]=\Mosa2\Phase2\reviewablePostcheck('practical',$counts,$changed);
+$changed=$rows;$changed['foreign']=0;$results[]=\Mosa2\Phase2\reviewablePostcheck('practical',$counts,$changed);
+$changed=$counts;$changed['foreign_keys']=13;$results[]=\Mosa2\Phase2\reviewablePostcheck('practical',$changed,$rows);
+echo json_encode($results);
+'''
+        result=subprocess.run(['php','-r',script,str(ROOT/'scripts/phase2/postcheck.php')],capture_output=True,text=True,check=True)
+        self.assertEqual(json.loads(result.stdout), [True]+[False]*7)
+
     def test_fk_probe_is_new_child_not_referenced_parent_update(self):
         source = (ROOT / 'scripts/phase2/postcheck.php').read_text(encoding='utf-8')
         self.assertIn("VALUES (999999,'fixture',1,$now)", source)

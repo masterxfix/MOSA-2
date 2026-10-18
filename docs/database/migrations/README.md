@@ -1,6 +1,13 @@
 # Phase-2-Migrationen
 
-Status: **Repository-Artefakt, auf keine Datenbank angewendet.**
+Status: **Live technisch validiert auf der isolierten Testdatenbank am 18.10.2026.**
+
+Der autorisierte einmalige Apply und sämtliche Postchecks sind erfolgreich.
+Migration SHA-256: `9c3ac21f02fc242e9561d94aaa4a4c4fe6a430d11aa5f0681f0c9eace81446dd`.
+Ledger: Version `1`, Schlüssel `0001_core_asset_identity`, identischer Digest als
+`BINARY(32)`, tatsächliches `applied_at` UTC `2026-10-18 14:10:22.604406`.
+13 Tabellen bleiben bestehen; Ledger 1 Zeile, alle übrigen 12 Tabellen leer.
+Details einschließlich aller 11 EXPLAIN-Wege: [finaler Live-Nachweis](../PHASE2_FINAL_LIVE.md).
 
 `0001_core_asset_identity.sql` ist Version 1 mit dem Migrationsschlüssel
 `0001_core_asset_identity`. Grundlage ist [CORE_SCHEMA_PHASE2.md](../CORE_SCHEMA_PHASE2.md).
@@ -59,12 +66,12 @@ Der kleine Standardbibliothek-Parser konsumiert die gesamte erlaubte DDL-
 Teilmenge. Spalten/Typen/NULL-Regeln werden unabhängig aus der verbindlichen
 Spezifikation gelesen, Keys/FKs/Indizes/CHECKs separat verglichen. Mutationstests
 prüfen, dass relevante Sicherheitsabweichungen tatsächlich erkannt werden.
-Das ist **keine MySQL-Server-Syntax- oder Ausführungsbestätigung**. Ein späterer
-separat freigegebener Apply-/Postcheck muss auf MySQL 8.0.26-16 insbesondere
+Offline-Tests allein sind **keine MySQL-Server-Syntax- oder Ausführungsbestätigung**.
+Der zusätzlich ausgeführte freigegebene Live-Apply-/Postcheck bestätigte auf MySQL 8.0.26-16
 SHOW CREATE TABLE, INFORMATION_SCHEMA, CHECK-Verhalten, binäre Identität,
-Nullability und EXPLAIN der vorgesehenen Lesewege prüfen.
+Nullability und EXPLAIN der vorgesehenen Lesewege.
 
-## Späterer Apply: ausdrücklich noch nicht freigegeben
+## Weitere Applies benötigen eine eigene Freigabe
 
 Kein automatischer Runner und kein Deployment-Hook. Vor einem separat
 beauftragten Apply die leere isolierte Ziel-DB, Rechte und Serverversion
@@ -78,7 +85,7 @@ ausführen. Kein `IF NOT EXISTS`, das unbekannte Altstrukturen verdecken könnte
 
 ## Cleanup ausschließlich nach gesonderter Testfreigabe
 
-Keine ausführbare Down-Migration und keine Bereinigung in diesem Auftrag.
+Keine ausführbare Down-Migration. Das erfolgreich validierte Schema bleibt erhalten.
 Vor einem späteren Cleanup die isolierte Test-DB und ihre ausschließlich
 synthetischen Inhalte eindeutig prüfen. Bei Fremdtabellen oder unbekannten
 Abhängigkeiten stoppen. Nur tatsächlich vorhandene Phase-2-Tabellen in dieser
