@@ -1,0 +1,35 @@
+{
+    "m2_entities": [
+        {
+            "table": "m2_entities",
+            "constraint": "ck_entities_status",
+            "expected": "status IN ('active', 'inactive', 'archived')",
+            "server_check_clause": "(`status` in (_utf8mb4\\'active\\',_utf8mb4\\'inactive\\',_utf8mb4\\'archived\\'))",
+            "show_create_table": "CREATE TABLE `m2_entities` (\n  `id` bigint unsigned NOT NULL AUTO_INCREMENT,\n  `entity_type` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,\n  `canonical_name` varchar(255) NOT NULL,\n  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,\n  `created_at` datetime(6) NOT NULL,\n  `updated_at` datetime(6) NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `ix_entities_type_status` (`entity_type`,`status`,`id`),\n  KEY `ix_entities_name` (`canonical_name`,`id`),\n  CONSTRAINT `ck_entities_status` CHECK ((`status` in (_utf8mb4'active',_utf8mb4'inactive',_utf8mb4'archived')))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+            "normalized_expected": [
+                "IN",
+                [
+                    "identifier",
+                    "status"
+                ],
+                [
+                    [
+                        "literal",
+                        "'active'"
+                    ],
+                    [
+                        "literal",
+                        "'inactive'"
+                    ],
+                    [
+                        "literal",
+                        "'archived'"
+                    ]
+                ]
+            ],
+            "normalized_server": null,
+            "equal": false,
+            "decision": "server:unsupported_token_at_22;"
+        }
+    ]
+}
