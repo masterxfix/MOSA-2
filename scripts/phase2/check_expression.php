@@ -26,7 +26,7 @@ final class CheckExpression
                 $end = strpos($expression, $delimiter, $start);
                 if ($end === false) throw new \RuntimeException('unterminated_introducer');
                 $value = substr($expression, $start, $end-$start);
-                if (!preg_match('/\A[a-z]*\z/', $value)) throw new \RuntimeException('unsupported_introduced_literal');
+                if (!preg_match('/\A(?:[a-z]*|1m|5m|1h|1d)\z/', $value)) throw new \RuntimeException('unsupported_introduced_literal');
                 $this->tokens[] = "'".$value."'";
                 $offset = $end + strlen($delimiter);
                 continue;

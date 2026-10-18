@@ -28,8 +28,8 @@ function splitSql(string $text,string $delimiter): array {
     check(!$quoted&&$depth===0,'unterminated_sql');$out[]=trim(substr($text,$start));return $out;
 }
 require_once __DIR__.'/check_expression.php';
-function contract(string $sql): array {
-    check(hash('sha256',$sql)===DIGEST,'migration_digest');
+function contract(string $sql,string $digest=DIGEST,array $tableOrder=TABLES): array {
+    check(hash('sha256',$sql)===$digest,'migration_digest');
     $clean=preg_replace('/^\s*--[^\n]*$/m','',$sql);$statements=splitSql($clean,';');
     same(array_pop($statements),'','semicolon');$all=[];
     foreach($statements as $statement){
@@ -37,7 +37,7 @@ function contract(string $sql): array {
         $name=$m[1];check(!isset($all[$name]),'duplicate_table');
         $t=['columns'=>[],'indexes'=>[],'fks'=>[],'checks'=>[],'ddl'=>$statement];
         foreach(splitSql($m[2],',') as $line){
-            if(preg_match('/\A([a-z_0-9]+) (BIGINT UNSIGNED|INT UNSIGNED|SMALLINT UNSIGNED|TINYINT\(1\)|VARCHAR\(\d+\)|CHAR\(\d+\)|BINARY\(32\)|DATETIME\(6\)|JSON)(?: COLLATE ([a-z0-9_]+))? (NOT NULL|NULL)( AUTO_INCREMENT)?( DEFAULT \'\')?\z/',$line,$c)){
+            if(preg_match('/\A([a-z_0-9]+) (BIGINT UNSIGNED|INT UNSIGNED|SMALLINT UNSIGNED|TINYINT\(1\)|VARCHAR\(\d+\)|CHAR\(\d+\)|BINARY\(32\)|DATETIME\(6\)|DECIMAL\(\d+,\d+\)|JSON)(?: COLLATE ([a-z0-9_]+))? (NOT NULL|NULL)( AUTO_INCREMENT)?( DEFAULT \'\')?\z/',$line,$c)){
                 $text=str_starts_with($c[2],'VARCHAR')||str_starts_with($c[2],'CHAR(');
                 $t['columns'][$c[1]]=['type'=>strtolower($c[2]),'nullable'=>$c[4]==='NULL'?'YES':'NO','extra'=>empty($c[5])?'':'auto_increment','collation'=>$text?($c[3]?:'utf8mb4_0900_ai_ci'):null,'charset'=>$text?'utf8mb4':null,'default'=>empty($c[6])?null:''];
             }elseif(preg_match('/\A(PRIMARY KEY|(?:UNIQUE )?KEY ([a-z_0-9]+)) \(([^()]+)\)\z/',$line,$k)){
@@ -48,7 +48,7 @@ function contract(string $sql): array {
             else throw new RuntimeException('unknown_definition');
         }$all[$name]=$t;
     }
-    same(array_keys($all),TABLES,'thirteen_table_order');return $all;
+    same(array_keys($all),$tableOrder,'thirteen_table_order');return $all;
 }
 function tables(PDO $p): array {return $p->query('SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME')->fetchAll(PDO::FETCH_COLUMN);}
 function connection(string $password): PDO {
@@ -72,8 +72,8 @@ function preflight(PDO $p,bool $empty=true): array {
     return ['database'=>'h29077_mosa2_test','account'=>'h29077_mosa2_test@localhost','host'=>'127.0.0.1','port'=>3307,'version'=>'8.0.26-16','tables'=>0,'grants'=>$grants,'session'=>$r];
 }
 function rows(PDO $p,string $sql,string $table): array {$q=$p->prepare($sql);$q->execute([$table]);return $q->fetchAll();}
-function structure(PDO $p,array $schema,?string $diagnosticsPath=null): array {
-    $expected=TABLES;sort($expected);same(tables($p),$expected,'table_set');$evidence=[];$counts=['tables'=>13,'columns'=>0,'primary'=>0,'unique'=>0,'secondary'=>0,'foreign_keys'=>0,'checks'=>0];
+function structure(PDO $p,array $schema,?string $diagnosticsPath=null,array $totals=[13,7,16,14,9]): array {
+    $expected=array_keys($schema);sort($expected);same(tables($p),$expected,'table_set');$evidence=[];$counts=['tables'=>count($schema),'columns'=>0,'primary'=>0,'unique'=>0,'secondary'=>0,'foreign_keys'=>0,'checks'=>0];
     foreach($schema as $name=>$t){
         $show=$p->query('SHOW CREATE TABLE '.qi($name))->fetch(PDO::FETCH_NUM)[1];
         $meta=rows($p,'SELECT ENGINE,TABLE_COLLATION,TABLE_TYPE FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',$name);
@@ -107,7 +107,7 @@ function structure(PDO $p,array $schema,?string $diagnosticsPath=null): array {
         $counts['checks']+=count($checks);
         $evidence[$name]=['show_create'=>$show,'columns'=>$columns,'indexes'=>$indexes,'constraints'=>$constraints,'foreign_keys'=>$fk,'checks'=>$checks];
     }
-    same([$counts['primary'],$counts['unique'],$counts['secondary'],$counts['foreign_keys'],$counts['checks']],[13,7,16,14,9],'structural_totals');
+    same([$counts['primary'],$counts['unique'],$counts['secondary'],$counts['foreign_keys'],$counts['checks']],$totals,'structural_totals');
     return ['counts'=>$counts,'metadata'=>$evidence];
 }
 function reject(PDO $p,string $sql,int $errno,string $name,array &$results): void {
