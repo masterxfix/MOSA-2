@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3C: kontrollierter Marktdaten-Schreibfluss
 
-**Status:** Spezifikation; noch nicht live ausgeführt  
+**Status:** 3C-A als Offline-Referenz implementiert und getestet; 3C-B nicht gestartet
 **Grundlage:** Phase 3B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Den fachlichen Schreibfluss History → Current mit kleinen synthetischen Beispieldaten reproduzierbar nachweisen, bevor echte MOSA-Marktdaten übernommen werden.
 
@@ -60,6 +60,54 @@ Der Dedupe-Schlüssel ist SHA-256 über eine zentrale kanonische Darstellung min
 
 NULL-Werte und DECIMAL-Werte müssen eindeutig und stabil serialisiert werden. Keine provider- oder asset-spezifische Sonderlogik.
 
+### Referenzvertrag für Phase 3C-A
+
+`scripts/phase3c/market_flow.php` enthält den gemeinsamen providerneutralen
+Normalizer, die testbare kanonische Darstellung, den SHA-256-Key und das
+gekapselte `MarketFlow`-Offline-Modell. Die illustrativen Phase-3A-Modelltests
+bleiben unverändert; der hier beschriebene 3C-Vertrag ist die Referenz für den
+späteren 3C-B-Nachweis. Es entsteht kein Collector oder zweiter produktiver Pfad.
+
+Die Eingabe enthält genau die oben genannten Felder **plus `observed_at`**,
+keinen selbst gelieferten Dedupe-Key und keine zusätzlichen unvalidierten Felder.
+`observed_at` gehört ebenfalls zur Identität: eine später erfasste Observation
+bei identischem `market_at` muss als neue History-Beobachtung unterscheidbar
+sein und darf gemäß Zeitregel Current aktualisieren. Ein vollständig identisches
+Replay bleibt ein No-op für beide Projektionen.
+
+Die kanonischen Bytes bestehen aus `mosa2-observation-v1` plus LF und einem
+kompakten UTF-8-JSON-Objekt in fester Reihenfolge:
+`asset_id, source_id, route_id, currency, market_at, observed_at, price, bid, ask, volume`.
+Keine Eingabereihenfolge oder Locale beeinflusst diese Bytes. IDs werden als
+positive unsigned-BIGINT-Dezimalstrings ohne führende Nullen normalisiert.
+Währung: genau drei ASCII-Großbuchstaben. Zeitangaben sind explizite UTC-
+SQL-Zeitstrings, kalendergeprüft und auf sechs Nachkommastellen aufgefüllt;
+Offsets, lokale Zeitformate und mehr als sechs Stellen werden abgelehnt.
+
+Preise/Bid/Ask verwenden die Präzision `DECIMAL(28,10)`, Volume `DECIMAL(32,8)`.
+Zulässig sind Dezimalstrings oder Integer, keine Floats, Exponenten oder
+localeabhängigen Trennzeichen. Führende Nullen, Pluszeichen, nachlaufende
+Nachkommanullen und negatives Null werden vereinheitlicht; Ausgabe mit fester
+Skala. Nicht darstellbare Werte werden ohne Rundung abgelehnt. Optionale Felder
+sind ausdrücklich vorhanden und können JSON-`null` sein; NULL bleibt von null
+als Zahl verschieden. Preis- und Bid/Ask-Prüfung entsprechen Migration 0002.
+`dedupeKey()` liefert 32 rohe Bytes für `BINARY(32)`; das Offline-Modell verwendet
+deren Hexdarstellung als History-Lookup und im Schreibresultat.
+
+Das Modell hält logische Projektionen der vorhandenen Tabellen: History enthält
+die normalisierten Observation-Felder; Current nur die passenden Current-Felder,
+ohne History-Volume oder Dedupe-Spalte. Technische DB-IDs sowie `created_at` und
+`updated_at` werden offline nicht erfunden. Der Ergebnisstatus unterscheidet
+`inserted`/`duplicate` und `updated`/`unchanged`.
+
+Alle Existenz- und Provenienzprüfungen erfolgen vor jeder Zustandsänderung.
+Ein Wechsel von Source/Route eines vorhandenen Asset-Current wird vollständig
+abgelehnt; eine Auswahl zwischen Routen wird nicht implementiert. Beide
+Projektionen werden zunächst per Copy-on-write lokal aufgebaut und erst bei
+Erfolg veröffentlicht. Der gezielte Fehler direkt nach dem History-Schritt
+lässt beide Originalzustände unverändert. History ist von außen nur als
+abgetrennter Snapshot lesbar; kein Update-/Delete-Pfad wird angeboten.
+
 ## Testfälle
 
 Mindestens nachweisen:
@@ -91,6 +139,28 @@ Die Messung ist ein kleiner Funktions-/Latenznachweis, keine Last- oder Produkti
 ## Ablauf
 
 ### 3C-A – Repository-Prüfcode
+
+**Umgesetzt.** `tests/test_phase3c.py` führt die echten PHP-Referenzfunktionen
+automatisiert aus: 24 Tests für die oben genannten Vertragsfälle, drei getrennte
+Assets, kanonische Bytes und SHA-256, jedes Identitätsfeld, NULL-/DECIMAL-/UTC-
+Grenzen, unveränderte History, No-op-Replay, Provenienz und modellierten Rollback.
+Die Migrationen bleiben byte-identisch. Ausführung vom Repository-Root:
+
+```text
+python -m unittest discover -s tests -p test_phase3c.py -v
+python -m unittest discover -s tests -v
+python scripts/deploy_sftp.py validate
+php -l scripts/phase3c/market_flow.php
+git diff --check
+```
+
+Der Linux-Nachweis prüft exakt den Abschluss-Commit im vorhandenen Workflow;
+Commit, Testergebnis und Run-ID werden in Issue #13 dokumentiert. Deploy muss
+skipped bleiben; der temporäre Prüfbranch wird anschließend entfernt.
+
+Diese Offline-Tests beweisen **keine** echte MySQL-Transaktion, DB-Latenz,
+Dedupe-Unique-Verletzung, Parallelität, Collector-Ausführung, Cross-Source-
+Auswahl oder Produktivfähigkeit. 3C-B bleibt separat freizugeben und ungestartet.
 
 - zentrale, providerneutrale Schreib-/Dedupe-Logik für den Testpfad;
 - deterministische Offline-Regressionstests;
