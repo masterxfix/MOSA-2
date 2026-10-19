@@ -14,6 +14,16 @@ function batchManifest(): array {
         $e['observation']['currency']=$i===0?'DKK':'EUR';
     }unset($e);return $m;
 }
+function independentManifest(int $count): array {
+    $m=batchManifest();$m['import_at']='2026-01-04 12:00:00';$m['observations']=array_slice($m['observations'],0,$count);
+    foreach($m['observations'] as $i=>&$e){
+        $e['sample_id']='C-'.($i+1);$e['source_reference']='synthetic:independent:'.$i;
+        $e['isin']=['US67066G1040','US88160R1014','US5949181045'][$i];$e['proposed_asset_key']='isin:'.$e['isin'];
+        $e['asset']['canonical_name']=$e['asset']['display_name']='Synthetic independent '.$i;
+        $e['proposed_source_key']=$e['source']['source_key']='provider:synthetic_four';
+        $e['proposed_route_key']='synthetic:independent-route:'.$i;$e['route']['external_key']='market-v1:'.hash('sha256',$e['proposed_route_key']);
+    }unset($e);return $m;
+}
 function snapshot(SyntheticStore $s): array {
     $facts=[];$counts=expectedCounts(syntheticManifest());foreach($counts as $t=>&$n){$n=count($s->tables[$t]??[]);if($t!=='m2_schema_migrations')$facts[$t]=$s->tables[$t]??[];}unset($n);$counts['m2_schema_migrations']=2;
     foreach($facts['m2_market_observations'] as &$r){$r['dedupe_hex']=strtoupper(bin2hex($r['dedupe_key']));unset($r['dedupe_key']);}unset($r);
@@ -22,6 +32,7 @@ function snapshot(SyntheticStore $s): array {
 $x=json_decode(stream_get_contents(STDIN),true);$case=$x['scenario']??'replay';
 try{
     if($case==='comparison'){\Mosa2\Phase3D\Import\sameEvidence($x['actual'],$x['expected'],'evidence_mismatch');echo json(['ok'=>true]);exit;}
+    if($case==='size'){$m=independentManifest(min(3,$x['count']));if($x['count']>3)$m['observations'][]=$m['observations'][0];manifest($m);echo json(['ok'=>true]);exit;}
     $s=new SyntheticStore();apply($s,syntheticManifest(),true);$baseline=snapshot($s);$m=batchManifest();
     if($case==='baseline_key_order'){$a=$baseline;$a['ledger']=[['version'=>1,'checksum'=>'synthetic','applied_at'=>'synthetic']];$a['structure']['metadata']=['synthetic'=>['show_create'=>'synthetic','columns'=>[['name'=>'id','type'=>'synthetic']]]];$b=json_decode(json($a),true);verifyBaseline($b,$a);echo json(['ok'=>true]);exit;}
     if($case==='extra_baseline'){$a=$baseline;$a['facts']['m2_sources'][]=$a['facts']['m2_sources'][0];$a['counts']['m2_sources']++;verifyBaseline($baseline,$a);}
@@ -30,13 +41,14 @@ try{
     if($case==='stream_conflict')$m['stream_key']='phase3d_market_sample_v1';
     if($case==='too_many')$m['observations'][]=$m['observations'][0];
     if($case==='determinism'){$a=manifest($m);$m['observations']=array_reverse($m['observations']);echo json(['ok'=>true,'same'=>json($a)===json(manifest($m))]);exit;}
+    if($case==='independent_two'){apply($s,$m,true,$baseline['facts']);$baseline=snapshot($s);$m=independentManifest(2);}
     verifyBaseline($baseline,snapshot($s));$first=apply($s,$m,true,$baseline['facts']);$after=snapshot($s);
     verifyBaseline($baseline,$after,false);$expected=expectedCounts($m,$baseline,$first['new']);
     \Mosa2\Phase2\same($after['counts'],$expected,'counts');$second=apply($s,$m,false,$baseline['facts']);$last=snapshot($s);verifyBaseline($baseline,$last,false);
     $legacyChecks=array_values(array_filter($last['facts']['m2_sync_checkpoints'],static fn($r)=>$r['stream_key']==='phase3d_market_sample_v1'));
     $migrationChecks=array_values(array_filter($last['facts']['m2_sync_checkpoints'],static fn($r)=>$r['stream_key']==='phase3d_market_migration_v1'));
-    $watermarks=true;foreach($migrationChecks as $cp){$values=array_column(array_filter($first['bindings'],static fn($r)=>$r['observation']['source_id']===$cp['source_id']),'observation');$watermarks=$watermarks&&$cp['watermark_at']===max(array_column($values,'observed_at'));}
+    $watermarks=true;foreach($migrationChecks as $cp){if(!in_array($cp['source_id'],array_column(array_column($first['bindings'],'observation'),'source_id'),true))continue;$values=array_column(array_filter($first['bindings'],static fn($r)=>$r['observation']['source_id']===$cp['source_id']),'observation');$watermarks=$watermarks&&$cp['watermark_at']===max(array_column($values,'observed_at'));}
     echo json(['ok'=>true,'first'=>$first,'second'=>$second,'counts'=>$last['counts'],'same'=>$after===$last,
         'legacy_checkpoints_same'=>$legacyChecks===$baseline['facts']['m2_sync_checkpoints'],'migration_checkpoints'=>$migrationChecks,
-        'watermarks_correct'=>$watermarks,'baseline_preserved'=>true,'tables'=>array_keys($s->tables)]);
+        'baseline_checkpoints_same'=>array_slice($last['facts']['m2_sync_checkpoints'],0,count($baseline['facts']['m2_sync_checkpoints']))===$baseline['facts']['m2_sync_checkpoints'],'baseline_checkpoint_count'=>count($baseline['facts']['m2_sync_checkpoints']),'watermarks_correct'=>$watermarks,'baseline_preserved'=>true,'tables'=>array_keys($s->tables)]);
 }catch(Throwable $e){echo json(['ok'=>false,'reason'=>$e->getMessage()]);}

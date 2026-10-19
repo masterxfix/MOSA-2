@@ -263,3 +263,18 @@ gesperrten Fälle bleiben gesperrt. Paket 3 ist nur vorbereitet: Die ursprüngli
 transformierbare Stichprobe ist noch nicht vollständig migriert. Ein späterer
 Import benötigt ein eigenes Issue und eine separate ausdrückliche Freigabe.
 Details: [Paket-3-Plan](PHASE3D_BATCH3_PLAN.md).
+
+## Phase 3D-G – Paket 3 persistent übernommen
+
+Exakt die beiden eingefrorenen Observations erfolgreich importiert: zwei neue
+Assets/Identifier, eine neue Source, zwei neue Routes und ein neuer Checkpoint im
+bestehenden allgemeinen Migrationsstream. Gesamt sieben Assets/Identifier, vier
+Sources, acht Routes, acht Observations und fünf Checkpoints. Paket 1/2 und alle
+vier bisherigen Checkpoints unverändert; Current/Bars null, Ledger v1+v2 und
+Struktur unverändert. Finale Dedupe-Keys mit echten IDs privat vollständig belegt.
+Zwei unabhängige Readbacks, identischer Replay überall null neu, keine UPDATEs.
+
+8/8 ursprünglich transformierbare Observations der kontrollierten Stichprobe sind
+übernommen. Die ursprünglichen acht gesperrten Fälle bleiben ausgeschlossen;
+keine Aussage einer vollständigen MOSA-Historien- oder Gesamtmarktdatenmigration.
+Keine Produktion. [Paket-3-Ergebnisse](PHASE3D_BATCH3_IMPORT_RESULTS.md).

@@ -66,18 +66,22 @@ class HomepageTests(unittest.TestCase):
                 self.assertIn(text, self.text)
 
     def test_import_result_and_remaining_limits_are_unambiguous(self):
-        for text in ['Sechs echte Marktbeobachtungen.', 'Zwei kontrollierte Importpakete',
-                     'Beide kleinen Importpakete', 'insgesamt sechs echten Marktbeobachtungen',
+        for text in ['Acht echte Marktbeobachtungen.', 'Drei kontrollierte Importpakete',
+                     'Alle drei kleinen Importpakete', 'insgesamt acht echten Marktbeobachtungen',
                      'idempotent wiederholt', 'keine neuen fachlichen Zeilen',
                      'Current und Bars sind weiterhin leer', 'keine Live-Daten',
                      'History → Current', '23/23 Phase-3C-B-Live-Prüfungen',
                      'Kontrollierte MOSA-Datenmigration', 'Breitere MOSA-Datenmigration',
                      'Current-Routenauswahl', 'Bars-Import', 'Depotdaten', 'News',
                      'KI-Auswertung auf MOSA-2-Daten', 'Keine Produktivfreigabe',
-                     'Keine Produktionsfreigabe', '19. Oktober 2026']:
+                     'Keine Produktionsfreigabe', '19. Oktober 2026',
+                     'kontrollierten Stichprobe', '(8/8)',
+                     'acht ursprünglich gesperrten Fälle wurden nicht automatisch übernommen']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
-        for obsolete in ['Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
+        for obsolete in ['Marktdatenmigration vollständig abgeschlossen',
+                         'Sechs echte Marktbeobachtungen.', 'Zwei kontrollierte Importpakete',
+                         'Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
                          '13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
                          'zwölf Fachtabellen sind leer', '18. Oktober 2026']:
             self.assertNotIn(obsolete, self.text)

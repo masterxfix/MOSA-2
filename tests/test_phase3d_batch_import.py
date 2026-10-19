@@ -6,12 +6,26 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 class BatchImportTests(unittest.TestCase):
     @classmethod
-    def scenario(cls,name):
-        return json.loads(subprocess.check_output(['php',str(ROOT/'tests/phase3d_batch_fixture.php')],input=json.dumps(dict(scenario=name)).encode()))
+    def scenario(cls,name,**kwargs):
+        return json.loads(subprocess.check_output(['php',str(ROOT/'tests/phase3d_batch_fixture.php')],input=json.dumps(dict(scenario=name,**kwargs)).encode()))
     @classmethod
     def setUpClass(cls):
         cls.r=cls.scenario('replay')
         if not cls.r['ok']:raise AssertionError(cls.r)
+    def test_general_manifest_accepts_one_to_three_only(self):
+        for count in range(5):
+            self.assertEqual(self.scenario('size',count=count)['ok'],1 <= count <= 3)
+    def test_independent_two_after_both_prior_packages(self):
+        r=self.scenario('independent_two');self.assertTrue(r['ok'],r)
+        self.assertEqual(r['first']['new'],dict(m2_entities=2,m2_assets=2,m2_asset_identifiers=2,m2_sources=1,m2_asset_source_routes=2,m2_market_observations=2,m2_sync_checkpoints=1))
+        for t,n in dict(m2_entities=7,m2_assets=7,m2_asset_identifiers=7,m2_sources=4,m2_asset_source_routes=8,m2_market_observations=8,m2_sync_checkpoints=5,m2_market_current=0,m2_market_bars=0).items():self.assertEqual(r['counts'][t],n)
+        self.assertEqual(r['baseline_checkpoint_count'],4);self.assertTrue(r['baseline_checkpoints_same']);self.assertTrue(r['baseline_preserved']);self.assertTrue(r['watermarks_correct'])
+        self.assertEqual(sum(r['second']['new'].values()),0);self.assertTrue(r['same'])
+        self.assertEqual([b['action'] for b in r['second']['bindings']],['duplicate']*2)
+        for a,b in zip(r['first']['bindings'],r['second']['bindings']):
+            self.assertGreater(int(a['observation']['asset_id']),1005)
+            self.assertEqual(a['dedupe_hex'],b['dedupe_hex']);self.assertEqual(len(a['dedupe_hex']),64)
+            self.assertTrue(a['canonical'].startswith('mosa2-observation-v1\n'))
     def test_existing_baseline_and_exact_new_catalog(self):
         expected=dict(m2_entities=3,m2_assets=3,m2_asset_identifiers=3,m2_sources=1,m2_asset_source_routes=3,m2_market_observations=3,m2_sync_checkpoints=2)
         self.assertEqual(self.r['first']['new'],expected)

@@ -1,6 +1,10 @@
 # Phase 3D-F – letztes kleines Paket der geeigneten Stichprobe
 
-**Status:** Am 19.10.2026 ausschließlich offline vorbereitet. Paket 3 enthält die
+**Aktueller Status:** Paket 3 wurde nach separater Freigabe in Issue #22 am
+19.10.2026 erfolgreich importiert, unabhängig gelesen und identisch replayt.
+Details: [Import-Ergebnisse](PHASE3D_BATCH3_IMPORT_RESULTS.md).
+
+**Historischer Planungsstand Phase 3D-F:** Am 19.10.2026 ausschließlich offline vorbereitet. Paket 3 enthält die
 zwei in Phase 3D-D bereits geeigneten, allein wegen der Paketgrenze zurückgestellten
 Kandidaten. Noch nicht importiert. Ein späterer Import benötigt ein eigenes Issue
 und eine neue ausdrückliche Nutzerfreigabe.
@@ -120,3 +124,13 @@ Ladezeitanzeige unverändert. Kein Deployment und keine Produktion.
 Die ursprüngliche geeignete Stichprobe ist **noch nicht vollständig migriert**:
 sechs von acht Observations sind importiert, zwei nur vorbereitet. Ein späterer
 Paket-3-Import benötigt ein eigenes Issue mit separater ausdrücklicher Freigabe.
+
+## Umsetzung Phase 3D-G
+
+Der oben dokumentierte eingefrorene Plan ist unverändert umgesetzt: zwei neue
+Assets/Identifier, eine neue Source, zwei Routes, zwei Observations und ein neuer
+Checkpoint. Beide Readbacks und identischer Replay erfolgreich, überall null neu.
+Gesamt sieben Assets/Identifier, vier Sources, acht Routes, acht Observations,
+fünf Checkpoints; Current/Bars null, Ledger v1+v2. Paket 1/2 unverändert.
+Damit sind 8/8 ursprünglich transformierbare Stichproben-Observations importiert;
+die acht ursprünglich gesperrten Fälle bleiben ausgeschlossen. Keine Produktion.
