@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Planung gestartet; keine echten MOSA-Daten übernommen  
+**Status:** Phase 3D-A als read-only Quelleninventar und Mappingvertrag abgeschlossen; offene Einzelfälle explizit gesperrt. Keine echten MOSA-Daten übernommen.
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -31,6 +31,26 @@ Die Übernahme erfolgt in klar getrennten Stufen:
 ## Phase 3D-A – Source-Inventar und Mapping
 
 Phase 3D-A ist rein analysierend.
+
+Ergebnisstand 19.10.2026:
+
+- [Quelleninventar](PHASE3D_SOURCE_INVENTORY.md), fixlab-Quellcode auf
+  `baa0f66d6b40105d6b030c6d1b81239ad6a6fc8c` schreibgeschützt untersucht;
+- [Feldmapping und Dry-Run-Vertrag](PHASE3D_FIELD_MAPPING.md), alle Attribute
+  der sieben vorhandenen Zieltabellen einschließlich Quellfeldklassifikation;
+- belegt: L&S-/Tradegate-Live-Offerten, Yahoo-Chart-/Heimatmarkt-/FX-Daten,
+  L&S-Chartpunkte, Frankfurt-Referenz-/Historywerte, Marktindikatoren und
+  NEL-JSON-Stände; angrenzende Kraftstoffpreis-History ausdrücklich abgegrenzt;
+- Persistenzverträge: sechs gemeinsame SQL-Tabellen sowie Quellen-/Identitäts-
+  und NEL-Intraday-JSON; tatsächliche aktuelle Datenbestände hier nicht gelesen;
+- offene Sperren: reale Identifier-/Route-Zuordnung, lokale Altzeiten/DST,
+  fehlende Barintervalle/-Endzeiten, Adjustierung/Revisionsregeln, GBX/XXX und
+  Einheiten, FX-Provenienz und ausdrückliche Current-Routenauswahl;
+- keine Quelländerung, keine DB-Aktion, kein Provider-Fetch, keine Übernahme.
+
+3D-A beschreibt das reproduzierbare Format und seine Ablehnungsregeln; es
+implementiert keinen Reader, Dry-Run-Executor oder Importer. 3D-B bleibt separat
+freizugeben und darf diese offenen Fälle nicht stillschweigend übergehen.
 
 Zu erfassen sind mindestens:
 
