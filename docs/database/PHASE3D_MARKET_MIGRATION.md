@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Phase 3D-G abgeschlossen: alle 8/8 ursprünglich transformierbaren Observations in drei idempotenten Testpaketen importiert. Phase 3H analysiert ausschließlich die acht weiterhin gesperrten Fälle offline; keine weitere Datenübernahme. Gesamtmigration weiterhin nicht abgeschlossen. [Blocker- und Entscheidungsplan](PHASE3H_BLOCKED_CASES.md).
+**Status:** Phase 3D-G: 8/8 ursprünglich transformierbare Observations importiert. Phase 3H: acht Restfälle weiterhin gesperrt. Phase 3I: allgemeiner versionierter Unit-/Quantity-Vertrag entschieden; nur logischer Zielentwurf, keine Schemaänderung oder weitere Übernahme. Gesamtmigration weiterhin offen. [Unit-Vertrag](PHASE3I_UNIT_CONTRACT.md).
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -301,3 +301,32 @@ Keine weitere Übernahme, keine DB-/Browser-/Provideraktion oder Deployment.
 Homepage/Ladezeit unverändert, keine Produktion. Alle acht bleiben gesperrt;
 die Gesamtmigration ist weiterhin offen. [Einzelmatrix und universelle
 Auflösungsstrategie](PHASE3H_BLOCKED_CASES.md).
+
+## Phase 3I – allgemeiner Unit-/Quantity-Vertrag entschieden
+
+Variante C: native Zahl + explizite unveränderliche Unitversion mit Basisdimension,
+Geldwährung soweit vorhanden und exaktem rationalem Skalierungsvertrag. B8 behält
+seine native GBX-Zahl; currency beschreibt GBP, Quote-Unit GBX und Faktor 1/100
+sind ausdrücklich getrennt. GBP ist nur eine deterministische Projektion derselben
+Tatsache, keine zweite native History-Zeile oder künstliche Route.
+
+Ein minimaler allgemeiner Unitkatalog, Route-/Datensatzbindung und explizite
+Routenrevisionen sind vorgesehen. Physische Route-ID bindet unveränderliche Unit-
+Semantik; Unitwechsel braucht neue ID und später kontrolliert erweiterte Routen-
+UNIQUEs. Unitinformationen gehören nicht in external_key oder Provider-Sonderfelder.
+Current übernimmt die native Unitbindung seiner Observation. Bars teilen einen
+Quote-Vertrag über OHLC, Volumen bleibt separat. B6/B7 können denselben Unitvertrag
+nutzen; ihre Intervall-/End-/Adjustment-Sperren bleiben bestehen. B5 kann POINT
+ohne Geldwährung ausdrücken; Indexidentität bleibt offen. Mengenbasis ist optional
+konzeptionell vorgesehen, ohne Futures in Scope zu nehmen.
+
+mosa2-observation-v1 und alle bisherigen Zeilen/Keys bleiben unverändert.
+Vorgeschlagenes v2 bindet Unitkey/-version, Unitvertrag sowie explizite optionale
+Mengenbasis und Volumeneinheit. Versionierter Legacy-Lesemantel mit 1/1 nur für
+bereits qualifizierte einfache monetäre v1-Zeilen, kein Backfill/Reimport.
+
+Additive fachliche Schemaerweiterung nötig; ausschließlich logischer Entwurf,
+keine Migration 0003 oder Implementierung. B8 ist fachlich modellierbar, aber noch
+nicht importierbar: Schema-/Writer-/Evidenzschritte benötigen eigene Freigaben.
+Keine DB-/Browser-/Provideraktion, kein Import/Deployment, Homepage/Ladezeit
+unverändert, keine Produktion. [Entscheidung und Migrationsgrenzen](PHASE3I_UNIT_CONTRACT.md).
