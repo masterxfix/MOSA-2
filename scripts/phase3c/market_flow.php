@@ -67,6 +67,11 @@ function canonicalObservation(array $input): string {
 function dedupeKey(array $input): string {
     return hash('sha256',canonicalObservation($input),true);
 }
+function shouldUpdateCurrent(?array $previous,array $row): bool {
+    requireValue($previous===null||($previous['route_id']===$row['route_id']&&$previous['source_id']===$row['source_id']),'selected_route_changed');
+    return $previous===null||strcmp($row['market_at'],$previous['market_at'])>0
+        ||($row['market_at']===$previous['market_at']&&strcmp($row['observed_at'],$previous['observed_at'])>0);
+}
 
 final class MarketFlow {
     private array $assets=[];
@@ -98,7 +103,7 @@ final class MarketFlow {
         requireValue($route['source_id']===$row['source_id'],'route_source');
         $previous=$this->current[$asset]??null;
         // Arbitration is outside this reference contract: reject a route change.
-        requireValue($previous===null||($previous['route_id']===$row['route_id']&&$previous['source_id']===$row['source_id']),'selected_route_changed');
+        $replace=shouldUpdateCurrent($previous,$row);
         $key=bin2hex(dedupeKey($row));
         if(isset($this->history[$key])){
             requireValue($this->history[$key]===$row,'dedupe_conflict');
@@ -107,8 +112,6 @@ final class MarketFlow {
         // Stage both projections with PHP copy-on-write; publish only on success.
         $history=$this->history;$current=$this->current;$history[$key]=$row;
         if($failAfterHistory)throw new RuntimeException('simulated_after_history');
-        $replace=$previous===null||strcmp($row['market_at'],$previous['market_at'])>0
-            ||($row['market_at']===$previous['market_at']&&strcmp($row['observed_at'],$previous['observed_at'])>0);
         if($replace){
             // volume belongs to History; Current has no volume column in 0002.
             $projection=$row;unset($projection['volume']);$current[$asset]=$projection;

@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3C: kontrollierter Marktdaten-Schreibfluss
 
-**Status:** 3C-A als Offline-Referenz implementiert und getestet; 3C-B nicht gestartet
+**Status:** 3C-A abgeschlossen; erster 3C-B-Live-Lauf mit 21/23 Prüfungen am History-Indexguard abgebrochen. Offline-Korrektur für einen separat freizugebenden zweiten Live-Nachweis vorbereitet.
 **Grundlage:** Phase 3B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Den fachlichen Schreibfluss History → Current mit kleinen synthetischen Beispieldaten reproduzierbar nachweisen, bevor echte MOSA-Marktdaten übernommen werden.
 
@@ -160,7 +160,7 @@ skipped bleiben; der temporäre Prüfbranch wird anschließend entfernt.
 
 Diese Offline-Tests beweisen **keine** echte MySQL-Transaktion, DB-Latenz,
 Dedupe-Unique-Verletzung, Parallelität, Collector-Ausführung, Cross-Source-
-Auswahl oder Produktivfähigkeit. 3C-B bleibt separat freizugeben und ungestartet.
+Auswahl oder Produktivfähigkeit. Ein weiterer 3C-B-Live-Nachweis bleibt separat freizugeben.
 
 - zentrale, providerneutrale Schreib-/Dedupe-Logik für den Testpfad;
 - deterministische Offline-Regressionstests;
@@ -168,7 +168,47 @@ Auswahl oder Produktivfähigkeit. 3C-B bleibt separat freizugeben und ungestarte
 
 ### 3C-B – isolierter Live-Nachweis
 
-Erst nach separater Freigabe:
+Der erste Lauf am 19.10.2026 um 09:09:12 UTC bewies Dedupe/1062,
+Current-Zeitregeln, Provenienz, Mehr-Asset-Isolation und Savepoint-Rollback.
+Der History-Plan verwendete `ix_market_observations_asset_source` / `ref` /
+rows 6 / Filesort statt `ix_market_observations_asset_time`. History-Latenz und
+Bars-Leseweg blieben ungeprüft. Der äußere Rollback und die neue unabhängige
+Verbindung bestätigten 16 Tabellen, unverändertes Ledger v1+v2 und 15 leere
+Fachtabellen. Das ist der letzte Live-Befund, keine erneute DB-Prüfung.
+
+Die vorhandenen Testdateien unter `scripts/phase3c/` übernehmen die gemeinsame
+Normalisierung, Dedupe- und Current-Entscheidung aus der Offline-Referenz.
+Der Gateway bleibt ein temporärer, geschützter Testzugang und wird in diesem
+Offline-Auftrag weder installiert noch verwendet.
+
+Für den späteren Leseabschnitt folgt auf die kleinen funktionalen Tests eine
+getrennte History-Fixture: drei Assets mit jeweils zwei gültigen Sources/Routes,
+acht Tage und 16 Zeitpunkte je Tag/Source, insgesamt 768 zusätzliche Observations.
+Alle Assets/Sources erhalten dieselbe Zeitverteilung. Das unveränderte
+Tagesfenster selektiert 32 von 256 Performance-Zeilen je Asset (plus vorhandene
+funktionale Zeilen); `LIMIT 5` bleibt bestehen. Diese direkten History-Inserts
+testen ausschließlich den Leseweg und verändern Current nicht.
+
+Ein falscher natürlicher Index oder `type=ALL` erlaubt **insgesamt einmal** einen
+Ausbau um weitere 24 Tage: maximal 3.072 Performance-Observations plus acht
+funktionale Zeilen. Jeder Plan wird einschließlich SQL, Parametern, erwartetem
+und tatsächlichem Key, Zugriffstyp, Schätzung, Extra und tatsächlicher
+Fixture-Verteilung vor dem Guard gespeichert. Ein zweiter Plan kann den ersten
+nicht überschreiben. Danach bleiben erwarteter Key, begrenzter Zugriff und
+Filesort-Verbot zwingend. Keine Index-Hints, Schemaänderungen oder Schleifen bis
+zum Erfolg. Erst nach bestandenem Guard folgen Warmup und 20 Messungen.
+
+Ein Rollback garantiert den leeren fachlichen Datenzustand, nicht identische
+AUTO_INCREMENT-Zähler. Der Endcheck vergleicht Ledger, Grants, leere Tabellen
+und den vollständigen Struktur-/Constraint-Vertrag separat von diesen Zählern.
+Nur die AUTO_INCREMENT-Tabellenoption in SHOW CREATE wird für den Vergleich
+normalisiert; andere Strukturänderungen bleiben Fehler. Kein Zähler-Reset.
+
+Details und Aussagegrenzen: [History-Analyse](PHASE3C_HISTORY_ANALYSIS.md).
+Die neuen Regressionstests simulieren EXPLAIN ausschließlich offline; sie beweisen
+keine tatsächliche Indexwahl oder History-/Bars-Latenz auf MySQL.
+
+Ein neuer Live-Lauf darf erst nach separater Freigabe erfolgen:
 
 - Preflight: 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer;
 - synthetische Core-/Asset-/Route-Fixtures in einer Transaktion;
