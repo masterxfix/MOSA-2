@@ -2,9 +2,15 @@
 
 ## Version 0002 – Marktdaten (Phase 3A)
 
-`0002_market_current_history.sql` ist ausschließlich ein **Repository-Artefakt,
-noch NICHT live angewendet**. Reihenfolge: **0001 → 0002**. Dies ist keine
-Live-Apply-Freigabe; Version 2 wurde nicht in den Ledger geschrieben.
+`0002_market_current_history.sql` wurde am **19.10.2026 einmalig auf der isolierten
+Testdatenbank live validiert**. Reihenfolge: **0001 → 0002**. Ledger Version 2:
+`0002_market_current_history`, SHA-256
+`205bea42cfc93a64f76eb61c10377e47dceae38815c4351817a17aced00a75ee`,
+`applied_at` UTC **2026-10-19 08:02:39.939576**. Version 1 unverändert.
+16 Tabellen, 30/30 praktische Tests, 8/8 natürliche EXPLAIN-Pfade und alle
+15 Nicht-Ledger-Tabellen nach Rollback leer; unabhängiger Readback erfolgreich.
+[Finaler Phase-3B-Live-Nachweis](../PHASE3B_FINAL_LIVE.md).
+Migrationen 0001/0002 byte-identisch; keine Produktivfreigabe und keine Phase 3C.
 Grundlage: [MARKET_DATA_PHASE3.md](../MARKET_DATA_PHASE3.md).
 
 Genau drei Tabellen: `m2_market_current` (ein Zustand je Asset),
@@ -26,8 +32,11 @@ Offline-Modelltests beschreiben Dedupe, ältere Beobachtungen, deterministischen
 Gleichstand und Rollback, ohne einen produktiven Schreibpfad zu implementieren.
 
 Offline-Test: `python -m unittest discover -s tests -p test_market_schema_phase3.py -v`.
-Kein MySQL-Ausführungs-, EXPLAIN- oder Performance-Nachweis; diese folgen nur
-mit eigener Phase-3B-Freigabe. Migration 0001 bleibt byte-identisch.
+Der Offline-Test allein ist kein MySQL-Ausführungs-, EXPLAIN- oder Performance-
+Nachweis. Der separat freigegebene Phase-3B-Lauf bestätigte nun Struktur,
+Constraints und acht natürliche Indexpfade auf begrenzten synthetischen Daten.
+Eine weitergehende Performance-/Parallelitätsfreigabe folgt daraus nicht.
+Migration 0001 bleibt byte-identisch.
 Die unten stehende Cleanup-Reihenfolge betrifft ausschließlich Phase 2 vor
 einem Apply von 0002; nach dessen Apply sind die abhängigen Markttabellen in
 einem separat freizugebenden Cleanup zu berücksichtigen.

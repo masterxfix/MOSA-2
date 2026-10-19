@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3: Marktdaten Current + History
 
-**Status:** fachliche/technische Spezifikation; noch nicht implementiert oder auf die Testdatenbank angewendet  
+**Status:** Phase 3A implementiert und Phase 3B am 19.10.2026 auf der isolierten Testdatenbank erfolgreich live validiert; Phase 3C nicht begonnen
 **Grundlage:** Phase 1 Plattform qualifiziert, Phase 2 Core-/Asset-Identität live technisch freigegeben  
 **Ziel:** Die erste echte Fachschicht von MOSA 2 aufbauen: aktuelle Marktdaten schnell lesbar halten und historische Marktdaten nachvollziehbar, append-only und skalierbar speichern.
 
@@ -221,7 +221,17 @@ Die frühere Skalierungsprüfung bis 1.000.000 History-Zeilen belegt die Plattfo
 
 ### 3B – isolierter Live-Apply und Postcheck
 
-Erst nach separater Freigabe:
+**Erfolgreich abgeschlossen am 19.10.2026 nach separater Freigabe.**
+Migration 0002 wurde einmalig angewendet: 16 Tabellen, 140 Spalten, 16 PKs,
+9 zusätzliche Unique Keys, 26 sekundäre Indizes, 23 FKs und 19 CHECKs.
+30/30 praktische Tests und 8/8 natürliche EXPLAIN-Pfade bestanden.
+`bars_asset`: `ix_market_bars_asset_time`, `range`, estimated rows 2,
+`Using where; Using index`, kein Filesort. Kein Fixture-Ausbau erforderlich.
+Alle synthetischen Daten wurden zurückgerollt; eine neue Verbindung bestätigte
+Ledger v1 unverändert, v2 korrekt und alle 15 Nicht-Ledger-Tabellen leer.
+[Finaler Live-Nachweis](PHASE3B_FINAL_LIVE.md), ohne Produktivfreigabe oder echte Daten.
+
+Der durchgeführte freigegebene Ablauf:
 
 - Preflight der isolierten Testdatenbank;
 - sicherstellen, dass Version 1 vorhanden ist und exakt 13 Phase-2-Tabellen bestehen;
@@ -233,7 +243,7 @@ Erst nach separater Freigabe:
 
 ### 3C – kleine kontrollierte Beispieldaten
 
-Erst nach erfolgreicher 3B:
+Erst nach erfolgreicher 3B und einer eigenen ausdrücklichen Freigabe; hier nicht gestartet:
 
 - wenige synthetische bzw. ausdrücklich freigegebene Testassets;
 - Current/History-Konsistenz prüfen;
