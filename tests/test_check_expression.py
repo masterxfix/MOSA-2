@@ -1,5 +1,6 @@
 """Run the very same fail-closed PHP CHECK parser used by the live postcheck."""
 import json
+import itertools
 from pathlib import Path
 import subprocess
 import unittest
@@ -56,6 +57,45 @@ class CheckExpressionTests(unittest.TestCase):
         self.assertTrue(self.compare(
             "identifier_type <> 'ticker' OR CHAR_LENGTH(TRIM(scope_key)) > 0",
             "((`identifier_type` <> 'ticker') OR (char_length(trim(`scope_key`)) > 0))")['equal'])
+
+    def test_associative_and_or_keeps_order_and_mixed_operator_grouping(self):
+        for operator in ('AND', 'OR'):
+            self.assertTrue(self.compare(f'a=1 {operator} (b=2 {operator} c=3)',
+                                         f'((`a`=1 {operator.lower()} `b`=2) {operator.lower()} `c`=3)')['equal'])
+            self.assertFalse(self.compare(f'a=1 {operator} b=2', f'b=2 {operator} a=1')['equal'])
+        self.assertFalse(self.compare('a=1 AND (b=2 OR c=3)', '(a=1 AND b=2) OR c=3')['equal'])
+        self.assertFalse(self.compare('a=1 OR (b=2 AND c=3)', '(a=1 OR b=2) AND c=3')['equal'])
+
+    def test_associativity_has_independent_complete_three_valued_truth_table(self):
+        def sql_and(a, b):
+            return False if a is False or b is False else None if a is None or b is None else True
+        def sql_or(a, b):
+            return True if a is True or b is True else None if a is None or b is None else False
+        for op in (sql_and, sql_or):
+            for a, b, c in itertools.product((True, False, None), repeat=3):
+                self.assertEqual(op(a, op(b, c)), op(op(a, b), c))
+
+    def test_exact_mysql_volume_reassociation_and_semantic_mutations(self):
+        expected = '(unit_contract_version IS NULL OR ((volume IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL) OR (volume IS NOT NULL AND volume_unit_key IS NOT NULL AND volume_unit_version IS NOT NULL))) IS TRUE'
+        actual = '(((`unit_contract_version` is null) or ((`volume` is null) and (`volume_unit_key` is null) and (`volume_unit_version` is null)) or ((`volume` is not null) and (`volume_unit_key` is not null) and (`volume_unit_version` is not null))) is true)'
+        show = '  CONSTRAINT `ck_test` CHECK (' + actual + ')'
+        self.assertTrue(self.compare(expected, actual, show, True)['equal'])
+        for changed in (actual.replace('`volume`', '`wrong_volume`'),
+                        actual.replace('is not null', 'is null', 1),
+                        actual.replace(' or ', ' and ', 1), actual.replace(' is true', ''),
+                        '(`unit_contract_version` is null) is true'):
+            self.assertFalse(self.compare(expected, changed, '  CONSTRAINT `ck_test` CHECK (' + changed + ')', True)['equal'])
+        self.assertFalse(self.compare(expected, actual, show.replace('ck_test', 'ck_wrong'), True)['equal'])
+        self.assertFalse(self.compare(expected, actual, show + '\n' + show, True)['equal'])
+
+    def test_exact_volume_semantics_against_independent_fixture(self):
+        from market_units_schema_fixture import CheckExpression as IndependentExpression
+        expected = '(unit_contract_version IS NULL OR ((volume IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL) OR (volume IS NOT NULL AND volume_unit_key IS NOT NULL AND volume_unit_version IS NOT NULL))) IS TRUE'
+        actual = '((unit_contract_version IS NULL OR (volume IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL)) OR (volume IS NOT NULL AND volume_unit_key IS NOT NULL AND volume_unit_version IS NOT NULL)) IS TRUE'
+        a, b = IndependentExpression(expected), IndependentExpression(actual)
+        for flags in itertools.product((False, True), repeat=4):
+            row = {field: 1 if flag else None for field, flag in zip(('unit_contract_version', 'volume', 'volume_unit_key', 'volume_unit_version'), flags)}
+            self.assertEqual(a.evaluate(row), b.evaluate(row))
 
     def test_unknown_charset_fails_closed(self):
         self.assertFalse(self.compare("a = 'x'", "a = _utf8mb4'x'")['equal'])

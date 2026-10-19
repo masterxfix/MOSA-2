@@ -26,7 +26,7 @@ final class CheckExpression
                 $end = strpos($expression, $delimiter, $start);
                 if ($end === false) throw new \RuntimeException('unterminated_introducer');
                 $value = substr($expression, $start, $end-$start);
-                if (!preg_match('/\A(?:[a-z]*|1m|5m|1h|1d)\z/', $value)) throw new \RuntimeException('unsupported_introduced_literal');
+                if (!preg_match('/\A(?:[a-z]*|1m|5m|1h|1d|mosa2-market-unit-v1)\z/', $value)) throw new \RuntimeException('unsupported_introduced_literal');
                 $this->tokens[] = "'".$value."'";
                 $offset = $end + strlen($delimiter);
                 continue;
@@ -76,6 +76,12 @@ final class CheckExpression
     private function comparison(): array
     {
         $left = $this->atom();
+        if ($this->accept('IS')) {
+            $negated = $this->accept('NOT');
+            if ($this->accept('NULL')) return [$negated ? 'IS NOT NULL' : 'IS NULL', $left];
+            if (!$negated && $this->accept('TRUE')) return ['IS TRUE', $left];
+            throw new \RuntimeException('unsupported_is');
+        }
         $negated = $this->accept('NOT');
         if ($this->accept('IN')) {
             $this->expect('(');
@@ -115,13 +121,29 @@ final class CheckExpression
     }
 }
 
+/** SQL AND/OR are associative under three-valued logic. Flatten only the
+ * same operator, in the original operand order. Mixed operators, IS TRUE,
+ * comparisons, names and literal bytes remain separate and significant.
+ */
+function canonicalCheckTree(array $node): array
+{
+    foreach ($node as $key=>$value) if (is_array($value)) $node[$key]=canonicalCheckTree($value);
+    if (!in_array($node[0]??null,['AND','OR'],true)) return $node;
+    $result=[$node[0]];
+    foreach (array_slice($node,1) as $child) {
+        if ($child[0]===$node[0]) foreach (array_slice($child,1) as $operand) $result[]=$operand;
+        else $result[]=$child;
+    }
+    return $result;
+}
+
 function compareCheck(string $table, string $constraint, string $expected, string $actual, string $show, bool $qualifiedUtf8 = false): array
 {
     $result = ['table'=>$table, 'constraint'=>$constraint, 'expected'=>$expected,
         'server_check_clause'=>$actual, 'show_create_table'=>$show,
         'normalized_expected'=>null, 'normalized_server'=>null, 'normalized_show'=>null, 'equal'=>false, 'decision'=>''];
     foreach (['expected'=>$expected, 'server'=>$actual] as $side=>$expression) {
-        try { $result['normalized_'.$side] = (new CheckExpression($expression, $qualifiedUtf8 && $side==='server', $side==='server'))->parse(); }
+        try { $result['normalized_'.$side] = canonicalCheckTree((new CheckExpression($expression, $qualifiedUtf8 && $side==='server', $side==='server'))->parse()); }
         catch (\RuntimeException $error) { $result['decision'] .= $side.':'.$error->getMessage().';'; }
     }
     if ($result['decision'] !== '') return $result;
@@ -131,7 +153,7 @@ function compareCheck(string $table, string $constraint, string $expected, strin
         if (preg_match_all($pattern, $show, $matches) !== 1) {
             $result['equal']=false; $result['decision']='missing_or_ambiguous_show_check'; return $result;
         }
-        try { $result['normalized_show']=(new CheckExpression($matches[1][0],true,false))->parse(); }
+        try { $result['normalized_show']=canonicalCheckTree((new CheckExpression($matches[1][0],true,false))->parse()); }
         catch (\RuntimeException $error) { $result['equal']=false; $result['decision']='show:'.$error->getMessage(); return $result; }
         $result['equal']=$result['equal'] && $result['normalized_show']===$result['normalized_expected'];
     }

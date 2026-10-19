@@ -61,7 +61,7 @@ class HomepageTests(unittest.TestCase):
     def test_visible_purpose_and_verified_results(self):
         for text in ['MOSA 2', 'Persönliche, finanzorientierte', 'Daten- und KI-Plattform.',
                      'deterministisch', 'Die KI hilft beim Verstehen.', 'Core-Schema',
-                     'Technisch freigegeben', '16 Tabellen', 'Version 2', '23 / 23 geprüft']:
+                     'Technisch freigegeben', '17 Tabellen', 'Version 3', '23 / 23 geprüft']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
 

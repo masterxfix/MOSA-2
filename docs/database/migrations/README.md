@@ -1,5 +1,23 @@
 # Versionierte Migrationen
 
+## Version 0003 – Unit-Schema live validiert (Phase 3K)
+
+Am 19.10.2026 wurde die unveränderte Migration auf der isolierten Testdatenbank
+vollständig validiert. Zwei vorherige fail-closed Stopps waren generische
+Checkerfehler (FK-Komma-Leerzeichen und associative OR-Darstellung); beide wurden
+ohne Datenbankreparatur korrigiert. Exakt bestätigte Resume-States verhinderten
+jede Wiederholung bereits ausgeführter DDLs. DDL 4/5 und vollständiger Postcheck,
+rollbackbare Constraintproben und zwei unabhängige Final-Readbacks bestanden.
+
+Ledger v3: `0003_market_units`, SHA-256
+`199933884802bd139b706e50e57e04687e9cbe5f8bd1366e98e302af7d47b8ee`,
+`applied_at` UTC **2026-10-19 18:17:09.921125**; v1/v2 unverändert.
+Endschema: **17 Tabellen, 186 Spalten, 17 PK, 10 zusätzliche UNIQUEs,
+39 weitere Indizes, 36 FKs, 37 CHECKs**. Units 0, Routes 8/revision 1,
+Observations 8 einschließlich Dedupe-Keys unverändert, Current/Bars 0.
+Keine Seeds, Writer-v2, B8 oder Produktion.
+[Vollständiger Nachweis und Sicherheitsbereinigung](../PHASE3K_UNIT_SCHEMA_LIVE.md).
+
 ## Version 0002 – Marktdaten (Phase 3A)
 
 `0002_market_current_history.sql` wurde am **19.10.2026 einmalig auf der isolierten

@@ -4,6 +4,15 @@
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
+**Aktueller Schemahinweis Phase 3K (19.10.2026):** Migration 0003 vollständig
+live validiert, Ledger v3 und zwei unabhängige Final-Readbacks bestätigt.
+17 Tabellen, 186 Spalten, 17 PK, 10 zusätzliche UNIQUEs, 39 weitere Indizes,
+36 FKs, 37 CHECKs. Die acht bestehenden Observations einschließlich Dedupe-Keys
+und übrigen Fachdaten sind gegenüber dem Original-Pre-State unverändert.
+Units 0, Routes 8/revision 1, Checkpoints 5, Current/Bars 0.
+Keine weiteren Imports, Unit-Seeds oder Writer-v2; die übrigen fachlichen
+Sperren bleiben bestehen. [Phase-3K-Nachweis](PHASE3K_UNIT_SCHEMA_LIVE.md).
+
 ## Grundprinzip
 
 MOSA bleibt Quelle und wird ausschließlich **read-only** gelesen. MOSA 2 bleibt die saubere Zielarchitektur.
