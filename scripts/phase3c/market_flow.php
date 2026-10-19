@@ -49,10 +49,16 @@ function normalizeObservation(array $input): array {
     $fields=['asset_id','source_id','route_id','currency','market_at','observed_at','price','bid','ask','volume'];
     $keys=array_keys($input);sort($keys);$expected=$fields;sort($expected);
     requireValue($keys===$expected,'observation_fields');
-    requireValue(is_string($input['currency'])&&(bool)preg_match('/\A[A-Z]{3}\z/D',$input['currency']),'currency');
     // Build the one canonical field order explicitly, independent of input order.
     $row=['asset_id'=>identity($input['asset_id']),'source_id'=>identity($input['source_id']),
-        'route_id'=>identity($input['route_id']),'currency'=>$input['currency'],
+        'route_id'=>identity($input['route_id'])];
+    return $row+normalizeObservationValues($input);
+}
+// Shared value validation also supports an offline proposal without invented IDs.
+// canonicalObservation/dedupeKey still require all three real numeric identities.
+function normalizeObservationValues(array $input): array {
+    requireValue(is_string($input['currency'])&&(bool)preg_match('/\A[A-Z]{3}\z/D',$input['currency']),'currency');
+    $row=['currency'=>$input['currency'],
         'market_at'=>utcTimestamp($input['market_at']),'observed_at'=>utcTimestamp($input['observed_at']),
         'price'=>decimal($input['price'],28,10),'bid'=>decimal($input['bid'],28,10,true),
         'ask'=>decimal($input['ask'],28,10,true),'volume'=>decimal($input['volume'],32,8,true)];

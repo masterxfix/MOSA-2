@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Phase 3D-A als read-only Quelleninventar und Mappingvertrag abgeschlossen; offene Einzelfälle explizit gesperrt. Keine echten MOSA-Daten übernommen.
+**Status:** Phase 3D-A abgeschlossen; Phase 3D-B mit 16 echten, privat eingefrorenen Read-only-Quellobjekten offline geprüft. Acht fachlich transformierbar, 16 finale Zielaktionen unresolved, keine echten MOSA-Daten übernommen. [Stichprobenbefunde](PHASE3D_SAMPLE_RESULTS.md).
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -171,7 +171,17 @@ Summen müssen reproduzierbar sein.
 
 ## Phase 3D-B – kleine echte Read-only-Stichprobe
 
-Erst nach separater Freigabe.
+Separat freigegebene Stichprobe vom 19.10.2026: 16 Objekte, SELECT-only;
+erneute feste Auswahl bytegleich. Keine MOSA-2-DB-Verbindung. Private Manifest-
+und Reportdateien bleiben außerhalb des Repositories. Zwei Offline-Läufe
+bytegleich; reale GBX-/XXX-/FX-/Bar-Sperren und Current-Auswahl bleiben explizit.
+Details, Zähler und Beweisgrenzen: [PHASE3D_SAMPLE_RESULTS.md](PHASE3D_SAMPLE_RESULTS.md).
+
+Der generische Evaluator liegt in `scripts/phase3d/dry_run.php`; seine
+Eingabe sind bereits extrahierte Zeilen mit geprüften Evidence-Annotationen.
+Er besitzt keinen Quellreader oder DB-Adapter und behauptet ohne Zielvergleich
+keinen insert/duplicate. Vorgeschlagene Schlüssel ersetzen keine realen IDs;
+der echte Phase-3C-Dedupe-Key bleibt bis zu bestätigten IDs null.
 
 - MOSA ausschließlich read-only lesen;
 - kleine explizit begrenzte Stichprobe;
