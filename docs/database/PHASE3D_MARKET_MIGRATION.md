@@ -330,3 +330,21 @@ keine Migration 0003 oder Implementierung. B8 ist fachlich modellierbar, aber no
 nicht importierbar: Schema-/Writer-/Evidenzschritte benötigen eigene Freigaben.
 Keine DB-/Browser-/Provideraktion, kein Import/Deployment, Homepage/Ladezeit
 unverändert, keine Produktion. [Entscheidung und Migrationsgrenzen](PHASE3I_UNIT_CONTRACT.md).
+
+## Phase 3J – Unit-Schema 0003 ausschließlich offline implementiert
+
+[Migration 0003](migrations/0003_market_units.sql) ergänzt repositoryseitig genau
+`m2_units`, positive Routenrevisionen mit revision-aware UNIQUEs sowie explizite
+Quote-/Quantity-/Volume-FKs auf Routes, Observations, Current und Bars.
+Currency ist für unit-aware Fakten nullable; lokale CHECKs erhalten Legacy mit
+Pflichtwährung und vollständig NULL bleibenden neuen Feldern. Vorhandenes
+Legacyvolumen bleibt zulässig. Observation-v1 und Dedupe unverändert.
+
+Kein Apply, Ledgerwrite, Seed, Writer-v2, Import oder DB-Zugriff. Späteres Ziel
+17 Tabellen / Ledger v3; historisch dokumentierter Teststand weiterhin
+16 Tabellen / Ledger v1+v2 / acht Observations, hier nicht live geprüft.
+B8 benötigt weiterhin freigegebenen Apply, qualifizierte Seeds, Writer-v2 und
+spezifische Identitäts-/Evidenzprüfung. B5/B6/B7 behalten ihre weiteren Sperren;
+alle acht bleiben gesperrt. Homepage/Ladezeit unverändert, kein Deployment,
+keine Produktion. Späterer Apply braucht eigenes Issue und ausdrückliche Freigabe.
+[Physischer Vertrag, Offline-Beweisgrenzen und Preflight](PHASE3J_UNIT_SCHEMA.md).

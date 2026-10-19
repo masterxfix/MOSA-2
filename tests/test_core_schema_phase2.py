@@ -326,7 +326,8 @@ class CoreSchemaTests(unittest.TestCase):
         order = re.findall(r'^\d+\. `(m2_\w+)`', section, re.M)
         self.assertEqual(order, list(reversed(self.tables)))
         self.assertEqual(sorted(p.name for p in MIGRATIONS.glob('*.sql')),
-                         ['0001_core_asset_identity.sql', '0002_market_current_history.sql'])
+                         ['0001_core_asset_identity.sql', '0002_market_current_history.sql',
+                          '0003_market_units.sql'])
 
 
 if __name__ == '__main__':

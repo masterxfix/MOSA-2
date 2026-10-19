@@ -1,0 +1,117 @@
+-- Phase 3J, version 3: repository artifact; NOT applied live.
+-- Target MySQL 8.0.26-16; requires exact migrations 0001 + 0002.
+-- Caller must qualify strict SQL mode, UTC and an isolated authorized database.
+-- Schema only: no data migration, seeds, ledger write, trigger, procedure,
+-- collector or writer-v2. No USE or session/server setting changes.
+-- Five atomic InnoDB DDL statements, NOT one rollbackable transaction.
+-- Stop on any error; no blind retry or IF [NOT] EXISTS masking.
+
+CREATE TABLE m2_units (
+    unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NOT NULL,
+    unit_version INT UNSIGNED NOT NULL,
+    unit_contract_version VARCHAR(64) COLLATE utf8mb4_0900_bin NOT NULL,
+    dimension_key VARCHAR(64) COLLATE utf8mb4_0900_bin NOT NULL,
+    base_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NOT NULL,
+    base_unit_version INT UNSIGNED NOT NULL,
+    monetary_currency_code CHAR(3) COLLATE utf8mb4_0900_bin NULL,
+    scale_numerator DECIMAL(38,0) NOT NULL,
+    scale_denominator DECIMAL(38,0) NOT NULL,
+    definition_sha256 BINARY(32) NOT NULL,
+    status VARCHAR(16) COLLATE utf8mb4_0900_bin NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (unit_key, unit_version),
+    UNIQUE KEY uq_units_contract (unit_key, unit_version, unit_contract_version),
+    KEY ix_units_base (base_unit_key, base_unit_version, unit_contract_version),
+    CONSTRAINT fk_units_base FOREIGN KEY (base_unit_key, base_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    CONSTRAINT ck_units_versions CHECK ((unit_version > 0 AND base_unit_version > 0) IS TRUE),
+    CONSTRAINT ck_units_scale CHECK ((scale_numerator > 0 AND scale_denominator > 0) IS TRUE),
+    CONSTRAINT ck_units_currency CHECK (((dimension_key = 'monetary' AND monetary_currency_code IS NOT NULL) OR (dimension_key <> 'monetary' AND monetary_currency_code IS NULL)) IS TRUE),
+    CONSTRAINT ck_units_contract CHECK ((unit_contract_version = 'mosa2-market-unit-v1' AND status = 'frozen') IS TRUE),
+    CONSTRAINT ck_units_keys CHECK ((unit_key <> '' AND base_unit_key <> '' AND dimension_key <> '') IS TRUE)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE m2_asset_source_routes
+    ADD COLUMN route_revision INT UNSIGNED NOT NULL DEFAULT 1,
+    ADD COLUMN unit_contract_version VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quantity_basis_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_amount DECIMAL(32,8) NULL,
+    ADD COLUMN volume_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN volume_unit_version INT UNSIGNED NULL,
+    ADD KEY ix_routes_quote_unit (quote_unit_key, quote_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_routes_quote_unit FOREIGN KEY (quote_unit_key, quote_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_routes_quantity_unit (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_routes_quantity_unit FOREIGN KEY (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_routes_volume_unit (volume_unit_key, volume_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_routes_volume_unit FOREIGN KEY (volume_unit_key, volume_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD CONSTRAINT ck_routes_revision CHECK ((route_revision > 0) IS TRUE),
+    ADD CONSTRAINT ck_routes_units CHECK (((unit_contract_version IS NULL AND quote_unit_key IS NULL AND quote_unit_version IS NULL AND quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL) OR (unit_contract_version IS NOT NULL AND quote_unit_key IS NOT NULL AND quote_unit_version IS NOT NULL)) IS TRUE),
+    ADD CONSTRAINT ck_routes_quantity CHECK (((quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL) OR (quantity_basis_unit_key IS NOT NULL AND quantity_basis_unit_version IS NOT NULL AND quantity_basis_amount IS NOT NULL AND quantity_basis_amount > 0)) IS TRUE),
+    ADD CONSTRAINT ck_routes_volume CHECK (((volume_unit_key IS NULL AND volume_unit_version IS NULL) OR (volume_unit_key IS NOT NULL AND volume_unit_version IS NOT NULL)) IS TRUE),
+    ADD UNIQUE KEY uq_routes_external_revision (source_id, route_type, external_key, route_revision),
+    ADD UNIQUE KEY uq_routes_asset_source_revision (asset_id, source_id, route_type, route_revision),
+    DROP INDEX uq_routes_external,
+    DROP INDEX uq_routes_asset_source;
+
+ALTER TABLE m2_market_observations
+    ADD COLUMN observation_format_version SMALLINT UNSIGNED NULL,
+    ADD COLUMN unit_contract_version VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quantity_basis_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_amount DECIMAL(32,8) NULL,
+    ADD COLUMN volume_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN volume_unit_version INT UNSIGNED NULL,
+    MODIFY COLUMN currency CHAR(3) COLLATE utf8mb4_0900_bin NULL,
+    ADD KEY ix_market_observations_quote_unit (quote_unit_key, quote_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_observations_quote_unit FOREIGN KEY (quote_unit_key, quote_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_market_observations_quantity_unit (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_observations_quantity_unit FOREIGN KEY (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_market_observations_volume_unit (volume_unit_key, volume_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_observations_volume_unit FOREIGN KEY (volume_unit_key, volume_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD CONSTRAINT ck_market_observations_units CHECK (((observation_format_version IS NULL AND unit_contract_version IS NULL AND quote_unit_key IS NULL AND quote_unit_version IS NULL AND quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL AND currency IS NOT NULL) OR (observation_format_version IS NOT NULL AND observation_format_version = 2 AND unit_contract_version IS NOT NULL AND quote_unit_key IS NOT NULL AND quote_unit_version IS NOT NULL)) IS TRUE),
+    ADD CONSTRAINT ck_market_observations_quantity CHECK (((quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL) OR (quantity_basis_unit_key IS NOT NULL AND quantity_basis_unit_version IS NOT NULL AND quantity_basis_amount IS NOT NULL AND quantity_basis_amount > 0)) IS TRUE),
+    ADD CONSTRAINT ck_market_observations_volume CHECK ((unit_contract_version IS NULL OR ((volume IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL) OR (volume IS NOT NULL AND volume_unit_key IS NOT NULL AND volume_unit_version IS NOT NULL))) IS TRUE);
+
+ALTER TABLE m2_market_current
+    ADD COLUMN unit_contract_version VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quantity_basis_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_amount DECIMAL(32,8) NULL,
+    ADD COLUMN day_volume_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN day_volume_unit_version INT UNSIGNED NULL,
+    MODIFY COLUMN currency CHAR(3) COLLATE utf8mb4_0900_bin NULL,
+    ADD KEY ix_market_current_quote_unit (quote_unit_key, quote_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_current_quote_unit FOREIGN KEY (quote_unit_key, quote_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_market_current_quantity_unit (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_current_quantity_unit FOREIGN KEY (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_market_current_day_volume_unit (day_volume_unit_key, day_volume_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_current_day_volume_unit FOREIGN KEY (day_volume_unit_key, day_volume_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD CONSTRAINT ck_market_current_units CHECK (((unit_contract_version IS NULL AND quote_unit_key IS NULL AND quote_unit_version IS NULL AND quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL AND day_volume_unit_key IS NULL AND day_volume_unit_version IS NULL AND currency IS NOT NULL) OR (unit_contract_version IS NOT NULL AND quote_unit_key IS NOT NULL AND quote_unit_version IS NOT NULL)) IS TRUE),
+    ADD CONSTRAINT ck_market_current_quantity CHECK (((quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL) OR (quantity_basis_unit_key IS NOT NULL AND quantity_basis_unit_version IS NOT NULL AND quantity_basis_amount IS NOT NULL AND quantity_basis_amount > 0)) IS TRUE),
+    ADD CONSTRAINT ck_market_current_volume CHECK ((unit_contract_version IS NULL OR ((day_volume IS NULL AND day_volume_unit_key IS NULL AND day_volume_unit_version IS NULL) OR (day_volume IS NOT NULL AND day_volume_unit_key IS NOT NULL AND day_volume_unit_version IS NOT NULL))) IS TRUE);
+
+ALTER TABLE m2_market_bars
+    ADD COLUMN unit_contract_version VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quote_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN quantity_basis_unit_version INT UNSIGNED NULL,
+    ADD COLUMN quantity_basis_amount DECIMAL(32,8) NULL,
+    ADD COLUMN volume_unit_key VARCHAR(64) COLLATE utf8mb4_0900_bin NULL,
+    ADD COLUMN volume_unit_version INT UNSIGNED NULL,
+    MODIFY COLUMN currency CHAR(3) COLLATE utf8mb4_0900_bin NULL,
+    ADD KEY ix_market_bars_quote_unit (quote_unit_key, quote_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_bars_quote_unit FOREIGN KEY (quote_unit_key, quote_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_market_bars_quantity_unit (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_bars_quantity_unit FOREIGN KEY (quantity_basis_unit_key, quantity_basis_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD KEY ix_market_bars_volume_unit (volume_unit_key, volume_unit_version, unit_contract_version),
+    ADD CONSTRAINT fk_market_bars_volume_unit FOREIGN KEY (volume_unit_key, volume_unit_version, unit_contract_version) REFERENCES m2_units (unit_key, unit_version, unit_contract_version) ON DELETE RESTRICT,
+    ADD CONSTRAINT ck_market_bars_units CHECK (((unit_contract_version IS NULL AND quote_unit_key IS NULL AND quote_unit_version IS NULL AND quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL AND currency IS NOT NULL) OR (unit_contract_version IS NOT NULL AND quote_unit_key IS NOT NULL AND quote_unit_version IS NOT NULL)) IS TRUE),
+    ADD CONSTRAINT ck_market_bars_quantity CHECK (((quantity_basis_unit_key IS NULL AND quantity_basis_unit_version IS NULL AND quantity_basis_amount IS NULL) OR (quantity_basis_unit_key IS NOT NULL AND quantity_basis_unit_version IS NOT NULL AND quantity_basis_amount IS NOT NULL AND quantity_basis_amount > 0)) IS TRUE),
+    ADD CONSTRAINT ck_market_bars_volume CHECK ((unit_contract_version IS NULL OR ((volume IS NULL AND volume_unit_key IS NULL AND volume_unit_version IS NULL) OR (volume IS NOT NULL AND volume_unit_key IS NOT NULL AND volume_unit_version IS NOT NULL))) IS TRUE);
