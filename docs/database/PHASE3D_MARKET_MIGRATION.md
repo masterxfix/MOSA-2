@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Phase 3D-E abgeschlossen: zwei kleine kontrollierte Testimportpakete mit insgesamt sechs echten Observations, beide idempotent bestätigt. Paket 1 unverändert; Current/Bars leer. [Paket-2-Ergebnisse](PHASE3D_BATCH2_IMPORT_RESULTS.md).
+**Status:** Phase 3D-F: Paket 3 mit den zwei letzten geeigneten Restkandidaten ausschließlich offline vorbereitet, noch nicht importiert. Bisher sechs von acht transformierbaren Observations in zwei idempotenten Testpaketen übernommen; Current/Bars leer. [Paket-3-Plan](PHASE3D_BATCH3_PLAN.md).
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -245,3 +245,21 @@ Zeitstempel sind unverändert. Finale Dedupe-Keys erst mit echten erzeugten IDs.
 Zwei unabhängige Readbacks und identischer Replay mit überall null neuen Zeilen.
 Current/Bars weiterhin leer, Ledger v1+v2 und Struktur unverändert. Keine Produktion.
 Details und Aussagegrenzen: [Paket-2-Ergebnisse](PHASE3D_BATCH2_IMPORT_RESULTS.md).
+
+## Phase 3D-F – Paket 3 vorbereitet
+
+Exakt die zwei in Phase 3D-D nur wegen der Paketgrenze zurückgestellten Kandidaten
+mit unveränderter privater Evidence reproduziert und gegen den bestätigten
+Phase-3D-E-Abschlussreport geplant. Beide geeignet: zwei neue Equity-Assets und
+Identifier, eine neue Source, zwei neue Routes; keine bestehenden Katalogobjekte
+wiederzuverwenden. Finale IDs und Dedupe-Keys bleiben bis zur echten Auflösung null.
+Geplant wäre ein neuer Checkpoint für die neue Source im allgemeinen Stream
+`phase3d_market_migration_v1`; bestehende Checkpoints sind nicht betroffen.
+
+Kein DB-Zugriff, keine Live-Quelle, kein Browser/Dogado, kein Import oder
+Checkpoint-Write. Homepage und Ladezeitanzeige unverändert, kein Deployment.
+Die sechs importierten Fälle bleiben ausgeschlossen; die acht ursprünglich
+gesperrten Fälle bleiben gesperrt. Paket 3 ist nur vorbereitet: Die ursprüngliche
+transformierbare Stichprobe ist noch nicht vollständig migriert. Ein späterer
+Import benötigt ein eigenes Issue und eine separate ausdrückliche Freigabe.
+Details: [Paket-3-Plan](PHASE3D_BATCH3_PLAN.md).
