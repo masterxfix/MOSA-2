@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3C: kontrollierter Marktdaten-Schreibfluss
 
-**Status:** 3C-A abgeschlossen; erster 3C-B-Live-Lauf mit 21/23 Prüfungen am History-Indexguard abgebrochen. Offline-Korrektur für einen separat freizugebenden zweiten Live-Nachweis vorbereitet.
+**Status:** 3C-A und 3C-B fachlich abgeschlossen. Zweiter freigegebener Live-Lauf am 19.10.2026, 09:42:32–09:42:33 UTC: 23/23 Prüfungen bestanden; vollständiger Rollback und unabhängiger Leerstandscheck erfolgreich.
 **Grundlage:** Phase 3B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Den fachlichen Schreibfluss History → Current mit kleinen synthetischen Beispieldaten reproduzierbar nachweisen, bevor echte MOSA-Marktdaten übernommen werden.
 
@@ -160,7 +160,8 @@ skipped bleiben; der temporäre Prüfbranch wird anschließend entfernt.
 
 Diese Offline-Tests beweisen **keine** echte MySQL-Transaktion, DB-Latenz,
 Dedupe-Unique-Verletzung, Parallelität, Collector-Ausführung, Cross-Source-
-Auswahl oder Produktivfähigkeit. Ein weiterer 3C-B-Live-Nachweis bleibt separat freizugeben.
+Auswahl oder Produktivfähigkeit. Der ergänzende reale 3C-B-Nachweis ist separat
+in [PHASE3C_FINAL_LIVE.md](PHASE3C_FINAL_LIVE.md) dokumentiert.
 
 - zentrale, providerneutrale Schreib-/Dedupe-Logik für den Testpfad;
 - deterministische Offline-Regressionstests;
@@ -174,12 +175,13 @@ Der History-Plan verwendete `ix_market_observations_asset_source` / `ref` /
 rows 6 / Filesort statt `ix_market_observations_asset_time`. History-Latenz und
 Bars-Leseweg blieben ungeprüft. Der äußere Rollback und die neue unabhängige
 Verbindung bestätigten 16 Tabellen, unverändertes Ledger v1+v2 und 15 leere
-Fachtabellen. Das ist der letzte Live-Befund, keine erneute DB-Prüfung.
+Fachtabellen. Dieser erste Befund wurde durch den nachfolgend dokumentierten
+zweiten, separat freigegebenen Lauf ergänzt.
 
 Die vorhandenen Testdateien unter `scripts/phase3c/` übernehmen die gemeinsame
 Normalisierung, Dedupe- und Current-Entscheidung aus der Offline-Referenz.
-Der Gateway bleibt ein temporärer, geschützter Testzugang und wird in diesem
-Offline-Auftrag weder installiert noch verwendet.
+Der Gateway war ein temporärer, geschützter Testzugang und wurde nach dem
+finalen Live-Nachweis einschließlich der kurzlebigen Zugangsdaten entfernt.
 
 Für den späteren Leseabschnitt folgt auf die kleinen funktionalen Tests eine
 getrennte History-Fixture: drei Assets mit jeweils zwei gültigen Sources/Routes,
@@ -205,10 +207,22 @@ Nur die AUTO_INCREMENT-Tabellenoption in SHOW CREATE wird für den Vergleich
 normalisiert; andere Strukturänderungen bleiben Fehler. Kein Zähler-Reset.
 
 Details und Aussagegrenzen: [History-Analyse](PHASE3C_HISTORY_ANALYSIS.md).
-Die neuen Regressionstests simulieren EXPLAIN ausschließlich offline; sie beweisen
-keine tatsächliche Indexwahl oder History-/Bars-Latenz auf MySQL.
+Die Regressionstests simulieren EXPLAIN ausschließlich offline. Der zweite
+Live-Lauf auf Ausgangscommit `b61f18945011a804baa03ed2c2012300120105b6`
+bewies anschließend die tatsächliche Indexwahl und History-/Bars-Latenz:
+alle 23 Prüfungen bestanden, alle Lesepläne im ersten Versuch korrekt,
+kein Fixture-Ausbau. History nutzte `ix_market_observations_asset_time` / range /
+35 geschätzte Zeilen; Bars `ix_market_bars_asset_time` / range / zwei Zeilen.
+Kein Filesort oder Full Scan. Median/p95/max in ms:
+Current 0.0962445/0.117369/0.137539,
+History 0.1667255/0.271995/0.306098,
+Bars 0.195615/0.222815/0.238689.
+Äußerer Rollback, Same-Connection- und unabhängiger Endcheck bestätigten
+16 Tabellen, unverändertes Ledger v1+v2 und 15 leere Fachtabellen.
+Temporärer Zugang und Secret sind entfernt, Stufe-1-Schutz unverändert.
+Vollständiger Nachweis: [PHASE3C_FINAL_LIVE.md](PHASE3C_FINAL_LIVE.md).
 
-Ein neuer Live-Lauf darf erst nach separater Freigabe erfolgen:
+Der vollständig bestandene Live-Ablauf umfasste:
 
 - Preflight: 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer;
 - synthetische Core-/Asset-/Route-Fixtures in einer Transaktion;

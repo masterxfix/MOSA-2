@@ -5,7 +5,7 @@
 Grundlage: Ausgangscommit `1fdcbcd29424a924d0fe262f8c17096fc61b02f3`,
 [Issue #14, erster Live-Report](https://github.com/masterxfix/MOSA-2/issues/14#issuecomment-6263763383)
 und [anschließende Einordnung](https://github.com/masterxfix/MOSA-2/issues/14#issuecomment-6263808301).
-Der einzige fachliche Lauf am 19.10.2026, 09:09:12 UTC, bestand 21/23 Prüfungen.
+Der erste fachliche Lauf am 19.10.2026, 09:09:12 UTC, bestand 21/23 Prüfungen.
 Die Schreibfälle (einschließlich Unique-Verletzung 1062 und Savepoint-Rollback)
 bestanden. Die Leseprüfung brach am History-Key ab:
 
@@ -96,3 +96,15 @@ neuen/geänderten PHP-Dateien, Dateivalidierung und `git diff --check` bestanden
 Der verbindliche Linux-Nachweis erfolgt auf dem exakten Abschlusscommit über
 einen temporären Prüfbranch; Ergebnis und Run-ID werden in Issue #14 ergänzt.
 Der Deploy-Job muss dabei skipped bleiben.
+
+## Separater finaler Live-Nachweis
+
+Der anschließend separat freigegebene zweite Lauf am 19.10.2026,
+09:42:32–09:42:33 UTC, verwendete die Korrektur auf `b61f189` unverändert und
+bestand 23/23 Prüfungen. Bereits mit 768 Performance-Observations wählte History
+im ersten Versuch `ix_market_observations_asset_time` / range / rows 35,
+`Using where; Using index`, ohne Filesort. Kein Fixture-Ausbau war erforderlich.
+Auch Bars und sämtliche Latenzbudgets bestanden. Der äußere Rollback und beide
+Endchecks bestätigten vollständigen Leerstand bei unverändertem Ledger und
+Strukturvertrag. Details: [PHASE3C_FINAL_LIVE.md](PHASE3C_FINAL_LIVE.md).
+Die vorstehenden Offline-Aussagegrenzen bleiben für den damaligen Auftrag gültig.
