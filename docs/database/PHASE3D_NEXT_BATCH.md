@@ -1,4 +1,12 @@
-# Phase 3D-D – zweites Marktdatenpaket (nur Planung)
+# Phase 3D-D / 3D-E – zweites Marktdatenpaket
+
+**Aktueller Status:** Paket 2 wurde am 19.10.2026 in der isolierten Testdatenbank
+erfolgreich importiert und idempotent bestätigt. Drei neue Observations; insgesamt
+sechs. [Persistente Ergebnisse](PHASE3D_BATCH2_IMPORT_RESULTS.md).
+
+Die folgenden Abschnitte dokumentieren den eingefrorenen **Planungsstand vor dem
+Import**. Damals offene Ziel-IDs und Dedupe-Keys wurden erst im freigegebenen
+Phase-3D-E-Lauf mit echten erzeugten IDs aufgelöst.
 
 ## Ergebnis
 

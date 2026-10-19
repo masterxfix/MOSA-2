@@ -66,7 +66,8 @@ class HomepageTests(unittest.TestCase):
                 self.assertIn(text, self.text)
 
     def test_import_result_and_remaining_limits_are_unambiguous(self):
-        for text in ['Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
+        for text in ['Sechs echte Marktbeobachtungen.', 'Zwei kontrollierte Importpakete',
+                     'Beide kleinen Importpakete', 'insgesamt sechs echten Marktbeobachtungen',
                      'idempotent wiederholt', 'keine neuen fachlichen Zeilen',
                      'Current und Bars sind weiterhin leer', 'keine Live-Daten',
                      'History → Current', '23/23 Phase-3C-B-Live-Prüfungen',
@@ -76,7 +77,8 @@ class HomepageTests(unittest.TestCase):
                      'Keine Produktionsfreigabe', '19. Oktober 2026']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
-        for obsolete in ['13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
+        for obsolete in ['Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
+                         '13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
                          'zwölf Fachtabellen sind leer', '18. Oktober 2026']:
             self.assertNotIn(obsolete, self.text)
 

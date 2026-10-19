@@ -99,7 +99,8 @@ class Phase3DImportTests(unittest.TestCase):
 
     def test_public_import_evidence_has_no_real_identifiers(self):
         for name in ['PHASE3D_TEST_IMPORT.md','PHASE3D_TEST_IMPORT_RESULTS.md',
-                     'PHASE3D_MARKET_MIGRATION.md']:
+                     'PHASE3D_MARKET_MIGRATION.md','PHASE3D_NEXT_BATCH.md',
+                     'PHASE3D_BATCH2_IMPORT_RESULTS.md']:
             text=(ROOT/'docs/database'/name).read_text(encoding='utf-8')
             self.assertNotRegex(text,r'\b[A-Z]{2}[A-Z0-9]{9}[0-9]\b')
             self.assertNotRegex(text,r'fixlab_market_observations:[0-9]+|object_[a-f0-9]{24}')

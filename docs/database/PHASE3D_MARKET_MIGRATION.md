@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Phase 3D-C abgeschlossen; Phase 3D-D hat die fünf festen Restkandidaten anhand gespeicherter Portfolio-Namen und expliziter Assetverträge offline entsperrt. Paket 2 mit drei Observations ist vorbereitet, noch nicht importiert. [Nächstes Paket](PHASE3D_NEXT_BATCH.md).
+**Status:** Phase 3D-E abgeschlossen: zwei kleine kontrollierte Testimportpakete mit insgesamt sechs echten Observations, beide idempotent bestätigt. Paket 1 unverändert; Current/Bars leer. [Paket-2-Ergebnisse](PHASE3D_BATCH2_IMPORT_RESULTS.md).
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -233,3 +233,15 @@ privaten, verifizierten Phase-3D-C-Zielreport; keine aktuelle Ziel-DB-Abfrage.
 Alle neuen IDs und endgültigen Dedupe-Keys bleiben null. Kein Import, kein
 Checkpoint, kein Current/Bars, keine Produktion. Ein späterer Import benötigt
 eine eigene Freigabe und echte Katalogauflösung. Details: [Paketplan](PHASE3D_NEXT_BATCH.md).
+
+## Phase 3D-E – Paket 2 persistent übernommen
+
+Drei unveränderte vorbereitete Observations erfolgreich importiert: drei neue
+Assets/Identifier, eine neue und eine bestehende Source, drei neue Routes und
+zwei neue Checkpoints im allgemeinen Stream `phase3d_market_migration_v1`.
+Gesamt: fünf Assets/Identifier, drei Sources, sechs Routes, sechs Observations,
+vier Checkpoints. Die zwei Paket-1-Checkpoints und alle bisherigen Fachwerte und
+Zeitstempel sind unverändert. Finale Dedupe-Keys erst mit echten erzeugten IDs.
+Zwei unabhängige Readbacks und identischer Replay mit überall null neuen Zeilen.
+Current/Bars weiterhin leer, Ledger v1+v2 und Struktur unverändert. Keine Produktion.
+Details und Aussagegrenzen: [Paket-2-Ergebnisse](PHASE3D_BATCH2_IMPORT_RESULTS.md).
