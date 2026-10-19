@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Phase 3D-F: Paket 3 mit den zwei letzten geeigneten Restkandidaten ausschließlich offline vorbereitet, noch nicht importiert. Bisher sechs von acht transformierbaren Observations in zwei idempotenten Testpaketen übernommen; Current/Bars leer. [Paket-3-Plan](PHASE3D_BATCH3_PLAN.md).
+**Status:** Phase 3D-G abgeschlossen: alle 8/8 ursprünglich transformierbaren Observations in drei idempotenten Testpaketen importiert. Phase 3H analysiert ausschließlich die acht weiterhin gesperrten Fälle offline; keine weitere Datenübernahme. Gesamtmigration weiterhin nicht abgeschlossen. [Blocker- und Entscheidungsplan](PHASE3H_BLOCKED_CASES.md).
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -278,3 +278,26 @@ Zwei unabhängige Readbacks, identischer Replay überall null neu, keine UPDATEs
 übernommen. Die ursprünglichen acht gesperrten Fälle bleiben ausgeschlossen;
 keine Aussage einer vollständigen MOSA-Historien- oder Gesamtmarktdatenmigration.
 Keine Produktion. [Paket-3-Ergebnisse](PHASE3D_BATCH3_IMPORT_RESULTS.md).
+
+## Phase 3H – ausschließlich die acht gesperrten Fälle untersucht
+
+Die exakt acht verbleibenden Kandidaten der ursprünglichen 16er-Stichprobe
+anhand unveränderter Snapshot-/Dry-Run-Fingerprints reproduziert. Die bereits
+importierten 8/8 Fälle aus den drei Paketen sind ausgeschlossen und werden
+nicht erneut analysiert. Familien überlappen: drei GBX-Fälle enthalten zugleich
+die beiden OHLCV-Barfälle; Reason-Summen sind keine Kandidatensummen.
+
+Eine Hauptklassifikation je Fall: sechs TARGET_CONTRACT_REQUIRED, zwei bewusst
+OUT_OF_SCOPE; jeweils null EXISTING_EVIDENCE_RESOLVABLE,
+READONLY_EVIDENCE_REQUIRED und CONFLICT. Die sechs Vertragsfälle benötigen
+zusätzlich gezielte spätere Evidenz, werden deshalb aber nicht doppelt gezählt.
+Allgemeiner Unit-/Quantity-Vertrag zuerst, danach getrennte Bar-/FX-Provenienz-
+und Indikatorverträge; zwei Future-Referenzen außerhalb der aktuellen
+Investment-Quote-Migration geparkt. Native/FX/Derived, Preiseinheit und Current-
+Routenauswahl bleiben getrennt. Schemaerweiterung teilweise voraussichtlich nötig,
+aber keine Migration 0003 und keine Implementierung.
+
+Keine weitere Übernahme, keine DB-/Browser-/Provideraktion oder Deployment.
+Homepage/Ladezeit unverändert, keine Produktion. Alle acht bleiben gesperrt;
+die Gesamtmigration ist weiterhin offen. [Einzelmatrix und universelle
+Auflösungsstrategie](PHASE3H_BLOCKED_CASES.md).
