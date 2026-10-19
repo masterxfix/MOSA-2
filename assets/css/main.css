@@ -74,7 +74,11 @@ dd { color: #bdcbd6; font-size: .86rem; margin: 7px 0 0 30px; }
 .not-started h3 { font-size: .8rem; font-weight: 550; margin-bottom: 10px; }
 .not-started ul { display: flex; flex-wrap: wrap; gap: 8px 24px; list-style: none; padding: 0; margin: 0; color: var(--muted); font-size: .76rem; }
 .not-started li::before { content: "–"; margin-right: 8px; }
-.footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--line); margin-top: 32px; padding-block: 25px; font-size: .72rem; }
+.footer { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 12px; border-top: 1px solid var(--line); margin-top: 32px; padding-block: 25px; font-size: .72rem; }
+.footer > span { min-width: 0; }
+.footer-latency { text-align: center; white-space: nowrap; }
+[data-page-load-time] { display: inline-block; min-width: 7ch; text-align: right; font-variant-numeric: tabular-nums; }
+.footer-release { text-align: right; }
 .skip-link { position: absolute; left: 20px; top: -100px; padding: 10px 16px; background: var(--text); color: var(--bg); z-index: 1; }
 .skip-link:focus { top: 12px; }
 @media (max-width: 900px) {
@@ -99,5 +103,6 @@ dd { color: #bdcbd6; font-size: .86rem; margin: 7px 0 0 30px; }
   .status-card { padding: 23px; }
   .next-step { padding: 26px; gap: 30px; margin-block: 36px; }
   .progress { gap: 26px 18px; }
-  .footer { margin-top: 20px; }
+  .footer { grid-template-columns: 1fr; text-align: center; margin-top: 20px; }
+  .footer-release { text-align: center; }
 }
