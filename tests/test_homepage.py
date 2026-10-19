@@ -57,18 +57,24 @@ class HomepageTests(unittest.TestCase):
     def test_visible_purpose_and_verified_results(self):
         for text in ['MOSA 2', 'Persönliche, finanzorientierte', 'Daten- und KI-Plattform.',
                      'deterministisch', 'Die KI hilft beim Verstehen.', 'Core-Schema',
-                     'Technisch freigegeben', '13 Tabellen', 'Version 1', '11 / 11 geprüft']:
+                     'Technisch freigegeben', '16 Tabellen', 'Version 2', '23 / 23 geprüft']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
 
-    def test_no_real_data_and_next_goal_are_unambiguous(self):
-        for text in ['Noch keine echten MOSA-Daten.', 'zwölf Fachtabellen sind leer',
-                     'Schema-Ledger) enthält einen Eintrag', 'keine Live-Daten',
-                     'Marktdaten – Current + History', 'Geplant', 'Current', 'History',
-                     'Noch nicht begonnen', 'Depotdaten', 'News', 'KI-Auswertung auf MOSA-2-Daten',
-                     'Keine Produktivfreigabe', '18. Oktober 2026']:
+    def test_import_result_and_remaining_limits_are_unambiguous(self):
+        for text in ['Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
+                     'idempotent wiederholt', 'keine neuen fachlichen Zeilen',
+                     'Current und Bars sind weiterhin leer', 'keine Live-Daten',
+                     'History → Current', '23/23 Phase-3C-B-Live-Prüfungen',
+                     'Kontrollierte MOSA-Datenmigration', 'Breitere MOSA-Datenmigration',
+                     'Current-Routenauswahl', 'Bars-Import', 'Depotdaten', 'News',
+                     'KI-Auswertung auf MOSA-2-Daten', 'Keine Produktivfreigabe',
+                     'Keine Produktionsfreigabe', '19. Oktober 2026']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
+        for obsolete in ['13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
+                         'zwölf Fachtabellen sind leer', '18. Oktober 2026']:
+            self.assertNotIn(obsolete, self.text)
 
     def test_public_files_contain_no_internal_or_credential_details(self):
         source = self.html + self.css

@@ -205,3 +205,15 @@ Erst nach erfolgreichem 3D-B und separater Freigabe.
 ## Erfolgskriterium 3D-A
 
 Phase 3D-A ist abgeschlossen, wenn die vorhandenen MOSA-Marktdatenquellen und relevanten Felder vollständig genug inventarisiert sind, ein eindeutiges Zielmapping existiert, offene Fälle explizit markiert sind und ein reproduzierbarer Dry-Run-Vertrag für 3D-B feststeht – ohne irgendeine echte Datenübernahme.
+
+## Phase 3D-C – ausgeführter Testimport am 19.10.2026
+
+Die separat freigegebene feste Auswahl A1/A2/A3 ist nach read-only belegter
+Stammdatenauflösung erfolgreich übernommen: 3 native Observations, 2 Assets,
+2 Sources, 3 Routes, 2 Identifier und 2 Checkpoints; genau 1 NOK- und 2 EUR-Fälle.
+Identischer Replay: 0 neue Zeilen in allen sieben erlaubten Tabellen.
+Zwei unabhängige Readbacks bestätigen identische Werte und Zeitstempel;
+Current/Bars bleiben 0, Ledger v1+v2 unverändert. Keine Defaults, keine Produktion.
+Private Snapshot-/Manifest-/Reportdateien und reale Identitäten bleiben privat.
+Details: [PHASE3D_TEST_IMPORT_RESULTS.md](PHASE3D_TEST_IMPORT_RESULTS.md).
+Weitere Migrationen benötigen eigene kleine geprüfte Pakete und Freigaben.

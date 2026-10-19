@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D-C: kleiner echter Testimport
 
-**Status:** Vorbereitung; noch nicht freigegeben oder ausgeführt  
+**Status:** Separat freigegeben und am 19.10.2026 in der isolierten Testdatenbank erfolgreich ausgeführt; [Ergebnisse](PHASE3D_TEST_IMPORT_RESULTS.md)
 **Grundlage:** Phase 3D-B am 19.10.2026 erfolgreich abgeschlossen; reale Read-only-Stichprobe validiert, keine MOSA-2-Schreibaktion  
 **Ziel:** Eine sehr kleine, fachlich eindeutig transformierbare Teilmenge echter MOSA-Marktdaten kontrolliert und idempotent in die isolierte MOSA-2-Testdatenbank übernehmen.
 
@@ -268,3 +268,26 @@ Dieser kleine Testimport ist keine Freigabe für:
 - GBX/XXX/Indikatoren;
 - Parallelbetrieb;
 - Produktion.
+
+## Belegte Stammdaten und ausführbarer Vertrag
+
+Die feste Auswahl A1/A2/A3 wurde unverändert aus dem eingefrorenen 3D-B-Snapshot
+übernommen. Ergänzt wurden nur belegte fachliche Namen und explizite Assetklassen.
+Der Basisreport bleibt als Parent-Fingerprint erhalten; das private Importmanifest
+bindet Snapshot, Mapping, Stammdatenquellen und Werte mit SHA-256.
+
+Namensbelege stammen aus exakt passenden Instrument-/Identity-Datensätzen.
+Der Typbeleg stammt aus gespeicherten Source-Registry-Werten EQUITY/STOCK;
+exakte gültige ETF-Referenzen werden gesondert geprüft. Fehlende, widersprüchliche
+oder unbekannte Belege sperren den Import. Keine Defaults oder Providerabfragen.
+Die native Quote-Währung setzt keine Asset-Basiswährung: diese bleibt hier NULL.
+
+`scripts/phase3d/import_sample.php` implementiert den begrenzten Importvertrag.
+Er prüft beide Route-Identitäten, den vollständigen Katalogvertrag und vorhandene
+Dedupe-Payloads. Es gibt keine UPDATEs, Löschungen oder unterdrückten SQL-Fehler.
+Reale erzeugte IDs werden innerhalb der ersten Transaktion gebunden; das aufgelöste
+Manifest einschließlich kanonischer erwarteter Dedupe-Keys wird vor COMMIT privat
+gesichert. Vorher werden keine numerischen Ziel-IDs oder echten Dedupe-Keys erfunden.
+Eine exklusive Startmarke verhindert einen erneuten Erstimport. Nach unklarem
+Commit-Ausgang gibt es keinen Wiederholungsversuch. Beide Readbacks nutzen neue
+Verbindungen; der identische Replay prüft Werte und Zeitstempel unverändert.

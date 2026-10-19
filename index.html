@@ -27,7 +27,7 @@
     </section>
 
     <section class="results" aria-labelledby="ergebnisse-titel">
-      <div class="section-heading"><div><p class="eyebrow">Das Fundament steht</p><h2 id="ergebnisse-titel">Was wir geschafft haben</h2></div><p class="snapshot">Geprüfter Projektstand<br><time datetime="2026-10-18">18. Oktober 2026</time></p></div>
+      <div class="section-heading"><div><p class="eyebrow">Das Fundament steht</p><h2 id="ergebnisse-titel">Was wir geschafft haben</h2></div><p class="snapshot">Geprüfter Projektstand<br><time datetime="2026-10-19">19. Oktober 2026</time></p></div>
       <!-- Statische Statussektion: eine gemeinsame Stelle für spätere Datenanbindung. -->
       <div class="status-grid">
         <article class="status-card" data-status="platform">
@@ -40,32 +40,32 @@
         </article>
         <article class="status-card" data-status="model">
           <span class="badge success">Bereit</span><h3>Datenmodell</h3>
-          <p><strong>13 Tabellen</strong> für den gemeinsamen Kern und eindeutige Identitäten bilden die technische Grundlage.</p>
+          <p><strong>16 Tabellen</strong> für den gemeinsamen Kern, eindeutige Identitäten und die abgeschlossene Marktdaten-Grundschicht bilden die technische Grundlage.</p>
         </article>
         <article class="status-card" data-status="version">
-          <span class="badge neutral">Version 1</span><h3>Schema-Version</h3>
-          <p>Die erste versionierte Datenbankstruktur ist erfolgreich registriert. Änderungen bleiben damit nachvollziehbar.</p>
+          <span class="badge neutral">Version 2</span><h3>Schema-Version</h3>
+          <p>Die zweite versionierte Datenbankstruktur ist erfolgreich registriert. Beide Strukturstände bleiben nachvollziehbar.</p>
         </article>
         <article class="status-card" data-status="read-paths">
-          <span class="badge success">11 / 11 geprüft</span><h3>Lesewege</h3>
-          <p>Alle vorgesehenen grundlegenden Datenbank-Lesewege verwenden die erwarteten Indizes für den gezielten Datenzugriff.</p>
+          <span class="badge success">23 / 23 geprüft</span><h3>Marktdatenfluss</h3>
+          <p>History → Current ist technisch validiert: 23/23 Phase-3C-B-Live-Prüfungen bestanden. Current und Bars bleiben beim Testimport bewusst leer.</p>
         </article>
         <article class="status-card data-card" data-status="data">
-          <span class="badge neutral">Noch leer</span><h3>Datenbestand</h3>
-          <p><strong>Noch keine echten MOSA-Daten.</strong> Die zwölf Fachtabellen sind leer. Nur das technische Strukturverzeichnis (Schema-Ledger) enthält einen Eintrag.</p>
+          <span class="badge success">Kontrolliert importiert</span><h3>Erster kontrollierter Testimport</h3>
+          <p><strong>Drei echte Marktbeobachtungen.</strong> Der kleine Testimport wurde idempotent wiederholt: keine neuen fachlichen Zeilen im zweiten Lauf.</p>
         </article>
       </div>
-      <p class="context-note">Ein geprüftes Fundament, noch keine befüllte Plattform: Depot-, Markt- und News-Daten wurden nicht übernommen. Die Statusangaben sind dokumentierte Ergebnisse, keine Live-Daten.</p>
+      <p class="context-note">Die Marktdaten-Grundschicht ist abgeschlossen. Ein erster kleiner echter Testimport ist geprüft; Current und Bars sind weiterhin leer. Keine Produktionsfreigabe. Die Statusangaben sind dokumentierte Ergebnisse, keine Live-Daten.</p>
     </section>
 
     <section class="next-step" aria-labelledby="naechstes-ziel">
-      <div class="next-copy"><p class="eyebrow">Nächstes Ziel <span class="badge planned">Geplant</span></p>
-        <h2 id="naechstes-ziel">Marktdaten –<br> Current + History</h2>
-        <p>Die erste echte Fachschicht soll aktuelle Marktdaten und historische Kursdaten eines Assets speichern und schnell wieder auslesen können.</p>
+      <div class="next-copy"><p class="eyebrow">Aktueller Schwerpunkt <span class="badge planned">Begonnen</span></p>
+        <h2 id="naechstes-ziel">Kontrollierte<br> MOSA-Datenmigration</h2>
+        <p>Nach dem erfolgreichen Testimport folgen kleine, einzeln geprüfte Datenpakete. Jede weitere Übernahme braucht einen belegten Vergleich und eine eigene Freigabe.</p>
       </div>
       <dl class="market-types">
-        <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Der aktuell gültige Kurs oder Zustand eines Assets – direkt im Blick.</dd></div>
-        <div><dt><span aria-hidden="true">02</span> History</dt><dd>Historische Werte für Charts, Vergleiche und spätere Analysen.</dd></div>
+        <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Technisch validiert; bleibt bis zur Freigabe der Routenauswahl bewusst leer.</dd></div>
+        <div><dt><span aria-hidden="true">02</span> History</dt><dd>Drei echte Marktbeobachtungen sind kontrolliert übernommen und unabhängig nachgeprüft.</dd></div>
       </dl>
     </section>
 
@@ -74,10 +74,10 @@
       <ol class="progress">
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="upcoming"><span class="step-marker" aria-hidden="true">03</span><p class="step-label">Nächster Schritt</p><h3>Marktdaten</h3><p class="step-state">Geplant</p></li>
-        <li><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Später</p><h3>Kontrollierte MOSA-Datenmigration</h3><p class="step-state">Noch nicht begonnen</p></li>
+        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
+        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Kontrollierte MOSA-Datenmigration</h3><p class="step-state">Mit kleinem Testimport begonnen</p></li>
       </ol>
-      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch nicht begonnen</h3><ul><li>Echte MOSA-Datenmigration</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
+      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch nicht begonnen</h3><ul><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
     </section>
   </main>
   <footer class="wrap footer"><span>MOSA 2 · Auf verlässlichen Grundlagen aufgebaut.</span><span>Entwicklung · Keine Produktivfreigabe</span></footer>
