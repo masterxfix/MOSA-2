@@ -1,6 +1,6 @@
 # MOSA 2 – Phase 3D: kontrollierte Übernahme vorhandener MOSA-Marktdaten
 
-**Status:** Phase 3D-A abgeschlossen; Phase 3D-B mit 16 echten, privat eingefrorenen Read-only-Quellobjekten offline geprüft. Acht fachlich transformierbar, 16 finale Zielaktionen unresolved, keine echten MOSA-Daten übernommen. [Stichprobenbefunde](PHASE3D_SAMPLE_RESULTS.md).
+**Status:** Phase 3D-C abgeschlossen; Phase 3D-D hat die fünf festen Restkandidaten anhand gespeicherter Portfolio-Namen und expliziter Assetverträge offline entsperrt. Paket 2 mit drei Observations ist vorbereitet, noch nicht importiert. [Nächstes Paket](PHASE3D_NEXT_BATCH.md).
 **Grundlage:** Phase 3C-B am 19.10.2026 erfolgreich abgeschlossen; 16 Tabellen, Ledger v1+v2, alle 15 Nicht-Ledger-Tabellen leer  
 **Ziel:** Vorhandene wertvolle MOSA-Marktdaten kontrolliert, nachvollziehbar und wiederholbar auf das MOSA-2-Modell abbilden, ohne 1:1-Altdatenkopie, Dual Write oder Provider-Sonderlogik.
 
@@ -217,3 +217,19 @@ Current/Bars bleiben 0, Ledger v1+v2 unverändert. Keine Defaults, keine Produkt
 Private Snapshot-/Manifest-/Reportdateien und reale Identitäten bleiben privat.
 Details: [PHASE3D_TEST_IMPORT_RESULTS.md](PHASE3D_TEST_IMPORT_RESULTS.md).
 Weitere Migrationen benötigen eigene kleine geprüfte Pakete und Freigaben.
+
+## Phase 3D-D – Paket 2 vorbereitet
+
+Fünf feste Restkandidaten geprüft: fünf eindeutige aktive Portfolio-Namen,
+fünf passende gültige Frankfurt-Registrierungen. Der bestehende produktive
+Live-Quote-Assetvertrag klassifiziert diese als `stock`; die explizite
+Zielabbildung ist `equity`. Keine passende ETF-Referenz, keine Konflikte.
+Die frühere negative Prüfung von `fixlab_assets` wurde nicht wiederholt.
+
+Deterministisch ausgewählt: drei Observations, drei neue Assets, eine bestehende
+und eine neue Source, drei neue Routes. Die zwei weiteren geeigneten Kandidaten
+bleiben wegen der Paketgrenze zurückgestellt. Planung ausschließlich gegen den
+privaten, verifizierten Phase-3D-C-Zielreport; keine aktuelle Ziel-DB-Abfrage.
+Alle neuen IDs und endgültigen Dedupe-Keys bleiben null. Kein Import, kein
+Checkpoint, kein Current/Bars, keine Produktion. Ein späterer Import benötigt
+eine eigene Freigabe und echte Katalogauflösung. Details: [Paketplan](PHASE3D_NEXT_BATCH.md).
