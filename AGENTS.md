@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 20.10.2026, 19:06:31 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 20.10.2026, 21:05:00 Uhr — Europe/Berlin (MESZ, UTC+02:00).
 
 ## Geltungsbereich
 
@@ -85,6 +85,18 @@ Diese Grenze ist verbindlich und hat Vorrang vor Komfort, Toolwahl oder Automati
 - Wenn die account-spezifische Browserprüfung das zentrale Akzeptanzkriterium eines Auftrags ist, darf ein reiner Dokumentations-/Webrecherche-Ersatz nicht als teilweise Erfüllung dieses Kernziels gewertet und nicht als Abschluss behandelt werden.
 - Historische Fehlerdiagnosen sind niemals ein aktueller Status. Jeder tatsächlich benötigte Zugang ist im aktuellen Lauf neu und über einen zulässigen, E:-freien Werkzeugweg zu prüfen.
 
+## Dogado-Testsite-Dateizugang
+
+- Für Dateiübertragungen zur MOSA-2-Testsite ist der verbindliche Standardweg der manuelle GitHub-Actions-Workflow `.github/workflows/deploy-testsite.yml` (**Deploy MOSA 2 testsite**).
+- Ziel ist ausschließlich `https://mosa2-test.scharwerk.de/`; der fest freigegebene SFTP-Webroot ist `/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de`.
+- Technischer Zugang: SFTP zu `server10.configcenter.info:22` mit dem primären Systembenutzer `web213`; SSH-Typ `/bin/bash (chrooted)`.
+- Passwort und Host-Key-Fingerprint liegen ausschließlich als GitHub-Actions-Secrets `MOSA_TEST_SFTP_PASSWORD` und `MOSA_TEST_SFTP_HOST_KEY_SHA256`; Secretwerte niemals auslesen, protokollieren, in Prompts übernehmen oder im Repository speichern.
+- Host, Port, Benutzer und Zielpfad werden über die zugehörigen Repository-Variablen `MOSA_TEST_SFTP_HOST`, `MOSA_TEST_SFTP_PORT`, `MOSA_TEST_SFTP_USER` und `MOSA_TEST_SFTP_PATH` bereitgestellt und vom Testsite-Client gegen feste Sollwerte geprüft.
+- `web213` kann technisch weitere Verzeichnisse sehen; diese Sichtbarkeit ist **keine Freigabe**. MOSA-2-Dateioperationen bleiben hart auf den genannten Test-Webroot begrenzt.
+- Für normale Testsite-Deployments keine Plesk-Aufgabe und keine erneute Passwortabfrage verwenden, solange der GitHub-Actions-Weg verfügbar ist.
+- Der Testsite-Workflow startet nur manuell per `workflow_dispatch`; kein automatischer Produktionsdeploy. Der ältere Workflow für `mosa.scharwerk.de` ist davon getrennt und darf nicht als Testsite-Ersatz verwendet werden.
+- Detailvertrag, Nachweise und aktuelle Betriebsinformationen stehen in `docs/DEPLOYMENT.md` und `docs/dogado/README.md`.
+
 ## Arbeitsweise für Codex
 
 1. Auftrag vollständig lesen und Akzeptanzkriterien identifizieren.
@@ -138,6 +150,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 20.10.2026 | 21:05:00 Uhr (MESZ, UTC+02:00) | Verbindlichen Dogado-/SFTP-Testsite-Zugang für Codex festgehalten: GitHub-Actions-Workflow, web213, harter Test-Webroot, Secret-/Variablennamen und klare Trennung vom älteren Produktionsziel. |
 | 20.10.2026 | 19:06:31 Uhr (MESZ, UTC+02:00) | Beim Diff-Check erkannte unbeabsichtigte Wortänderung im Abschnitt „Verständliche Einordnung nach Tests“ zurückgenommen; Browserkorrektur unverändert. |
 | 20.10.2026 | 19:05:09 Uhr (MESZ, UTC+02:00) | Pauschale Browserpflicht für Web-/Dogado-Aufträge ersetzt: Google Chrome ist der Standardbrowser für Codex; Browserwahl und Dateiübertragung/Deployment ausdrücklich getrennt. Stelle mit **GEÄNDERT** markiert. |
 | 17.10.2026 | 20:03:45 Uhr (MESZ, UTC+02:00) | Vorabinformation für notwendige Nutzeraktionen ergänzt: ChatGPT muss vor jedem Auftrag klar ankündigen, was der Nutzer wo und warum selbst tun muss; Codex soll bis unmittelbar vor diesen Schritt selbst vorbereiten. |
