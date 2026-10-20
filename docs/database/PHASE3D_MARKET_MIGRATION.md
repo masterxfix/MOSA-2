@@ -500,3 +500,30 @@ DB-Verbindungen/Writes 0, kein Passwort/Gateway, Providerabruf, B8-Import,
 fixlab-Write, Schema-/Ledger-/Current-/Bars-Write oder Produktionsdeploy.
 Tests, einziger Abschlusscommit und exakter Linux-Run werden in Issue #32
 festgehalten; dessen Abschluss bestätigt die Untersuchung, keine Importfreigabe.
+
+## Phase 3Q – historische B8-Identity gefunden, eine Provenienzquelle offen
+
+Untersuchung abgeschlossen: **AUTHORITATIVE_SOURCE_REQUIRED**. Die gebundene
+Quellkennung trifft genau einen ausdrücklich freigegebenen historischen
+MOSA-Metadateneintrag im fixlab-Commit
+baa0f66d6b40105d6b030c6d1b81239ad6a6fc8c. Historischer Name, Klasse und
+Objektbezug jetzt PASS; echte Werte ausschließlich privat. Die Zuordnung ist
+keine heutige MOSA-2-Anlagefreigabe. Weiterhin 0 passende Zielidentifier im
+vorhandenen O-Readback: **Neue Stammdatenanlage erforderlich.** Keine Anlage.
+
+Alte MOSA-Producergruppe belegt; reale MOSA-2-B8-Legacyroute fehlt. Tatsächliche
+Route-ID/-Keybindung und nächste Revision OPEN, vollständiger v1-Vergleich OPEN,
+tatsächlicher B8-v2-Dry-Run NOT_RUN. Native GBX@1/GBP, NULL-Mengenbasis und
+NULL-Historyvolume bleiben unverändert; kein Import und keine fremde Ersatzroute.
+
+Genau eine nächste autoritative Quelle: historischer Sicherungsstand der alten
+MOSA-Installation für den privat gebundenen B8-Lauf, einschließlich damaligem
+Collector-Dateistand und Payloadarchiv. Konkretes Backup und Verfügbarkeit sind
+nicht bestätigt. Fehlende Rawbytes/unabhängige Deploymentbindung gelten nicht
+automatisch als dauerhaft verloren; keine Provenienzlücke selbst akzeptiert.
+Danach gegebenenfalls getrennte Stammdatenvorbereitung, keine automatische Anlage.
+
+[Evidenzmatrix, historische Bindung und genauer nächster Quellenauftrag](PHASE3Q_B8_EVIDENCE.md).
+Generische synthetische Gates verwenden weiterhin den echten Phase-3N-Writer.
+Tests, einziger Abschlusscommit und Linux-Run mit Deploy skipped in Issue #33.
+DB-Verbindungen/Writes 0; keine Browser-/Dogado-/Provideraktion oder Produktion.
