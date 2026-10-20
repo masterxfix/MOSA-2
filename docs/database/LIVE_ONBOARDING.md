@@ -1,5 +1,9 @@
 # Gemeinsames Live-Onboarding
 
+Der gemeinsame Orchestrator unterstützt zwei Policies: `ONBOARD_NEW_ROUTE` (bisheriger Standard) legt die geplante neue Routenrevision an; `USE_EXISTING_ROUTE` verlangt bereits vor dem Providerrequest `EXISTING_MATCH` für Asset und Route. Source und Unitbindung werden in beiden Modi gleich qualifiziert. Es gibt einen gemeinsamen Provider-, Writer- und Transaktionsablauf.
+
+Im Wiederholungsmodus liest `applyMarketRoutePlan` die geplante Route exakt per ID und prüft alle Bindungsfelder, ohne zu schreiben. Asset und sämtliche Kataloge erhalten Delta 0; ausschließlich eine neue Observation erhält Delta +1. Der vollständige Vorher-/Nachhervergleich bewahrt auch Revision, Status, Priorität und Zeitstempel der Route sowie alle bisherigen Observations. Der gespeicherte Fact muss im Replay `DUPLICATE_UNCHANGED` ergeben. Current und Bars bleiben getrennt und unverändert; Batch-, Scheduler- und Parallelbetrieb sind nicht freigegeben.
+
 `scripts/market_collector/onboarding.php` extrahiert die allgemeine Phase-3D-Asset-/ISIN-Auflösung. Der Phase-3D-Importer und der Livepfad verwenden denselben reinen Planer und INSERT-Executor. Qualifizierte Namen werden exakt verglichen; widersprechende Identitäten und mehrere Kandidaten sind Konflikte. Historische Importe behalten zusätzlich ihre fingerprintgebundenen Zeitstempelprüfungen.
 
 `planAssetIdentity` entscheidet zwischen EXISTING_MATCH, BIND_IDENTIFIER, CREATE_ASSET_AND_IDENTIFIER und CONFLICT. `applyAssetIdentityPlan` bestätigt den Plan gegen den Transaktionsbestand und liest die Bindung nach INSERT zurück. UPDATE, UPSERT und heuristische Reparaturen sind nicht Bestandteil des Vertrags.

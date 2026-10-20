@@ -127,8 +127,13 @@ function planMarketRoute(array $current,array $qualified,array $units): array {
     return ['decision'=>'CREATE_REVISION','row'=>$base+['route_revision'=>(string)($max+1)]+$units,'proposed_route_key'=>$c['proposed_route_key']];
 }
 function applyMarketRoutePlan(Store $s,array $plan,string $assetId,string $timestamp): array {
-    same($plan['decision']??null,'CREATE_REVISION','route_plan');\Mosa2\Phase3C\identity($assetId);\Mosa2\Phase3C\utcTimestamp($timestamp);
+    check(in_array($plan['decision']??null,['CREATE_REVISION','EXISTING_MATCH'],true),'route_plan');\Mosa2\Phase3C\identity($assetId);\Mosa2\Phase3C\utcTimestamp($timestamp);
     $row=$plan['row'];check($row['asset_id']===null||$row['asset_id']===$assetId,'route_asset_binding');$row['asset_id']=$assetId;
+    if($plan['decision']==='EXISTING_MATCH'){
+        \Mosa2\Phase3C\identity($plan['route_id']);same($plan['row']['asset_id'],$assetId,'existing_route_asset');
+        $rows=$s->find('m2_asset_source_routes',['id'=>$plan['route_id']]);same(count($rows),1,'existing_route_count');
+        check(matchFields($rows[0],['id'=>$plan['route_id']]+$row),'existing_route_drift');return $rows[0];
+    }
     $row+=['created_at'=>$timestamp,'updated_at'=>$timestamp];$id=$s->insert('m2_asset_source_routes',$row);
     $rows=$s->find('m2_asset_source_routes',['id'=>$id]);same(count($rows),1,'route_readback_count');check(matchFields($rows[0],['id'=>$id]+$row),'route_readback');
     return $rows[0];

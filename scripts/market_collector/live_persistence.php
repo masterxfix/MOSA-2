@@ -28,7 +28,9 @@ function snapshot(PDO $p): array {
     return $out;
 }
 function completePlan(array $state,array $m): array {
+    $policy=$m['policy']??'ONBOARD_NEW_ROUTE';check(in_array($policy,['ONBOARD_NEW_ROUTE','USE_EXISTING_ROUTE'],true),'live_policy');
     $asset=planAssetIdentity($state,$m['identity']);check($asset['decision']!=='CONFLICT','asset_plan_conflict');
+    if($policy==='USE_EXISTING_ROUTE')same($asset['decision'],'EXISTING_MATCH','existing_asset_required');
     $c=\Mosa2\Phase3D\candidate($m['route_evidence']);$key=$c['proposed_source_key'];
     $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']===$key));same(count($sources),1,'qualified_source');
     check(matchFields($sources[0],['source_type'=>'market_data','enabled'=>1]),'source_semantics');
@@ -38,12 +40,12 @@ function completePlan(array $state,array $m): array {
     same($unitRows[0]['monetary_currency_code'],$m['route_evidence']['row']['currency'],'quote_currency');
     $qualified=['asset_id'=>$asset['asset_id'],'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>0,'evidence'=>$m['route_evidence']];
     $route=planMarketRoute($state['m2_asset_source_routes'],$qualified,$unit);
-    same($route['decision'],'CREATE_REVISION','new_route_required');
-    return ['asset'=>$asset,'source'=>['decision'=>'EXISTING_MATCH','source_id'=>$sources[0]['id']],
+    same($route['decision'],$policy==='USE_EXISTING_ROUTE'?'EXISTING_MATCH':'CREATE_REVISION','policy_route_required');
+    return ['policy'=>$policy,'asset'=>$asset,'source'=>['decision'=>'EXISTING_MATCH','source_id'=>$sources[0]['id']],
         'qualified_route'=>$qualified,'route'=>$route,'unit_binding'=>$unit,
         'provider_request'=>['adapter_module'=>$m['adapter_module'],'adapter_class'=>$m['adapter_class'],'instrument'=>$m['instrument'],'count'=>1],
         'writer_path'=>'Collector/Adapter/Normalizer/Phase3N INSERT; stored DUPLICATE_UNCHANGED',
-        'deltas'=>$asset['deltas']+['m2_asset_source_routes'=>1,'m2_market_observations'=>1]];
+        'deltas'=>$asset['deltas']+['m2_asset_source_routes'=>$policy==='USE_EXISTING_ROUTE'?0:1,'m2_market_observations'=>1]];
 }
 function bridge(array $config,array $request): array {
     $p=proc_open([$config['python'],$config['project'].'/scripts/market_collector/live_bridge.py'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,$config['project'],
@@ -94,7 +96,7 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
             same($replay['decision'],'DUPLICATE_UNCHANGED','replay');same($replay['canonical_bytes'],$writer['canonical_bytes'],'replay_canonical');same($replay['dedupe_key'],$writer['dedupe_key'],'replay_key');
             foreach($plan['deltas'] as $t=>$delta){$pk=$t==='m2_assets'?'entity_id':'id';$oldIds=array_column($baseline[$t],$pk);$inserted[$t]=array_values(array_filter($state[$t],static fn($row)=>!in_array($row[$pk],$oldIds,true)));}
             compareDelta($baseline,snapshot($p),$plan,$inserted);same($p->commit(),true,'commit');$r['committed']=true;
-            $r+=['asset_plan'=>$plan['asset']['decision'],'route_plan'=>$plan['route']['decision'],'route_revision'=>$plan['route']['row']['route_revision'],'writer'=>'INSERT','replay'=>'DUPLICATE_UNCHANGED','deltas'=>$plan['deltas']];
+            $r+=['policy'=>$plan['policy'],'asset_plan'=>$plan['asset']['decision'],'route_plan'=>$plan['route']['decision'],'route_revision'=>$plan['route']['row']['route_revision'],'writer'=>'INSERT','replay'=>'DUPLICATE_UNCHANGED','deltas'=>$plan['deltas']];
         }catch(Throwable $e){if($p->inTransaction())$r['rollback']=$p->rollBack();throw $e;}
     }catch(Throwable $e){$r['failure']=$e->getMessage();}
     finally {

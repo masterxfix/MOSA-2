@@ -106,3 +106,72 @@ class MarketOnboardingTests(unittest.TestCase):
         self.assertNotIn('DE'+'000A0JBPG2', text)
         for pattern in ['UPDATE ', 'UPSERT ', 'REPLACE INTO', 'INSERT IGNORE']:
             self.assertNotIn(pattern, text)
+
+    def existing_live(self):
+        route = dict(self.route()['row'], id='11', created_at='2026-01-01 00:00:00.000000',
+                     updated_at='2026-01-01 00:00:00.000000')
+        s = state(True)
+        s.update(m2_sources=[dict(id='9', source_key='provider:synthetic_provider', source_type='market_data', enabled='1')],
+                 m2_units=[dict(unit_key='EUR', unit_version='1', unit_contract_version=UNITS['unit_contract_version'], monetary_currency_code='EUR')],
+                 m2_asset_source_routes=[route], m2_market_observations=[dict(id='21', price='42')])
+        m = dict(policy='USE_EXISTING_ROUTE', identity=IDENTITY, instrument=IDENTITY['normalized_value'],
+                 route_evidence=route_input()['evidence'], unit_binding=UNITS,
+                 adapter_module='synthetic.adapter', adapter_class='SyntheticAdapter')
+        return s, m
+
+    def test_reuse_materializes_exact_row_without_writes(self):
+        s, _ = self.existing_live();plan = self.route(s['m2_asset_source_routes'])
+        r = call(action='materialize', state=s, plan=plan, asset_id='7')['result']
+        self.assertEqual(r['writes'], []);self.assertEqual(r['row'], s['m2_asset_source_routes'][0])
+        self.assertEqual(r['after'], r['before'])
+
+    def test_reuse_materializer_rejects_binding_drift(self):
+        s, _ = self.existing_live();plan = self.route(s['m2_asset_source_routes'])
+        for field, value in [('id','12'), ('asset_id','12'), ('route_revision','2'), ('priority','1'),
+                             ('enabled','1'), ('quote_unit_key','GBP')]:
+            changed = copy.deepcopy(s);changed['m2_asset_source_routes'][0][field] = value
+            self.assertFalse(call(action='materialize', state=changed, plan=plan, asset_id='7')['ok'])
+
+    def test_reuse_requires_existing_asset_before_acquisition(self):
+        s, m = self.existing_live();s['m2_asset_identifiers'] = []
+        r = call(action='complete_plan', state=s, manifest=m)
+        self.assertFalse(r['ok']);self.assertIn('existing_asset_required', r['error'])
+
+    def test_reuse_requires_existing_route_before_acquisition(self):
+        s, m = self.existing_live();s['m2_asset_source_routes'] = []
+        r = call(action='complete_plan', state=s, manifest=m)
+        self.assertFalse(r['ok']);self.assertIn('policy_route_required', r['error'])
+
+    def test_reuse_rejects_revision_creation_for_unit_drift(self):
+        s, m = self.existing_live();s['m2_asset_source_routes'][0]['quote_unit_version'] = '2'
+        r = call(action='complete_plan', state=s, manifest=m)
+        self.assertFalse(r['ok']);self.assertIn('policy_route_required', r['error'])
+
+    def test_reuse_delta_allows_only_observation_and_preserves_complete_route(self):
+        s, m = self.existing_live();plan = call(action='complete_plan', state=s, manifest=m)['result']
+        self.assertEqual(plan['asset']['decision'], 'EXISTING_MATCH')
+        self.assertEqual(plan['route']['decision'], 'EXISTING_MATCH')
+        self.assertEqual(plan['deltas'], dict(m2_entities=0,m2_assets=0,m2_asset_identifiers=0,
+                                            m2_asset_source_routes=0,m2_market_observations=1))
+        after = copy.deepcopy(s);new = dict(id='22', price='42');after['m2_market_observations'].append(new)
+        args = dict(action='delta', before=s, after=after, plan=plan, inserted=dict(m2_market_observations=[new]))
+        self.assertTrue(call(**args)['ok'])
+        for field in s['m2_asset_source_routes'][0]:
+            bad = copy.deepcopy(after);bad['m2_asset_source_routes'][0][field] = 'changed'
+            self.assertFalse(call(**dict(args, after=bad))['ok'])
+        bad = copy.deepcopy(after);bad['m2_market_observations'][0]['price'] = '43'
+        self.assertFalse(call(**dict(args, after=bad))['ok'])
+
+    def test_onboarding_policy_still_creates_one_route(self):
+        s, m = self.existing_live();s['m2_asset_source_routes'] = [];m.pop('policy')
+        plan = call(action='complete_plan', state=s, manifest=m)['result']
+        self.assertEqual(plan['policy'], 'ONBOARD_NEW_ROUTE');self.assertEqual(plan['route']['decision'], 'CREATE_REVISION')
+        result = call(action='materialize', state=s, plan=plan['route'], asset_id='7')['result']
+        self.assertEqual(len(result['writes']), 1);self.assertEqual(result['row']['route_revision'], '1')
+
+    def test_reuse_remains_in_common_orchestrator_without_asset_literals(self):
+        self.test_shared_code_has_no_asset_literals_or_mutating_sql()
+        text = (ROOT/'scripts/market_collector/live_persistence.php').read_text()
+        self.assertEqual(text.count('function run('), 1)
+        s, m = self.existing_live();m['policy'] = 'UNKNOWN'
+        self.assertFalse(call(action='complete_plan', state=s, manifest=m)['ok'])
