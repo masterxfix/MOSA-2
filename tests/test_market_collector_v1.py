@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from scripts.market_collector.collector import Collector, FixtureTransport
+from scripts.market_collector.boerse_frankfurt import FrankfurtSnapshotV1
 from scripts.market_collector.contracts import (ObservationCandidate, Request, RouteContract,
     TransportResponse, validate_payload)
 from scripts.market_collector.normalizer import pipeline, raw_observation, writer
@@ -206,6 +207,110 @@ class MarketCollectorTests(unittest.TestCase):
         core=(ROOT/'scripts/market_collector/collector.py').read_text()
         for word in ('yahoo','GBX','currency','regularMarket','native_price','WriterPlanner'):
             self.assertNotIn(word,core)
+
+
+class FrankfurtCollectorTests(unittest.TestCase):
+    def setUp(self):
+        self.adapter=FrankfurtSnapshotV1()
+        self.catalog=writer.observation.catalog_module.normative_catalog()
+        self.created='2001-01-01 10:06:00.000000'
+        self.request=Request(self.adapter.provider_key,'202','302','synthetic-frankfurt-price',
+            '2001-01-01 10:04:00.000000','ZZ0000000016')
+        self.route=RouteContract(self.adapter.provider_key,self.request.instrument,2,
+            dict(id='302',asset_id='102',source_id='202',route_revision='1',
+                unit_contract_version='mosa2-market-unit-v1',quote_unit_key='EUR',quote_unit_version='1',
+                quantity_basis_unit_key=None,quantity_basis_unit_version=None,quantity_basis_amount=None,
+                volume_unit_key=None,volume_unit_version=None))
+        self.response=TransportResponse((FIXTURES/'frankfurt_snapshot.json').read_bytes(),
+            '2001-01-01 10:05:00.123456',200,'application/json')
+
+    def run_pipeline(self, body=None, route=None):
+        response=self.response if body is None else replace(self.response,payload_bytes=body)
+        return pipeline(self.request,route or self.route,FixtureTransport({self.request:response}),
+            [YahooChartSnapshotV1(),self.adapter],catalog=self.catalog,created_at=self.created)
+
+    def body(self, **updates):
+        document=json.loads(self.response.payload_bytes);document.update(updates)
+        return json.dumps(document).encode()
+
+    def reject(self, body):
+        with patch.object(writer,'WriterPlanner',side_effect=AssertionError('must stop before writer')):
+            result=self.run_pipeline(body)
+        self.assertEqual(result['decision'],'REJECT');self.assertEqual(result['writer_decision'],'NOT_RUN')
+        return result
+
+    def test_frankfurt_snapshot_end_to_end_uses_existing_writer(self):
+        with patch.object(writer,'WriterPlanner',wraps=writer.WriterPlanner) as planner:
+            result=self.run_pipeline()
+        self.assertEqual(planner.call_count,1);self.assertEqual(result['decision'],'INSERT')
+        candidate=result['candidate'];row=result['writer_plan']['normalized']
+        self.assertEqual(candidate.native_price,'173.8125')
+        self.assertEqual((row['currency'],row['quote_unit_key'],row['quote_unit_version'],row['price']),
+            ('EUR','EUR','1','173.8125000000'))
+        self.assertEqual(row['market_at'],'2001-01-01 10:00:00.654321')
+        self.assertEqual(row['observed_at'],'2001-01-01 10:05:00.123456')
+        self.assertIs(result['canonical_bytes'],result['writer_plan']['canonical_bytes'])
+        self.assertIs(result['dedupe_key'],result['writer_plan']['dedupe_key'])
+        self.assertEqual(len(result['dedupe_key']),32)
+        self.assertEqual(result['payload_sha256'],hashlib.sha256(self.response.payload_bytes).hexdigest())
+        provenance=dict(candidate.provenance)
+        self.assertEqual(provenance,dict(provider_key=self.adapter.provider_key,request_key=self.request.request_key,
+            payload_sha256=result['payload_sha256'],price_field_source='$.lastPrice',time_field_source='$.timestampLastPrice',
+            instrument_field_source='$.isin',mic_field_source='$.mic',unit_field_source='$.currency.originalValue',
+            observed_at_source='CollectedPayload.collected_at'))
+
+    def test_frankfurt_isin_mismatch_and_missing_identifier_rejected(self):
+        for value in ('ZZ0000000024',None):
+            with self.subTest(isin=value):self.reject(self.body(isin=value))
+
+    def test_frankfurt_mic_mismatch_rejected(self):
+        self.reject(self.body(mic='XETR'))
+
+    def test_frankfurt_currency_and_route_unit_mismatch_rejected(self):
+        self.reject(self.body(currency=dict(originalValue='GBP')))
+        wrong=RouteContract(self.route.provider_key,self.route.instrument,2,dict(self.route.route,quote_unit_key='GBP'))
+        result=self.run_pipeline(route=wrong)
+        self.assertEqual(result['decision'],'REJECT');self.assertEqual(result['writer_decision'],'NOT_RUN')
+
+    def test_frankfurt_missing_or_invalid_last_price_rejected(self):
+        document=json.loads(self.response.payload_bytes);del document['lastPrice']
+        self.reject(json.dumps(document).encode())
+        self.reject(self.body(lastPrice='not-a-price'))
+
+    def test_frankfurt_iso_offset_and_z_no_local_timezone_guess(self):
+        result=self.run_pipeline(self.body(timestampLastPrice='2001-01-01T10:00:00.654321Z'))
+        self.assertEqual(result['decision'],'INSERT')
+        self.assertEqual(result['candidate'].market_at,'2001-01-01 10:00:00.654321')
+        for value in ('2001-01-01T10:00:00','2001-02-30T10:00:00Z','2001-01-01T10:00:00+01:99'):
+            with self.subTest(time=value):self.reject(self.body(timestampLastPrice=value))
+
+    def test_frankfurt_json_object_members_and_hash_validated(self):
+        for body in (b'{invalid',b'[]',b'{"isin":"first","isin":"second"}'):
+            with self.subTest(body=body):self.reject(body)
+        payload=Collector([self.adapter]).collect(self.request,FixtureTransport({self.request:self.response}))
+        with self.assertRaisesRegex(ValueError,'hash mismatch'):
+            self.adapter.normalize(replace(payload,payload_sha256='0'*64),self.route)
+
+    def test_frankfurt_turnover_and_extra_fields_never_become_facts(self):
+        with patch.object(socket,'socket',side_effect=AssertionError('no network')), \
+             patch.object(sqlite3,'connect',side_effect=AssertionError('no database')):
+            result=self.run_pipeline()
+        row=result['writer_plan']['normalized']
+        self.assertIsNone(result['candidate'].native_volume);self.assertIsNone(row['volume'])
+        self.assertTrue(all(row[f] is None for f in writer.UNIT_FIELDS[3:]))
+        self.assertEqual(set(row),set(writer.observation.FIELDS))
+        self.assertEqual(set(k for k in row if k in ('price','bid','ask')),{'price','bid','ask'})
+        self.assertIsNone(row['bid']);self.assertIsNone(row['ask'])
+        for field in ('current','bars','fx','derived','observations'):self.assertNotIn(field,result)
+
+    def test_frankfurt_and_yahoo_registered_together_without_fallback(self):
+        yahoo=YahooChartSnapshotV1();collector=Collector([yahoo,self.adapter])
+        self.assertIs(collector.adapter(yahoo.provider_key),yahoo)
+        self.assertIs(collector.adapter(self.adapter.provider_key),self.adapter)
+        with patch.object(yahoo,'normalize',side_effect=AssertionError('no Yahoo fallback')):
+            result=pipeline(self.request,self.route,FixtureTransport({self.request:self.response}),
+                [yahoo,self.adapter],catalog=self.catalog,created_at=self.created)
+        self.assertEqual(result['decision'],'INSERT')
 
 
 if __name__=='__main__':unittest.main()

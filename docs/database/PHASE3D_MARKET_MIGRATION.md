@@ -538,3 +538,9 @@ Volume bewusst NULL, keine FX-/Derived-/Bars-/Currentlogik. Keine Schemaänderun
 DB-/Providerverbindung oder Produktion. B8 bleibt geparkt, bis der in Phase 3Q
 benannte historische Sicherungsstand vorliegt; kein weiterer B8-Sonderpfad.
 [Architektur, Verträge und Offline-Nachweis](MARKET_COLLECTOR_V1.md).
+
+Issue #35 ergänzt Börse Frankfurt price_information als zweiten realen
+Snapshotadapter offline. ISIN/XFRA/EUR, nativer lastPrice und explizite ISO-Zeit
+werden im Adapter geprüft; derselbe Collector/Normalizer/Phase-3N-Writer erzeugt
+den Plan. Core, Contracts, Normalizer und Yahoo unverändert, Volume NULL;
+keine History/Bars/Current- oder DB-/Provideraktion und keine Produktion.

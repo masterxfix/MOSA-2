@@ -22,6 +22,7 @@ Homepage, Migrationen und bestehende Phase-3N-/Unitmodule unverändert.
 | `scripts/market_collector/contracts.py` | Unveränderliche Requests, Responses, Payloads, qualifizierte Routensidecars und native Candidates; Transport-/Adapterprotokolle |
 | `collector.py` | Request validieren, registrierten Adapter auswählen, Responsebytes und Transportmetadaten übernehmen, exakten Payloadhash bilden |
 | `yahoo_chart.py` | Nur Yahoo-Chart-Snapshot v1: JSON, Symbol, native Providerunit und Unix-Marktzeit interpretieren |
+| `boerse_frankfurt.py` | Börse-Frankfurt-price_information-Snapshot v1: ISIN/XFRA/EUR, lastPrice und explizite ISO-Marktzeit prüfen |
 | `normalizer.py` | Providerneutral IDs/Route/Units/Provenienz prüfen, Raw-Observation erzeugen und an den vorhandenen Writer übergeben |
 
 Der Collector kennt keine Preise, Währungen, Units oder Yahoo-Feldnamen.
@@ -99,6 +100,73 @@ Payloadhash und die konkreten Preis-, Zeit-, Symbol- und Unitfeldpfade sowie
 die Erfassungszeitquelle. Originalbytes verbleiben im CollectedPayload; keine
 zweite Rawpayloadkopie im Candidate und keine Secrets.
 
+## Börse-Frankfurt-Snapshot-v1
+
+Issue [#35](https://github.com/masterxfix/MOSA-2/issues/35), Ausgangspunkt
+`d8106f8a0ea188b9ab1c4f29bf77fe1d994ad19e`. Zwei reale Provideradapter sind jetzt
+offline unterstützt: Yahoo Snapshot v1 und Börse Frankfurt Snapshot v1.
+Collector-Core, Contracts, gemeinsamer Normalizer und Yahoo-Modul bleiben
+byteidentisch. Die vorhandene Adapterregistrierung reicht unverändert aus;
+beide Adapter können gleichzeitig übergeben werden. Kein Yahoo-Fallback.
+
+Neuer Adapterkey `boerse_frankfurt_api_v1`, historischer Providerbezug
+`boerse_frankfurt_api`. Ausschließlich Semantikreferenz auf fixlab-Commit
+`baa0f66d6b40105d6b030c6d1b81239ad6a6fc8c`:
+
+- `php/mosa_boerse_frankfurt.php`, Git-Blob
+  `ead84889894fd3c1336e2259abb14b607446f366`: current/rich verwenden fachlich
+  price_information, MIC XFRA, Currency EUR.
+- `php/market_collection_bundle.php`, Git-Blob
+  `8c4cc8afe3b9eef28ecb50cb0251e87fbc7781ba`, price_information-Zweig:
+  Payload-ISIN/MIC/Currency werden gegen den Kontext gebunden, lastPrice und
+  timestampLastPrice bilden den Snapshot. Keine andere historische Datei nötig.
+
+Keine historischen Header-/Security-/Transportfunktionen übernommen und keine
+aktuelle Providerkompatibilität behauptet. Request.instrument und
+RouteContract.instrument sind dieselbe qualifizierte ISIN, formal zwölf große
+alphanumerische Zeichen. Keine Tickerheuristik, Identitätssuche oder Stammdatenanlage.
+
+| Frankfurt-Payloadfeld | Prüfung / nativer Candidate |
+| --- | --- |
+| `$.isin` | exakt gleich qualifiziertem Request-/Routeinstrument |
+| `$.mic` | exakt XFRA |
+| `$.currency.originalValue` | exakt EUR; Providerunit EUR |
+| `$.lastPrice` | einziger Preis; echte JSON-Zahl, dezimal ohne Float-Zwischenrechnung gelesen |
+| `$.timestampLastPrice` | ISO mit explizitem Z oder ±HH:MM; UTC-DATETIME(6) |
+| `CollectedPayload.collected_at` | observed_at; unabhängig vom Marktzeitpunkt |
+
+Der Adapter verlangt ein JSON-Top-Level-Objekt, eindeutige Member und unveränderten
+Payloadhash. Fehlender/widersprüchlicher Kontext und ungültige Preis-/Zeitfelder
+führen zu REJECT. Zeitwerte ohne Offset, ungültige Kalenderdaten/Offsets und mehr
+als sechs Nachkommastellen werden abgewiesen; keine lokale Zeitzone und keine
+stille Mikrosekundentrunkierung. Präzisions-/Bereichsprüfung der nativen Preise
+bleibt im vorhandenen Writer, keine Rundung, Skalierung oder FX-Rechnung.
+
+Provenienz bindet provider_key, request_key, payload_sha256 und exakt die
+JSON-Pfade für Preis, Zeit, Instrument, MIC und Unit sowie die Erfassungszeitquelle.
+Keine Rawkopie im Candidate. Der gemeinsame Normalizer prüft Providerunit EUR
+gegen die qualifizierte Route EUR@1 und leitet Currency EUR aus dem Katalog ab;
+der Adapter baut keinen MOSA-Unitvertrag nach.
+
+Bid/Ask/Volume bleiben NULL. turnoverInPieces, turnoverNominal, turnoverInEur,
+closingPricePrevTradingDay, Tages-/Jahresgrenzen und minimumTradableUnit werden
+bewusst nicht zu Historyvolume oder weiteren Observations. Nur lastPrice.
+Keine History, Intraday-History, Daily/Backfill, Bars, Current-Auswahl oder Scheduler.
+
+Eine zusätzliche eingefrorene synthetische Frankfurt-Fixture mit fiktiver
+12-Zeichen-Kennung enthält absichtlich diese Zusatzfelder. Neun neue Frankfurt-
+Tests ergänzen den bestehenden Collectorblock: echtes End-to-End-INSERT samt
+Writerbytes/Key und Provenienz, ISIN, MIC, Currency/Routeunit, Preis, ISO-Zeit,
+JSON-/Hashintegrität, ignorierte Zusatzfelder und parallele Registrierung ohne
+Fallback. Bestehende Yahoo-Tests unverändert, kein neuer Yahoo-Testkatalog.
+Lokale Gesamtregression und Linux-Vollrun für diesen Auftrag jeweils genau
+einmal; endgültige Ergebnisse/Run-ID in Issue #35. Kein PHP geändert.
+Erster und einziger gezielter Collectorblock: **28/28 bestanden**, darin
+**9/9 neue Frankfurtfälle**. Keine Testfehler oder zusätzlichen Fehler-Retests.
+Einmalige lokale Gesamtsuite: **427/428**, ausschließlich bekanntes Windows-
+`budget_not_private`; Validate (drei Webdateien) und Diff-Check bestanden.
+Keine Codekorrektur nach Abschlussregression und kein Wiederholungslauf.
+
 ## Routeautorität, gemeinsame Normalisierung und Writer
 
 `RouteContract` ist ein unveränderlicher qualifizierter Aufrufer-Sidecar:
@@ -111,7 +179,7 @@ und passende IDs. Legacy-v1 wird nicht still umgedeutet.
 Providerunit muss exakt zur Quote-Unit passen. `currency` stammt ausschließlich
 aus `monetary_currency_code` der qualifizierten Unitdefinition: EUR@1 → EUR,
 GBP@1 → GBP, GBX@1 → GBP, POINT@1 → NULL. Der gemeinsame Code kennt keine
-GBX-/Yahoo-Sonderregel. Ein synthetischer zweiter Adapter mit POINT belegt diese
+GBX-/Yahoo-Sonderregel. Ein synthetischer Testadapter mit POINT belegt diese
 Providerneutralität; er ist kein zusätzlicher realer Provideradapter.
 
 GBX bleibt eine native Pence-Zahl mit GBX@1 und Currency GBP. Keine Division
