@@ -222,3 +222,42 @@ Eine fehlende Pfadzuordnung ist eine Dokumentations- beziehungsweise Zugriffsfra
 | [MOSA/fixlab: lokale Arbeitsweise](https://github.com/masterxfix/fixlab/blob/main/docs/17_LOKALE_ARBEITSWEISE.md) | Bestehendes WinSCP-/FTPS-Verfahren und damaliges Pfadmapping für MOSA; keine automatische MOSA-2-Freigabe. |
 
 Die Originalquellen werden nicht verschoben oder gelöscht, damit vorhandene Links und technische Nachweise erhalten bleiben. Weitere Dogado-Betriebsinformationen werden an dieser zentralen Stelle ergänzt. Keine Passwörter, Cookies, Tokens, Codes, privaten Zugangskonfigurationen oder Secret-Werte aufnehmen. Beobachtungsdatum und Nachweisumfang nennen; eine Dokumentationsänderung ist keine Freigabe für einen Servereingriff.
+
+## 9. Freigegebene SSH-Aktivierung am 20.10.2026
+
+Dieser bestätigte Betriebsnachtrag aktualisiert frühere Befunde eines verbotenen
+SSH-Zugangs. Der Nutzer hat die folgende einzelne Änderung ausdrücklich freigegeben.
+
+| Merkmal | Bestätigter Stand |
+| --- | --- |
+| Datum der Umstellung | 20.10.2026, Europe/Berlin |
+| Server | `server10.configcenter.info` |
+| Port | `22` |
+| Primärer FTP-/Systembenutzer | `web213` |
+| SSH-Typ vorher | `Verboten` |
+| SSH-Typ gespeichert und erneut geöffnet | `/bin/bash (chrooted)` |
+| Geltungsbereich der Einstellung | Gemeinsamer Webspace mit acht Domains; keine Beschränkung nur auf die Testseite |
+| SFTP-Verbindungstest | **Offen; kein SFTP-Anmeldeversuch durchgeführt** |
+| Sichtbares SFTP-Basisverzeichnis | Nicht geprüft; kein Pfad aus einer SFTP-Auflistung bestätigt |
+| SFTP-Pfad von `mosa2-test.scharwerk.de` | Nicht nachgewiesen; bestehende Dokumentstammangaben nicht als SFTP-Auflistung ausgeben |
+
+In der bestehenden Chrome-Sitzung wurden zunächst Systembenutzer und Ausgangswert
+kontrolliert. Danach wurde ausschließlich die angebotene Option
+`/bin/bash (chrooted)` ausgewählt und gespeichert. Beim erneuten Öffnen derselben
+Hosting-Einstellungen war dieser Wert weiterhin ausgewählt. Ein Vergleich der
+übrigen auslesbaren Formularwerte zeigte keine weitere Änderung. Passwortfelder
+wurden weder ausgelesen noch bearbeitet.
+
+Die verfügbare Computer-Oberfläche stellte nur Browserzugriffe und keine native
+WinSCP-Oberfläche bereit. Deshalb konnte weder eine vorhandene WinSCP-Sitzung noch
+eine gespeicherte Anmeldung benutzt werden. Das bedeutet **nicht**, dass nachgewiesen
+wäre, WinSCP enthalte kein Passwort. Es wurde kein Passwort angefordert, keine neue
+Passwortmaske vorbereitet und kein anderer Loginweg oder wiederholter Versuch
+begonnen. Die gespeicherte SSH-Freigabe ist bestätigt; ein funktionierendes
+SFTP-Subsystem und dessen Verzeichnisauflistung bleiben ungeprüft.
+
+Außer dem freigegebenen SSH-Typ erfolgten keine Hostingänderungen. Keine Benutzer-,
+Passwort-, Domain-, PHP-, Datenbank-, DNS-, Firewall- oder Scheduler-Einstellung
+wurde geändert; kein Benutzer und kein regelmäßiger Job wurden angelegt.
+Keine Website-Datei wurde auf Dogado hochgeladen, geändert oder gelöscht.
+Die Dokumentationsänderung und ihr Commit sind kein Deployment.
