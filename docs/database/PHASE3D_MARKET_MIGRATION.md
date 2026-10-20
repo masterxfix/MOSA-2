@@ -544,3 +544,11 @@ Snapshotadapter offline. ISIN/XFRA/EUR, nativer lastPrice und explizite ISO-Zeit
 werden im Adapter geprüft; derselbe Collector/Normalizer/Phase-3N-Writer erzeugt
 den Plan. Core, Contracts, Normalizer und Yahoo unverändert, Volume NULL;
 keine History/Bars/Current- oder DB-/Provideraktion und keine Produktion.
+
+Issue #36: genau ein echter PNE-Frankfurt-Snapshot read-only erfolgreich,
+HTTP 200, bestehender Collector → Frankfurtadapter → Normalizer → Phase-3N-
+Writerplan INSERT mit EUR@1 und unveränderter nativer Zahl. Ausschließlich
+**NON_PERSISTENT_TEST_ROUTE**, keine existierende v2-PNE-Route behauptet;
+Providerrequests 1, DB-Verbindungen/Writes 0. Homepage rein statisch auf
+20. Oktober und Collector-Schwerpunkt aktualisiert, kein Produktionsdeploy.
+Current/Bars bleiben im letzten qualifizierten Stand leer, B8 geparkt.

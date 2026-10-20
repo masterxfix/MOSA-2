@@ -198,8 +198,11 @@ class MarketCollectorTests(unittest.TestCase):
         with patch.object(socket,'socket',side_effect=AssertionError('no network')), \
              patch.object(sqlite3,'connect',side_effect=AssertionError('no database')):
             self.assertEqual(self.run_pipeline()['decision'],'INSERT')
-        forbidden={'socket','requests','urllib','http','sqlite3','mysql','pymysql'}
+        # Explicitly supplied HTTP transport is separate; the offline core and
+        # adapters must not import it or acquire implicit network capability.
+        forbidden={'socket','requests','urllib','http','sqlite3','mysql','pymysql','http_transport'}
         for path in (ROOT/'scripts/market_collector').glob('*.py'):
+            if path.name == 'http_transport.py':continue
             tree=ast.parse(path.read_text())
             imports=[n.module for n in ast.walk(tree) if isinstance(n,ast.ImportFrom)]
             imports += [a.name for n in ast.walk(tree) if isinstance(n,ast.Import) for a in n.names]

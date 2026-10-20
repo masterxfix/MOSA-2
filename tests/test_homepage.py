@@ -61,29 +61,30 @@ class HomepageTests(unittest.TestCase):
     def test_visible_purpose_and_verified_results(self):
         for text in ['MOSA 2', 'Persönliche, finanzorientierte', 'Daten- und KI-Plattform.',
                      'deterministisch', 'Die KI hilft beim Verstehen.', 'Core-Schema',
-                     'Technisch freigegeben', '17 Tabellen', 'Version 3', '23 / 23 geprüft']:
+                     'Technisch freigegeben', '17 Tabellen', 'Version 3', 'versionierte Einheiten',
+                     'Marktdaten-Collector', 'Yahoo- und Börse-Frankfurt-Snapshots']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
 
     def test_import_result_and_remaining_limits_are_unambiguous(self):
         for text in ['Acht echte Marktbeobachtungen.', 'Drei kontrollierte Importpakete',
-                     'Alle drei kleinen Importpakete', 'insgesamt acht echten Marktbeobachtungen',
+                     'Alle drei kleinen Importpakete',
                      'idempotent wiederholt', 'keine neuen fachlichen Zeilen',
-                     'Current und Bars sind weiterhin leer', 'keine Live-Daten',
-                     'History → Current', '23/23 Phase-3C-B-Live-Prüfungen',
-                     'Kontrollierte MOSA-Datenmigration', 'Breitere MOSA-Datenmigration',
+                     'Current und Bars bleiben leer', 'keine laufenden Live-Daten',
+                     'Genau ein Börse-Frankfurt-Snapshot für PNE AG', 'ohne DB-Write',
+                     'nicht persistenten Test-Routenvertrag', 'Erster Live-Snapshot read-only geprüft',
+                     'Marktdaten-Collector & kontrollierte Live-Daten', 'Collector & Datenübernahme',
+                     'B8 ist geparkt', 'historische autoritative Quelle fehlt', 'Breitere MOSA-Datenmigration',
                      'Current-Routenauswahl', 'Bars-Import', 'Depotdaten', 'News',
                      'KI-Auswertung auf MOSA-2-Daten', 'Keine Produktivfreigabe',
-                     'Keine Produktionsfreigabe', '19. Oktober 2026',
-                     'kontrollierten Stichprobe', '(8/8)',
-                     'acht ursprünglich gesperrten Fälle wurden nicht automatisch übernommen']:
+                     '20. Oktober 2026', 'Kontrollierte Persistenz neuer Live-Snapshots']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
         for obsolete in ['Marktdatenmigration vollständig abgeschlossen',
                          'Sechs echte Marktbeobachtungen.', 'Zwei kontrollierte Importpakete',
                          'Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
                          '13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
-                         'zwölf Fachtabellen sind leer', '18. Oktober 2026']:
+                         'zwölf Fachtabellen sind leer', '18. Oktober 2026', '19. Oktober 2026']:
             self.assertNotIn(obsolete, self.text)
 
     def test_public_files_contain_no_internal_or_credential_details(self):

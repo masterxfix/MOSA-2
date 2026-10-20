@@ -11,7 +11,8 @@ Schemaänderung, Migration 0004 oder neue Abhängigkeit erforderlich.
 Der allgemeine Collector ist der neue Einstieg für zukünftige native Marktdaten.
 Die historische Restmigration wird dadurch nicht freigegeben. B8 bleibt gemäß
 [Phase 3Q](PHASE3Q_B8_EVIDENCE.md) geparkt; B6/B7 bleiben ebenfalls geparkt.
-Homepage, Migrationen und bestehende Phase-3N-/Unitmodule unverändert.
+Migrationen und bestehende Phase-3N-/Unitmodule unverändert. Die Homepage wurde
+in Issue #36 ausschließlich inhaltlich auf den Stand vom 20. Oktober aktualisiert.
 
 ## Architektur und Verantwortungen
 
@@ -24,6 +25,7 @@ Homepage, Migrationen und bestehende Phase-3N-/Unitmodule unverändert.
 | `yahoo_chart.py` | Nur Yahoo-Chart-Snapshot v1: JSON, Symbol, native Providerunit und Unix-Marktzeit interpretieren |
 | `boerse_frankfurt.py` | Börse-Frankfurt-price_information-Snapshot v1: ISIN/XFRA/EUR, lastPrice und explizite ISO-Marktzeit prüfen |
 | `normalizer.py` | Providerneutral IDs/Route/Units/Provenienz prüfen, Raw-Observation erzeugen und an den vorhandenen Writer übergeben |
+| `http_transport.py` | Explizit gebundener, einmal verwendbarer anonymer HTTPS-GET; keine Providerlogik, Cookies, Credentials, Redirects oder Retries |
 
 Der Collector kennt keine Preise, Währungen, Units oder Yahoo-Feldnamen.
 Provideradapter werden über ihren versionierten Schlüssel registriert; keine
@@ -32,11 +34,12 @@ Requests werden abgewiesen. Keine automatische Discovery oder Ersatzquelle.
 
 Die Schnittstellen `Transport.fetch(Request) -> TransportResponse` und
 `ProviderAdapter.normalize(CollectedPayload, RouteContract) -> ObservationCandidate`
-erlauben später einen getrennt freizugebenden Transport. Aktuell wird ausschließlich
-`FixtureTransport` geliefert und verwendet. Kein HTTPTransport, URL-Builder,
-Retry, Scheduler, Credentialszugriff oder Live-Fallback implementiert. Zusätzliche
-eingespeiste Transport-/Adapterimplementierungen wären eigener vertrauenswürdiger
-Code und sind durch diesen Auftrag nicht qualifiziert.
+haben zunächst ausschließlich `FixtureTransport` verwendet. Issue #36 ergänzt
+einen ausdrücklich übergebenen `ReadOnlyHttpTransport` für genau einen freigegebenen
+GET; der Core importiert oder aktiviert ihn nicht selbst. Provider-URL und
+technische Header kommen getrennt aus dem qualifizierten Requestvertrag.
+Kein Retry, Scheduler, Credentialszugriff oder Live-Fallback. Weitere Transport-/
+Adapterimplementierungen bleiben eigener zu qualifizierender Code.
 
 ## CollectedPayload und unveränderte Bytes
 
@@ -247,17 +250,89 @@ Genau ein Linux-Workflow auf dem exakten Abschlusscommit, auf temporärem
 Nicht-main-Branch mit Produktionsdeploy skipped. Ergebnisse, Laufzahlen, Commit
 und Run-ID in Issue #34; anschließend Prüfbranch löschen. Kein PHP geändert.
 
-## Nächste Live-Grenze
+## Ein echter PNE-Snapshot read-only – Issue #36
 
-Bewiesen wird ausschließlich die Offlinekette mit synthetischen Inputs und
-Planentscheidungen. Keine aktuelle Providerkompatibilität, kein Live-Collector,
-DB-Insert, Last-/Parallelbetrieb oder freigegebener produktiver Transport.
-Netzwerk-/DB-Zugriffe 0; kein Browser, Dogado/Plesk, Gateway, Passwort,
-Scheduler, Schema-/Ledger-/Current-/Bars-Write, B8-Import oder Produktion.
+Ausgangspunkt `04d74b7a095723903b044bb47d8881f1849a6067`.
+**Genau ein** externer Börse-Frankfurt-price_information-GET für **PNE AG**,
+keine Yahoo-Abfrage und kein Retry. Vorher vorhandene MOSA-Evidenz geprüft:
+die freigegebene, gesicherte historische Metadatenassoziation bindet die vom
+Nutzer angegebene öffentliche ISIN exakt an PNE AG. Keine Discovery/Heuristik.
+Request/MIC XFRA/EUR und deterministische Headerbildung stammen ausschließlich
+aus dem bereits gebundenen historischen Frankfurtvertrag. Header und interne
+Hilfswerte werden weder hier noch im Repository veröffentlicht.
 
-Nächster eigener kompakter Auftrag: genau ein qualifiziertes Testasset, ein
-Provider, kontrollierter read-only Providerabruf ohne DB-Write; originale Payload
-über Adapter/Normalizer bis zum Writerplan vergleichen. Nicht hier ausgeführt.
+Der minimale allgemeine HTTPS-Transport bindet einen unveränderlichen GET-
+Descriptor an genau einen Collector-Request. Er ignoriert authentifizierte
+Umgebungsproxies, verwendet keine Cookies, Auth-Handler oder Sessionpersistenz
+und folgt keiner Weiterleitung, auch nicht zur selben Domain. Jeder Fetch
+verbraucht die Instanz vor dem Öffnen des Requests; Netzwerk-/HTTPfehler lösen
+keinen zweiten Versuch aus. Technische Fehlercodes enthalten keine rohen
+Diagnosen. Der tatsächliche Einmalabruf wurde zusätzlich durch eine exklusive
+private Budgetdatei gegen erneutes Ausführen gesperrt.
+
+| Tatsächlicher Nachweis | Ergebnis |
+| --- | --- |
+| PNE-Identität / qualifizierter Request vor Abruf | PASS |
+| Externe Providerrequests | 1 |
+| HTTP / Content-Type | 200 / application/json |
+| Originalantwort | 561 unveränderte Bytes; ausschließlich privat gesichert |
+| ISIN / XFRA / EUR / Preis / explizite Marktzeit / eindeutiges JSON | PASS |
+| Collector | COLLECTED |
+| Frankfurtadapter / gemeinsamer Normalizer | jeweils NORMALIZED |
+| Echter Phase-3N WriterPlanner | INSERT, Format 2, native EUR-Zahl unverändert, EUR@1 |
+| Volume / Mengenbasis / Volumeunit | NULL |
+| Persistente Route behauptet | nein |
+| DB-Verbindungen / DB-Writes | 0 / 0 |
+
+Requeststart **20.10.2026 10:15:25.317491 UTC**, Responseende/observed_at
+**10:15:25.581287 UTC**. Provider-market_at **07:33:17.000000 UTC** desselben
+Tages; Markt- und Erfassungszeit bleiben getrennt. Der gelesene Preis ist
+fachlich verarbeitbar; daraus folgt keine Zusage über Tickaktualität.
+SHA-256 der privat erhaltenen Antwortbytes:
+`73df054a69cf1d78ff086f1bcdb7c1c929cbd6c7ff9c08afee4bea91ba7fb029`.
+Kein Rawpayload oder echter Preiswert im Repository. Native Zahl, Payloadhash
+und tatsächliche Erfassungszeit zusätzlich anhand derselben gespeicherten
+Antwort mit Candidate/Writerplan abgeglichen, ohne weiteren Netzwerkabruf.
+
+Der Sidecar ist ausdrücklich **NON_PERSISTENT_TEST_ROUTE**: an die verifizierte
+PNE-Identity, Frankfurt/XFRA/EUR und EUR@1 gebunden, ohne Mengenbasis/Volumeunit.
+Seine ausschließlich lokalen Test-IDs und Revision sind **keine** behaupteten
+DB-Identitäten oder existierende Route. Der Plan beweist nur: dieser reale
+Providerpayload ist mit dem vorhandenen MOSA-2-v2-Vertrag verarbeitbar. Er
+beweist weder eine persistente v2-PNE-Route noch einen DB-Insert.
+
+Neue gezielte Offline-Transporttests: **7/7**, erster Lauf erfolgreich. GET-only,
+Bytegenauigkeit/Metadaten, sichere Descriptorbindung, keine Redirects/Cookies/
+Credentials/Proxies, einmaliger Erfolg/Fehler/Timeout und keine DB-/Providerlogik.
+Kein erneuter separater Yahoo-/Frankfurt-/Writer-/Schema-/Unit-/Rollbacktest.
+Die bestehende Offline-Importschutzprüfung grenzt den expliziten neuen HTTP-
+Transport aus und verbietet weiterhin seine implizite Nutzung im Core/Adapter.
+
+Homepage: statische Inhalte auf **20. Oktober 2026**, Schwerpunkt Collector &
+kontrollierte Live-Daten, zwei offline geprüfte Provideradapter und genau diesen
+read-only PNE-Erfolg aktualisiert. Vier Hauptphasen erhalten, Phase 4 Collector &
+Datenübernahme; Current/Bars laut letztem qualifiziertem Stand leer, B8 geparkt,
+keine Produktivfreigabe. Keine neuen Requests, Assets, CSS-/JS-/Ladestrukturen.
+Inhaltsprüfungen und feste Homepagefingerprints entsprechend der ausdrücklich
+beauftragten Änderung aktualisiert; v1-/Schema-/CSS-/JS-Schutzwerte unverändert.
+Validator und bestehende Regression reichen; kein Performance-/Browserblock.
+Der Quellenstand wird mit Deploy skipped abgeschlossen, kein Homepage-Livedeploy.
+
+Genau eine vollständige lokale Regression und genau ein Linux-Vollrun auf dem
+Abschlusscommit; endgültige Ergebnisse/Commit/Run-ID in Issue #36. Keine weiteren
+Providerrequests. Native Start-/Describe-/Plan-Erfassung jeweils einmal regulär
+versucht, weiterhin Promptbeleg-/Laboridentitätsfehler; keine erfundenen Ereignisse.
+Lokaler Vollrun: **434/435**, ausschließlich bekanntes Windows-
+`budget_not_private`. Validate und Diff-Check erfolgreich; alle aktualisierten
+Homepage- und Transportschutzprüfungen bestanden. Keine Fehler-Retests,
+Codekorrekturen nach Abschlussregression oder zusätzlichen Vollruns.
+
+## Nächste Grenze
+
+Keine Freigabe für DB-Persistenz, Last-/Parallelbetrieb, breitere Instrumentlisten,
+Scheduler, Current/Bars, FX, B8 oder Produktion. Kein Browser, Dogado/Plesk,
+Gateway oder Passwort verwendet. Ein kontrollierter Test-DB-Insert wäre ein
+eigener neuer Auftrag mit ausdrücklicher Freigabe. Hier nicht ausgeführt.
 
 Native Registrierung scheitert an `PROMPT_RECEIPT_MISSING`; Describe und Plan
 jeweils einmal regulär versucht, ungültige Laboridentität. Keine IDs/Zeiten oder

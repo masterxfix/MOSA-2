@@ -28,7 +28,7 @@
     </section>
 
     <section class="results" aria-labelledby="ergebnisse-titel">
-      <div class="section-heading"><div><p class="eyebrow">Das Fundament steht</p><h2 id="ergebnisse-titel">Was wir geschafft haben</h2></div><p class="snapshot">Geprüfter Projektstand<br><time datetime="2026-10-19">19. Oktober 2026</time></p></div>
+      <div class="section-heading"><div><p class="eyebrow">Das Fundament steht</p><h2 id="ergebnisse-titel">Was wir geschafft haben</h2></div><p class="snapshot">Geprüfter Projektstand<br><time datetime="2026-10-20">20. Oktober 2026</time></p></div>
       <!-- Statische Statussektion: eine gemeinsame Stelle für spätere Datenanbindung. -->
       <div class="status-grid">
         <article class="status-card" data-status="platform">
@@ -45,24 +45,24 @@
         </article>
         <article class="status-card" data-status="version">
           <span class="badge neutral">Version 3</span><h3>Schema-Version</h3>
-          <p>Das Einheiten-Grundschema ist erfolgreich registriert und geprüft. Die acht bestehenden Marktbeobachtungen bleiben unverändert erhalten.</p>
+          <p>Schema Version 3 ist geprüft; versionierte Einheiten sind hinterlegt. Die acht bestehenden Marktbeobachtungen bleiben unverändert erhalten.</p>
         </article>
         <article class="status-card" data-status="read-paths">
-          <span class="badge success">23 / 23 geprüft</span><h3>Marktdatenfluss</h3>
-          <p>History → Current ist technisch validiert: 23/23 Phase-3C-B-Live-Prüfungen bestanden. Current und Bars bleiben beim Testimport bewusst leer.</p>
+          <span class="badge success">Offline &amp; read-only geprüft</span><h3>Marktdaten-Collector</h3>
+          <p>Collector v1 verarbeitet Rohdaten über getrennte Provideradapter. Yahoo- und Börse-Frankfurt-Snapshots sind offline geprüft; ein echter PNE-Snapshot wurde read-only bis zum Writerplan verarbeitet.</p>
         </article>
         <article class="status-card data-card" data-status="data">
           <span class="badge success">Kontrolliert importiert</span><h3>Drei kontrollierte Importpakete</h3>
           <p><strong>Acht echte Marktbeobachtungen.</strong> Alle drei kleinen Importpakete wurden idempotent wiederholt: keine neuen fachlichen Zeilen im jeweiligen Replay.</p>
         </article>
       </div>
-      <p class="context-note">Die Marktdaten-Grundschicht ist abgeschlossen. Drei kleine kontrollierte Importpakete mit insgesamt acht echten Marktbeobachtungen sind geprüft; Current und Bars sind weiterhin leer. Keine Produktionsfreigabe. Die Statusangaben sind dokumentierte Ergebnisse, keine Live-Daten.</p>
+      <p class="context-note">Genau ein Börse-Frankfurt-Snapshot für PNE AG wurde durch die neue Kette geprüft – ohne DB-Write und mit einem nicht persistenten Test-Routenvertrag. Current und Bars bleiben leer. B8 ist geparkt, weil die historische autoritative Quelle fehlt. Keine Produktivfreigabe. Diese Seite zeigt dokumentierte Ergebnisse, keine laufenden Live-Daten.</p>
     </section>
 
     <section class="next-step" aria-labelledby="naechstes-ziel">
       <div class="next-copy"><p class="eyebrow">Aktueller Schwerpunkt <span class="badge planned">Begonnen</span></p>
-        <h2 id="naechstes-ziel">Kontrollierte<br> MOSA-Datenmigration</h2>
-        <p>Alle acht ursprünglich transformierbaren Beobachtungen der kontrollierten Stichprobe sind übernommen (8/8). Die acht ursprünglich gesperrten Fälle wurden nicht automatisch übernommen. Eine breitere Migration braucht eigene Prüfung und Freigabe.</p>
+        <h2 id="naechstes-ziel">Marktdaten-Collector<br> &amp; kontrollierte Live-Daten</h2>
+        <p>Rohdaten werden über providergetrennte Adapter in einen gemeinsamen Marktdatenvertrag überführt und bis zum geprüften Writerplan verarbeitet. Der erste echte Frankfurt-Snapshot ist read-only geprüft. Die kontrollierte Übernahme neuer Live-Daten in die Datenbank braucht eine eigene Freigabe.</p>
       </div>
       <dl class="market-types">
         <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Technisch validiert; bleibt bis zur Freigabe der Routenauswahl bewusst leer.</dd></div>
@@ -76,9 +76,9 @@
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Kontrollierte MOSA-Datenmigration</h3><p class="step-state">Drei kleine Importpakete geprüft</p></li>
+        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Erster Live-Snapshot read-only geprüft</p></li>
       </ol>
-      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch nicht begonnen</h3><ul><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
+      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Kontrollierte Persistenz neuer Live-Snapshots</li><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
     </section>
   </main>
   <footer class="wrap footer">
