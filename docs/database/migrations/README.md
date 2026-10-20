@@ -1,5 +1,15 @@
 # Versionierte Migrationen
 
+## Version 0004 – Current-Provenienz (Issue 41)
+
+`0004_current_observation_provenance.sql` ist der versionierte Anzeigepfad:
+ein ALTER an Current mit Observation-ID, Format, Dedupe-Key und Routenrevision.
+Preview, exakter Schema-/Fact-Check, Rückfallsicherung und ausdrückliche
+Freigabe der isolierten Testanwendung sind erforderlich. Die bestehende
+Migrationshistorie bleibt byte-identisch. Ablauf und Nachweisgrenzen:
+[CURRENT_DISPLAY.md](../CURRENT_DISPLAY.md). Eine Repository-Datei belegt
+keine Live-Anwendung.
+
 ## Version 0003 – Unit-Schema live validiert (Phase 3K)
 
 Am 19.10.2026 wurde die unveränderte Migration auf der isolierten Testdatenbank

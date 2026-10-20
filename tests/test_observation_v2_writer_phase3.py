@@ -241,7 +241,7 @@ class ObservationV2WriterTests(unittest.TestCase):
 
     def test_v1_source_and_homepage_are_byteidentical(self):
         for path,digest in [('scripts/phase3c/market_flow.php','ab2b9510da0a76b549b587e10db5d768f079b57cd1d4e0d6542b46f805cd33af'),
-                            ('index.html','e368861ce9adffbb6ba0dbb206bd9bae9defdba5f19da10fed7193f18f578238'),
+                            ('index.html','1ffdcaf65a7195193cf4d72f3cbb0ac9b0317083dcf825aaf68685bb1d1325a3'),
                             ('docs/database/migrations/0003_market_units.sql','199933884802bd139b706e50e57e04687e9cbe5f8bd1366e98e302af7d47b8ee')]:
             self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),digest)
 

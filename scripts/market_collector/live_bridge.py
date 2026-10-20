@@ -55,7 +55,8 @@ def run(data):
         result = pipeline(request, route, FixtureTransport({request: response}), [adapter],
             catalog=writer.observation.catalog_module.normative_catalog(),
             created_at=data['created_at'], existing=restore(data['existing']))
-        if result['decision'] != 'INSERT':
+        allowed = ('INSERT', 'DUPLICATE_UNCHANGED') if data.get('allow_duplicate') is True else ('INSERT',)
+        if result['decision'] not in allowed:
             raise ValueError('writer decision')
         return dict(ok=True, plan=transport(result['writer_plan']))
     if action == 'replay':

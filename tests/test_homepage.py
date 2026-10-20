@@ -1,4 +1,4 @@
-"""Public, static project overview: content, markup and disclosure guards."""
+"""Immediate market shell, accessible markup and disclosure guards."""
 from html.parser import HTMLParser
 import importlib.util
 import json
@@ -17,7 +17,7 @@ SPEC.loader.exec_module(DEPLOY)
 class Markup(HTMLParser):
     """Strict structural checks for this deliberately small HTML vocabulary."""
     VOID = {'meta', 'link', 'br'}
-    ALLOWED = VOID | set('html head title script body a header span main section div h1 h2 h3 p strong time article dl dt dd ol li aside ul footer'.split())
+    ALLOWED = VOID | set('html head title script body a header span main section div h1 h2 h3 p strong time article dl dt dd ol li aside ul footer table caption thead tbody tr th td noscript'.split())
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -59,35 +59,19 @@ class HomepageTests(unittest.TestCase):
         cls.text = ' '.join(' '.join(visible.text).split())
 
     def test_visible_purpose_and_verified_results(self):
-        for text in ['MOSA 2', 'Persönliche, finanzorientierte', 'Daten- und KI-Plattform.',
-                     'deterministisch', 'Die KI hilft beim Verstehen.', 'Core-Schema',
-                     'Technisch freigegeben', '17 Tabellen', 'Version 3', 'versionierte Einheiten',
-                     'Marktdaten-Collector', 'getrennte Provideradapter', 'PNE AG ist über den gemeinsamen Asset-/ISIN-Vertrag gebunden']:
+        for text in ['MOSA 2', 'Marktdaten', 'Gespeicherte Kurse', 'Marktzeit', 'Erfassungszeit',
+                     'Letzter gespeicherter Stand','Asset','Kurs','Quelle / Handelsplatz','Datenstatus']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
 
     def test_import_result_and_remaining_limits_are_unambiguous(self):
-        for text in ['Neun echte Marktbeobachtungen.', 'acht importierten Beobachtungen',
-                     'ein neuer Live-Snapshot', 'keine Dublette',
-                     'Current und Bars bleiben leer', 'keine laufenden Live-Daten',
-                     'erste echte PNE-Live-Snapshot ist als Observation-v2 gespeichert',
-                     'persistente, unveränderliche Frankfurt-Route mit EUR@1',
-                     'gemeinsam atomar übernommen', 'unabhängig nachgeprüft',
-                     'Erster Live-Snapshot kontrolliert gespeichert',
-                     'Marktdaten-Collector & kontrollierte Live-Daten', 'Collector & Datenübernahme',
-                     'B8 bleibt geparkt', 'Breitere MOSA-Datenmigration',
-                     'Current-Routenauswahl', 'Bars-Import', 'Depotdaten', 'News',
-                     'KI-Auswertung auf MOSA-2-Daten', 'Keine Produktivfreigabe',
-                     '20. Oktober 2026', 'Weitere kontrollierte Asset- und Live-Datenübernahmen']:
+        for text in ['Keine automatische Aktualisierung.', 'ausschließlich gespeicherte Daten',
+                     'Fehlende Angaben bleiben offen', 'keine Echtzeitzusage', 'Keine Produktivfreigabe',
+                     'Marktdaten werden geladen', 'Mit Daten']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
-        for obsolete in ['Marktdatenmigration vollständig abgeschlossen',
-                         'Sechs echte Marktbeobachtungen.', 'Zwei kontrollierte Importpakete',
-                         'Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
-                         'ohne DB-Write', 'nicht persistenten Test-Routenvertrag',
-                         'Erster Live-Snapshot read-only geprüft',
-                         '13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
-                         'zwölf Fachtabellen sind leer', '18. Oktober 2026', '19. Oktober 2026']:
+        for obsolete in ['Current und Bars bleiben leer','Neun echte Marktbeobachtungen.',
+                         'status-grid','keine laufenden Live-Daten','PNE AG','Echtzeitkurse verfügbar']:
             self.assertNotIn(obsolete, self.text)
 
     def test_public_files_contain_no_internal_or_credential_details(self):
@@ -115,16 +99,20 @@ class HomepageTests(unittest.TestCase):
         self.assertTrue(self.html.lower().startswith('<!doctype html>'))
         self.assertIn('<html lang="de">', self.html)
         self.assertIn('name="viewport"', self.html)
-        self.assertEqual(self.html.count('data-status='), 6)
+        self.assertIn('data-market-rows',self.html)
+        self.assertEqual(parser.tags.count('table'),1)
+        self.assertEqual(parser.tags.count('th'),5)
+        self.assertIn('aria-busy="true"',self.html)
 
-    def test_only_one_deferred_local_script_and_no_external_dependencies(self):
+    def test_deferred_local_scripts_and_no_external_dependencies(self):
         self.assertNotRegex(self.html.lower(), r'<(?:iframe|form|input)\b|\son\w+=')
         scripts = re.findall(r'<script\b([^>]*)>(.*?)</script\s*>', self.html, re.S | re.I)
-        self.assertEqual(len(scripts), 1)
+        self.assertEqual(len(scripts), 2)
         self.assertEqual(scripts[0], (' src="assets/js/page_load_time.js" defer', ''))
+        self.assertEqual(scripts[1], (' src="assets/js/market.js" defer', ''))
         self.assertNotRegex(self.html + self.css, r'https?://|@import|url\(')
         self.assertEqual(re.findall(r'<link[^>]+href="([^"]+)"', self.html),
-                         ['assets/css/main.css?v=footer-20261019'])
+                         ['assets/css/main.css?v=market-41'])
         self.assertIn('@media (max-width: 600px)', self.css)
         self.assertIn('@media (max-width: 900px)', self.css)
         self.assertNotIn('animation:', self.css)

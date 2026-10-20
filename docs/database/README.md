@@ -130,3 +130,6 @@ Der Prüfauftrag und die späteren Ergebnisse stehen unter [`DOGADO_PLATFORM_QUA
 | harte Obergrenze | **2,0 s** |
 
 Dieses Dokument ist der Ausgangspunkt. Detailtabellen, Keys, Indizes, KI-Rechte und Migrationsschritte werden hier schrittweise ergänzt, bevor produktive Daten übernommen werden.
+
+Der explizit freizugebende Current-/Nur-Lese-Anzeigepfad einschließlich
+Migration 4 ist in [CURRENT_DISPLAY.md](CURRENT_DISPLAY.md) beschrieben.
