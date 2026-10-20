@@ -197,8 +197,8 @@ Quellen: [Plattformaufnahme, Scheduler und Backups](../database/DOGADO_PLATFORM_
 
 | Thema | Tatsächlich noch zu klären | Keine daraus folgende Zusatzmaßnahme |
 | --- | --- | --- |
-| Testsite-Pfad | Vom Nutzer bestätigter Test-Webroot in Abschnitt 10; praktische SFTP-Prüfung durch Codex noch offen | Keine neuen Ordner, Domains oder Datenbanken anlegen. |
-| Normaler Testsite-Upload | Temporärer Schreib-/Readback-/SHA-256-/Delete-Nachweis noch offen; Uploadscope ausschließlich gemäß Abschnitt 10 | Nicht den bestehenden Workflow auf `mosa.scharwerk.de` starten. |
+| Testsite-Pfad | Exakter Test-Webroot praktisch per SFTP bestätigt, siehe Abschnitt 11 | Keine neuen Ordner, Domains oder Datenbanken anlegen. |
+| Normaler Testsite-Upload | Temporärer Schreib-/Readback-/SHA-256-/Delete-Nachweis PASS, siehe Abschnitt 11; kein allgemeiner Deployment-Umbau | Nicht den bestehenden Workflow auf `mosa.scharwerk.de` starten. |
 | Passwortentfernung | Ergebnis und verbleibender Authentifizierungsmodus, nicht nur die Anweisung | Keine erneute Passwortanforderung oder automatische Kontoänderung durch diese Dokumentation. |
 | Abschluss von #41 | Tatsächlicher Live-/Commit-/Abnahmenachweis; zuletzt im geprüften Issue noch offen | Kein Abschluss allein aufgrund der Doku oder einer Testanzahl. |
 
@@ -264,6 +264,9 @@ Die Dokumentationsänderung und ihr Commit sind kein Deployment.
 
 ## 10. Bestätigter SFTP-Zugang und begrenzter Testscope am 20.10.2026
 
+Historischer Zwischenstand; der danach erfolgreich ausgeführte praktische Test
+ist in Abschnitt 11 dokumentiert und ersetzt die hier genannten offenen Prüfpunkte.
+
 Nach der SSH-Umstellung bestätigte der Nutzer ausdrücklich, dass SFTP funktioniert.
 Im anschließenden Prüfauftrag bestätigte er außerdem den Test-Webroot. Diese
 Angaben stammen vom Nutzer; der unten angeforderte praktische Dateitest konnte
@@ -298,3 +301,47 @@ Ein allgemeiner Deployment-Umbau ist damit nicht beauftragt oder umgesetzt.
 In diesem Prüflauf wurden auf Dogado keine Dateien angelegt, hochgeladen,
 verändert oder gelöscht. Es erfolgten keine Hosting-, Benutzer-, Passwort-,
 Datenbank-, Homepage- oder Scheduler-Änderungen und kein Produktionsdeploy.
+
+## 11. Praktischer SFTP-Dateinachweis am 20.10.2026: PASS
+
+Der vollständige Dateitest wurde tatsächlich über Python/Paramiko ausgeführt.
+Aus `scripts/deploy_sftp.py` wurden die bestehenden Funktionen
+`verify_fingerprint` und `remote_kind` wiederverwendet. Der allgemeine
+Deployment-Einstieg wurde nicht aufgerufen oder verändert: Er ist weiterhin
+auf seine bisherigen Ziele begrenzt. Der einmalige Test verwendete ausschließlich
+den unten genannten Test-Webroot und genau eine neue temporäre Datei.
+
+| Merkmal | Praktisch bestätigtes Ergebnis |
+| --- | --- |
+| SFTP-Verbindung | **PASS**, `server10.configcenter.info:22`, Benutzer `web213` |
+| SSH-Typ | `/bin/bash (chrooted)`; zuvor gespeicherte Plesk-Einstellung |
+| Test-Webroot | **PASS**, `/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de` |
+| Pfadprüfung | SFTP-Normalisierung entspricht exakt dem freigegebenen absoluten Pfad; Ziel ist ein Verzeichnis |
+| Temporärer Upload | **PASS**, exklusiv neu angelegt, keine bestehende Datei überschrieben |
+| Readback und SHA-256 | **PASS**, per SFTP zurückgelesener Inhalt stimmt exakt mit dem vorher festgelegten lokalen Inhalt überein |
+| Entfernung | **PASS**, Datei nach identischem Hash per SFTP gelöscht; anschließendes SFTP-lstat meldet Datei nicht vorhanden |
+| Test-ID | `b5cb71f9cd2b486f8d7cc307ddf5515e` |
+| Entfernte Testdatei | `.mosa2-sftp-probe-b5cb71f9cd2b486f8d7cc307ddf5515e.txt` |
+| Lokaler und zurückgelesener SHA-256 | `1453b15a45a7b0ac829a2b46a1a0ce2d39a57f14e0ed782341afd9e0f94d09fc` |
+
+Der Inhalt stand vor der Übertragung fest: `MOSA2 SFTP PROBE`, ein Zeilenumbruch,
+`Test-ID: b5cb71f9cd2b486f8d7cc307ddf5515e` und ein abschließender Zeilenumbruch
+(ASCII). Der Server-Hostschlüssel wurde gegen den bereits vorhandenen
+öffentlichen WinSCP-Vertrauenseintrag geprüft; es wurde kein unbekannter
+Hostschlüssel automatisch akzeptiert.
+
+Für die vorhandenen WinSCP-Profile des primären Benutzers war kein gespeichertes
+Passwort verfügbar. Der Nutzer gab es deshalb genau einmal in einem maskierten
+lokalen Eingabefenster ein. Der Python-Test verwendete es nur im Arbeitsspeicher;
+keine Passwortwerte wurden in Kommandozeilen, Dateien, Ausgaben, Logs oder Git
+übernommen. Der Testprozess ist beendet. Es wurde kein neuer Zugang angelegt
+und keine dauerhafte Secret-Ablage eingerichtet.
+
+`web213` kann technisch weitere Verzeichnisse sehen. Für MOSA 2 bleibt der
+Uploadscope trotzdem **ausschließlich auf den oben genannten Test-Webroot
+begrenzt**. Andere Domains wurden weder geöffnet noch verändert. Der Test
+führte keine Shell-Kommandos auf Dogado aus und verwendete keine Plesk-Aufgabe.
+Keine bestehenden Homepage-, CSS-, JS-, PHP- oder Konfigurationsdateien wurden
+verändert; keine Datenbank-, Benutzer- oder Passwortänderungen und kein
+Produktionsdeploy erfolgten. Dieser begrenzte Dateinachweis ist kein allgemeiner
+Deployment-Umbau und keine Produktionsfreigabe.
