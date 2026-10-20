@@ -357,3 +357,20 @@ spezifische Identitäts-/Evidenzprüfung. B5/B6/B7 behalten ihre weiteren Sperre
 alle acht bleiben gesperrt. Homepage/Ladezeit unverändert, kein Deployment,
 keine Produktion. Späterer Apply braucht eigenes Issue und ausdrückliche Freigabe.
 [Physischer Vertrag, Offline-Beweisgrenzen und Preflight](PHASE3J_UNIT_SCHEMA.md).
+
+## Phase 3L – normative Unit-Definitionen repositoryseitig vorbereitet
+
+EUR@1, GBP@1, POINT@1 und GBX@1 liegen als deterministisches providerneutrales
+[Seed-Manifest](seeds/0001_market_units_v1.json) mit generischer Offline-Validierung,
+Definition-SHA-256 und separatem Paketfingerprint vor. Direkte Basen: EUR→EUR,
+GBP→GBP, POINT→POINT, GBX→GBP; Faktoren 1/1 beziehungsweise exakt 1/100.
+Geldwährung EUR/GBP beziehungsweise NULL bei POINT; keine Floatrechnung.
+
+Dokumentarische Grundlage ist der bestätigte Phase-3K-Stand: Schema 3 / 17 Tabellen /
+Ledger v3 / Units leer / acht unveränderte Observations / Current und Bars 0.
+In Phase 3L keine DB-Verbindung oder erneute Live-Prüfung, keine Seeds live,
+kein Writer-v2 und kein B8-Import. B8 bleibt gesperrt. Migration 0003,
+Observation-v1 und Homepage unverändert; kein Deployment, keine Produktion.
+Der kontrollierte Seed-Insert einschließlich praktischem Self-FK-Precheck
+benötigt eine eigene ausdrückliche Freigabe.
+[Kanonische Definitionen, Fingerprint und Beweisgrenzen](PHASE3L_UNIT_SEEDS.md).
