@@ -374,3 +374,49 @@ Observation-v1 und Homepage unverändert; kein Deployment, keine Produktion.
 Der kontrollierte Seed-Insert einschließlich praktischem Self-FK-Precheck
 benötigt eine eigene ausdrückliche Freigabe.
 [Kanonische Definitionen, Fingerprint und Beweisgrenzen](PHASE3L_UNIT_SEEDS.md).
+
+## Phase 3M – Live-Preflight gestoppt, keine Unit-Seeds geschrieben
+
+Das freigegebene Phase-3L-Paket wurde erneut offline validiert. Der geschützte
+einmalige Testlauf stoppte vor Self-FK-Probe und normativem Insert mit
+`auto_increments_changed`: AUTO_INCREMENT-Metadaten weichen vom eingefrorenen
+privaten Phase-3K-Abschlussbeleg ab. Keine weitere DB-Diagnose, Reparatur oder
+Wiederholung. Keine Seeds, Updates oder Ledgerwrites. Readbacks und Replay
+wurden nicht live erreicht; vollständiger Endzustandsnachweis bleibt offen.
+
+Gateway/temporäre Quellen/Zugangskonfiguration/Lock entfernt, Gateway 404 und
+Homepage ohne Auth 401 bestätigt. Homepage unverändert. Issue #29 bleibt offen;
+kein Erfolgscommit, kein Writer-v2, kein B8-Import, keine Produktion.
+[Tatsächlicher Stopp und Nachweisgrenzen](PHASE3M_UNIT_SEEDS_LIVE.md).
+
+Die ausdrücklich autorisierte Fortsetzung erfasste anschließend einmalig einen
+Read-only-Snapshot. Rows/PKs/Hashes, Ledger v1/v2/v3 und Struktur sind identisch,
+Units weiterhin 0. Bei 10 von 12 Tabellen weichen Zählermetadaten ab; die
+technische Bedingung AUTO_INCREMENT > MAX(PK) ist jedoch nicht durchgehend
+belegt (`counter_not_above_max`). Klassifikation: **EVIDENCE_INSUFFICIENT**.
+Deshalb erneuter Stopp vor Guardfix, Self-FK und Seeds; kein Counter-Reset,
+keine Wiederholung oder DB-Reparatur. 33/33 gezielte Diagnosetests bestanden.
+Alle 17 temporären Quellen und Zugang entfernt; Gateway 404 / Schutz 401.
+Kein Abschlusscommit oder Linux-Lauf; Issue #29 bleibt offen.
+
+## Phase 3M – abschließend erfolgreich
+
+Die zusätzliche AUTO_INCREMENT-vs-MAX(PK)-Bedingung ist gemäß dem bestehenden
+Phase-3C-Vertrag entfernt. Korrigierte Klassifikation: CHECKER_BASELINE_BUG mit
+METADATA_ONLY_DRIFT (10/12 historische Zähler), kein Counter-Reset oder Repair.
+Die gemeinsame Logik schützt weiterhin vollständige Rows/PKs/Hashes, Schema,
+Grants, Ledger und Units; Readbacks normalisieren nur Zählermetadaten.
+
+Praktischer Self-FK-Test mit vollständigem Rollback und unabhängigem
+Empty-Readback bestanden. EUR@1, GBP@1, POINT@1 und GBX@1 exakt in einer
+Transaktion nach 4/4-Readback committed: Units 0 → 4. Zwei neue Verbindungen
+bestätigten identischen Fachzustand und Definitionhashes; Replay 4/0/0/0 ohne
+zweite Insert-Transaktion. Legacydaten einschließlich Dedupe-Keys und Ledger
+v1/v2/v3 unverändert; Current/Bars 0. Keine Legacy-Unit-FKs nachgetragen.
+
+34/34 gezielte Tests; Windows-Gesamtsuite 320/321 ausschließlich mit bekanntem
+`budget_not_private`, Validator/PHP-Lints/Diff-Prüfung erfolgreich.
+15/15 temporäre Quellen und Zugang entfernt; Gateway 404, Schutz 401,
+Homepage byteidentisch. Exakter Abschlusscommit und Linux-Run werden in
+Issue #29 dokumentiert. Nächster Schritt Phase 3N ist ausschließlich offline
+vorbereitet; kein Writer-v2 live, B8-Import oder Produktionsdeploy.
