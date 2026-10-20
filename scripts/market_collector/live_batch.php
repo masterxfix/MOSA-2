@@ -49,7 +49,7 @@ function execute(array $prepared,callable $runner): array {
             'provider_requests'=>counter($result['provider_requests']??null),'database_connections'=>counter($result['database_connections']??null)];
         $item+=['asset_identity'=>$entry['manifest']['identity']['normalized_value'],'provider_request_performed'=>$item['provider_requests']===null?null:$item['provider_requests']>0,
             'writer'=>null,'observation_id'=>$result['observation_id']??null,'replay'=>null,'failure_stage'=>$success?null:($result['stage']??'runner')];
-        foreach(['policy','asset_plan','route_plan','writer','replay','readback','deltas'] as $field)if(array_key_exists($field,$result))$item[$field]=$result[$field];
+        foreach(['policy','asset_plan','route_plan','writer','replay','readback','deltas','metrics','provider_duration_ms'] as $field)if(array_key_exists($field,$result))$item[$field]=$result[$field];
         $item['source']=$result['private_evidence']['plan']['source']['decision']??null;
         $report['item_results'][$i]=$item;$private[]=['position'=>$i+1,'fingerprint'=>$entry['fingerprint'],'result'=>$result];
         foreach(['provider_requests','database_connections'] as $field)$report[$field]=total($report[$field],$item[$field]);

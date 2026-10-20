@@ -51,9 +51,12 @@ function contract(string $sql,string $digest=DIGEST,array $tableOrder=TABLES): a
     same(array_keys($all),$tableOrder,'thirteen_table_order');return $all;
 }
 function tables(PDO $p): array {return $p->query('SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME')->fetchAll(PDO::FETCH_COLUMN);}
-function connection(string $password): PDO {
+function connection(string $password,string $host='127.0.0.1',int $port=3307): PDO {
     check($password!==''&&PHP_VERSION_ID>=80400&&PHP_VERSION_ID<80500,'runtime_or_secret');
-    $p=new PDO('mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4','h29077_mosa2_test',$password,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_TIMEOUT=>5,PDO::ATTR_STRINGIFY_FETCHES=>false]);
+    // Only the transport endpoint is configurable. The authenticated server identity
+    // below (including its own port 3307) remains mandatory through a local tunnel.
+    check($host==='127.0.0.1'&&$port>=1&&$port<=65535,'runtime_endpoint');
+    $p=new PDO('mysql:host='.$host.';port='.$port.';dbname=h29077_mosa2_test;charset=utf8mb4','h29077_mosa2_test',$password,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_TIMEOUT=>5,PDO::ATTR_STRINGIFY_FETCHES=>false]);
     $r=$p->query('SELECT DATABASE() AS db,CURRENT_USER() AS account,VERSION() AS version,@@port AS port')->fetch();
     same($r,['db'=>'h29077_mosa2_test','account'=>'h29077_mosa2_test@localhost','version'=>'8.0.26-16','port'=>3307],'target_identity');
     $p->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");$p->exec("SET SESSION time_zone='+00:00'");$p->exec("SET SESSION sql_mode='".MODE."'");

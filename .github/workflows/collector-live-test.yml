@@ -1,0 +1,55 @@
+name: Manual MOSA 2 collector live acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed commit SHA; must equal the selected workflow revision
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-collector-live-test
+  cancel-in-progress: false
+
+jobs:
+  collector:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require exact reviewed revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Install pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Relevant offline acceptance checks
+        run: |
+          python3 -m unittest discover -s tests -p 'test_collector_actions.py' -v
+          python3 -m unittest discover -s tests -p 'test_market_collector*.py' -v
+          python3 -m unittest discover -s tests -p 'test_market_live_batch.py' -v
+          python3 -m unittest discover -s tests -p 'test_market_runtime.py' -v
+      - name: One SSH tunnel and one live acceptance attempt
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: python3 scripts/collector_actions.py

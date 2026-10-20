@@ -27,6 +27,10 @@ class MemoryStatement extends PDOStatement {
             $columns=array_map(static fn($s)=>trim($s,'`'),explode(',',$m[1]));$row=array_combine($columns,$params);$row['dedupe_key']=strtoupper(bin2hex($row['dedupe_key']));$row['id']=(string)++$this->db->state->last;
             $this->db->state->rows['m2_market_observations'][]=\Mosa2\MarketLive\strings($row);$this->affected=1;return true;
         }
+        if(preg_match('/INSERT INTO `(m2_[a-z_]+)` \(([^)]+)\)/',$sql,$m)){
+            $columns=array_map(static fn($s)=>trim($s,'`'),explode(',',$m[2]));$row=array_combine($columns,$params);$row['id']=(string)++$this->db->state->last;
+            $this->db->state->rows[$m[1]][]=\Mosa2\MarketLive\strings($row);$this->affected=1;return true;
+        }
         if(!preg_match('/ FROM `?(m2_\w+)`?/',$sql,$m))throw new RuntimeException('unsupported SQL: '.$sql);
         $rows=$this->db->state->rows[$m[1]];
         if(str_contains($sql,' WHERE ')){
@@ -72,7 +76,19 @@ $invoke=static function($config,$request)use($in,$memory,&$providers){
     $reply=\Mosa2\MarketLive\bridge($config,$request);
     if(($in['fault']??'')==='replay'&&$request['action']==='replay')$reply['plan']['decision']='INSERT';return $reply;
 };
-if(($in['action']??'')==='proof'){
+if(($in['action']??'')==='acceptance'){
+    require dirname(__DIR__).'/scripts/market_collector/actions_acceptance.php';
+    $connect=static function()use($memory,&$connections,$in){$connections++;if(($in['fault']??'')==='authentication')throw new PDOException('synthetic');return new MemoryConnection($memory);};
+    $invoke=static function($config,$request)use($in,$memory,&$providers){
+        if($request['action']==='fetch'){
+            $providers++;$dir=$request['private_root'];touch($dir.'/provider-consumed.lock');
+            if(($in['fail_provider']??0)===$providers)throw new RuntimeException('synthetic');
+            $m=json_decode(file_get_contents($dir.'/live-manifest.json'),true);return $in['acquired_by_isin'][$m['instrument']];
+        }
+        return \Mosa2\MarketLive\bridge($config,$request);
+    };
+    $reports=[\Mosa2\MarketAcceptance\acceptance($in['scope'],$in['private_root'],$in['config'],$connect,$invoke)];
+}elseif(($in['action']??'')==='proof'){
     $p=new MemoryConnection($memory);$before=\Mosa2\MarketLive\snapshot($p,['schema_version'=>4]);
     $memory->rows['m2_jobs'][]=['id'=>'999','job_key'=>'unexpected'];$after=\Mosa2\MarketLive\snapshot($p,['schema_version'=>4]);
     try{\Mosa2\MarketLive\compareDelta($before,$after,['deltas'=>[]],[]);$detected=false;}catch(Throwable){$detected=true;}

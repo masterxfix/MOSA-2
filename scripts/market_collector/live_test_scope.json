@@ -1,0 +1,7 @@
+[
+  {"name":"DroneShield","isin":"AU000000DRO2","qualify":true},
+  {"name":"BYD","isin":"CNE100000296","qualify":true},
+  {"name":"Ubtech Robotics","isin":"CNE100006CQ4","qualify":true},
+  {"name":"Carl Zeiss Meditec","isin":"DE0005313704","qualify":false},
+  {"name":"PNE AG","isin":"DE000A0JBPG2","qualify":false}
+]

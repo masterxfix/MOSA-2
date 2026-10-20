@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -31,18 +32,30 @@ def run(data):
         adapter = getattr(importlib.import_module(module), manifest['adapter_class'])()
         stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
         endpoint = adapter.live_request(manifest['instrument'], stamp,
-            php_cli=data['php_cli'], request_script=str(private/'request.php'))
+            php_cli=data['php_cli'], request_script=data.get('request_script', str(private/'request.php')))
         http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],
             tuple(tuple(h.split(': ', 1)) for h in endpoint['headers'])), timeout=25)
         fd = os.open(private/'provider-consumed.lock', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(fd)
+        started = time.monotonic()
         response = http.fetch(None)
+        provider_duration_ms = (time.monotonic() - started) * 1000
         if response.http_status != 200:
             raise ValueError('provider response')
-        return dict(ok=True, provider_requests=1, response=transport(asdict(response)),
+        return dict(ok=True, provider_requests=1, provider_duration_ms=provider_duration_ms, response=transport(asdict(response)),
             request_key=endpoint['request_key'], requested_at=stamp,
             provider_key=adapter.provider_key, adapter_module=module,
             adapter_class=manifest['adapter_class'], instrument=manifest['instrument'])
+    if action == 'qualify':
+        # A clearly labelled nonpersistent sidecar, never a claimed physical DB route.
+        acquired, binding = data['acquired'], data['route']
+        result = run(dict(action='plan', acquired=acquired, route=binding,
+                          created_at=acquired['requested_at'], existing=[]))
+        normalized = result['plan']['normalized']
+        return dict(ok=True, scope='NON_PERSISTENT_TEST_ROUTE',
+                    currency=normalized['currency'], quote_unit_key=normalized['quote_unit_key'],
+                    quote_unit_version=normalized['quote_unit_version'],
+                    market_at=normalized['market_at'], observed_at=normalized['observed_at'])
     if action == 'plan':
         acquired = data['acquired']
         from scripts.market_collector.contracts import TransportResponse

@@ -52,6 +52,7 @@ function completePlan(array $state,array $m): array {
         'deltas'=>$asset['deltas']+['m2_asset_source_routes'=>$policy==='USE_EXISTING_ROUTE'?0:1,'m2_market_observations'=>1]];
 }
 function bridge(array $config,array $request): array {
+    if(isset($config['request_script']))$request['request_script']=$config['request_script'];
     $p=proc_open([$config['python'],$config['project'].'/scripts/market_collector/live_bridge.py'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,$config['project'],
         ['PATH'=>$config['runtime_path'],'PYTHONDONTWRITEBYTECODE'=>'1']);check(is_resource($p),'bridge_process');
     $wire=json_encode($request,JSON_THROW_ON_ERROR);check(fwrite($pipes[0],$wire)===strlen($wire),'bridge_input');fclose($pipes[0]);
@@ -135,7 +136,7 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
     $mode=$config['verification_mode']??'runtime';check(in_array($mode,['runtime','proof'],true),'verification_mode');
     if($mode==='proof')return proofRun($privateRoot,$password,$config,$manifest);
     $consumed=is_file($privateRoot.'/provider-consumed.lock');
-    try{$result=runtimeRun($privateRoot,$config,$manifest,static fn()=>connection($password),__NAMESPACE__.'\\bridge');
+    try{$result=runtimeRun($privateRoot,$config,$manifest,static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307),__NAMESPACE__.'\\bridge');
         $result['provider_requests']=!$consumed&&is_file($privateRoot.'/provider-consumed.lock')?1:0;return $result;}
     finally{unset($password);}
 }

@@ -265,3 +265,105 @@ credential-entry attempt requires renewed user instruction because this order
 limited that interaction to once. Then obtain all three actual provider
 qualifications and conflict-free generic onboarding plans, followed by the
 complete five-asset preflight, before consuming the single final batch budget.
+
+
+## Noninteractive Actions acceptance runner
+
+The manual-only `.github/workflows/collector-live-test.yml` runs the existing
+Collector/Adapter/Normalizer/Writer on Ubuntu with PHP 8.4 and Python. It uses
+only the existing three Actions secrets `MOSA_TEST_SFTP_PASSWORD`,
+`MOSA_TEST_SFTP_HOST_KEY_SHA256`, `MOSA_TEST_DB_PASSWORD`, and the fixed four
+`MOSA_TEST_SFTP_*` repository variables. No password dialog, fallback, new
+account, SFTP session, remote command/file, Plesk task, webdeployment or production
+operation is used. The earlier interactive attempt above is historical and is
+superseded by this noninteractive path.
+
+`collector_actions.py` reuses `deploy_test_sftp.configuration` and
+`deploy_sftp.verify_fingerprint`. It accepts only the pinned Ed25519 host key,
+disables agent/key discovery, authenticates once, probes `direct-tcpip` to
+Dogado 127.0.0.1:3307 and binds an ephemeral listener to runner 127.0.0.1 only.
+Missing secrets produce exact secret names, never values. Authentication,
+forwarding or configuration failure prevents all provider calls and DB writes.
+SSH and tunnel resources close on every exit. SSH exception text, PHP stderr,
+raw provider payloads and database exceptions are never published.
+
+The PDO helper accepts explicit loopback host/port transport parameters; the
+existing default remains 127.0.0.1:3307. Database/user/version and the remote
+server's own port remain strictly checked, including through a tunnel.
+The DB password reaches PHP only over stdin. Its child environment omits SSH,
+DB and GitHub secrets; the bridge receives none. Temporary manifests are mode
+0600 in runner-only mode-0700 directories and are removed in a finally/context
+cleanup. No private artifacts are uploaded. Public output is screened against
+all supplied secret values before logging or writing the step summary.
+
+### Frozen acceptance scope and gates
+
+`live_test_scope.json` is the explicit run configuration, in the user-requested
+order: DroneShield, BYD, Ubtech Robotics, Carl Zeiss Meditec, PNE AG. Asset IDs
+are resolved from the authenticated global ISIN catalog, not copied from old
+readbacks. All five complete identity/source/unit/route plans are validated
+before a provider request. The final two must already match their existing
+unit-bound routes. No asset substitutions or identity discovery are performed.
+
+A shared generic manifest generator retains the historical Phase-3D external
+identity `{isin, venue: boerse_frankfurt}`, with null quote variant, snapshot
+series and market_quote kind. This exact historical contract was recovered from
+existing Phase-3DB and Collector-40 evidence; it is not inferred by hash search.
+The unchanged generic planner must confirm the old route group, including BYD's
+legacy revision. It still rejects mismatched old revisions/external identities.
+The explicit versioned adapter/canonical Source binding remains unchanged.
+`frankfurt_request.php` is one shared descriptor, copied from the existing pure
+Frankfurt helpers at fixlab commit baa0f66d6b40105d6b030c6d1b81239ad6a6fc8c
+(blob ead84889894fd3c1336e2259abb14b607446f366), with a stdin CLI wrapper.
+No five asset-specific request scripts or live source/secret files are needed.
+
+Authenticated target and ledger 1-4/unit/index checks precede acquisition.
+Each of the first three assets is fetched at most once into a clearly labelled
+NON_PERSISTENT_TEST_ROUTE qualification sidecar using the existing adapter,
+normalizer, normative unit catalog and writer planner. Qualification persists
+nothing. Any failure stops immediately, without onboarding or final acquisition.
+Only after all three pass, the existing identity/route apply helpers execute
+all planned onboarding atomically, preserving every old revision. The independent
+readback must equal the exact initial snapshot plus the planned route rows.
+
+All five final manifests must then use USE_EXISTING_ROUTE. An exclusive batch
+marker permits exactly one sequential batch invocation. The existing runtime
+retains per-asset commit, exact independent row readback and identical
+DUPLICATE_UNCHANGED replay. Failure stops later items and retains earlier commits.
+Exhaustive acceptance-only snapshots on separate connections independently prove
+Current/Bars and all unrelated tables unchanged; only exact planned routes and
+confirmed inserted Observations may differ. These snapshots are outside the
+bounded per-asset runtime, not a replacement for it.
+
+### Metrics, validation and execution record
+
+Per-asset elapsed runtime and HTTP fetch duration are measured once. SQL-call and
+returned-row metrics are explicitly null/unavailable: the PDO path does not yet
+provide reliable complete counters. Offline 75-SQL/70-row values are not imposed
+or presented as live measurements. No benchmark loop or new EXPLAIN is run.
+The existing display_name ALL / estimated 9 rows finding from c95e9cc remains
+applicable; its query/schema are unchanged and no index/migration is added.
+
+Targeted offline checks cover missing secrets, fixed configuration, strict key
+rejection, forwarding denial, loopback forwarding cleanup, password stdin and
+child environment isolation, output suppression, explicit PDO parameters,
+shared descriptor, actual adapter/unit qualification, all-five acceptance,
+qualification/authentication/ledger failures, and partial-batch commit retention.
+Local PHP 8.4 validation: 19 Actions/acceptance, 28 Collector, 13 batch and 15
+runtime tests passed (75 distinct relevant tests); affected transport checks
+passed again after the final reporting change. PHP lint and diff checks passed.
+The complete five-asset success and failure paths use transactional PDO doubles
+and frozen synthetic responses; they are not live acceptance evidence.
+An initial integration test exposed an incorrect use of zero-delta entries for
+tables without an id column in the global proof. The corrected proof declares
+only changed route/observation tables and still compares all other tables exactly.
+No check or assertion was weakened. Unrelated homepage hash tests are untouched.
+
+The completion commit is pushed once with [skip ci], then this workflow is
+manually dispatched exactly once with expected_commit equal to that SHA. Checkout
+is bound to github.sha; a mismatch fails before access. A rerun attempt is skipped.
+No repository file is changed after that live run. Actual access statuses,
+qualification outcomes, deltas, per-asset writer/IDs/readback/replay, metrics and
+failures are recorded in the Actions log/step summary and the final task report,
+not retroactively written into this pre-run document. This document does not
+claim that SSH/tunnel/authentication or live acceptance have already passed.
