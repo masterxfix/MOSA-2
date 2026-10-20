@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import json
 import re
+import subprocess
 
 from .contracts import ObservationCandidate, require, validate_payload
 
@@ -35,6 +36,18 @@ def market_time(value):
 
 class FrankfurtSnapshotV1:
     provider_key = 'boerse_frankfurt_api_v1'
+
+    def live_request(self, instrument, instant, *, php_cli, request_script):
+        """Reuse the qualified historical request descriptor; no DB or identity discovery."""
+        require(type(instrument) is str and re.fullmatch(r'[A-Z0-9]{12}', instrument), 'qualified ISIN context required')
+        reply = subprocess.run([php_cli, request_script], input=json.dumps(
+            dict(isin=instrument, instant=instant+' UTC')).encode(), capture_output=True, timeout=10)
+        require(reply.returncode == 0 and not reply.stderr, 'provider request descriptor')
+        endpoint = json.loads(reply.stdout)
+        expected = 'https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='+instrument+'&mic=XFRA'
+        require(endpoint['url'] == expected and endpoint['role'] == 'price_information'
+                and endpoint['series'] == 'snapshot', 'qualified snapshot request')
+        return endpoint
 
     def normalize(self, payload, route):
         validate_payload(payload)

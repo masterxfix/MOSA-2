@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Mosa2\Phase3D\Import;
 require_once dirname(__DIR__).'/phase3c/live_test.php';
 require_once __DIR__.'/dry_run.php';
+require_once dirname(__DIR__).'/market_collector/onboarding.php';
 use PDO;
 use RuntimeException;
 use function Mosa2\Phase2\{check,same,qi,connection,preflight,structure,save};
@@ -88,23 +89,8 @@ function manifest(array $input): array {
     usort($input['observations'],static fn($a,$b)=>strcmp($a['sample_id'],$b['sample_id']));
     return $input;
 }
-interface Store {
-    public function find(string $table,array $where): array;
-    public function insert(string $table,array $values): string;
-}
-final class PdoStore implements Store {
-    public function __construct(private PDO $p){check($p->inTransaction(),'transaction_required');}
-    public function find(string $table,array $where): array {
-        check(in_array($table,WRITABLE,true)&&$where!==[],'read_table');
-        $sql='SELECT * FROM '.qi($table).' WHERE '.implode(' AND ',array_map(static fn($k)=>qi($k).' <=> ?',array_keys($where)));
-        $q=$this->p->prepare($sql);$q->execute(array_values($where));return $q->fetchAll();
-    }
-    public function insert(string $table,array $values): string {
-        check(in_array($table,WRITABLE,true)&&$this->p->inTransaction(),'write_table');
-        $sql='INSERT INTO '.qi($table).' ('.implode(',',array_map('Mosa2\\Phase2\\qi',array_keys($values))).') VALUES ('.implode(',',array_fill(0,count($values),'?')).')';
-        $q=$this->p->prepare($sql);$q->execute(array_values($values));return $this->p->lastInsertId();
-    }
-}
+interface Store extends \Mosa2\MarketIdentity\Store {}
+final class PdoStore extends \Mosa2\MarketIdentity\PdoStore implements Store {}
 function verifyFields(array $actual,array $expected,string $reason): void {
     foreach($expected as $k=>$v){check(array_key_exists($k,$actual),$reason);check($v===null?$actual[$k]===null:($actual[$k]!==null&&(string)$actual[$k]===(string)$v),$reason);}
 }
@@ -131,17 +117,27 @@ function apply(Store $s,array $input,bool $allowNew,array $baseline=[]): array {
     }
     foreach($m['observations'] as $e){
         $isin=$e['isin'];$source=$sourceIds[$e['proposed_source_key']];
-        $identifier=['identifier_type'=>'isin','normalized_value'=>$isin,'scope_key'=>''];
-        $found=$s->find('m2_asset_identifiers',$identifier);check(count($found)<=1,'isin_ambiguous');
-        $entity=['entity_type'=>'asset','canonical_name'=>$e['asset']['canonical_name'],'status'=>'active','created_at'=>$now,'updated_at'=>$now];
-        if(!$found){
-            check($allowNew,'replay_missing_identifier');$asset=identity($s->insert('m2_entities',$entity));$counts['m2_entities']++;
-            $s->insert('m2_assets',['entity_id'=>$asset,'asset_class'=>$e['asset']['asset_class'],'display_name'=>$e['asset']['display_name'],'base_currency'=>null,'status'=>'active','created_at'=>$now,'updated_at'=>$now]);$counts['m2_assets']++;
-        }else{$asset=identity($found[0]['asset_id']);}
-        $entities=$s->find('m2_entities',['id'=>$asset]);same(count($entities),1,'entity_missing');verifyFields($entities[0],catalogExpected('m2_entities',['id'=>$asset],$entity,$baseline),'entity_conflict');
-        $assets=$s->find('m2_assets',['entity_id'=>$asset]);same(count($assets),1,'asset_missing');
-        verifyFields($assets[0],catalogExpected('m2_assets',['entity_id'=>$asset],['entity_id'=>$asset,'asset_class'=>$e['asset']['asset_class'],'display_name'=>$e['asset']['display_name'],'base_currency'=>null,'status'=>'active','created_at'=>$now,'updated_at'=>$now],$baseline),'asset_conflict');
-        resolve($s,'m2_asset_identifiers',$identifier,$identifier+['asset_id'=>$asset,'identifier_value'=>$isin,'is_primary'=>1,'source_id'=>null,'valid_from'=>null,'valid_to'=>null,'created_at'=>$now],'id',$counts,$allowNew,$baseline);
+        $qualified=array_intersect_key($e['asset'],array_flip(['canonical_name','display_name','asset_class']))+
+            ['identifier_type'=>'isin','identifier_value'=>$isin,'normalized_value'=>$isin,'scope_key'=>'','is_primary'=>1];
+        $identityState=\Mosa2\MarketIdentity\identityState($s,$qualified);
+        $identityPlan=\Mosa2\MarketIdentity\planAssetIdentity($identityState,$qualified);
+        check($identityPlan['decision']!=='CONFLICT','catalog_conflict');
+        check($allowNew||$identityPlan['decision']==='EXISTING_MATCH','replay_missing_identifier');
+        // The migration additionally preserves its historical fingerprint-bound timestamp checks.
+        if($identityPlan['asset_id']!==null){
+            $asset=$identityPlan['asset_id'];
+            foreach(['m2_entities'=>['id'=>$asset],'m2_assets'=>['entity_id'=>$asset]] as $table=>$where){
+                $expected=($table==='m2_entities'?\Mosa2\MarketIdentity\entityValues($qualified):['entity_id'=>$asset]+\Mosa2\MarketIdentity\assetValues($qualified))+['created_at'=>$now,'updated_at'=>$now];
+                verifyFields($s->find($table,$where)[0],catalogExpected($table,$where,$expected,$baseline),'catalog_conflict');
+            }
+            if($identityPlan['decision']==='EXISTING_MATCH'){
+                $where=\Mosa2\MarketIdentity\identifierKey($qualified);
+                $expected=$where+['asset_id'=>$asset,'identifier_value'=>$isin,'is_primary'=>1,'source_id'=>null,'valid_from'=>null,'valid_to'=>null,'created_at'=>$now];
+                verifyFields($s->find('m2_asset_identifiers',$where)[0],catalogExpected('m2_asset_identifiers',$where,$expected,$baseline),'catalog_conflict');
+            }
+        }
+        $applied=\Mosa2\MarketIdentity\applyAssetIdentityPlan($s,$identityPlan,$now);$asset=$applied['asset_id'];
+        foreach($applied['deltas'] as $table=>$delta)$counts[$table]+=$delta;
         $route=$e['route']+['asset_id'=>$asset,'source_id'=>$source,'created_at'=>$now,'updated_at'=>$now];
         $external=$s->find('m2_asset_source_routes',array_intersect_key($route,array_flip(['source_id','route_type','external_key'])));
         $scoped=$s->find('m2_asset_source_routes',array_intersect_key($route,array_flip(['asset_id','source_id','route_type'])));

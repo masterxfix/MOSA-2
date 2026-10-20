@@ -27,8 +27,8 @@ PROTECTED = {
     'docs/database/migrations/0002_market_current_history.sql': '205bea42cfc93a64f76eb61c10377e47dceae38815c4351817a17aced00a75ee',
     'scripts/phase3c/market_flow.php': 'ab2b9510da0a76b549b587e10db5d768f079b57cd1d4e0d6542b46f805cd33af',
     'tests/test_phase3c.py': '9e4f03f8bbb4cc969553df906940b94ef020ef3b3d7af571a048cec8d1f1b940',
-    # Phase 3K explicitly authorizes the verified 17-table / version-3 status update.
-    'index.html': '55e479482b15e6f698e7a96a595dd7093b80894f73ca5a59e579424e92a18583',
+    # Issue 37 authorizes the first atomic live-fact status; schema/source anchors stay fixed.
+    'index.html': 'e368861ce9adffbb6ba0dbb206bd9bae9defdba5f19da10fed7193f18f578238',
     'assets/css/main.css': '6b500107f2be65f11dd49be06375f76cb0b4488a5b9f0636ab44b673c604e319',
     'assets/js/page_load_time.js': 'd892ccee43c03989a66edd65e929c83a536747dbc3bd7da3720f8c147d938593',
 }

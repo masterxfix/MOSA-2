@@ -14,12 +14,12 @@ def utc_now():
 
 @dataclass(frozen=True)
 class HttpGet:
-    request: Request
+    request: Request | None  # None permits acquisition before transaction-owned route allocation.
     url: str
     headers: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self):
-        require(type(self.request) is Request, 'bound collector request required')
+        require(self.request is None or type(self.request) is Request, 'bound collector request required')
         require(type(self.url) is str, 'HTTPS URL required')
         parsed = urllib.parse.urlsplit(self.url)
         require(parsed.scheme == 'https' and bool(parsed.hostname) and parsed.port in (None, 443)

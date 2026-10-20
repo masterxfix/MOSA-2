@@ -45,28 +45,28 @@
         </article>
         <article class="status-card" data-status="version">
           <span class="badge neutral">Version 3</span><h3>Schema-Version</h3>
-          <p>Schema Version 3 ist geprüft; versionierte Einheiten sind hinterlegt. Die acht bestehenden Marktbeobachtungen bleiben unverändert erhalten.</p>
+          <p>Schema Version 3 ist geprüft; versionierte Einheiten sind hinterlegt. Die acht bisherigen Marktbeobachtungen bleiben unverändert erhalten.</p>
         </article>
         <article class="status-card" data-status="read-paths">
-          <span class="badge success">Offline &amp; read-only geprüft</span><h3>Marktdaten-Collector</h3>
-          <p>Collector v1 verarbeitet Rohdaten über getrennte Provideradapter. Yahoo- und Börse-Frankfurt-Snapshots sind offline geprüft; ein echter PNE-Snapshot wurde read-only bis zum Writerplan verarbeitet.</p>
+          <span class="badge success">Erster Live-Fact gespeichert</span><h3>Marktdaten-Collector</h3>
+          <p>Collector v1 verarbeitet Rohdaten über getrennte Provideradapter. PNE AG ist über den gemeinsamen Asset-/ISIN-Vertrag gebunden; der erste echte PNE-Live-Snapshot ist als Observation-v2 gespeichert.</p>
         </article>
         <article class="status-card data-card" data-status="data">
-          <span class="badge success">Kontrolliert importiert</span><h3>Drei kontrollierte Importpakete</h3>
-          <p><strong>Acht echte Marktbeobachtungen.</strong> Alle drei kleinen Importpakete wurden idempotent wiederholt: keine neuen fachlichen Zeilen im jeweiligen Replay.</p>
+          <span class="badge success">Kontrolliert übernommen</span><h3>Importe &amp; erster Live-Snapshot</h3>
+          <p><strong>Neun echte Marktbeobachtungen.</strong> Zu den acht importierten Beobachtungen kommt ein neuer Live-Snapshot. Die gespeicherte Wiederholung erzeugt keine Dublette.</p>
         </article>
       </div>
-      <p class="context-note">Genau ein Börse-Frankfurt-Snapshot für PNE AG wurde durch die neue Kette geprüft – ohne DB-Write und mit einem nicht persistenten Test-Routenvertrag. Current und Bars bleiben leer. B8 ist geparkt, weil die historische autoritative Quelle fehlt. Keine Produktivfreigabe. Diese Seite zeigt dokumentierte Ergebnisse, keine laufenden Live-Daten.</p>
+      <p class="context-note">Der erste PNE-Live-Snapshot ist über eine persistente, unveränderliche Frankfurt-Route mit EUR@1 gebunden und unabhängig nachgeprüft. Assetidentität, Route und Beobachtung wurden gemeinsam atomar übernommen; die Wiederholung bleibt ohne Dublette. Current und Bars bleiben leer. B8 bleibt geparkt. Keine Produktion und keine Produktivfreigabe. Diese Seite zeigt dokumentierte Ergebnisse, keine laufenden Live-Daten.</p>
     </section>
 
     <section class="next-step" aria-labelledby="naechstes-ziel">
       <div class="next-copy"><p class="eyebrow">Aktueller Schwerpunkt <span class="badge planned">Begonnen</span></p>
         <h2 id="naechstes-ziel">Marktdaten-Collector<br> &amp; kontrollierte Live-Daten</h2>
-        <p>Rohdaten werden über providergetrennte Adapter in einen gemeinsamen Marktdatenvertrag überführt und bis zum geprüften Writerplan verarbeitet. Der erste echte Frankfurt-Snapshot ist read-only geprüft. Die kontrollierte Übernahme neuer Live-Daten in die Datenbank braucht eine eigene Freigabe.</p>
+        <p>Der gemeinsame Weg von qualifizierter Assetidentität über Collector und Provideradapter bis zur atomaren Persistenz ist mit dem ersten echten Frankfurt-Snapshot geprüft. Weitere Assets und Live-Läufe folgen ausschließlich kontrolliert und mit eigener Freigabe.</p>
       </div>
       <dl class="market-types">
         <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Technisch validiert; bleibt bis zur Freigabe der Routenauswahl bewusst leer.</dd></div>
-        <div><dt><span aria-hidden="true">02</span> History</dt><dd>Acht echte Marktbeobachtungen aus drei kleinen Paketen sind kontrolliert übernommen und unabhängig nachgeprüft.</dd></div>
+        <div><dt><span aria-hidden="true">02</span> History</dt><dd>Acht importierte Beobachtungen und der erste echte Live-Snapshot sind kontrolliert gespeichert und unabhängig nachgeprüft.</dd></div>
       </dl>
     </section>
 
@@ -76,9 +76,9 @@
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Erster Live-Snapshot read-only geprüft</p></li>
+        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Erster Live-Snapshot kontrolliert gespeichert</p></li>
       </ol>
-      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Kontrollierte Persistenz neuer Live-Snapshots</li><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
+      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Weitere kontrollierte Asset- und Live-Datenübernahmen</li><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
     </section>
   </main>
   <footer class="wrap footer">

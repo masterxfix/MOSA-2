@@ -31,7 +31,7 @@ function writerPlans(string $root,array $request,string $runtimePath): array {
     check(($reply['ok']??false)===true&&is_array($reply['plans']??null),'writer_reply');
     same(count($reply['plans']),count($request['observations']),'writer_plan_count');return $reply['plans'];
 }
-function insertValues(array $plan,array $route): array {
+function insertValues(array $plan,array $route,string $created=CREATED): array {
     same($plan['decision']??null,'INSERT','insert_decision');
     same($plan['observation_format_version']??null,2,'insert_format');
     same($plan['catalog_fingerprint']??null,\Mosa2\Phase3M\PACKAGE,'insert_catalog');
@@ -48,7 +48,8 @@ function insertValues(array $plan,array $route): array {
         same($values[$field],$payload[$field],'insert_value');
     }
     same($values['observation_format_version'],2,'insert_marker');
-    same($values['created_at'],CREATED,'insert_created');same(byteValue($values['dedupe_key']),$key,'insert_value_key');
+    check(preg_match('/\A[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}\z/D',$created)===1,'insert_created_format');
+    same($values['created_at'],$created,'insert_created');same(byteValue($values['dedupe_key']),$key,'insert_value_key');
     same($plan['route_binding']['matched_fields'],$route,'insert_route_snapshot');
     same($plan['route_binding']['format_version'],2,'insert_route_format');
     same($plan['route_binding']['route_revision'],$route['route_revision'],'insert_route_revision');
@@ -58,8 +59,8 @@ function insertValues(array $plan,array $route): array {
     foreach(UNITS as $field)same($values[$field],$route[$field],'insert_unit');
     $values['dedupe_key']=$key;return $values;
 }
-function executePlan(PDO $p,array $plan,array $route): void {
-    check($p->inTransaction(),'insert_transaction');$values=insertValues($plan,$route);
+function executePlan(PDO $p,array $plan,array $route,string $created=CREATED): void {
+    check($p->inTransaction(),'insert_transaction');$values=insertValues($plan,$route,$created);
     $q=$p->prepare('INSERT INTO m2_market_observations ('.implode(',',array_map(__NAMESPACE__.'\\column',array_keys($values))).') VALUES ('.implode(',',array_fill(0,count($values),'?')).')');
     $q->execute(array_values($values));same($q->rowCount(),1,'one_observation');
 }

@@ -62,27 +62,30 @@ class HomepageTests(unittest.TestCase):
         for text in ['MOSA 2', 'Persönliche, finanzorientierte', 'Daten- und KI-Plattform.',
                      'deterministisch', 'Die KI hilft beim Verstehen.', 'Core-Schema',
                      'Technisch freigegeben', '17 Tabellen', 'Version 3', 'versionierte Einheiten',
-                     'Marktdaten-Collector', 'Yahoo- und Börse-Frankfurt-Snapshots']:
+                     'Marktdaten-Collector', 'getrennte Provideradapter', 'PNE AG ist über den gemeinsamen Asset-/ISIN-Vertrag gebunden']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
 
     def test_import_result_and_remaining_limits_are_unambiguous(self):
-        for text in ['Acht echte Marktbeobachtungen.', 'Drei kontrollierte Importpakete',
-                     'Alle drei kleinen Importpakete',
-                     'idempotent wiederholt', 'keine neuen fachlichen Zeilen',
+        for text in ['Neun echte Marktbeobachtungen.', 'acht importierten Beobachtungen',
+                     'ein neuer Live-Snapshot', 'keine Dublette',
                      'Current und Bars bleiben leer', 'keine laufenden Live-Daten',
-                     'Genau ein Börse-Frankfurt-Snapshot für PNE AG', 'ohne DB-Write',
-                     'nicht persistenten Test-Routenvertrag', 'Erster Live-Snapshot read-only geprüft',
+                     'erste echte PNE-Live-Snapshot ist als Observation-v2 gespeichert',
+                     'persistente, unveränderliche Frankfurt-Route mit EUR@1',
+                     'gemeinsam atomar übernommen', 'unabhängig nachgeprüft',
+                     'Erster Live-Snapshot kontrolliert gespeichert',
                      'Marktdaten-Collector & kontrollierte Live-Daten', 'Collector & Datenübernahme',
-                     'B8 ist geparkt', 'historische autoritative Quelle fehlt', 'Breitere MOSA-Datenmigration',
+                     'B8 bleibt geparkt', 'Breitere MOSA-Datenmigration',
                      'Current-Routenauswahl', 'Bars-Import', 'Depotdaten', 'News',
                      'KI-Auswertung auf MOSA-2-Daten', 'Keine Produktivfreigabe',
-                     '20. Oktober 2026', 'Kontrollierte Persistenz neuer Live-Snapshots']:
+                     '20. Oktober 2026', 'Weitere kontrollierte Asset- und Live-Datenübernahmen']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
         for obsolete in ['Marktdatenmigration vollständig abgeschlossen',
                          'Sechs echte Marktbeobachtungen.', 'Zwei kontrollierte Importpakete',
                          'Drei echte Marktbeobachtungen.', 'Erster kontrollierter Testimport',
+                         'ohne DB-Write', 'nicht persistenten Test-Routenvertrag',
+                         'Erster Live-Snapshot read-only geprüft',
                          '13 Tabellen', 'Version 1', 'Noch keine echten MOSA-Daten',
                          'zwölf Fachtabellen sind leer', '18. Oktober 2026', '19. Oktober 2026']:
             self.assertNotIn(obsolete, self.text)
