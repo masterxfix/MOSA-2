@@ -60,7 +60,7 @@ class HomepageTests(unittest.TestCase):
         cls.text = ' '.join(' '.join(visible.text).split())
 
     def test_visible_purpose_and_verified_results(self):
-        for text in ['MOSA 2', 'Marktdaten', 'Gespeicherte Kurse', 'Marktzeit', 'Erfassungszeit',
+        for text in ['MOSA 2', 'Marktdaten', 'Gespeicherte Kurse', 'Markt- und Erfassungszeit', 'Erfassungszeit',
                      'Letzter gespeicherter Stand','Asset','Kurs','Quelle / Handelsplatz','Datenstatus']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
@@ -79,8 +79,8 @@ class HomepageTests(unittest.TestCase):
         original = original.replace('  <script src="assets/js/market.js" defer></script>\n', '')
         original = original.replace('assets/css/main.css?v=homecopy-20261020', 'assets/css/main.css?v=footer-20261019')
         original = original.replace('<br>Mit Daten · <span data-data-ready-time aria-label="Datenladezeit wird gemessen">— ms</span>', '')
-        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), '94d2c7509133ffbe2082ac647753371f19d3f9abe904d98fd4bc22be8e816bdd')
-        for removed in ['Finanzen, Depot und Markt verstehen', 'Die Daten liefern die Fakten.', 'Die KI hilft beim Verstehen.', 'class="principles"']:
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), '5c43bb61a926ac9e0c66f24ab8eb725177f506951e292a916bdb18edc5f35122')
+        for removed in ['Finanzen, Depot und Markt verstehen', 'Die Daten liefern die Fakten.', 'Die KI hilft beim Verstehen.', 'class="principles"', 'Der erste PNE-Live-Snapshot ist über eine persistente', 'Gespeicherte Kurse aus kontrollierten Übernahmen.']:
             self.assertNotIn(removed, self.html)
         self.assertRegex(self.html, r'<h1 id="projekt-titel">MOSA 2</h1>')
         order = [self.html.index(value) for value in ['class="results"', 'class="market-section"', 'class="next-step"', 'class="progress-section"']]

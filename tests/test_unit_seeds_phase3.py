@@ -27,7 +27,7 @@ PACKAGE = 'b66df6f972ad13c05c3f34c604088c0281dcd9f0ff4bafad45b9600aa2b747ee'
 PROTECTED = {
     'docs/database/migrations/0003_market_units.sql': '199933884802bd139b706e50e57e04687e9cbe5f8bd1366e98e302af7d47b8ee',
     'scripts/phase3c/market_flow.php': 'ab2b9510da0a76b549b587e10db5d768f079b57cd1d4e0d6542b46f805cd33af',
-    'index.html': '977be8b1660a5d6065b281511232f3b94f5b54e219c55ed9241dfe3f5deb4c10',
+    'index.html': 'f271e50a25fe7dadac9f4e76f0dfb1ce0264d21476e6cb09125ad5deb6c2f4d6',
     'assets/css/main.css': '89859971c23d555112fc5052d5fcdf6b1b93617c9613e26fe3d369ff9b7c8ea1',
     'assets/js/page_load_time.js': 'd892ccee43c03989a66edd65e929c83a536747dbc3bd7da3720f8c147d938593',
 }
