@@ -471,3 +471,32 @@ Kein B8-Import, Produktionsdeploy oder neue Migration. Als nächster Schritt
 ist ausschließlich Phase 3P read-only vorbereitet: Identität, Source, Route,
 native GBX-Semantik, Zeit-/Payload-Evidenz und notwendige unit-aware
 Routenrevision qualifizieren. Diese B8-Prüfung wurde noch nicht ausgeführt.
+
+## Phase 3P – B8 read-only qualifiziert
+
+Untersuchung abgeschlossen: **READONLY_EVIDENCE_REQUIRED**. Genau B8 anhand der
+privaten Phase-3H-Matrix und Originalfingerprints wiedergefunden; historischer
+Yahoo-Snapshotvertrag ausschließlich auf fixlab baa0f66d6b40105d6b030c6d1b81239ad6a6fc8c
+bestätigt. Native GBX-Zahl, monetäre Basis GBP, getrennte gespeicherte UTC-Markt-/
+Erfassungszeiten, NULL-Historyvolume statt unqualifiziertem Tagesvolumen und
+passende vorhandene Source qualifiziert. Keine andere Restmenge neu analysiert.
+
+Im hashgebundenen Phase-3O-Finalreadback fehlt ein passender Zielidentifier;
+damit sind bestehendes Zielasset, Name/Klasse, konkrete B8-Legacyroute und
+tatsächliche nächste Routenrevision nicht qualifiziert. Kein Widerspruch erfunden,
+keine neue Identität/Source angelegt. Rawpayload und unabhängiger historischer
+Deploymenthash waren im ursprünglichen Snapshot nicht gesichert. Der vollständige
+v1-Factvergleich und tatsächliche B8-v2-Plan bleiben offen; nur synthetische
+Helpertests verwenden den echten Phase-3N-Writer. Kein INSERT-Plan für B8 behauptet.
+
+Allgemeiner bedingter Vertrag: neue unveränderliche unit-aware Route mit GBX@1,
+mosa2-market-unit-v1, NULL-Mengenbasis und NULL-Volumeunit; echte Providerkeys/
+Rollenart erhalten, beide revisionsbewussten UNIQUEs prüfen. Keine Legacyroute
+mutieren. Zuerst exakt fehlende historische Stammdaten-/Zuordnungsevidenz und
+Provenienz beschaffen; kein Import vorbereiten. Currentauswahl bleibt separat.
+
+[Ergebnismatrix, Fingerprintbindung und Grenzen](PHASE3P_B8_QUALIFICATION.md).
+DB-Verbindungen/Writes 0, kein Passwort/Gateway, Providerabruf, B8-Import,
+fixlab-Write, Schema-/Ledger-/Current-/Bars-Write oder Produktionsdeploy.
+Tests, einziger Abschlusscommit und exakter Linux-Run werden in Issue #32
+festgehalten; dessen Abschluss bestätigt die Untersuchung, keine Importfreigabe.
