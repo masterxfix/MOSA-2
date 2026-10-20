@@ -1,0 +1,133 @@
+{
+  "provenance": "Eight synthetic v1 vectors frozen from unchanged Phase-3M baseline 296eb2ffb6cb6ecaf81db36d37c70028db29136e; not live rows",
+  "vectors": [
+    {
+      "input": {
+        "asset_id": "100",
+        "source_id": "9",
+        "route_id": "200",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:00",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": "2.5"
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"100\",\"source_id\":\"9\",\"route_id\":\"200\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:00.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":\"2.50000000\"}",
+      "dedupe_hex": "4b10b9b61e394f9c5c7f9b8935842bcca54721bf1742d4f4153da4bfdd899e03"
+    },
+    {
+      "input": {
+        "asset_id": "101",
+        "source_id": "9",
+        "route_id": "201",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:01",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": null
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"101\",\"source_id\":\"9\",\"route_id\":\"201\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:01.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":null}",
+      "dedupe_hex": "e847be58793d13a39ab59a69d48a235888057c36f528c7c43ed7393e5b83ea8c"
+    },
+    {
+      "input": {
+        "asset_id": "102",
+        "source_id": "9",
+        "route_id": "202",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:02",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": "2.5"
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"102\",\"source_id\":\"9\",\"route_id\":\"202\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:02.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":\"2.50000000\"}",
+      "dedupe_hex": "b0e22b75642475e4b552897209bf39e32a5c9be296dfbd7e0b80c4887fc36c52"
+    },
+    {
+      "input": {
+        "asset_id": "103",
+        "source_id": "9",
+        "route_id": "203",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:03",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": null
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"103\",\"source_id\":\"9\",\"route_id\":\"203\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:03.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":null}",
+      "dedupe_hex": "a9a5f2987c718e80ad966bdda7487dd25aa2d2f3d592961581cee53f6cc90f27"
+    },
+    {
+      "input": {
+        "asset_id": "104",
+        "source_id": "9",
+        "route_id": "204",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:04",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": "2.5"
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"104\",\"source_id\":\"9\",\"route_id\":\"204\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:04.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":\"2.50000000\"}",
+      "dedupe_hex": "7c06b0d8b9cf1495a7bc370732b959757db40c7da0fd16091b1bdb96e9955cc6"
+    },
+    {
+      "input": {
+        "asset_id": "105",
+        "source_id": "9",
+        "route_id": "205",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:05",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": null
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"105\",\"source_id\":\"9\",\"route_id\":\"205\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:05.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":null}",
+      "dedupe_hex": "f731ca33874edba7ce8f2a629b64df408fab252e1e01f6c9bfe3a96046c7a104"
+    },
+    {
+      "input": {
+        "asset_id": "106",
+        "source_id": "9",
+        "route_id": "206",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:06",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": "2.5"
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"106\",\"source_id\":\"9\",\"route_id\":\"206\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:06.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":\"2.50000000\"}",
+      "dedupe_hex": "93ffd8f8257e504c922837172c66346c8c51344deb7a5491172bf1544b91e31f"
+    },
+    {
+      "input": {
+        "asset_id": "107",
+        "source_id": "9",
+        "route_id": "207",
+        "currency": "EUR",
+        "market_at": "2026-01-01 00:00:00",
+        "observed_at": "2026-01-01 00:00:07",
+        "price": "10.25",
+        "bid": "10",
+        "ask": "11",
+        "volume": null
+      },
+      "canonical": "mosa2-observation-v1\n{\"asset_id\":\"107\",\"source_id\":\"9\",\"route_id\":\"207\",\"currency\":\"EUR\",\"market_at\":\"2026-01-01 00:00:00.000000\",\"observed_at\":\"2026-01-01 00:00:07.000000\",\"price\":\"10.2500000000\",\"bid\":\"10.0000000000\",\"ask\":\"11.0000000000\",\"volume\":null}",
+      "dedupe_hex": "ae8973487812d13ffac68842f9ac300313a2406731a546458c0a2b8e1869880f"
+    }
+  ]
+}

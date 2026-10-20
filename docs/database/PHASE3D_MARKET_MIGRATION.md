@@ -420,3 +420,26 @@ v1/v2/v3 unverändert; Current/Bars 0. Keine Legacy-Unit-FKs nachgetragen.
 Homepage byteidentisch. Exakter Abschlusscommit und Linux-Run werden in
 Issue #29 dokumentiert. Nächster Schritt Phase 3N ist ausschließlich offline
 vorbereitet; kein Writer-v2 live, B8-Import oder Produktionsdeploy.
+
+## Phase 3N – Observation-v2 / unit-aware Writer offline implementiert
+
+Allgemeine v2-Normalisierung mit exakt 18 kanonischen Feldern und Domain
+`mosa2-observation-v2`, rohe SHA-256-Keys und deterministische Offline-Write-Pläne
+implementiert. Gemeinsame Phase-3C-Wertprimitiven und Phase-3L-Katalogvalidierung
+wiederverwendet; v1-Code, Homepage und Migrationen byteidentisch. Keine Migration 0004.
+Strenge Unit-/Routebindung, expliziter v1-Replay-/v2-Neudaten-Dispatcher,
+Duplicate/Conflict und Schutz vor Reimport/Projektion als neue History.
+
+EUR/GBP/GBX/POINT sowie zusätzliche ausschließlich synthetische Quantity- und
+Volume-Definitionen offline getestet. 27/27 gezielte Tests einschließlich acht
+eingefrorener synthetischer v1-Byte-/Dedupe-Vektoren erfolgreich. Tatsächliche
+Live-Zeilen wurden nicht erneut gelesen; v1-Schutz beruht auf byteidentischem
+Code und unveränderten Regressionen. Kein Live-Writer-Test, B8-Import,
+Current-/Bars-Write, Browser, Provider, DB-Verbindung oder Produktionsdeploy.
+[Vertrag, API und Nachweisgrenzen](PHASE3N_OBSERVATION_V2_WRITER.md).
+Der spätere Phase-3O-Test in der isolierten DB benötigt neue ausdrückliche Freigabe.
+
+Lokale Gesamtsuite für Phase 3N: 347/348, ausschließlich bekanntes
+Windows-`budget_not_private`; alle bisherigen v1-Tests grün. Validator,
+PHP-Lint und Diff-Prüfung bestanden. Exakter Abschlusscommit und Linux-Run
+werden in Issue #30 dokumentiert; Produktionsdeploy skipped.
