@@ -161,3 +161,107 @@ testsite deployment are required.
 The code task is implemented. A fully green inherited regression remains blocked
 by the two baseline homepage hash tests. MySQL optimizer/latency and the catalog
 index gap remain separate qualification work, not a production release.
+
+## Five-asset live acceptance attempt — 20 October 2026
+
+**Incomplete: read-only inventory and EXPLAIN obtained; no onboarding and no final
+batch executed.** The one approved local masked credential entry was cancelled
+before credentials were handed to the SSH/DB runner. It was not repeated. This
+is not evidence that the existing passwords or database permissions are invalid.
+
+Existing hosting SSO, after the user renewed two-factor authentication, opened
+phpMyAdmin for precisely `h29077_mosa2_test`. A read-only identity query verified
+MySQL `8.0.26-16`, `h29077_mosa2_test@localhost` and port `3307`; the UI's historical
+“MySQL 5.7” label was not used as engine evidence. No Plesk task was run.
+
+### Read-only inventory and deterministic provisional selection
+
+Nine active equity assets had nine global, primary ISIN identifiers, matching
+identifier/normalized values and NULL source/validity fields. All nine ISINs
+passed the existing `Phase3D\isinValid` check. The ledger contained versions
+1–4; four frozen units were visible. This does not replace the exact five-manifest
+Runtime preflight or provider qualification.
+
+Exclude the two mandated historical assets, sort remaining valid global ISINs
+lexicographically, and qualify the first three with the existing adapter. This
+yields the following **provisional** scope/order, without name-based preference:
+
+| Order | Asset | ISIN | Existing asset ID | Observed route situation |
+| --- | --- | --- | --- | --- |
+| 1 | DroneShield | AU000000DRO2 | 516 | Legacy route 517 / Source 205; no unit-bound Frankfurt route shown |
+| 2 | BYD | CNE100000296 | 514 | Legacy Frankfurt route 514 / Source 204; unit binding NULL |
+| 3 | Ubtech Robotics | CNE100006CQ4 | 517 | Legacy route 518 / Source 205; no unit-bound Frankfurt route shown |
+| 4 | Carl Zeiss Meditec | DE0005313704 | 529 | Frankfurt route 530 / revision 1 / Source 204 / EUR@1 |
+| 5 | PNE AG | DE000A0JBPG2 | 528 | Frankfurt route 529 / revision 1 / Source 204 / EUR@1 |
+
+DroneShield, BYD and Ubtech are not yet provider-qualified or onboarded by this
+assignment. Identity validity alone does not establish eligibility. No synthetic
+assets, new Sources or manual SQL INSERTs were used. Initial inventory: 13
+Observations (maximum ID 4902), two Current rows and zero Bars. Observation
+history was not enumerated.
+
+### Concrete runtime binding correction
+
+The documented adapter key `boerse_frankfurt_api_v1` differs from the existing
+canonical Source reference `boerse_frankfurt_api` (Source 204). The previous
+Runtime check required these distinct keys to be identical and would reject
+this historically qualified binding.
+
+An approved private manifest can now explicitly supply `provider_key` for the
+adapter contract; `route_evidence.row.provider_key` still qualifies the existing
+canonical Source/route. Acquired adapter module, class, instrument and provider
+key continue to match exactly. Without a separate explicit key, the original
+exact comparison remains. No suffix stripping, automatic alias discovery,
+Source rename or new Source is introduced. A generic test proves rejection
+without explicit binding and persistence with it, preserving the Source row.
+
+### Exactly one read-only EXPLAIN
+
+Executed once through the existing Test-DB administration session:
+
+```sql
+EXPLAIN SELECT * FROM m2_assets WHERE display_name <=> 'DroneShield' LIMIT 33;
+```
+
+Result: `select_type=SIMPLE`, `type=ALL`, `possible_keys=NULL`, `key=NULL`,
+estimated `rows=9`, `filtered=11.11`, `Extra=Using where`. This confirms the
+documented catalog scan on the small current asset catalog. It is not a measured
+Runtime bottleneck or Observation-history scan. No index or migration was added.
+No second EXPLAIN was executed.
+
+### Execution and evidence boundaries
+
+- Preparation provider requests: **0**. Final-batch provider requests: **0**.
+  The private qualifier was checked only with a frozen synthetic offline fixture.
+- Catalog/Source/route/unit/Observation writes by this assignment: **0**.
+  No onboarding plan was applied and no final batch budget was consumed.
+- Batch: **NOT STARTED**. No fabricated `overall_status`, writer decisions,
+  Observation IDs, commits, readbacks or replays. Stored IDs above are inventory
+  facts, not new per-asset execution results.
+- Current/Bars were read with **no mutation issued**. The independent post-batch
+  unchanged-state proof remains **incomplete**, because there was no batch.
+  No Current projection ran.
+- Real per-asset Runtime/query/provider timings: **not measured**. Historical
+  offline 75-SQL/70-row values are not presented as live measurements.
+- SSH without a password was currently tested and denied. Both matching local
+  WinSCP profiles had neither a stored password nor a key configuration. Direct
+  MySQL port 3307 was reachable and advertised TLS, but certificate verification
+  failed before authentication; verification was not disabled or bypassed.
+- The user approved one masked local dialog for the existing SSH and Test-DB
+  passwords and one private temporary CLI directory. The dialog's final state
+  was `CANCELLED`: no password handover, authenticated SSH run or remote temporary
+  CLI directory. No password was logged, placed in command arguments, stored in
+  the repository or sent to GitHub.
+- Collector **28/28**, batch **13/13**, final Runtime **15/15** tests passed. The
+  final Runtime block/new binding test used local PHP 8.4.13; the initial unchanged
+  Collector/batch block used existing PHP 8.5.8. The two unrelated homepage hash
+  tests were neither repaired nor rerun. PHP lint and diff checks passed.
+- No scheduler, retry, parallel run, webdeployment, Plesk task, password/account
+  change, new database, Bars import or production action occurred. Native order
+  registration was attempted once and returned `PROMPT_RECEIPT_MISSING` again.
+
+Remaining prerequisite: available existing SSH/Test-DB authentication. Another
+credential-entry attempt requires renewed user instruction because this order
+limited that interaction to once. Then obtain all three actual provider
+qualifications and conflict-free generic onboarding plans, followed by the
+complete five-asset preflight, before consuming the single final batch budget.

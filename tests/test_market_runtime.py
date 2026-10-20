@@ -106,6 +106,20 @@ class RuntimeTests(unittest.TestCase):
         acquired=copy.deepcopy(self.acquired);acquired['provider_key']='wrong_provider'
         result=self.call(acquired=acquired);self.assertEqual(result['providers'],1);self.assertFalse(result['reports'][0]['committed'])
 
+    def test_versioned_adapter_to_existing_source_requires_explicit_manifest_binding(self):
+        state=copy.deepcopy(self.state);manifest=copy.deepcopy(self.manifest)
+        canonical_source='qualified_canonical_provider'
+        state['m2_sources'][0]['source_key']='provider:'+canonical_source
+        manifest['route_evidence']['row']['provider_key']=canonical_source
+        qualified=onboarding.route_input()|dict(evidence=manifest['route_evidence'])
+        state['m2_asset_source_routes']=[onboarding.call(action='route',routes=[],qualified=qualified,units=onboarding.UNITS)['result']['row']|dict(id='11')]
+        rejected=self.call(state=state,manifest=manifest)
+        self.assertFalse(rejected['reports'][0]['committed'])
+        manifest['provider_key']=self.acquired['provider_key']
+        accepted=self.call(state=state,manifest=manifest)
+        self.assertTrue(accepted['reports'][0]['ok'],accepted['reports'])
+        self.assertEqual(accepted['state']['m2_sources'],state['m2_sources'])
+
     def test_same_semantic_fact_on_another_route_is_not_reimported(self):
         fact=self.call()['state']['m2_market_observations'][0]
         altered=dict(fact,route_id='88')

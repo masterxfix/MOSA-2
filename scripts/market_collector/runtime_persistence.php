@@ -89,7 +89,9 @@ function runtimeRun(string $privateRoot,array $config,array $manifest,callable $
         $r['stage']='provider';$r['provider_requests']=1;
         $acquired=$invoke($config,['action'=>'fetch','private_root'=>$privateRoot,'php_cli'=>$config['php']]);
         foreach(['adapter_module','adapter_class','instrument'] as $field)same($acquired[$field]??null,$manifest[$field],'acquisition_binding');
-        same($acquired['provider_key']??null,$manifest['route_evidence']['row']['provider_key'],'acquisition_source');
+        // A versioned adapter contract and the existing canonical Source may have
+        // different keys. Such a binding must be explicit in the approved manifest.
+        same($acquired['provider_key']??null,$manifest['provider_key']??$manifest['route_evidence']['row']['provider_key'],'acquisition_source');
         same($acquired['provider_requests']??null,1,'one_provider_request');
         $r['stage']='transaction';$p->beginTransaction();
         try{
