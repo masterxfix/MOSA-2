@@ -527,3 +527,14 @@ Danach gegebenenfalls getrennte Stammdatenvorbereitung, keine automatische Anlag
 Generische synthetische Gates verwenden weiterhin den echten Phase-3N-Writer.
 Tests, einziger Abschlusscommit und Linux-Run mit Deploy skipped in Issue #33.
 DB-Verbindungen/Writes 0; keine Browser-/Dogado-/Provideraktion oder Produktion.
+
+## Allgemeiner Marktdaten-Collector v1 als Offline-Hauptpfad
+
+Issue #34: providerneutraler Fixture-Collector, separater Yahoo-Chart-Snapshot-
+Adapter und gemeinsamer Normalizer führen native EUR-/GBX-Snapshots bis zum
+vorhandenen Phase-3N-WriterPlanner. Exakte Rawbytes/Payloadhash und Feldprovenienz
+bleiben gebunden; GBX-Zahl unverändert, Currency GBP aus dem Unitkatalog.
+Volume bewusst NULL, keine FX-/Derived-/Bars-/Currentlogik. Keine Schemaänderung,
+DB-/Providerverbindung oder Produktion. B8 bleibt geparkt, bis der in Phase 3Q
+benannte historische Sicherungsstand vorliegt; kein weiterer B8-Sonderpfad.
+[Architektur, Verträge und Offline-Nachweis](MARKET_COLLECTOR_V1.md).
