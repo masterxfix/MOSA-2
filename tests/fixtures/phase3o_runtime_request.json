@@ -1,0 +1,159 @@
+{
+  "routes": [
+    {
+      "format_version": 2,
+      "route": {
+        "id": "8301",
+        "asset_id": "8101",
+        "source_id": "8201",
+        "route_revision": "1",
+        "unit_contract_version": "mosa2-market-unit-v1",
+        "quote_unit_key": "EUR",
+        "quote_unit_version": "1",
+        "quantity_basis_unit_key": null,
+        "quantity_basis_unit_version": null,
+        "quantity_basis_amount": null,
+        "volume_unit_key": null,
+        "volume_unit_version": null
+      }
+    },
+    {
+      "format_version": 2,
+      "route": {
+        "id": "8302",
+        "asset_id": "8102",
+        "source_id": "8201",
+        "route_revision": "1",
+        "unit_contract_version": "mosa2-market-unit-v1",
+        "quote_unit_key": "GBP",
+        "quote_unit_version": "1",
+        "quantity_basis_unit_key": null,
+        "quantity_basis_unit_version": null,
+        "quantity_basis_amount": null,
+        "volume_unit_key": null,
+        "volume_unit_version": null
+      }
+    },
+    {
+      "format_version": 2,
+      "route": {
+        "id": "8303",
+        "asset_id": "8103",
+        "source_id": "8201",
+        "route_revision": "1",
+        "unit_contract_version": "mosa2-market-unit-v1",
+        "quote_unit_key": "POINT",
+        "quote_unit_version": "1",
+        "quantity_basis_unit_key": null,
+        "quantity_basis_unit_version": null,
+        "quantity_basis_amount": null,
+        "volume_unit_key": null,
+        "volume_unit_version": null
+      }
+    },
+    {
+      "format_version": 2,
+      "route": {
+        "id": "8304",
+        "asset_id": "8104",
+        "source_id": "8201",
+        "route_revision": "1",
+        "unit_contract_version": "mosa2-market-unit-v1",
+        "quote_unit_key": "GBX",
+        "quote_unit_version": "1",
+        "quantity_basis_unit_key": null,
+        "quantity_basis_unit_version": null,
+        "quantity_basis_amount": null,
+        "volume_unit_key": null,
+        "volume_unit_version": null
+      }
+    }
+  ],
+  "observations": [
+    {
+      "asset_id": "8101",
+      "source_id": "8201",
+      "route_id": "8301",
+      "currency": "EUR",
+      "market_at": "2001-01-01 00:00:00",
+      "observed_at": "2001-01-01 00:00:01",
+      "price": "42.125",
+      "bid": null,
+      "ask": null,
+      "volume": null,
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "quote_unit_key": "EUR",
+      "quote_unit_version": "1",
+      "quantity_basis_unit_key": null,
+      "quantity_basis_unit_version": null,
+      "quantity_basis_amount": null,
+      "volume_unit_key": null,
+      "volume_unit_version": null
+    },
+    {
+      "asset_id": "8102",
+      "source_id": "8201",
+      "route_id": "8302",
+      "currency": "GBP",
+      "market_at": "2001-01-01 00:00:00",
+      "observed_at": "2001-01-01 00:00:01",
+      "price": "42.125",
+      "bid": null,
+      "ask": null,
+      "volume": null,
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "quote_unit_key": "GBP",
+      "quote_unit_version": "1",
+      "quantity_basis_unit_key": null,
+      "quantity_basis_unit_version": null,
+      "quantity_basis_amount": null,
+      "volume_unit_key": null,
+      "volume_unit_version": null
+    },
+    {
+      "asset_id": "8103",
+      "source_id": "8201",
+      "route_id": "8303",
+      "currency": null,
+      "market_at": "2001-01-01 00:00:00",
+      "observed_at": "2001-01-01 00:00:01",
+      "price": "42.125",
+      "bid": null,
+      "ask": null,
+      "volume": null,
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "quote_unit_key": "POINT",
+      "quote_unit_version": "1",
+      "quantity_basis_unit_key": null,
+      "quantity_basis_unit_version": null,
+      "quantity_basis_amount": null,
+      "volume_unit_key": null,
+      "volume_unit_version": null
+    },
+    {
+      "asset_id": "8104",
+      "source_id": "8201",
+      "route_id": "8304",
+      "currency": "GBP",
+      "market_at": "2001-01-01 00:00:00",
+      "observed_at": "2001-01-01 00:00:01",
+      "price": "42.125",
+      "bid": null,
+      "ask": null,
+      "volume": null,
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "quote_unit_key": "GBX",
+      "quote_unit_version": "1",
+      "quantity_basis_unit_key": null,
+      "quantity_basis_unit_version": null,
+      "quantity_basis_amount": null,
+      "volume_unit_key": null,
+      "volume_unit_version": null
+    }
+  ],
+  "existing": [],
+  "created_at": "2001-01-01 00:00:02.000000",
+  "format_version": 2,
+  "intent": "NEW_NATIVE_V2",
+  "representation": "native"
+}

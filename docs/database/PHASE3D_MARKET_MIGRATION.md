@@ -443,3 +443,31 @@ Lokale Gesamtsuite für Phase 3N: 347/348, ausschließlich bekanntes
 Windows-`budget_not_private`; alle bisherigen v1-Tests grün. Validator,
 PHP-Lint und Diff-Prüfung bestanden. Exakter Abschlusscommit und Linux-Run
 werden in Issue #30 dokumentiert; Produktionsdeploy skipped.
+
+## Phase 3O – Observation-v2-Writer kontrolliert live validiert
+
+Der echte Phase-3N-Writer wurde über den späteren FPM-Gatewaypfad vor jeder
+synthetischen Testtransaktion erfolgreich mit vier vollständigen Goldenplänen
+qualifiziert. Portable Prozesskommunikation, struktureller Countertabellensatz,
+Capabilitybindung, zentrale Normalisierung verschachtelter SHOW-CREATE-
+Counteroptionen und getrenntes Rollbackreporting sind korrigiert und getestet.
+
+EUR/GBP/GBX/POINT praktisch in genau einer synthetischen Testtransaktion geprüft:
+vier INSERTs aus validierten echten Writerplänen, DB-Werte/canonical bytes/rohe
+32-Byte-Dedupe-Keys identisch, jeweils Duplicate und Conflict sowie sieben
+Rejectfälle ohne zusätzliche Writes. Anschließend vollständiger ROLLBACK.
+Zwei neue unabhängige Verbindungen bestätigen unveränderte Legacy-PKs/-Werte/
+Dedupe, v1-Marker/Unitfelder NULL, Units 4, Ledger v1/v2/v3, Routes 8,
+Observations 8, Checkpoints 5 und Current/Bars 0. Keine synthetischen Rows übrig.
+
+Gateway, Konfiguration, Locks und 27 temporäre Quellen entfernt; Gateway 404,
+anonyme Homepage 401 und Homepagebytes unverändert. Lokale Tests 374/375,
+ausschließlich bekanntes Windows-budget_not_private; gezielt Phase 3O und 3N
+jeweils 27/27, Validate/PHP-Lints/Diff-Check erfolgreich. Abschlusscommit und
+exakter Linux-Workflow mit Deploy skipped werden in Issue #31 dokumentiert.
+[Chronologischer Nachweis und Grenzen](PHASE3O_OBSERVATION_V2_WRITER_LIVE.md).
+
+Kein B8-Import, Produktionsdeploy oder neue Migration. Als nächster Schritt
+ist ausschließlich Phase 3P read-only vorbereitet: Identität, Source, Route,
+native GBX-Semantik, Zeit-/Payload-Evidenz und notwendige unit-aware
+Routenrevision qualifizieren. Diese B8-Prüfung wurde noch nicht ausgeführt.

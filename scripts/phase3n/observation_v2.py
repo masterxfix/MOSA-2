@@ -22,10 +22,13 @@ DOMAIN = b'mosa2-observation-v2\n'
 
 def shared(operation, **arguments):
     process = subprocess.run(['php', str(HERE/'value_adapter.php')],
-                             input=units.compact(dict(operation=operation, **arguments)),
-                             capture_output=True, text=True, encoding='utf-8', check=True, timeout=10)
-    require(not process.stderr, 'value adapter diagnostics')
-    result = json.loads(process.stdout)
+                             input=units.compact(dict(operation=operation, **arguments)).encode('utf-8'),
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+    stdout = process.stdout.decode('utf-8', 'strict')
+    stderr = process.stderr.decode('utf-8', 'strict')
+    require(process.returncode == 0, 'value adapter process failed')
+    require(not stderr, 'value adapter diagnostics')
+    result = json.loads(stdout)
     require(result['ok'], result.get('reason', 'value adapter failed'))
     return result['result']
 

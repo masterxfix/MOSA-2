@@ -263,7 +263,7 @@ class UnitSeedGatewayTests(unittest.TestCase):
                 'structure':{'counts':{'tables':1},'metadata':{'sample':{
                     'table':{'AUTO_INCREMENT':next_id,'ENGINE':'InnoDB'},
                     'show_create':'CREATE TABLE sample (id BIGINT PRIMARY KEY, value TEXT) ENGINE=InnoDB AUTO_INCREMENT='+next_id,
-                    'columns':[{'name':'id','type':'bigint','extra':'auto_increment'}]}}},
+                    'columns':[{'COLUMN_NAME':'id','COLUMN_TYPE':'bigint','EXTRA':'auto_increment'}]}}},
                 'counter_diagnostics':{'sample':{'column':'id','value':next_id,'count':len(ids),
                     'min_pk':str(min(ids)) if ids else None,'max_pk':str(max(ids)) if ids else None,
                     'pk_set':keys,'pk_sha256':digest(keys),'row_hash':digest(rows['sample'])}}}
@@ -312,7 +312,7 @@ class UnitSeedGatewayTests(unittest.TestCase):
         for field in ('table','column','show'):
             after=copy.deepcopy(base)
             if field=='table': after['structure']['metadata']['unexpected']=copy.deepcopy(after['structure']['metadata']['sample'])
-            if field=='column': after['structure']['metadata']['sample']['columns'][0]['type']='int'
+            if field=='column': after['structure']['metadata']['sample']['columns'][0]['COLUMN_TYPE']='int'
             if field=='show': after['structure']['metadata']['sample']['show_create']+=' COLLATE=unexpected'
             self.assertFalse(self.compare_state(base,after)['ok'])
 
