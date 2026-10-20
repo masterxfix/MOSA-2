@@ -327,6 +327,14 @@ Lokaler Vollrun: **434/435**, ausschließlich bekanntes Windows-
 Homepage- und Transportschutzprüfungen bestanden. Keine Fehler-Retests,
 Codekorrekturen nach Abschlussregression oder zusätzlichen Vollruns.
 
+## Generischer Collector-Runtimepfad (20.10.2026)
+
+Der folgende Abschnitt beschreibt den historischen Einmalnachweis. Der neue
+Codevertrag für explizite Batches bis zehn Assets, bounded Runtimeabfragen und
+den erhaltenen exhaustive Proof Mode steht in [COLLECTOR_RUNTIME.md](COLLECTOR_RUNTIME.md).
+Er erteilt keine zusätzliche Live- oder Produktionsfreigabe; die historischen
+Nachweise und deren damalige Grenzen bleiben erhalten.
+
 ## Nächste Grenze
 
 Keine Freigabe für DB-Persistenz, Last-/Parallelbetrieb, breitere Instrumentlisten,

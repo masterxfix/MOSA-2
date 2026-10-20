@@ -47,9 +47,9 @@ def call(manifests, outcomes=(), path_case=None, action=None):
 
 
 class MarketLiveBatchTests(unittest.TestCase):
-    def test_identifier_order_overrides_input_and_name(self):
+    def test_explicit_input_order_is_preserved(self):
         low, high = manifest(1), manifest(2)
-        self.assertEqual(call([high, low])['calls'], [isin(1), isin(2)])
+        self.assertEqual(call([high, low])['calls'], [isin(2), isin(1)])
 
     def test_duplicate_identity_rejected_before_runner_even_with_different_key_order(self):
         a = manifest(1);b = copy.deepcopy(a);b['identity'] = dict(reversed(list(b['identity'].items())))
@@ -58,32 +58,33 @@ class MarketLiveBatchTests(unittest.TestCase):
     def test_only_existing_route_policy_allowed_before_first_runner(self):
         a, b = manifest(1), manifest(2);b['policy'] = 'ONBOARD_NEW_ROUTE'
         result = call([a, b], action='invalid_run')['batch']
-        self.assertEqual(result['overall_status'], 'FAILED_BEFORE_FIRST_ITEM')
+        self.assertEqual(result['overall_status'], 'FAILED_BEFORE_FIRST_COMMIT')
         self.assertEqual(result['started_count'], 0);self.assertEqual(result['provider_requests'], 0)
         self.assertEqual(result['database_connections'], 0);self.assertEqual(result['not_started_count'], 2)
 
-    def test_success_aggregates_and_returns_public_results_without_identity(self):
+    def test_success_aggregates_and_reports_identity_without_private_paths(self):
         result = call([manifest(2), manifest(1)]);r = result['batch']
         self.assertEqual(r['overall_status'], 'COMPLETE')
         self.assertEqual([r[k] for k in ['started_count','completed_count','failed_count','not_started_count']], [2,2,0,0])
         self.assertEqual([r[k] for k in ['provider_requests','database_connections']], [2,4])
         self.assertEqual([x['source'] for x in r['item_results']], ['EXISTING_MATCH']*2)
-        r.pop('private_evidence');self.assertNotIn(isin(1), json.dumps(r));self.assertNotIn('private_root',json.dumps(r))
+        self.assertEqual([x['asset_identity'] for x in r['item_results']], [isin(2),isin(1)])
+        r.pop('private_evidence');self.assertNotIn('private_root',json.dumps(r))
 
     def test_first_failure_keeps_second_not_started(self):
         r = call([manifest(2),manifest(1)], [dict(ok=False,committed=False)])['batch']
-        self.assertEqual(r['overall_status'], 'PARTIAL')
+        self.assertEqual(r['overall_status'], 'FAILED_BEFORE_FIRST_COMMIT')
         self.assertEqual([x['status'] for x in r['item_results']], ['FAILED','NOT_STARTED'])
         self.assertEqual([r[k] for k in ['started_count','completed_count','failed_count','not_started_count']], [1,0,1,1])
 
     def test_second_failure_preserves_first_commit(self):
         r = call([manifest(1),manifest(2)], [{},dict(ok=False,committed=False)])['batch']
-        self.assertEqual(r['overall_status'], 'PARTIAL');self.assertEqual(r['completed_count'], 1)
+        self.assertEqual(r['overall_status'], 'PARTIAL_FAILED');self.assertEqual(r['completed_count'], 1)
         self.assertTrue(r['item_results'][0]['committed']);self.assertFalse(r['item_results'][1]['committed'])
 
     def test_failure_has_no_retry_and_sequence_has_no_overlap(self):
         r = call([manifest(3),manifest(2),manifest(1)], [{},dict(ok=False,committed=False)])
-        self.assertEqual(r['calls'], [isin(1),isin(2)])
+        self.assertEqual(r['calls'], [isin(3),isin(2)])
         self.assertEqual(r['events'], ['start:0','finish:0','start:1','finish:1'])
         self.assertEqual(r['batch']['not_started_count'], 1)
         thrown = call([manifest(1),manifest(2)], [dict(throw=True)])
@@ -109,3 +110,21 @@ class MarketLiveBatchTests(unittest.TestCase):
         for items in [[],[manifest(i) for i in range(11)],[bad],[invalid]]:
             r = call(items);self.assertFalse(r['ok']);self.assertEqual(r['calls'], [])
         self.assertEqual(call([manifest(1)])['batch']['overall_status'], 'COMPLETE')
+
+    def test_one_two_five_and_ten_assets_have_individual_commits_and_replays(self):
+        for size in [1,2,5,10]:
+            r=call([manifest(i) for i in range(size)])['batch']
+            self.assertEqual(r['overall_status'],'COMPLETE');self.assertEqual(r['committed_count'],size)
+            self.assertEqual(r['provider_requests'],size)
+            self.assertTrue(all(x['replay']=='DUPLICATE_UNCHANGED' and x['committed'] for x in r['item_results']))
+
+    def test_middle_failure_leaves_later_assets_unstarted_and_prior_commits(self):
+        r=call([manifest(i) for i in range(5)],[{},{},dict(ok=False,committed=False,stage='transaction')])['batch']
+        self.assertEqual(r['overall_status'],'PARTIAL_FAILED');self.assertEqual(r['committed_count'],2)
+        self.assertEqual([x['status'] for x in r['item_results']],['COMPLETE','COMPLETE','FAILED','NOT_STARTED','NOT_STARTED'])
+        self.assertEqual(r['item_results'][2]['failure_stage'],'transaction')
+        self.assertFalse(r['item_results'][3]['provider_request_performed'])
+
+    def test_first_readback_failure_after_commit_is_partial_failed(self):
+        r=call([manifest(1),manifest(2)],[dict(ok=False,committed=True,stage='readback')])['batch']
+        self.assertEqual(r['overall_status'],'PARTIAL_FAILED');self.assertEqual(r['committed_count'],1)

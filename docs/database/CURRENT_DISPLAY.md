@@ -4,8 +4,10 @@ The display is an explicit extension of the manual collector, not an implicit
 change to its observation-only default. `MarketCurrent\run` uses the existing
 sequential `MarketBatch\run`, adapter, normalizer and v2 writer. It first checks
 the whole configured scope and its Current approvals without a provider call.
-An unchanged acquired fact is accepted only by this opt-in caller. The default
-live persistence still requires an INSERT and an empty Current under schema 3.
+The observation runtime also accepts an exactly unchanged acquired fact, without
+projecting Current. Its default contract is schema 4; schema 3 remains an explicit
+configuration. Exhaustive historical proofs retain their original schema/Current
+preconditions. See [collector runtime](COLLECTOR_RUNTIME.md).
 
 ## Current selection
 
@@ -40,6 +42,11 @@ successful batch reports CURRENT_FAILED: already stored observations remain
 valid, Current rolls back, and there is no automatic retry or provider call.
 An independent connection verifies the committed Current and unchanged other
 tables. This is a manual, bounded path, not a parallel or scheduled service.
+
+Collector batch v2 preserves configured order and reports `COMPLETE`,
+`PARTIAL_FAILED` or `FAILED_BEFORE_FIRST_COMMIT`. Only `COMPLETE` enters this
+separate Current path. The Current approval/projection functions retain their
+explicit exhaustive evidence checks; observation-only runtime never calls them.
 
 Existing stored observations can also be projected without running the collector:
 the shared `planner.plan` / `MarketCurrent\refresh` path has no provider dependency.

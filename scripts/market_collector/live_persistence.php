@@ -73,7 +73,7 @@ function compareDelta(array $before,array $after,array $plan,array $inserted): v
     }same($after,$before,'unplanned_delta');
 }
 /** One read-only plan, one provider acquisition, one atomic business transaction, one independent readback. */
-function run(string $privateRoot,string $password,array $config,array $manifest): array {
+function proofRun(string $privateRoot,string $password,array $config,array $manifest): array {
     $capture=static fn(PDO $db)=>snapshot($db,$config['state_contract']??[]);
     $r=['ok'=>false,'stage'=>'preflight','database_connections'=>0,'provider_requests'=>0,'committed'=>false,'rollback'=>null];
     $p=null;$locked=false;$baseline=null;$plan=null;$inserted=[];$lockKey=null;
@@ -93,6 +93,7 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
             $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');$store=new \Mosa2\MarketIdentity\PdoStore($p);
             $asset=applyAssetIdentityPlan($store,$plan['asset'],$now);$route=strings(applyMarketRoutePlan($store,$plan['route'],$asset['asset_id'],$now));$binding=routeBinding($route);
             $writer=bridge($config,['action'=>'plan','acquired'=>$acquired,'route'=>$binding,'created_at'=>$now,'existing'=>existing($baseline['m2_market_observations']),'allow_duplicate'=>($config['allow_duplicate']??false)===true])['plan'];
+            $r['writer']=$writer['decision'];
             if($writer['decision']==='INSERT'){
                 \Mosa2\Phase3O\executePlan($p,$writer,$binding,$now);$observationId=$p->lastInsertId();
             }else{
@@ -101,6 +102,7 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
                 $old=array_values(array_filter($baseline['m2_market_observations'],static fn($row)=>$row['dedupe_key']===$key));same(count($old),1,'duplicate_origin');
                 $observationId=$old[0]['id'];$plan['deltas']['m2_market_observations']=0;
             }
+            $r['observation_id']=$observationId;
             $state=$capture($p);$rows=array_values(array_filter($state['m2_market_observations'],static fn($row)=>$row['id']===$observationId));same(count($rows),1,'observation_readback');$observation=$rows[0];
             if($writer['decision']==='INSERT'){$expected=\Mosa2\Phase3O\insertValues($writer,$binding,$now);$expected['dedupe_key']=strtoupper(bin2hex($expected['dedupe_key']));same($observation,['id'=>$observationId]+strings($expected),'observation_exact');}
             else same(array_intersect_key($observation,$writer['normalized']),strings($writer['normalized']),'duplicate_payload');
@@ -109,7 +111,7 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
             same($replay['decision'],'DUPLICATE_UNCHANGED','replay');same($replay['canonical_bytes'],$writer['canonical_bytes'],'replay_canonical');same($replay['dedupe_key'],$writer['dedupe_key'],'replay_key');
             foreach($plan['deltas'] as $t=>$delta){$pk=$t==='m2_assets'?'entity_id':'id';$oldIds=array_column($baseline[$t],$pk);$inserted[$t]=array_values(array_filter($state[$t],static fn($row)=>!in_array($row[$pk],$oldIds,true)));}
             compareDelta($baseline,$capture($p),$plan,$inserted);same($p->commit(),true,'commit');$r['committed']=true;
-            $r+=['policy'=>$plan['policy'],'asset_plan'=>$plan['asset']['decision'],'route_plan'=>$plan['route']['decision'],'route_revision'=>$plan['route']['row']['route_revision'],'writer'=>$writer['decision'],'replay'=>'DUPLICATE_UNCHANGED','deltas'=>$plan['deltas']];
+            $r+=['observation_id'=>$observationId,'policy'=>$plan['policy'],'asset_plan'=>$plan['asset']['decision'],'route_plan'=>$plan['route']['decision'],'route_revision'=>$plan['route']['row']['route_revision'],'writer'=>$writer['decision'],'replay'=>'DUPLICATE_UNCHANGED','deltas'=>$plan['deltas']];
         }catch(Throwable $e){if($p->inTransaction())$r['rollback']=$p->rollBack();throw $e;}
     }catch(Throwable $e){$r['failure']=$e->getMessage();}
     finally {
@@ -117,6 +119,7 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
         if($locked&&$p!==null){try{$q=$p->prepare('SELECT RELEASE_LOCK(?)');$q->execute([$lockKey]);same((int)$q->fetchColumn(),1,'lock_release');}catch(Throwable $e){$r['cleanup_failure']=$e->getMessage();}}
         $p=null;
         if($baseline!==null&&($r['committed']||$r['rollback']===true)){
+            if($r['committed'])$r['stage']='readback';
             try{$r['database_connections']++;$read=connection($password);$read->exec('SET TRANSACTION READ ONLY');$read->beginTransaction();
                 try{$after=$capture($read);if($r['committed'])compareDelta($baseline,$after,$plan,$inserted);else same($after,$baseline,'rollback_delta');}
                 finally{if($read->inTransaction())$read->rollBack();$read=null;}
@@ -125,4 +128,14 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
         }
         unset($password);$r['ok']=$r['committed']&&($r['readback']??null)==='PASS'&&!isset($r['failure'])&&!isset($r['cleanup_failure'])&&!isset($r['readback_failure']);
     }return $r;
+}
+require_once __DIR__.'/runtime_persistence.php';
+/** Exhaustive evidence is an explicit test/proof operation, never the runtime default. */
+function run(string $privateRoot,string $password,array $config,array $manifest): array {
+    $mode=$config['verification_mode']??'runtime';check(in_array($mode,['runtime','proof'],true),'verification_mode');
+    if($mode==='proof')return proofRun($privateRoot,$password,$config,$manifest);
+    $consumed=is_file($privateRoot.'/provider-consumed.lock');
+    try{$result=runtimeRun($privateRoot,$config,$manifest,static fn()=>connection($password),__NAMESPACE__.'\\bridge');
+        $result['provider_requests']=!$consumed&&is_file($privateRoot.'/provider-consumed.lock')?1:0;return $result;}
+    finally{unset($password);}
 }
