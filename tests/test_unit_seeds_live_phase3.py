@@ -133,7 +133,7 @@ class LiveUnitSeedTests(unittest.TestCase):
         expected = {
             'scripts/phase3c/market_flow.php':'ab2b9510da0a76b549b587e10db5d768f079b57cd1d4e0d6542b46f805cd33af',
             'docs/database/migrations/0003_market_units.sql':'199933884802bd139b706e50e57e04687e9cbe5f8bd1366e98e302af7d47b8ee',
-            'index.html':'4ee184d6349180294977478df0c35f9022c4c22c13257cabf0eeb8534d813c31'}
+            'index.html':'977be8b1660a5d6065b281511232f3b94f5b54e219c55ed9241dfe3f5deb4c10'}
         for path,digest in expected.items():
             self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),digest)
 

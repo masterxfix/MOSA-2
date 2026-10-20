@@ -49,6 +49,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { font-size: clamp(3.4rem, 7vw, 5.3rem); line-height: 1.05; letter-spacing: -.065em; font-weight: 600; margin-bottom: 22px; }
 .hero-title { font-size: clamp(1.45rem, 3vw, 2.15rem); line-height: 1.35; letter-spacing: -.025em; margin-bottom: 22px; }
+.hero > .hero-title:last-child { margin-bottom: 0; }
 .intro { max-width: 680px; color: var(--muted); font-size: 1.02rem; }
 .principles { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 32px; }
 .principles p { color: var(--muted); font-size: .86rem; margin-bottom: 0; }

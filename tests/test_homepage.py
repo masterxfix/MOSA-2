@@ -77,9 +77,11 @@ class HomepageTests(unittest.TestCase):
     def test_original_overview_is_preserved_and_market_follows_results(self):
         original = re.sub(r'    <section class="market-section".*?</section>\n\n', '', self.html, flags=re.S)
         original = original.replace('  <script src="assets/js/market.js" defer></script>\n', '')
-        original = original.replace('assets/css/main.css?v=market-41', 'assets/css/main.css?v=footer-20261019')
+        original = original.replace('assets/css/main.css?v=homecopy-20261020', 'assets/css/main.css?v=footer-20261019')
         original = original.replace('<br>Mit Daten · <span data-data-ready-time aria-label="Datenladezeit wird gemessen">— ms</span>', '')
-        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), 'e368861ce9adffbb6ba0dbb206bd9bae9defdba5f19da10fed7193f18f578238')
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), '94d2c7509133ffbe2082ac647753371f19d3f9abe904d98fd4bc22be8e816bdd')
+        for removed in ['Finanzen, Depot und Markt verstehen', 'Die Daten liefern die Fakten.', 'Die KI hilft beim Verstehen.', 'class="principles"']:
+            self.assertNotIn(removed, self.html)
         self.assertRegex(self.html, r'<h1 id="projekt-titel">MOSA 2</h1>')
         order = [self.html.index(value) for value in ['class="results"', 'class="market-section"', 'class="next-step"', 'class="progress-section"']]
         self.assertEqual(order, sorted(order))
@@ -122,7 +124,7 @@ class HomepageTests(unittest.TestCase):
         self.assertEqual(scripts[1], (' src="assets/js/market.js" defer', ''))
         self.assertNotRegex(self.html + self.css, r'https?://|@import|url\(')
         self.assertEqual(re.findall(r'<link[^>]+href="([^"]+)"', self.html),
-                         ['assets/css/main.css?v=market-41'])
+                         ['assets/css/main.css?v=homecopy-20261020'])
         self.assertIn('@media (max-width: 600px)', self.css)
         self.assertIn('@media (max-width: 900px)', self.css)
         self.assertNotIn('animation:', self.css)
