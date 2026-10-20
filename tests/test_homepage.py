@@ -66,12 +66,13 @@ class HomepageTests(unittest.TestCase):
                 self.assertIn(text, self.text)
 
     def test_import_result_and_remaining_limits_are_unambiguous(self):
-        for text in ['Keine automatische Aktualisierung.', 'ausschließlich gespeicherte Daten',
-                     'Fehlende Angaben bleiben offen', 'keine Echtzeitzusage', 'Keine Produktivfreigabe',
+        for text in ['Keine Produktivfreigabe',
                      'Marktdaten werden geladen', 'Mit Daten']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
-        for obsolete in ['Echtzeitkurse verfügbar']:
+        for obsolete in ['Echtzeitkurse verfügbar', 'Keine automatische Aktualisierung.',
+                         'ausschließlich gespeicherte Daten', 'Fehlende Angaben bleiben offen',
+                         'keine Echtzeitzusage']:
             self.assertNotIn(obsolete, self.text)
 
     def test_original_overview_is_preserved_and_market_follows_results(self):
