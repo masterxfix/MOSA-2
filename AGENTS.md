@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 20.10.2026, 21:05:00 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 20.10.2026, 22:45:06 Uhr — Europe/Berlin (MESZ, UTC+02:00).
 
 ## Geltungsbereich
 
@@ -28,6 +28,17 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Die Vorabinformation muss konkret sagen: **was** der Nutzer voraussichtlich tun muss, **wo** dies geschieht und **warum** es erforderlich ist. Keine überraschenden Nutzeraktionen erst während des Codex-Laufs.
 - Codex soll soweit technisch möglich bis unmittelbar vor den unvermeidbaren Nutzerschritt selbst navigieren/vorbereiten und den Nutzer erst dann mit einer klaren Ein-Schritt-Anweisung auffordern.
 - Der Nutzer soll nicht selbst nach Tabs, Formularen oder Einstellungen suchen müssen, wenn Codex diese Vorbereitung übernehmen kann.
+
+## Verbindliche Passwort- und Secret-Regel
+
+- MOSA-2-/Codex-Aufträge dürfen **keine erneute Passwortabfrage als normalen Fallback** enthalten oder während der Ausführung überraschend auslösen.
+- Bevor ein Auftrag ausgegeben wird, muss ChatGPT prüfen, ob für alle voraussichtlich benötigten Zugriffe ein bereits freigegebener nicht-interaktiver Weg existiert (z. B. GitHub-Actions-Secret, bestehender sicherer Zugang oder ausdrücklich dokumentierter Secret-Pfad).
+- Ist ein benötigter nicht-interaktiver Zugang noch nicht eingerichtet, wird **zuerst dieser Zugang eingerichtet**. Der eigentliche Fachauftrag wird erst danach gestartet.
+- Eine einmalige Secret-Einrichtung ist nur zulässig, wenn sie technisch wirklich erforderlich ist und der Nutzer **vorher** klar erfährt, welches Secret er wo und wofür einmalig hinterlegt. Danach darf derselbe Arbeitsweg keine wiederholten Passwortfenster mehr erzeugen.
+- Bereits vorhandene geeignete Secrets und Zugänge sind wiederzuverwenden. Keine zusätzlichen Benutzer, Passwortwechsel, neuen Formulare oder lokalen Eingabedialoge nur für weitere Teilprüfungen anlegen.
+- Für Testsite-SFTP/SSH ist der dokumentierte GitHub-Actions-Weg mit den vorhandenen MOSA_TEST_SFTP_* Secrets/Variablen zu verwenden; lokale erneute Eingabe des web213-Passworts ist dafür nicht zulässig.
+- Für schreibende Test-DB-Läufe ist ebenfalls ein nicht-interaktiver Secret-Weg Voraussetzung. Solange dieser nicht eingerichtet ist, darf kein Auftrag gestartet werden, der absehbar eine erneute Test-DB-Passworteingabe verlangen würde.
+- Wenn trotz dieser Regel ein Tool während eines laufenden Auftrags unerwartet ein Passwort verlangt, den Vorgang an dieser Stelle stoppen und **nicht** den Nutzer zur Eingabe auffordern. Erst den fehlenden nicht-interaktiven Zugang sauber herstellen.
 
 ## MOSA-Auftragsstandard
 
@@ -150,6 +161,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 20.10.2026 | 22:45:06 Uhr (MESZ, UTC+02:00) | Globale Passwort-/Secret-Regel ergänzt: keine erneuten Passwortabfragen als Fallback; Fachaufträge erst starten, wenn der benötigte nicht-interaktive Zugang eingerichtet ist. |
 | 20.10.2026 | 21:05:00 Uhr (MESZ, UTC+02:00) | Verbindlichen Dogado-/SFTP-Testsite-Zugang für Codex festgehalten: GitHub-Actions-Workflow, web213, harter Test-Webroot, Secret-/Variablennamen und klare Trennung vom älteren Produktionsziel. |
 | 20.10.2026 | 19:06:31 Uhr (MESZ, UTC+02:00) | Beim Diff-Check erkannte unbeabsichtigte Wortänderung im Abschnitt „Verständliche Einordnung nach Tests“ zurückgenommen; Browserkorrektur unverändert. |
 | 20.10.2026 | 19:05:09 Uhr (MESZ, UTC+02:00) | Pauschale Browserpflicht für Web-/Dogado-Aufträge ersetzt: Google Chrome ist der Standardbrowser für Codex; Browserwahl und Dateiübertragung/Deployment ausdrücklich getrennt. Stelle mit **GEÄNDERT** markiert. |
