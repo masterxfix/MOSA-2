@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 20.10.2026, 19:05:09 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 20.10.2026, 19:06:31 Uhr — Europe/Berlin (MESZ, UTC+02:00).
 
 ## Geltungsbereich
 
@@ -117,7 +117,7 @@ Diese Grenze ist verbindlich und hat Vorrang vor Komfort, Toolwahl oder Automati
 - Nach jedem Testblock gibt ChatGPT von sich aus eine kurze, verständliche Einordnung: **fachlich erfolgreich / teilweise / fehlgeschlagen**, mit dem konkret nachgewiesenen Ergebnis und seiner Bedeutung für MOSA 2.
 - Die wichtigsten Messwerte den vereinbarten Zielwerten gegenüberstellen und in Alltagssprache bewerten. Eine reine Datei-, Test- oder Commitliste ersetzt diese Einordnung nicht.
 - Aussagegrenzen und offene Risiken nennen: Ein begrenzter Test ist keine Freigabe für größere Datenmengen, Parallelbetrieb oder Produktivbetrieb. Fehlende Prüfungen nicht als bestanden darstellen.
-- Fachliche Testergebnisse und Probleme bei Werkzeugen, Statusübertragung oder KI-Kontrollzentrumproblemen getrennt bewerten; Regelverstöße und fehlende Nachweise trotzdem ausdrücklich nennen.
+- Fachliche Testergebnisse und Probleme bei Werkzeugen, Statusübertragung oder KI-Kontrollzentrum getrennt bewerten; Regelverstöße und fehlende Nachweise trotzdem ausdrücklich nennen.
 - Den nächsten sinnvollen Schritt kurz benennen, ohne ihn automatisch auszuführen. Insgesamt wenige kurze Absätze, keine langen Rohprotokolle oder unnötigen Fachbegriffe.
 
 ## Abschlussmeldung
@@ -138,6 +138,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 20.10.2026 | 19:06:31 Uhr (MESZ, UTC+02:00) | Beim Diff-Check erkannte unbeabsichtigte Wortänderung im Abschnitt „Verständliche Einordnung nach Tests“ zurückgenommen; Browserkorrektur unverändert. |
 | 20.10.2026 | 19:05:09 Uhr (MESZ, UTC+02:00) | Pauschale Browserpflicht für Web-/Dogado-Aufträge ersetzt: Google Chrome ist der Standardbrowser für Codex; Browserwahl und Dateiübertragung/Deployment ausdrücklich getrennt. Stelle mit **GEÄNDERT** markiert. |
 | 17.10.2026 | 20:03:45 Uhr (MESZ, UTC+02:00) | Vorabinformation für notwendige Nutzeraktionen ergänzt: ChatGPT muss vor jedem Auftrag klar ankündigen, was der Nutzer wo und warum selbst tun muss; Codex soll bis unmittelbar vor diesen Schritt selbst vorbereiten. |
 | 17.10.2026 | 17:23:47 Uhr (MESZ, UTC+02:00) | Verständliche Einordnung nach jedem Testblock ergänzt: fachliches Ergebnis, Bedeutung, Messwerte gegenüber Zielwerten, Aussagegrenzen und getrennter Status von Werkzeug-/Kontrollzentrumproblemen. |
