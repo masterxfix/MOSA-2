@@ -197,8 +197,8 @@ Quellen: [Plattformaufnahme, Scheduler und Backups](../database/DOGADO_PLATFORM_
 
 | Thema | Tatsächlich noch zu klären | Keine daraus folgende Zusatzmaßnahme |
 | --- | --- | --- |
-| Testsite-Pfad | Exakter Serverpfad plus Abbildung auf das verwendete Dateiübertragungsprofil | Keine neuen Ordner, Domains oder Datenbanken anlegen. |
-| Normaler Testsite-Upload | Ob ein bestehender Zugang den Testordner erreicht; fester Zielschutz und geeigneter Dateiumfang | Nicht den bestehenden Workflow auf `mosa.scharwerk.de` starten. |
+| Testsite-Pfad | Vom Nutzer bestätigter Test-Webroot in Abschnitt 10; praktische SFTP-Prüfung durch Codex noch offen | Keine neuen Ordner, Domains oder Datenbanken anlegen. |
+| Normaler Testsite-Upload | Temporärer Schreib-/Readback-/SHA-256-/Delete-Nachweis noch offen; Uploadscope ausschließlich gemäß Abschnitt 10 | Nicht den bestehenden Workflow auf `mosa.scharwerk.de` starten. |
 | Passwortentfernung | Ergebnis und verbleibender Authentifizierungsmodus, nicht nur die Anweisung | Keine erneute Passwortanforderung oder automatische Kontoänderung durch diese Dokumentation. |
 | Abschluss von #41 | Tatsächlicher Live-/Commit-/Abnahmenachweis; zuletzt im geprüften Issue noch offen | Kein Abschluss allein aufgrund der Doku oder einer Testanzahl. |
 
@@ -261,3 +261,40 @@ Passwort-, Domain-, PHP-, Datenbank-, DNS-, Firewall- oder Scheduler-Einstellung
 wurde geändert; kein Benutzer und kein regelmäßiger Job wurden angelegt.
 Keine Website-Datei wurde auf Dogado hochgeladen, geändert oder gelöscht.
 Die Dokumentationsänderung und ihr Commit sind kein Deployment.
+
+## 10. Bestätigter SFTP-Zugang und begrenzter Testscope am 20.10.2026
+
+Nach der SSH-Umstellung bestätigte der Nutzer ausdrücklich, dass SFTP funktioniert.
+Im anschließenden Prüfauftrag bestätigte er außerdem den Test-Webroot. Diese
+Angaben stammen vom Nutzer; der unten angeforderte praktische Dateitest konnte
+durch Codex nicht ausgeführt werden und bleibt offen.
+
+| Merkmal | Stand und Nachweis |
+| --- | --- |
+| SFTP-Verbindung | Funktioniert laut ausdrücklicher Nutzerbestätigung; kein eigener Verbindungstest in diesem Lauf |
+| Host | `server10.configcenter.info` |
+| Port | `22` |
+| Primärer Benutzer | `web213` |
+| SSH-Typ | `/bin/bash (chrooted)`; gespeicherter Wert zuvor in Plesk erneut geprüft |
+| Ausschließlich erlaubter MOSA-2-Test-Webroot | `/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de` |
+| Erreichbarkeit des Test-Webroots | Vom Nutzer bestätigt; in diesem Lauf nicht selbst per SFTP geprüft |
+| Temporärer Upload / Readback / SHA-256-Vergleich | **Nicht durchgeführt; offen** |
+| Temporäre Testdatei entfernt | Nicht anwendbar: keine Testdatei angelegt oder hochgeladen |
+| Sichtbares SFTP-Basisverzeichnis | In diesem Lauf nicht ermittelt; nicht mit dem erlaubten Test-Webroot gleichsetzen |
+
+Die aktuelle Werkzeuginventarisierung bot Browserzugriffe, aber keine bedienbare
+native WinSCP-Oberfläche. Daher wurden weder die bestehende WinSCP-Sitzung noch
+deren gespeicherte Anmeldung verwendet. Ob das Passwort gespeichert ist, wurde
+nicht festgestellt; eine Passwortanforderung erfolgte nicht. Es wurden keine
+Shell-Kommandos für den Dateitest und keine alternativen Plesk-Aufgaben benutzt.
+Dieser Werkzeugbefund ist kein fehlgeschlagener SFTP-Login und kein Nachweis
+fehlender Schreibrechte.
+
+`web213` kann laut Nutzer technisch weitere Verzeichnisse sehen. Der autorisierte
+MOSA-2-Uploadscope bleibt trotzdem **hart auf den oben genannten Test-Webroot
+begrenzt**. Andere Domains und Verzeichnisstrukturen sind nicht freigegeben.
+Ein allgemeiner Deployment-Umbau ist damit nicht beauftragt oder umgesetzt.
+
+In diesem Prüflauf wurden auf Dogado keine Dateien angelegt, hochgeladen,
+verändert oder gelöscht. Es erfolgten keine Hosting-, Benutzer-, Passwort-,
+Datenbank-, Homepage- oder Scheduler-Änderungen und kein Produktionsdeploy.
