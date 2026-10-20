@@ -198,7 +198,7 @@ Quellen: [Plattformaufnahme, Scheduler und Backups](../database/DOGADO_PLATFORM_
 | Thema | Tatsächlich noch zu klären | Keine daraus folgende Zusatzmaßnahme |
 | --- | --- | --- |
 | Testsite-Pfad | Exakter Test-Webroot praktisch per SFTP bestätigt, siehe Abschnitt 11 | Keine neuen Ordner, Domains oder Datenbanken anlegen. |
-| Normaler Testsite-Upload | Temporärer Schreib-/Readback-/SHA-256-/Delete-Nachweis PASS, siehe Abschnitt 11; kein allgemeiner Deployment-Umbau | Nicht den bestehenden Workflow auf `mosa.scharwerk.de` starten. |
+| Normaler Testsite-Upload | Manueller GitHub-Actions-Standard und praktischer SFTP-Nachweis PASS, siehe Abschnitt 12; Dateisatz immer ausdrücklich angeben | Nicht den bestehenden Workflow auf `mosa.scharwerk.de` starten. |
 | Passwortentfernung | Ergebnis und verbleibender Authentifizierungsmodus, nicht nur die Anweisung | Keine erneute Passwortanforderung oder automatische Kontoänderung durch diese Dokumentation. |
 | Abschluss von #41 | Tatsächlicher Live-/Commit-/Abnahmenachweis; zuletzt im geprüften Issue noch offen | Kein Abschluss allein aufgrund der Doku oder einer Testanzahl. |
 
@@ -345,3 +345,72 @@ Keine bestehenden Homepage-, CSS-, JS-, PHP- oder Konfigurationsdateien wurden
 verändert; keine Datenbank-, Benutzer- oder Passwortänderungen und kein
 Produktionsdeploy erfolgten. Dieser begrenzte Dateinachweis ist kein allgemeiner
 Deployment-Umbau und keine Produktionsfreigabe.
+
+## 12. GitHub Actions für MOSA-2-Testdeployments
+
+**GitHub Actions ist der Standardweg für automatisierte MOSA-2-Testdeployments.**
+Workflow: `.github/workflows/deploy-testsite.yml`, Name **Deploy MOSA 2 testsite**.
+Er startet ausschließlich manuell über `workflow_dispatch`; normale Pushes und
+Cronjobs lösen keinen Testsite-Deploy aus. Der bestehende Workflow auf `main`
+für `mosa.scharwerk.de` bleibt unverändert und wurde nicht ausgeführt.
+
+| Repository-Konfiguration | Name bzw. Sollwert |
+| --- | --- |
+| Passwort-Secret | `MOSA_TEST_SFTP_PASSWORD` – vorhanden, direkt vom Nutzer in GitHub hinterlegt |
+| Host-Key-Secret | `MOSA_TEST_SFTP_HOST_KEY_SHA256` – vorhanden, aus dem zuvor erfolgreich geprüften Hostschlüssel übernommen |
+| Variable | `MOSA_TEST_SFTP_HOST` = `server10.configcenter.info` |
+| Variable | `MOSA_TEST_SFTP_PORT` = `22` |
+| Variable | `MOSA_TEST_SFTP_USER` = `web213` |
+| Variable | `MOSA_TEST_SFTP_PATH` = `/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de` |
+
+Keine Secretwerte werden hier dokumentiert. Der Client akzeptiert ausschließlich
+diesen Host, Port, Benutzer und **exakten absoluten Test-Webroot**. Vor jeder
+Anmeldung wird der bereits verifizierte Ed25519-Hostschlüssel geprüft; unbekannte
+Schlüssel werden nicht automatisch akzeptiert. Die SFTP-Normalisierung muss
+ebenfalls exakt dem festen Test-Webroot entsprechen. Trotz weiterer technischer
+Verzeichnissicht von `web213` bleibt der MOSA-2-Uploadscope hart auf diesen Pfad
+begrenzt; dies ist ein Clientschutz und keine serverseitige Benutzerisolation.
+
+Der Standardmodus `probe` verwendet ausschließlich eine neue temporäre Datei.
+`deploy` verlangt eine explizite JSON-Liste versionierter, validierter Webdateien
+in `files_json`. Keine implizite Komplettübertragung und keine rekursive Löschung.
+Die gemeinsame Uploadlogik prüft den Dateisatz vor Schreibbeginn, lädt zunächst
+in temporäre Remote-Dateien, prüft SHA-256 per Readback und benennt erst dann
+atomar um. Einzelheiten und manueller Start: [Deploymentvertrag](../DEPLOYMENT.md).
+
+### Erster praktischer Actions-Test am 20.10.2026
+
+[Actions-Run 39479855161](https://github.com/masterxfix/MOSA-2/actions/runs/39479855161)
+endete erfolgreich. Genau ein manueller Lauf wurde gestartet, Modus `probe`.
+
+| Prüfschritt | Ergebnis |
+| --- | --- |
+| Sichere Anmeldung aus GitHub Actions | **PASS** |
+| SFTP-Verbindung | **PASS** |
+| Bereits verifizierter Host-Key | **PASS** |
+| Exakter Test-Webroot | **PASS** |
+| Temporärer Upload und atomarer Rename | **PASS** |
+| Readback und SHA-256 | **PASS**, auch nach dem Rename erneut geprüft |
+| Prüfdatei entfernt und Nichtvorhandensein geprüft | **PASS** |
+| Remote-Dateioperationen außerhalb des Test-Webroots | Keine; Pfadschutz im Client und gezielte Offline-Tests bestätigt |
+| Secretwerte in den geprüften Logs | Keine sichtbar; beide Secret-Umgebungswerte als `***` maskiert |
+| Gezielte Deployment-Sicherheitstests | **20/20 PASS**, lokal und im Linux-Actions-Lauf |
+
+SHA-256 des tatsächlichen Actions-Prüfinhalts und des finalen Readbacks:
+`da130c2f729b7b3ee40c674f7b42fd70891d8ac62f079a7ab78caee54e5e6879`.
+
+Damit der neue Workflow vor genau einem finalen Commit auf `main` getestet
+werden konnte, lief sein unveränderter YAML-Inhalt auf dem isolierten Prüfbranch
+`testsite-sftp-verify-a1579b` über den bereits registrierten manuellen Einstieg
+`.github/workflows/deploy.yml`. Prüfcommit:
+`39f6744149a45ace1218ad7885485ba80dac5eea`. Der YAML-Inhalt dieses Einstiegs ist
+identisch mit dem neuen `deploy-testsite.yml`; Uploadskripte und Tests entsprechen
+dem abschließenden Stand. Der alte Produktionsworkflow auf `main` wurde dabei
+nicht ersetzt. Der temporäre Prüfbranch wird nach Sicherung des Abschlussstands
+entfernt; der Run bleibt als Nachweis erreichbar. Kein zweiter SFTP-Testlauf.
+
+Der erste Test hat ausschließlich seine eigene Prüfdatei angelegt, übertragen,
+zurückgelesen und entfernt. Keine bestehende Homepage-, CSS-, JS-, PHP- oder
+Konfigurationsdatei wurde hochgeladen. Keine Produktion, Datenbankarbeit,
+Plesk-Aufgabe, Benutzeranlage oder Passwortänderung. Der Nachweis belegt den
+Dateitransport; er ersetzt keine Browserabnahme künftig geänderter Webdateien.

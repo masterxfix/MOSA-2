@@ -1,0 +1,58 @@
+name: Deploy MOSA 2 testsite
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Probe (temporary file only) or deploy an explicit web file set
+        type: choice
+        options: [probe, deploy]
+        default: probe
+        required: true
+      files_json:
+        description: JSON array of tracked web filenames; required only for deploy
+        type: string
+        default: '[]'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+
+jobs:
+  testsite:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test SFTP profiles and target isolation
+        run: python3 -m unittest discover -s tests -p 'test_deploy*.py' -v
+      - name: Validate tracked web package
+        run: python3 scripts/deploy_sftp.py validate
+      - name: Install pinned SFTP client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: SFTP testsite only
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: ${{ inputs.files_json }}
+          TEST_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          case "$TEST_OPERATION" in
+            probe|deploy) python3 scripts/deploy_test_sftp.py "$TEST_OPERATION" ;;
+            *) echo 'Unsupported operation'; exit 1 ;;
+          esac
+          printf 'MOSA-2 testsite SFTP: PASS\nCommit: %s\nOperation: %s\n' "$GITHUB_SHA" "$TEST_OPERATION" >> "$GITHUB_STEP_SUMMARY"

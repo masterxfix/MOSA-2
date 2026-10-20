@@ -127,11 +127,15 @@ def remote_kind(sftp, path):
         raise
 
 
-def check_remote(sftp, root, name=""):
+def check_remote(sftp, root, name="", *, scoped=False):
     """Check every existing ancestor and destination without following symlinks."""
     target = PurePosixPath(root) / name
-    parts = target.parts[1:]
-    current = ""
+    parts = target.relative_to(root).parts if scoped else target.parts[1:]
+    current = root if scoped else ""
+    if scoped:
+        mode = remote_kind(sftp, root)
+        if mode is None or not stat.S_ISDIR(mode):
+            raise ValueError("Scoped document root must be an existing directory")
     for index, part in enumerate(parts):
         current += "/" + part
         mode = remote_kind(sftp, current)
@@ -142,18 +146,32 @@ def check_remote(sftp, root, name=""):
             raise ValueError("Remote path contains a symlink or unexpected file type")
 
 
-def upload(sftp, root, files):
-    if root not in {f"/{SITE}", ABSOLUTE_ROOT}:
+TEST_ROOT = "/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de"
+
+
+def upload(sftp, root, files, *, profile="legacy"):
+    roots = {"legacy": {f"/{SITE}", ABSOLUTE_ROOT}, "test": {TEST_ROOT}}
+    if profile not in roots or root not in roots[profile]:
         raise ValueError("Canonical SFTP root is outside the MOSA-2 document root")
-    check_remote(sftp, root)
+    # Validate the entire explicit file set before any remote access.
+    names = set()
+    for name, _ in files:
+        path = PurePosixPath(name)
+        if (not name or path.is_absolute() or path.as_posix() != name
+                or ".." in path.parts or "\\" in name
+                or any(ord(c) < 32 for c in name) or name in names):
+            raise ValueError("Unsafe or duplicate deployment filename")
+        names.add(name)
+    scoped = profile == "test"
+    check_remote(sftp, root, scoped=scoped)
     mode = remote_kind(sftp, root)
     if mode is None or not stat.S_ISDIR(mode):
         raise ValueError("MOSA-2 document root must already exist")
     # Preflight the whole package before creating a directory or writing a file.
     for name, _ in files:
-        check_remote(sftp, root, name)
+        check_remote(sftp, root, name, scoped=scoped)
     for name, data in files:
-        check_remote(sftp, root, name)
+        check_remote(sftp, root, name, scoped=scoped)
         parent = PurePosixPath(name).parent
         current = root
         for part in parent.parts:
@@ -168,9 +186,10 @@ def upload(sftp, root, files):
             digest = hashlib.file_digest(uploaded, "sha256").digest()
         if digest != hashlib.sha256(data).digest():
             raise ValueError("SFTP upload readback mismatch")
-        check_remote(sftp, root, name)
+        check_remote(sftp, root, name, scoped=scoped)
         sftp.posix_rename(temporary, target)
-    print(f"Deployed {len(files)} verified files to https://{SITE}")
+    site = "mosa2-test.scharwerk.de" if scoped else SITE
+    print(f"Deployed {len(files)} verified files to https://{site}")
 
 
 def deploy(config, files):

@@ -1,4 +1,67 @@
-# MOSA 2: Deployment nach mosa.scharwerk.de
+# MOSA 2: getrennte Deploymentziele
+
+## MOSA-2-Testsite: manueller GitHub-Actions-Standard
+
+Für automatisierte Dateiübertragungen nach `https://mosa2-test.scharwerk.de/`
+gilt ausschließlich `.github/workflows/deploy-testsite.yml` (**Deploy MOSA 2 testsite**).
+Dieser Workflow hat nur `workflow_dispatch`: kein Push-Trigger, kein Cronjob.
+Der bestehende Workflow `.github/workflows/deploy.yml` und sein altes Ziel werden
+dadurch nicht geändert oder aufgerufen.
+
+| GitHub-Konfiguration | Name / fester Sollwert |
+| --- | --- |
+| Repository-Secret | `MOSA_TEST_SFTP_PASSWORD` |
+| Repository-Secret | `MOSA_TEST_SFTP_HOST_KEY_SHA256` |
+| Repository-Variable | `MOSA_TEST_SFTP_HOST` = `server10.configcenter.info` |
+| Repository-Variable | `MOSA_TEST_SFTP_PORT` = `22` |
+| Repository-Variable | `MOSA_TEST_SFTP_USER` = `web213` |
+| Repository-Variable | `MOSA_TEST_SFTP_PATH` = `/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de` |
+
+Das Testprofil in `scripts/deploy_test_sftp.py` prüft Host, Port, Benutzer und
+**exakten absoluten Pfad** vor jeder Verbindung. Abweichende Pfade, auch relative
+Varianten oder ein abschließender Slash, werden abgelehnt. Nach Verbindungsaufbau
+muss auch die SFTP-Normalisierung exakt diesen Pfad ergeben. Die Ed25519-Hostidentität
+wird vor Passwortauthentifizierung gegen den bereits verifizierten Fingerprint
+geprüft. Werte der beiden Secrets gehören nicht in diese Dokumentation oder Logs.
+
+Manueller Start: **Actions → Deploy MOSA 2 testsite → Run workflow → main**.
+
+- `operation=probe` ist der sichere Standard für den Verbindungstest: genau eine
+  neue temporäre Datei, Upload, SHA-256-Readback, atomarer Rename, erneuter
+  Readback, Löschen und Nichtvorhandensein-Prüfung. Keine bestehende Webdatei
+  wird angefasst.
+- `operation=deploy` verlangt in `files_json` eine ausdrückliche JSON-Liste,
+  etwa `["assets/site.css"]`, sofern diese Datei tatsächlich versioniert und
+  im validierten Webdateisatz vorhanden ist. Eine leere Liste, Dubletten,
+  Traversierung, Metadaten und fremde Dateien werden abgelehnt. Es wird niemals
+  stillschweigend das ganze Projekt übertragen.
+
+Die gemeinsame Uploadlogik prüft den gesamten ausgewählten Dateisatz auf
+Symlinks und unzulässige Zieltypen, bevor sie schreibt. Sie lädt jede Datei in
+eine neue temporäre Datei innerhalb des Test-Webroots, prüft deren SHA-256 per
+Readback und ersetzt dann atomar die jeweilige Zieldatei. Keine rekursive
+Löschung, keine Remote-Shell, keine Datenbank- oder Konfigurationsänderung.
+Der Prüfmodus löscht ausschließlich seine eigene neue Prüfdatei nach erfolgreichem
+Hashvergleich. Bei Fehlern wird abgebrochen; ein fehlgeschlagener Transfer kann
+eine temporäre Datei hinterlassen und wird nicht als erfolgreich bereinigt gemeldet.
+
+`web213` besitzt technisch weitergehende Verzeichnissicht. Der Pfadschutz ist eine
+verbindliche Clientgrenze, keine behauptete serverseitige Isolation des Benutzers.
+Workflow- und Skriptänderungen sind deshalb vor Ausführung mit Secrets zu prüfen.
+Dieses Profil eröffnet keine Produktionsfreigabe.
+
+Der praktische Actions-Nachweis und seine Aussagegrenzen stehen zentral in
+[Dogado, Abschnitt 12](dogado/README.md#12-github-actions-fuer-mosa-2-testdeployments).
+`[skip ci]` unterbindet Push-Läufe; der bewusste manuelle `workflow_dispatch`
+bleibt ausführbar.
+
+## Bestehender Alt-/Produktionsworkflow: mosa.scharwerk.de
+
+Die folgenden Abschnitte beschreiben den unveränderten älteren Deploymentweg.
+Die anfängliche Aussage „SSH verboten / SFTP ungeprüft“ ist ein historischer
+Befund vom 16.10.2026. Seit 20.10.2026 sind `/bin/bash (chrooted)` und der
+SFTP-Dateizugang zur **Testsite** bestätigt; daraus folgt keine Freigabe oder
+Abnahme des älteren Produktionsziels.
 
 ## Methode und Voraussetzungen
 
