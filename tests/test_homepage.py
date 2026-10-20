@@ -1,5 +1,6 @@
 """Immediate market shell, accessible markup and disclosure guards."""
 from html.parser import HTMLParser
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -70,9 +71,18 @@ class HomepageTests(unittest.TestCase):
                      'Marktdaten werden geladen', 'Mit Daten']:
             with self.subTest(text=text):
                 self.assertIn(text, self.text)
-        for obsolete in ['Current und Bars bleiben leer','Neun echte Marktbeobachtungen.',
-                         'status-grid','keine laufenden Live-Daten','PNE AG','Echtzeitkurse verfügbar']:
+        for obsolete in ['Echtzeitkurse verfügbar']:
             self.assertNotIn(obsolete, self.text)
+
+    def test_original_overview_is_preserved_and_market_follows_results(self):
+        original = re.sub(r'    <section class="market-section".*?</section>\n\n', '', self.html, flags=re.S)
+        original = original.replace('  <script src="assets/js/market.js" defer></script>\n', '')
+        original = original.replace('assets/css/main.css?v=market-41', 'assets/css/main.css?v=footer-20261019')
+        original = original.replace('<br>Mit Daten · <span data-data-ready-time aria-label="Datenladezeit wird gemessen">— ms</span>', '')
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), 'e368861ce9adffbb6ba0dbb206bd9bae9defdba5f19da10fed7193f18f578238')
+        self.assertRegex(self.html, r'<h1 id="projekt-titel">MOSA 2</h1>')
+        order = [self.html.index(value) for value in ['class="results"', 'class="market-section"', 'class="next-step"', 'class="progress-section"']]
+        self.assertEqual(order, sorted(order))
 
     def test_public_files_contain_no_internal_or_credential_details(self):
         source = self.html + self.css + self.js

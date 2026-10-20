@@ -29,7 +29,7 @@ PROTECTED = {
     'scripts/phase3c/market_flow.php': 'ab2b9510da0a76b549b587e10db5d768f079b57cd1d4e0d6542b46f805cd33af',
     'tests/test_phase3c.py': '9e4f03f8bbb4cc969553df906940b94ef020ef3b3d7af571a048cec8d1f1b940',
     # Issue 41 authorizes the DB display; historic schema/source anchors stay fixed.
-    'index.html': '1ffdcaf65a7195193cf4d72f3cbb0ac9b0317083dcf825aaf68685bb1d1325a3',
+    'index.html': '4ee184d6349180294977478df0c35f9022c4c22c13257cabf0eeb8534d813c31',
     'assets/css/main.css': '39b9fc9e3c03cfa0314d3048b5ecde37eb566be6b6baeff41839de4b8214725f',
     'assets/js/page_load_time.js': 'd892ccee43c03989a66edd65e929c83a536747dbc3bd7da3720f8c147d938593',
 }
