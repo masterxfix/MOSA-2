@@ -1173,3 +1173,254 @@ manual-only workflow/no DB, provider or filesystem-mutating probe; and the
 existing secret-output guard. Only new diagnostic/workflow/tests and this
 documentation are changed. Existing collector core, proof mode, deployment and
 production workflows, database, scheduler and masterxfix/fixlab are untouched.
+
+## Compatible Python found and private provisioning contract — 21 October 2026
+
+### Present and tested: Python >=3.10 YES
+
+[Run 39562130881](https://github.com/masterxfix/MOSA-2/actions/runs/39562130881),
+job 119095645983, attempt 1, revision
+088d0bc1533f15c6480b97b6d4ca948b8c38e7ee completed successfully.
+The ten reused process/security tests passed in 0.560 s and six new bounded-path/
+ABI tests passed in 0.125 s. Existing PHP sources and the generated PHP program
+passed lint. The live command completed in about 0.963 s.
+
+The extended fixed-path check found:
+
+| Property | Observed result |
+| --- | --- |
+| Interpreter | /opt/alt/python311/bin/python3.11 |
+| Exact version | Python 3.11.17 |
+| Required standard modules | 24/24 PASS |
+| dataclasses / typing.Protocol / collector annotation compatibility | PASS / PASS / PASS |
+| PHP -> selected Python | PASS, existing proc_open helper |
+| Selected Python -> existing PATH php | PHP 8.3.35; PHP-8.4 requirement FAILS |
+| Selected Python -> child-only pinned PHP-bin PATH | PHP 8.4.12 / PDO MySQL PASS |
+| Own harmless process-group termination | PASS |
+| Python TLS prerequisites | SNI true, 153 CA certificates, OpenSSL 1.1.1w |
+| SSH / host key / secret-output guard | PASS / PASS / NEIN-PASS |
+
+This supersedes only the earlier negative *interpreter availability* result:
+the earlier check inspected three baseline commands and did not include the
+Alt-Python 3.11 path. No Python installation or hosting change was required.
+MOSA project files were not transferred/imported/executed; standard-library,
+syntax and process checks do not constitute a full collector qualification.
+
+The allowed candidate list had 18 explicit versioned files: versions
+3.12/3.13/3.14/3.15/3.11/3.10 under /usr/bin/python<V>,
+/usr/local/bin/python<V> and /opt/alt/python<digits>/bin/python<V>.
+The probe checked 15 entries and stopped at the first compatible one.
+Fourteen preceding entries were unavailable/not executable in the jail; the
+remaining three 3.10 entries were not checked. No directory listing, glob,
+recursive scan, whole-system search or other-domain inspection occurred.
+
+The baseline /usr/bin/python3 remains Python 3.6.8. It was used only to read
+ABI metadata through native APIs and explicitly named system library loads:
+
+| Platform prerequisite | Observed result |
+| --- | --- |
+| Machine / pointer width / byte order | x86_64 / 64 bit / little endian |
+| GNU libc | glibc 2.17 |
+| libc.so.6, libpthread.so.0, libdl.so.2, libutil.so.1, librt.so.1, libm.so.6 | All loadable inside the jail |
+| libcrypt.so.1 | Loadable |
+| /lib64/ld-linux-x86-64.so.2 | Accessible |
+| /usr/bin/cloudlinux-selector | Not executable/visible at this fixed path |
+| /usr/bin/selectorctl | Executable at this fixed path; never invoked |
+
+Presence of selectorctl is not proof of an enabled/supported application selector
+or permission to change its settings. It was not run, so no account/application/
+domain list or selector configuration was read or changed.
+
+### Public documentation versus this account's evidence
+
+[Dogado's SSH interpreter guide](https://help.dogado.de/hc/de/articles/28536696027537-PHP-und-Python-per-SSH-im-Webhosting-und-WordPress-Hosting)
+documents Python per SSH but makes the available version/path environment-specific.
+Its [paths-and-ports guide](https://help.dogado.de/hc/de/articles/23633586903569-Wichtige-Pfade-und-Ports-im-Web-und-WordPress-Hosting)
+directs users to their package's oneHome information; it does not publish a
+universal modern Python version.
+
+[Plesk's Python support guidance](https://support.plesk.com/hc/en-us/articles/15902915279767-Which-Python-versions-are-supported-by-Plesk)
+says additional instances are a server-owner responsibility and may be called
+through their binaries. The [CloudLinux Python Selector requirements](https://docs.cloudlinux.com/cloudlinuxos/cloudlinux_os_components/#python-selector)
+list cPanel/DirectAdmin and exclude Plesk for that selector. This does not negate
+the successful direct Alt-Python CLI test on the actual account.
+
+Conclusion: a suitable interpreter is **actually present and executable**.
+An enabled modern Plesk/CloudLinux application-selector UI, contractual support
+guarantee, update policy and long-running CLI quota for this package are
+**not proven** by public documentation or binary presence. No Plesk setting,
+application registration, support ticket or browser form was submitted.
+No selector operation is necessary for the preferred direct-CLI approach.
+
+### Preferred concrete route: use the existing Alt-Python, install nothing
+
+Use /opt/alt/python311/bin/python3.11 as the explicitly configured interpreter.
+Keep /usr/bin/python3 and every existing domain configuration unchanged.
+No venv is necessary for the inspected standard-library-only collector; creating
+a venv from Python 3.6 would not supply a newer interpreter anyway.
+
+For the eventual release, provide a small secret-free private launcher named
+python3 that execs the absolute 3.11 interpreter with -I -B and the original
+arguments. Bind config.python to that launcher and config.php to
+/opt/plesk/php/8.4/bin/php. Build a **process-local** minimal PATH from the private
+launcher directory, /opt/plesk/php/8.4/bin and required system binary directories,
+so both explicit calls and nested literal php/python3 calls stay pinned.
+Do not modify account shell startup files, global PATH, alternatives, symlinks
+in system directories or selectors.
+
+The actual live_bridge.py already inserts its release's project root explicitly;
+an isolated Python start therefore need not depend on user site-packages,
+PYTHONPATH or another website. This wrapper/actual-project combination still
+requires a file-based offline fixture test after a private deployment is
+authorized. It is a design contract here, not an installed launcher.
+
+Record the exact interpreter/version, PHP version and source/seed hashes in each
+run's evidence. A vendor patch/path change requires rerunning the runtime and
+canonical writer fixtures before use; do not silently switch to the old default.
+The [Python lifecycle table](https://devguide.python.org/versions/) lists 3.11
+security support through October 2027; >=3.10 is a code-compatibility floor, not
+a reason to select the now-EOL 3.10 branch for a new installation.
+
+### Private directory and package contract — not created
+
+Proposed host-side root for a later explicit approval:
+ /var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector
+
+This is an uncreated, unverified proposal outside the test webroot. Its exact
+chroot-visible spelling, canonical parent, isolation and execute permission must
+be confirmed under that later path-specific scope. The existing AGENTS.md and
+SFTP webroot authorization do not already permit using it.
+
+A future root has these fixed roles:
+
+- releases/<commit-sha>/ contains the audited PHP/Python dependency closure,
+  normative seed/migration validation inputs, launcher and SHA-256 manifest;
+  owner-only traversal and no HTTP mapping. Preserve repository-relative paths.
+- runs/<safe-run-id>/ contains only the existing nonsecret per-run manifest,
+  consumed-acquisition marker and bounded redacted evidence.
+- locks/ contains a remote whole-job exclusive lock. Retain the existing Actions
+  concurrency group, per-identifier DB locks, Dedupe and independent readbacks.
+- Pin the selected release path in the run request; no global runtime replacement
+  or mutable system symlink is needed. Keep one previous release for rollback.
+
+Directory modes are 0700, nonexecutable files 0600 and required launchers 0700,
+with umask 077 and exclusive creation. Reject traversal, source/destination
+symlinks and unexpected ownership. All paths remain under the exact approved
+private root, never another domain or a public staging directory.
+
+The deployment extension must reuse the existing testsite SFTP secrets, pinned
+host key, exact canonical-root/parent checks, explicit tracked-file manifest,
+SHA-256 readback and atomic publication. Add a separately fixed private-package
+profile/operation; do not relax the existing web profile. Current web_files
+excludes scripts/ and docs/ and its destination is the test webroot, so the
+unchanged deployment workflow cannot provision this private package.
+No existing workflow or deployment helper was changed in this task.
+
+Only the existing PHP DB owner receives the DB password over protected stdin.
+No credential belongs in the launcher, code archive, environment, manifest, file,
+command arguments, Python bridge or logs. Keep foreground ownership, total
+deadline, bounded outputs, owned-process-group cleanup and explicit unknown-
+commit status from the preceding runtime design. No collector-core change,
+asset special case, new normalizer/writer or package installation is proposed.
+
+### Storage and dependencies
+
+The preferred route adds **zero runtime-installation bytes**: Python 3.11.17,
+its standard library and the tested native dependencies are already present.
+It still needs a private application package and run space.
+
+At commit 760689452cb3cb366d1cc899bd5bcdffa74c9aa1, the broad source families
+market_collector, phase2/3b/3c/3d/3k/3l/3m/3n/3o plus the normative unit seed
+and 0004 migration comprise 54 tracked files / 415855 raw bytes
+(about 0.397 MiB), measured through Git tree metadata.
+This is a source-size reference, **not a deployment allowlist or a fully
+audited release size**: it includes unused diagnostics/historical entry points
+which must be excluded, and the final dependency closure must be verified.
+Do not publish all those files blindly.
+
+A concrete initial planning reserve is 64 MiB: up to 4 MiB each for active,
+rollback and staging application releases (12 MiB), bounded evidence for up to
+16 one-MiB run records (16 MiB), up to 8 MiB logs/manifests and 28 MiB slack.
+These are proposed caps/headroom, not measured usage or available quota.
+Fail/review a package or run that exceeds its agreed budget. Account free space,
+inode quota and the as-yet-unapproved private root were not inspected.
+
+PHP's previously measured 256M memory_limit is not an account RAM guarantee.
+Real Python/combined-process peak memory and shared-host/cgroup quotas remain
+untested; no memory exhaustion test was run. Required packages on Dogado:
+none for the inspected path. Required existing facilities: selected Alt-Python,
+PHP 8.4/PDO MySQL/proc_open, standard TLS/CA trust, POSIX child control and local
+test DB. API/DNS/HTTPS reachability and a complete collector remain untested.
+
+### Contingency only: isolated private CPython package
+
+Because a suitable interpreter was found, this fallback is **not the preferred
+implementation** and no runtime archive was downloaded, transferred or executed.
+For completeness, public release metadata identified this pinned alternative:
+
+| Item | Metadata-only candidate |
+| --- | --- |
+| Source | [astral-sh/python-build-standalone release 20261020](https://github.com/astral-sh/python-build-standalone/releases/tag/20261020) |
+| Artifact | cpython-3.12.15+20261020-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz |
+| Compressed size | 34479233 bytes (32.88 MiB) |
+| SHA-256 from release asset metadata | 7d6ef1164fb94c4b60d913340610fc7e0ef8e3d1b705aa5628b299b08cbdd4b5 |
+| Target | baseline x86_64-unknown-linux-gnu; regular GIL build |
+| Extraction/RAM/actual execution on Dogado | Not tested |
+
+The upstream [runtime requirements](https://github.com/astral-sh/python-build-standalone/blob/main/docs/running.rst)
+describe baseline GNU/Linux builds with minimal system-library dependencies and
+a glibc 2.17 floor for this target. The observed ABI/libraries make this a
+plausible fallback, **not proof that this exact binary works in the jail**.
+The [archive documentation](https://docs.astral.sh/python-build-standalone/distributions/)
+defines install-only stripped packages as excluding build/debug material.
+
+If that fallback is ever needed, first bind URL/version/hash and licenses in a
+reviewed manifest, inspect the archive/dependency metadata on the control runner,
+and qualify extraction, safe link materialization, TLS trust and modules before
+private publication. Do not use remote builds, curl|sh, automatic uv/pyenv
+downloads, system upgrades, musl assumptions or global LD_LIBRARY_PATH changes.
+A provisional cap of 256 MiB per extracted runtime and 1 GiB total staging/
+rollback reserve would need actual archive-member measurement before approval;
+these are planning limits, not a measured footprint. No such space is needed
+for the currently preferred existing interpreter.
+
+### Certainty and next implementation step
+
+| Evidence class | Conclusion |
+| --- | --- |
+| Present and checked | Python 3.11.17 at the exact Alt-Python path; 24 modules, syntax, typing, child-only PHP 8.4 pin, process cleanup and ABI/library checks PASS |
+| Technically feasible, untested | Private launcher/release with the unchanged actual MOSA modules; complete normative file access, lock collision/timeout/disconnect handling |
+| Hoster-dependent | Private-root approval/chroot mapping/noexec policy, account quotas, support/update policy and long-running CLI/provider-network allowance |
+| Not allowed/not done | Runtime/package installation or upload, private directory creation, selector/hosting/global Python changes, other-domain investigation, DB/provider/collector execution |
+
+The next useful implementation is an explicitly private-root-scoped, secret-free
+collector package and pinned-launcher deployment using the already available
+Python 3.11.17, followed by the actual offline fixtures and bounded read-only
+preflight on Dogado. A new Python installation is unnecessary. Resolve the
+private deployment/ownership/quota contract before any transfer; do not start a
+full collector or change the eight domains/testsite as part of this assessment.
+
+### Safety/test receipt
+
+Run 39562130881 used the new manual
+.github/workflows/collector-python-options.yml and the established isolated,
+exact-branch test trigger on codex/python-options-a15aee. Tests gate the live
+step, contents permission is read-only, and the same concurrency/SSH/fingerprint/
+output guard is reused. The final main workflow has workflow_dispatch only;
+resetting the verification branch removes its temporary trigger.
+
+The new helper reuses the corrected readinessChild pipe/timeout implementation.
+Its own candidate loop has a 45-second admission budget, each child is bounded,
+and the outer SSH command is limited to 90 seconds. Only executable-file checks
+on named candidates and native ABI/library APIs run. Selector commands are
+checked for presence only and never invoked. There is no DB password in the
+remote payload, no package-download path, no remote project/cache/credential
+file creation, no DNS/provider request and no DB connection.
+
+All 16 relevant tests passed: the ten existing process/output/secret-safety
+tests plus six tests for the finite candidate set/early stop, found-interpreter
+version/module protocol, generated PHP syntax and secret-free payload, explicit
+ABI/library-only inspection, negative-result semantics and manual/no-install/
+no-transfer workflow contract. Only a new diagnosis helper/workflow/tests and
+this document change; collector, normalizer/writer, production/deployment
+workflows, database, system Python and the existing domains are untouched.
