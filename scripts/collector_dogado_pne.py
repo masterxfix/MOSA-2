@@ -134,7 +134,9 @@ def execute(env,paramiko):
                     caveat="Different acquisition time; additional exhaustive integrity checkpoints; excludes Actions/SSH/SFTP")
             report["stage"]="finished"
     except Exception as error:
-        report.update(ok=False,failure_type=type(error).__name__)
+        report.update(ok=False,failure_type=type(error).__name__,
+                      failure_code="REMOTE_OUTCOME_UNAVAILABLE" if dispatched else "START_PREREQUISITE_FAILED",
+                      failure_phase=report["stage"],commit_state="unbekannt" if dispatched else "nicht bestätigt")
         if dispatched:
             report["status"]="OUTCOME_UNKNOWN"
             if "collector" not in report:report["provider_requests"]="UNKNOWN_MAX_1"
@@ -145,7 +147,8 @@ def execute(env,paramiko):
 def main():
     import paramiko
     try:report=execute(os.environ,paramiko)
-    except Exception as error:report=dict(ok=False,status="FAILED",stage="authorization",failure_type=type(error).__name__,provider_requests=0)
+    except Exception as error:report=dict(ok=False,status="FAILED",stage="authorization",failure_code="START_AUTHORIZATION_OR_CONFIGURATION_FAILED",
+        failure_phase="authorization",php_process_started=False,php_exitcode=None,provider_started=False,commit_state="nicht bestätigt",provider_requests=0)
     encoded=shared.public_text(report,os.environ)
     print(encoded,flush=True)
     if os.environ.get("GITHUB_STEP_SUMMARY"):

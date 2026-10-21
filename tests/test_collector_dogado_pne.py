@@ -181,4 +181,68 @@ class DogadoPneTests(unittest.TestCase):
         self.assertNotIn("shared.tunnel",driver_source)
         self.assertNotIn("upload(",driver_source)
 
+    def test_safe_failure_vocabulary_and_actual_php_child_exit_are_preserved(self):
+        scope={"__name__":"fixture"};exec(driver.remote_source(),scope)
+        self.assertEqual(scope["safe_code"](scope["Stop"]("RUN_PATH")),"RUN_PATH")
+        canary="secret-canary SELECT private raw data"
+        self.assertEqual(scope["safe_code"](scope["Stop"](canary)),"SUPERVISOR_CHECK_FAILED")
+        self.assertEqual(scope["safe_code"](RuntimeError("RUN_PATH")),"SUPERVISOR_CHECK_FAILED")
+        real_popen=subprocess.Popen
+        for script,expected,exitcode in (
+            ("import sys;sys.stderr.write('Cannot allocate memory secret-canary');sys.exit(13)","PHP_ADDRESS_SPACE_EXHAUSTED",13),
+            ("import sys;sys.stderr.write('syntax error secret-canary');sys.exit(255)","PHP_SYNTAX_ERROR",255),
+            ("import sys;sys.stderr.write('arbitrary secret-canary');sys.exit(1)","PHP_STDERR",1),
+            ("print('invalid secret-canary')","PHP_RESULT_INVALID",0)):
+            def launch(*args,**kwargs):
+                kwargs.pop("cwd",None)
+                return real_popen([sys.executable,"-I","-B","-c",script],**kwargs)
+            with self.subTest(expected=expected),patch.object(subprocess,"Popen",side_effect=launch):
+                with self.assertRaises(scope["ChildStop"]) as caught:scope["child"]("NOT EXECUTED",canary)
+                d=caught.exception.details
+                self.assertEqual(d["failure_code"],expected);self.assertEqual(d["php_exitcode"],exitcode)
+                self.assertTrue(d["php_process_started"]);self.assertNotIn("secret-canary",json.dumps(d))
+        with patch.object(subprocess,"Popen",side_effect=PermissionError(canary)):
+            with self.assertRaises(scope["ChildStop"]) as caught:scope["child"]("NOT EXECUTED",canary)
+            self.assertEqual(caught.exception.details,dict(failure_code="PHP_SPAWN_FAILED",failure_phase="php_spawn",
+                php_process_started=False,php_exitcode=None))
+
+    def test_structured_failure_preserves_unknown_outcome_and_existing_run_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
+            scope,root,data=self.fixture(tmp)
+            error=scope["ChildStop"]("PHP_NONZERO_EXIT","php_exit",True,255)
+            scope["child"]=Mock(side_effect=error)
+            first=scope["run_once"](data)
+            self.assertEqual(first["status"],"OUTCOME_UNKNOWN")
+            self.assertEqual(first["commit_state"],"unbekannt")
+            self.assertEqual(first["failure_code"],"PHP_NONZERO_EXIT")
+            self.assertEqual(first["php_exitcode"],255)
+            self.assertFalse(first["provider_started"])
+            folder=Path(scope["RUN"])
+            before={p.name:p.read_bytes() for p in folder.iterdir()}
+            second=scope["run_once"](data)
+            self.assertEqual(second["failure_code"],"RUN_ALREADY_EXISTS")
+            self.assertFalse(second["php_process_started"])
+            self.assertEqual(scope["child"].call_count,1)
+            self.assertEqual(before,{p.name:p.read_bytes() for p in folder.iterdir()})
+
+    def test_php_public_failure_codes_are_closed_and_no_raw_exception_is_emitted(self):
+        source=driver.php_source(release_root=str(ROOT),run_root=str(ROOT),entry=False)
+        source+='\necho json_encode([\\Mosa2\\DogadoPne\\safeFailureCode("php_pin"),\\Mosa2\\DogadoPne\\safeFailureCode("secret SELECT private")]);'
+        r=subprocess.run(["php","-d","log_errors=0","-r",source],capture_output=True,text=True,check=True,timeout=10)
+        self.assertEqual(json.loads(r.stdout),["php_pin","collector_check_failed"])
+        self.assertFalse(r.stderr)
+
+    def test_only_proven_virtual_address_limit_changes_all_other_guards_remain(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit") as limits,patch.dict(os.environ,{}):
+            scope,root,data=self.fixture(tmp)
+            scope["child"]=Mock(return_value=dict(ok=True,status="COMPLETE",result=dict(committed=True)))
+            r=scope["run_once"](data)
+            self.assertTrue(r["ok"])
+            self.assertEqual(r["commit_state"],"bestätigt")
+            self.assertEqual([c.args for c in limits.call_args_list],[
+                (resource.RLIMIT_FSIZE,(1024*1024,1024*1024)),(resource.RLIMIT_CPU,(45,45)),
+                (resource.RLIMIT_AS,(1024*1024*1024,1024*1024*1024))])
+            self.assertIn("memory_limit=128M",scope["PHP_FLAGS"])
+            self.assertEqual(scope["integrity"].call_count,2)
+
 if __name__=="__main__":unittest.main()

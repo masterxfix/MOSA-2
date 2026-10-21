@@ -2374,3 +2374,90 @@ Der frühere offene Remote-Offline-Nachweis ist damit abgeschlossen.
 Collector-Livebetrieb auf Dogado. **Nächster Schritt:** einen begrenzten
 Dogado-Livetest separat freigeben und vorbereiten; dieser Auftrag führt ihn
 nicht aus. Nur Dokumentation geändert, keine Laufzeit- oder Workflowänderung.
+
+
+## PNE-Startfehler eingegrenzt und korrigiert (21.10.2026)
+
+Ausgang: [Run 39586524795](https://github.com/masterxfix/MOSA-2/actions/runs/39586524795),
+Launcher-Commit 307c718fdd326c51188f3e1f05f0eb7d75ab72a2. Der Supervisor
+meldete nach 550,82 ms nur Stop / OUTCOME_UNKNOWN. PHP-Exitcode und stderr
+wurden damals nicht erhalten; der historische Exitcode bleibt UNBESTÄTIGT.
+
+**Reproduzierte Ursache:** RLIMIT_AS=256 MiB reicht für den PHP-8.4-Start
+mit der vorhandenen normalen Erweiterungskonfiguration nicht aus.
+[Einmalige lesende Diagnose 39588668836](https://github.com/masterxfix/MOSA-2/actions/runs/39588668836)
+verwendete den bisherigen erzeugten PHP-Bibliothekscode ohne main/perform-
+Aufruf auf dem unveränderten installierten Release. Ein einziger harmloser
+Remote-Vergleich mit zwei begrenzten Fällen, ohne DB-Passwort im Testprozess:
+
+| Virtueller Adressraum | PHP 8.4.12 | Ergebnis |
+| --- | --- | --- |
+| bisher 256 MiB | Exit 254 | PHP_ADDRESS_SPACE_EXHAUSTED |
+| korrigiert 1024 MiB | Exit 0, kein stderr | Start und PDO-MySQL-Verfügbarkeit PASS |
+
+Der Supervisor setzt künftig 1 GiB als weiterhin endliche **virtuelle**
+Adressraumgrenze. Das reserviert weder 1 GiB physischen Speicher noch
+Hosting-Speicherplatz. PHP memory_limit=128M, CPU=45 s, Prozessdeadline=120 s,
+Dateischreiblimit=1 MiB, Ausgabegrenze=64 KiB, Prozessgruppenbeendigung und
+alle Einmal-/Integritätsprüfungen bleiben unverändert. Keine Änderung der
+installierten Collector-, Normalizer-, Writer- oder Dedupe-Implementierung.
+
+Fehlerberichte verwenden eine geschlossene Liste fester Codes und enthalten
+Prüfbedingung, Fehlerphase, PHP-Prozessstart, Exitcode (sonst null),
+Providerstart gemäß geprüftem Verbrauchsmarker sowie Commit-Zustand
+bestätigt / nicht bestätigt / unbekannt. Unbekannte Fehlermeldungen werden
+generisch unterdrückt; weder stderr, Stacktraces, SQL noch beliebige
+Exceptiontexte werden veröffentlicht. OUTCOME_UNKNOWN bleibt bei unklarem
+Prozess-/Commit-Ausgang erhalten. Der PHP-Startweg filtert auch interne
+Prüfmeldungen, statt ungeprüfte Exceptiontexte weiterzureichen.
+
+**Unabhängige Test-DB-Prüfung:** separater PHP-Prozess und SSH-Kanal mit
+bestehendem DB-Secret ausschließlich über stdin. Feste Server-/Account-
+Identität PASS; ausschließlich READ-ONLY-Transaktion, SELECT/Metadaten und
+Rollback, keine Business-Writes. Asset-ID 528, 18 Observations insgesamt;
+PNE hat genau vier bestehende IDs: 4898, 4899, 4902, 4907. Alle created_at
+liegen am 20.10.2026; letzte PNE-Observation 4907 um 21:23:40.699693 UTC,
+bereits im erfolgreichen 5-Asset-Run 39498807003 dokumentiert.
+Keine gegenwärtige Observation weist auf einen Commit des Versuchs vom
+21.10. hin. Current: insgesamt zwei Zeilen, davon eine für PNE mit
+observed_at 20.10.2026 13:51:39.324776 UTC. Bars: null Zeilen.
+SHA-256 des lesend erfassten Gesamtbestands:
+Observations 6cfecab68a2836d9855eecee0bf753f523c320396d86e7333c1bcc1f62e47095,
+Current 93d449cac9dc8a863777f9b210ce73574d5c0b681001b6bdc3778283cb69af2d,
+Bars 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945.
+Ein vollständiger Vorher-Hash des gescheiterten Versuchs fehlt:
+historische Gleichheit aller Werte und dessen endgültiger Commit-Zustand
+bleiben ausdrücklich UNBESTÄTIGT; der alte OUTCOME_UNKNOWN-Beleg wird
+nicht rückwirkend zu FAILED geändert.
+
+Das vorhandene deterministische PNE-Laufverzeichnis wurde nur gelesen.
+Enthalten: job.lock, started.json und result.json; kein live-manifest.json,
+kein provider-consumed.lock. started/result bestätigen den alten Commit
+und Stop / OUTCOME_UNKNOWN / provider_requests=0. Dateisatz, Größen,
+SHA-256 und Änderungszeiten vor/nach der Diagnose identisch. Keine
+Laufdatei angelegt, gelöscht oder überschrieben. Unabhängiger SFTP-
+Readback aller 33 Release-Dateien vor/nach der Diagnose: PASS,
+248.105 Byte, Hashes, UID:GID 10317:1003, Modi 0700/0600 unverändert.
+
+**Tests:** [abschließender Offline-Run 39588998116](https://github.com/masterxfix/MOSA-2/actions/runs/39588998116),
+35/35 PASS. Erzeugter PHP-Code: Syntax und harmloser Bibliotheksstart PASS;
+feste Fehlercodes, Exitcodes/Startphasen, Secret-Canaries, unbekannte
+Ergebnisse, kein Retry, unveränderte bestehende Laufdaten und
+Adressraum-/Heap-/CPU-/Datei-/Ausgabegrenzen geprüft. Bestehende Runtime-
+Regressionen für INSERT/Dedupe, Readback, Drift, Konflikte, Rollback und
+Current/Bars ebenfalls PASS. Offline-PHP 8.4.26; der getrennte
+Dogado-Startnachweis verwendete das gepinnte PHP 8.4.12/Python 3.11.17.
+
+In diesem Auftrag: genau ein harmloser Remote-Startvergleich und eine
+separate lesende DB-Prüfung; null Collector-Aufrufe, Providerrequests,
+Business-Writes oder Remote-Dateischreibvorgänge. Bestehende Secrets und
+Host-Key-Pinning wiederverwendet. Der temporäre manuelle Diagnoseworkflow
+wird zurückgenommen; keine dauerhafte Workflowänderung. Der korrigierte
+Code wurde anschließend ausschließlich offline geprüft.
+
+**Grenze:** PHP-Startfähigkeit ist nachgewiesen, ein vollständiger
+korrigierter Live-Durchlauf nicht. Der bestehende Einmallauf bleibt
+absichtlich durch sein unverändertes Laufverzeichnis gesperrt
+(RUN_ALREADY_EXISTS); keine automatische Wiederfreigabe und kein neuer
+PNE-Livetest in diesem Auftrag. Ein künftiger separat freigegebener
+Versuch muss diese Sperre und die erhaltene Historie berücksichtigen.

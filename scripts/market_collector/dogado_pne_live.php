@@ -13,6 +13,25 @@ const PYTHON='/opt/alt/python311/bin/python3.11';
 require_once RELEASE.'/scripts/market_collector/live_batch.php';
 require_once RELEASE.'/scripts/collector_release/runtime.php';
 
+
+/** Public errors are an explicit closed vocabulary, never arbitrary exception text. */
+function safeFailureCode(string $code): string {
+    $allowed=['one_isin_scope','php_pin','php_binary','release_path','run_path','run_owner_mode',
+        'db_secret_required','database_operation_failed','existing_route_only','existing_asset_only',
+        'bounded_test_state','manifest_exists','manifest_create','manifest_write','manifest_mode',
+        'one_observation_budget','observation_scope','schema_drift','full_preflight_drift',
+        'rollback_full_delta','independent_full_delta','checkpoint_budget','bridge_action',
+        'one_provider_budget','provider_private_root','bridge_process','bridge_input_limit',
+        'bridge_input','bridge_output_limit','bridge_deadline','bridge_exit','bridge_stderr',
+        'bridge_fetch','bridge_plan','bridge_replay','connection_budget','four_checkpoints',
+        'independent_readback','exact_observation_delta','identifier_lock_busy','acquisition_binding',
+        'acquisition_source','one_provider_request','preflight_drift','runtime_route','candidate_plan',
+        'candidate_drift','candidate_key_drift','writer_decision','duplicate_origin','duplicate_payload',
+        'observation_readback','observation_exact','replay','replay_canonical','replay_key',
+        'transaction_binding_drift','commit','independent_binding_drift'];
+    return in_array($code,$allowed,true)?$code:'collector_check_failed';
+}
+
 function outcome(array $r,int $checkpoint): string {
     if(($r['ok']??false)===true)return 'COMPLETE';
     if(($r['committed']??false)===true||($checkpoint>=3&&($r['rollback']??null)!==true))return 'OUTCOME_UNKNOWN';
@@ -100,8 +119,10 @@ function perform(string $password,array $input): array {
         same($input['isin']??null,ISIN,'one_isin_scope');same(PHP_VERSION,'8.4.12','php_pin');
         same(realpath(PHP_BINARY),realpath(PHP),'php_binary');same(realpath(RELEASE),RELEASE,'release_path');
         same(realpath(RUN),RUN,'run_path');check(!is_link(RUN)&&fileowner(RUN)===10317&&filegroup(RUN)===1003&&(fileperms(RUN)&0777)===0700,'run_owner_mode');
+        $r['stage']='runtime_configuration';
         $config=\Mosa2\CollectorRelease\configuration(RELEASE);
         $config+=['state_contract'=>['schema_version'=>4,'allow_current'=>true]];
+        $r['stage']='database_preflight';
         $t=hrtime(true);$prim=connection($password);$connectionMs+=(hrtime(true)-$t)/1e6;
         $prim->exec('SET TRANSACTION READ ONLY');$prim->beginTransaction();
         try{
@@ -114,6 +135,7 @@ function perform(string $password,array $input): array {
             same($plan['route']['decision'],'EXISTING_MATCH','existing_route_only');
             $scope=['asset_id'=>$plan['asset']['asset_id'],'source_id'=>$plan['source']['source_id'],'route_id'=>$plan['route']['route_id']];
         }finally{if($prim->inTransaction())$prim->rollBack();}
+        $r['stage']='manifest';
         $r['preflight']='PASS';$r['scope']=$scope;
         $r['preflight_ms']=(hrtime(true)-$start)/1e6;
         check(!file_exists(RUN.'/live-manifest.json')&&!is_link(RUN.'/live-manifest.json'),'manifest_exists');
@@ -134,7 +156,9 @@ function perform(string $password,array $input): array {
         $result=\Mosa2\MarketLive\runtimeRun(RUN,$config,$m,$connect,$invoke,[$audit,'read']);
         $r['collector_ms']=(hrtime(true)-$collectStart)/1e6;
         unset($connect,$invoke,$password);
-        $r['result']=$result;$r['status']=outcome($result,$audit->checkpoint);$r['ok']=$r['status']==='COMPLETE';
+        if(isset($result['failure']))$result['failure']=safeFailureCode($result['failure']);
+        $r['result']=$result;
+        if(isset($result['failure'])){$r['failure_code']=$result['failure'];$r['failure_phase']=in_array($result['stage'],['preflight','provider','transaction','readback'],true)?$result['stage']:'collector';}$r['status']=outcome($result,$audit->checkpoint);$r['ok']=$r['status']==='COMPLETE';
         if($r['ok']){
             same($audit->checkpoint,4,'four_checkpoints');same($result['readback'],'PASS','independent_readback');
             same(count($audit->new),$result['writer']==='INSERT'?1:0,'exact_observation_delta');
@@ -142,8 +166,9 @@ function perform(string $password,array $input): array {
                 'catalog_route_unit_unchanged'=>'PASS','old_observations_unchanged'=>'PASS','unexpected_business_writes'=>'NONE'];
         }
     }catch(Throwable $e){
-        $r['ok']=false;$r['failure_type']=get_class($e);
-        $r['failure']=$e instanceof \PDOException?'database_operation_failed':$e->getMessage();
+        $r['ok']=false;$r['failure_type']=$e instanceof \PDOException?'PDOException':'CollectorCheck';
+        $r['failure_code']=$e instanceof \PDOException?'database_operation_failed':safeFailureCode($e->getMessage());
+        $r['failure_phase']=$r['stage'];
         if(isset($result))$r['status']=($result['committed']??false)?'OUTCOME_UNKNOWN':outcome($result,$audit?->checkpoint??0);
     }finally{
         $r['provider_requests']=is_file(RUN.'/provider-consumed.lock')?1:0;
@@ -164,5 +189,5 @@ function main(): void {
         check(is_string($input['password']??null)&&$input['password']!=='','db_secret_required');
         $r=perform($input['password'],$input);unset($input);
         echo json_encode($r,JSON_THROW_ON_ERROR);
-    }catch(Throwable $e){echo json_encode(['ok'=>false,'status'=>'FAILED','stage'=>'initialization','failure_type'=>get_class($e)],JSON_THROW_ON_ERROR);}
+    }catch(Throwable $e){echo json_encode(['ok'=>false,'status'=>'FAILED','stage'=>'initialization','failure_code'=>safeFailureCode($e->getMessage()),'failure_phase'=>'initialization'],JSON_THROW_ON_ERROR);}
 }
