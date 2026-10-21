@@ -367,3 +367,218 @@ qualification outcomes, deltas, per-asset writer/IDs/readback/replay, metrics an
 failures are recorded in the Actions log/step summary and the final task report,
 not retroactively written into this pre-run document. This document does not
 claim that SSH/tunnel/authentication or live acceptance have already passed.
+
+
+## Read-only Collector performance diagnosis — 21 October 2026
+
+This diagnosis investigates the successful five-asset run
+[39498807003](https://github.com/masterxfix/MOSA-2/actions/runs/39498807003)
+at cb9b723a60867e8dcfe12310db7e1baebb7677a6. It does not optimize the collector.
+
+The original asset timer encloses runtimeRun only. SSH authentication and tunnel
+creation happen before that timer. Complete acceptance snapshots likewise sit
+outside it: the successful acceptance path calls snapshot eleven times, each
+performing a table-set query and three queries per table (52 calls for 17 tables;
+572 calls derived from code, not an old live query counter). These snapshots
+contribute to the overall acceptance duration, not directly to the reported
+37.4–37.7 seconds per asset.
+
+The separate manual workflow is
+`.github/workflows/collector-performance.yml`. It reuses the existing fixed
+Actions secret configuration, fingerprint verification, SSH context manager and
+direct-tcpip forwarding. No remote file, command, deployment or provider
+request is used. The diagnostic uses only existing global ISIN identities,
+existing unit-bound routes and existing Observations from the five fixed assets.
+
+Measurement definitions:
+
+- A: SSH TCP/handshake/authentication wall time, including strict key verification.
+- B: forwarding probe plus local loopback listener/thread creation; excludes teardown.
+- C: one bare native PDO constructor/authentication measurement, plus separately
+  measured calls to the unchanged configured connection helper. The latter also
+  include authenticated identity/version verification and its five session SETs.
+- D: exactly ten simple SELECT executions total: five direct query calls and
+  five fresh native prepare/execute pairs. There is no warmup or retry.
+- E: the same four bounded runtimeState checks per asset as the successful
+  runtime, with three on the first connection and the independent check on the
+  second. prepare, execute, query and fetch operations are timed separately.
+  Existing-fact lookup equivalents are measured separately. A bounded query
+  selects an existing Observation for the offline replay; its setup cost is not
+  falsely counted as part of the original runtime.
+- F: completePlan wall time without DB I/O, parent PHP process CPU time, and
+  runtimeState wall time minus measured PDO API wall time. This residual includes
+  wrapper/timer overhead and local file/validation work; it is not a pure CPU
+  measurement. Local Python bridge startup and offline stored-fact replay wall
+  times are reported separately. These make no HTTP request.
+
+Configured connections enter a server-side SESSION TRANSACTION READ ONLY
+transaction. A diagnostic-only PDO adapter additionally rejects SQL other than
+SELECT/SHOW, side-effecting lock/file/sleep statements, exec, commit and caller
+transaction changes. The original runtime/preflight queries and connection
+helper are unchanged. Measurement progress is flushed after phases/assets.
+Passwords remain on process stdin/in memory, the child environment omits Actions
+secrets, process stderr is never published, and the existing output secret guard
+is reused. No private artifact is uploaded.
+
+Reported PDO API calls are not synonymous with SQL executions: a prepared
+statement has separate prepare and execute calls; fetches are counted too.
+Rows count fetched result rows, not optimizer estimates or scanned rows.
+The diagnostic cannot separate SQL-server execution time from network/SSH/
+protocol waits inside a measured PDO call. No new EXPLAIN, index, migration,
+query rewrite, caching, emulated prepares or tunnel/socket optimization is made.
+
+### Successful measurement and evidence
+
+Diagnostic run: [39553694338](https://github.com/masterxfix/MOSA-2/actions/runs/39553694338),
+job 119068413406, attempt 1, diagnostic revision
+0d4ababc63bc13619f5e6f0d94be1e80e8942516. All steps succeeded:
+both PHP lint checks and all nine diagnostic tests passed (1.534 s).
+PHP 8.4.26; GitHub-hosted Ubuntu 24.04; runner region centralus.
+The historical collector run used westcentralus. Results below are new
+measurements, not retroactive per-phase instrumentation of the old run.
+
+The unavailable browser/dispatch route required the explicitly authorized
+one-time push trigger on codex/collector-performance-a15aee. On that isolated
+branch only, the existing registered acceptance-workflow path temporarily
+contained the read-only diagnostic. It did not execute the collector.
+The delivered new workflow is workflow_dispatch only; the original acceptance
+workflow on main is unchanged. The temporary branch is reset to the original
+revision after publication to remove its one-time trigger.
+
+| Component | Measured result |
+| --- | --- |
+| A SSH connection/auth/key verification | 1.649 s; SSH and host-key PASS |
+| B DB forwarding probe/listener creation | 0.301 s; tunnel PASS |
+| C Bare native PDO constructor/authentication | 0.515 s; DB authentication successful |
+| C Configured helper, 11 separate calls | 1.305–1.657 s; mean 1.569 s |
+| D SELECT 1, 5 direct executions | 430.849–432.368 ms; mean 431.280 ms |
+| D SELECT 1, 5 fresh native prepare/execute executions | 431.304–436.217 ms; mean 432.853 ms |
+| E Four bounded runtime-state checks per asset | 25.125–29.096 s total per asset |
+| F Pure PHP completePlan, five assets | 0.161–0.211 ms per asset |
+| F Local bridge runtime initialization | 90.851–94.191 ms per asset |
+| F Offline existing-fact writer replay, including local child process | 317.205–322.127 ms per asset; all DUPLICATE_UNCHANGED |
+
+A and B occur once before the historical asset timer, so they cannot explain
+37.6 seconds repeated for each asset. Configured helper time includes the bare
+PDO constructor; these two C figures must not be added together. The diagnostic
+opened one bare probe plus eleven configured connections: one setup connection
+and two per asset. Extra diagnostic read-only transaction control and rollback
+are outside the configured-helper timer.
+
+All ten simple SELECT wall times, milliseconds, in execution order:
+
+| Mode | 1 | 2 | 3 | 4 | 5 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct query | 430.849 | 430.986 | 430.993 | 431.202 | 432.368 |
+| Native prepare/execute | 436.217 | 431.304 | 433.853 | 431.512 | 431.381 |
+
+For the native probes prepare took 300.599–305.425 ms and execute took
+130.434–130.702 ms; fetchColumn took 0.003–0.006 ms. A direct query's PDO call
+also took about 431 ms. Native prepare/execute therefore did **not** demonstrate
+twice the latency of direct query in this experiment. These client API timings
+cannot establish whether the delay originates in network propagation, SSH
+forwarding, driver/protocol behavior, or DB-server work.
+
+### Repeated bounded preflight cost
+
+Each measured runtimeState call executed 17 SQL statements (13 prepared
+executions and four direct queries), using 47 measured PDO calls including
+prepare and fetchAll. It returned 89 rows, including schema/index metadata.
+Each asset repeated this check four times: 68 SQL executions, 188 PDO API calls
+and 356 returned rows. These counters exclude configured-connection setup,
+fact lookups and diagnostic scope setup.
+
+| Asset | Initial preflight s | Transaction recheck s | Before-commit recheck s | Independent state readback s | Sum s | PDO share |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DroneShield | 6.327 | 6.323 | 6.670 | 6.661 | 25.981 | 99.9711% |
+| BYD | 7.175 | 7.341 | 7.405 | 7.176 | 29.096 | 99.9688% |
+| Ubtech Robotics | 5.987 | 6.320 | 6.167 | 6.661 | 25.136 | 99.9682% |
+| Carl Zeiss Meditec | 7.179 | 7.349 | 7.346 | 7.175 | 29.049 | 99.9687% |
+| PNE AG | 6.157 | 5.981 | 6.664 | 6.322 | 25.125 | 99.9680% |
+
+The phase labels reproduce the original runtime's read sequence; this diagnostic
+does not perform the original INSERT or commit. The three checks on the first
+connection and the independent check on the second returned identical state.
+
+| Asset | PDO prepare s, four checks | PDO execute s | PDO query s | PDO fetchAll ms | PHP wall residual ms, four checks |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| DroneShield | 13.607 | 6.799 | 5.567 | 1.110 | 7.502 |
+| BYD | 15.660 | 6.803 | 6.623 | 1.183 | 9.084 |
+| Ubtech Robotics | 12.589 | 6.795 | 5.742 | 1.130 | 7.997 |
+| Carl Zeiss Meditec | 15.641 | 6.809 | 6.589 | 1.144 | 9.093 |
+| PNE AG | 12.239 | 6.798 | 6.079 | 1.105 | 8.051 |
+
+Each individual state check used only 4.913–6.386 ms of parent PHP process CPU;
+its wall residual outside PDO was 1.814–2.354 ms. CPU time includes client-side
+work inside PDO, so CPU and residual must not be added as disjoint components.
+These measurements rule out substantial local PHP computation as the cause
+of the multi-second state-check duration.
+
+Configured connection times, milliseconds, in execution order (global setup,
+then first/independent connection per asset):
+
+1647.244, 1643.531, 1644.497, 1475.111, 1649.393, 1474.901, 1644.611, 1474.241, 1644.460, 1305.257, 1656.614.
+
+Bounded scope/manifest setup took 26.412 s (26.404 s inside PDO), with 61 SQL
+executions and 136 fetched rows. It is setup for this five-asset diagnostic,
+not a per-asset runtime component. The extra existing-Observation selection
+for offline replay took 430.979–432.033 ms per asset and is also excluded
+from the historical-runtime comparison.
+
+### Comparison with the historical asset timer
+
+The following sum uses measured equivalents only: four runtimeState checks,
+two configured connections, the original three targeted fact-read equivalents,
+one independent fact readback and pure completePlan. It excludes this
+diagnostic's setup and extra existing-fact selection, and excludes local
+bridge initialization/replay so that their different diagnostic use is not
+silently equated with all original child-process actions.
+
+| Asset | Historical runtime s | Four checks s | Two connections s | Four targeted reads s | Measured equivalent subtotal s | Historical minus subtotal s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DroneShield | 37.737 | 25.981 | 3.288 | 1.386 | 30.656 | 7.081 |
+| BYD | 37.581 | 29.096 | 3.125 | 1.728 | 33.949 | 3.632 |
+| Ubtech Robotics | 37.643 | 25.136 | 3.120 | 1.387 | 29.643 | 8.000 |
+| Carl Zeiss Meditec | 37.623 | 29.049 | 3.119 | 1.727 | 33.894 | 3.729 |
+| PNE AG | 37.438 | 25.125 | 2.962 | 1.555 | 29.642 | 7.796 |
+
+The equivalent subtotal is a **comparison calculation**, not a measured full
+collector runtime or exact attribution of the historical run. It represents
+78.7–90.3% of the old duration numerically under the new probe conditions.
+The remaining 3.632–8.000 s is an arithmetic difference across different runs,
+not a measured unexplained phase. The old provider times were 472–748 ms,
+already measured in the old run; this diagnosis made no new provider request.
+
+**Proven cause at the processing-step level:** repeated bounded DB preflights
+dominate the measured work, consuming 25–29 s per asset, almost entirely inside
+PDO calls. Two configured connections and targeted fact reads add approximately
+4.5–4.9 s per asset. A cheap SELECT itself takes about 431 ms, so repeated
+serial DB/protocol interactions are a substantial source of wall time even
+for bounded small result sets. PHP computation, provider HTTP time and one-time
+SSH/tunnel setup do not account for the large repeated preflight cost.
+
+**Not proven:** the exact historical 37.6-second decomposition; which fraction
+of PDO wall time belongs to network, SSH, driver or DB-server execution; the
+timing of the prohibited INSERT/commit; and unmeasured original transaction
+control/child-process actions. Server profiling and a new mutating collector
+run were intentionally outside this diagnosis. No index defect, table-scan
+cause, artificial sleep, or particular network mechanism is asserted.
+
+### Boundaries and validation
+
+The successful report has provider_requests = 0 and business_writes = 0.
+Existing observations were read and replayed offline; no collector batch,
+writer apply, schema operation, Current/Bars write, scheduler or deployment ran.
+The server read-only transaction and SQL adapter enforce the measured DB path;
+there was no independent full-database before/after checksum in this diagnostic,
+so its evidence must not be presented as a new global unchanged-data snapshot.
+SSH and host-key verification passed, all five read-only state/readback checks
+passed, and all five offline replays were DUPLICATE_UNCHANGED.
+The existing secret-output guard reported NEIN/PASS; no secret value or private
+artifact was published.
+
+Nine relevant tests cover read-only rejection before delegation, forbidden
+transaction/write APIs, required transaction ownership, actual bounded query
+shapes, separate operation/row/residual accounting, missing-secret rejection,
+secret-output rejection, manual-only final workflow and the ten-SELECT budget.
+No production collector logic or existing acceptance workflow is changed.
