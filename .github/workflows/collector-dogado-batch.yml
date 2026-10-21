@@ -1,0 +1,74 @@
+name: Manual MOSA 2 Dogado equity batch (live locked)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main commit
+        required: true
+        type: string
+      selection_json:
+        description: Ordered JSON array of 1 to 10 previously qualified equity ISINs
+        required: true
+        type: string
+      run_id:
+        description: Unique private run label, lowercase letters digits hyphens
+        required: true
+        type: string
+      authorization:
+        description: Reserved for separate future explicit live authorization
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: mosa-2-collector-live-test
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          EXPECTED: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: git fetch --depth=1 origin 92274a79550b8acd719434459022da6de5261d2e
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: none
+      - env:
+          PYTHONPATH: '.:tests'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m unittest -v test_collector_dogado_pne test_collector_dogado_pne_diagnose test_market_live_batch test_market_runtime
+  live:
+    # This assignment authorizes OFFLINE work only. No input can enable this job.
+    if: ${{ false }}
+    needs: offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: git fetch --depth=1 origin 92274a79550b8acd719434459022da6de5261d2e
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Prepared generic supervisor; independently locked in both source layers
+        env:
+          MOSA_BATCH_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_BATCH_SELECTION: ${{ inputs.selection_json }}
+          MOSA_BATCH_RUN_ID: ${{ inputs.run_id }}
+          MOSA_BATCH_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m scripts.collector_dogado_batch

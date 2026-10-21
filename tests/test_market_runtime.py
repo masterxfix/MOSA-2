@@ -160,7 +160,7 @@ class RuntimeTests(unittest.TestCase):
         return dict(state=state,batch=entries,acquired_batch=acquired)
 
     def test_actual_runtime_batch_one_two_and_five_assets(self):
-        for size in [1,2,5]:
+        for size in [1,2,5,10]:
             result=self.call(**self.batch_inputs(size));report=result['reports'][0]
             self.assertEqual(report['overall_status'],'COMPLETE',report)
             self.assertEqual(report['committed_count'],size);self.assertEqual(result['providers'],size)

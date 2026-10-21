@@ -2503,3 +2503,129 @@ geprüft und auf main veröffentlicht. Der vollständige Livebeleg verbleibt
 im [manuellen PNE-Workflow](https://github.com/masterxfix/MOSA-2/actions/workflows/collector-dogado-pne.yml);
 diese Vorbereitung behauptet noch keinen erfolgreichen Liveausgang.
 Nach dem Versuch keine weiteren Codeänderungen oder erneute Akquisition.
+
+
+## Gemeinsamer Dogado-Aktienstart für 1–10 Assets, nur offline vorbereitet (21.10.2026)
+
+Der erfolgreiche historische PNE-Nachweis bleibt unverändert:
+[Run 39590396752](https://github.com/masterxfix/MOSA-2/actions/runs/39590396752),
+Commit 73643c2e397549c1799624c2653c8959654a5b3d, INSERT 4908,
+Readback PASS, Replay DUPLICATE_UNCHANGED, lokale Collector-Dauer 4,31 s.
+Er beweist nicht die Livefunktion des hier neu vorbereiteten Mehrfachstarts.
+Installiertes Release weiterhin ausschließlich
+92274a79550b8acd719434459022da6de5261d2e, 33 Dateien / 248.105 Byte.
+
+**Gemeinsame Komponenten:** dogado_runtime.php enthält die aus dem PNE-
+Startweg herausgezogenen Prüf-, Prozess-, Audit- und Startfunktionen.
+Der PNE-Einstieg delegiert mit denselben Pins und Verträgen an diese
+Bibliothek; seine bisherige Schnittstelle bleibt verfügbar. Batch und
+Einzelstart verwenden dieselben Funktionen. Keine zweite Normalizer-,
+Writer-, Dedupe-, SQL- oder Transaktionsimplementierung:
+MarketBatch::prepare/execute aus dem installierten live_batch.php
+koordiniert weiterhin sequentiell; MarketLive::runtimeRun aus
+runtime_persistence.php übernimmt Transaktion, Writer, unabhängigen
+Readback und Replay. Der bestehende Proof Mode bleibt unverändert.
+
+Konfiguration ist eine geordnete JSON-Liste von 1 bis 10 ISINs, keine
+fest eingebaute Aktienliste. Die vollständige Auswahl wird vor dem
+ersten Providerrequest gegen den authentifizierten DB-Snapshot geprüft:
+globale Identität, asset_class=equity, bestehender qualifizierter Source,
+USE_EXISTING_ROUTE, vorhandene Route, Ledger, Schema und Unit-Bindung.
+ETFs, Duplikate, unbekannte Assets, neue Routen oder Konflikte stoppen den
+gesamten Start vor Akquisition. Der übernommene Manifest-/Providervertrag
+ist der bereits qualifizierte Frankfurt-Snapshot-Pfad; andere vorhandene
+Routen werden nicht stillschweigend auf diesen Vertrag umgestellt.
+
+Jedes Asset erhält ein eigenes privates asset-NN-Verzeichnis und sein
+unveränderliches Manifest. Vor jeder Akquisition erfolgt erneut der
+vollständige Abgleich mit dem erwarteten Zustand: am Anfang dem globalen
+Preflight, danach dem exakt bestätigten Endzustand der vorherigen Aktie.
+Es gibt keinen Cache veränderlicher Schema-, Ledger-, Unit- oder Route-
+Prüfungen. Vier Auditpunkte einschließlich unabhängigem Readback erhalten
+Current/Bars, Katalog und sämtliche Bestandszeilen; pro Aktie höchstens
+eine neue Observation. Ein Providerbudget und Verbrauchsmarker gelten
+je Asset. Beim ersten Fehler stoppt der bestehende Coordinator, spätere
+Assets bleiben NOT_STARTED; frühere Commits bleiben erhalten.
+OUTCOME_UNKNOWN wird einschließlich bestätigter Teilcommits ausdrücklich
+erhalten, auch wenn die Coordinator-Ergebnisverarbeitung ausfällt.
+
+**Supervisor:** vorhandene Guard-, Metadaten-, exklusive Datei-, Prozess-
+gruppen-, Deadline-, Ausgabe- und sichere Fehlercodefunktionen werden
+direkt aus der gemeinsamen bestehenden Supervisorquelle wiederverwendet.
+Laufkennung bindet vollständigen Quellcommit, validiertes Laufetikett und
+SHA-256 der geordneten Auswahl:
+runs/batch-<commit>-<run_id>-<selection-hash-prefix>.
+Exklusives mkdir, globaler nichtblockierender collector-batch.lock unter
+locks/ und bestehender DB-Identifier-Lock verhindern Wiederverwendung und
+Überschneidungen. Keine alte Laufdatei oder kein Verbrauchsmarker wird
+gelöscht oder überschrieben. UID:GID 10317:1003, Verzeichnisse 0700,
+Dateien 0600, no-follow-Pfadprüfung und umask 0077 bleiben verbindlich.
+Python 3.11.17/PHP 8.4.12, 1 GiB virtueller Adressraum, PHP-Heap 128 MiB,
+höchstens 120 s Deadline und 45 s CPU je angeforderter Aktie, maximal
+1200 s/450 s pro Batch, 64 KiB Ausgabe, 1 MiB je geschriebener Datei.
+DB-Passwort ausschließlich über geschütztes stdin, keine dauerhafte
+Credentialdatei und keine Secretwerte in Bericht oder Paket.
+
+**Release-Integrität und Startaufwand:** Der Actions-Treiber verifiziert
+zunächst das reproduzierbare Paket/Manifest des unveränderten installierten
+Release-Commits gegen den vorhandenen Deploymentbeleg. Auf Dogado prüfen
+dieselben bestehenden Integritätsfunktionen vor und nach dem gesamten
+Batch alle 33 Dateien einschließlich Dateisatz, SHA-256, Größe, Owner,
+Modus, Pfad und Symlinks gegen dieses vertrauenswürdige Manifest.
+Hashfehler stoppen, nach bereits gestartetem Batch konservativ mit
+OUTCOME_UNKNOWN. Der normale Batch-Treiber öffnet keinen SFTP-Kanal.
+Vollständige unabhängige SFTP-Audits bleiben über den bestehenden
+deploy_private_collector.readback und die vorhandenen separaten
+Offline-/Diagnosewege möglich; sie werden nicht je Aktie ausgeführt.
+
+Beim historischen PNE-Lauf benötigten die beiden SFTP-Auditphasen zusammen
+80,36 s. Deren Transfer-Roundtrips entfallen im normalen Batchstart;
+serverlokale Hashprüfungen bleiben bestehen. Erwartung: dieser bisherige
+Startaufwand wird weitgehend vermieden und SSH nur einmal pro Batch
+aufgebaut. **Keine neue Live-Messung oder gemessene Beschleunigung**
+des Mehrfachstarts in diesem Auftrag; Provider-, Prozess- und Actions-
+Zeiten sowie die zusätzliche vollständige Scope-Prüfung bleiben offen.
+
+Berichte enthalten requested/started/completed/not_started/committed,
+Providerrequests und erhaltene Marker, INSERT-/DUPLICATE_UNCHANGED-
+Entscheidungen, Observation-IDs, Readback, Replay, Fehlercode/-phase,
+Collector- und Providerdauer pro Aktie, DB-Prüfzeit pro Aktie und globalem
+Scope-Preflight, lokale Batch-Gesamtzeit sowie getrennte Actions-/SSH-/
+Supervisorzeiten. INSERT-/Duplicate-Zähler zählen Writerentscheidungen;
+committed_count weist davon unabhängig bestätigte Commits aus.
+Rohe Zustandsdaten bleiben im Prozessspeicher; öffentliche Ausgaben
+enthalten keine Provider-Rohantworten oder ungeprüften Exceptiontexte.
+
+**Offline-Nachweis:** Die bestehenden Tests wurden erweitert und
+Fixture-/PDO-/Provider-Doubles wiederverwendet, keine realen DB- oder
+HTTP-Verbindungen. Abgedeckt sind 1/2/5/10 Assets (auch mit echtem
+bestehendem Normalizer/Writer gegen In-Memory-PDO), Duplikate, ETFs,
+unqualifizierte/fehlende Route, Unit-Drift, Provider-/Writer-/Readbackfehler,
+INSERT und Dedupe, Teilcommit mit Folgefehler, unbekannte Ergebnisse,
+Einmalkollision, Erhalt alter Laufdaten, Current/Bars und Bestandszeilen,
+sowie tatsächliche 33-Dateien-Hash-, Fremddatei- und Symlink-Prüfungen.
+
+[Abschließende betroffene Suite 39593243437](https://github.com/masterxfix/MOSA-2/actions/runs/39593243437):
+36/36 PASS. Die 19 unveränderten Diagnose-/Runtime-Tests bestanden im
+[initialen Gesamtblock 39592819507](https://github.com/masterxfix/MOSA-2/actions/runs/39592819507)
+einschließlich tatsächlichem Runtime-Batch mit 10 synthetischen Assets;
+dieser erste Block hatte zwei inzwischen korrigierte Testverdrahtungsfehler.
+Damit 55/55 relevante Tests abgedeckt. Keine Schutzprüfung abgeschwächt.
+
+**Live bleibt gesperrt:** neuer manueller Workflow collector-dogado-batch.yml
+ist commitgebunden. Sein Livejob ist mit konstant false gesperrt; zusätzlich
+stehen LIVE_ENABLED im Actions-Treiber und im Remote-Supervisor auf false.
+Kein Workflow-Input kann diese Sperren aufheben. Vor späterer Ausführung
+sind eine separate ausdrückliche Nutzerfreigabe und eine geprüfte Aktivierung
+erforderlich. Die vorbereitete Autorisierung bindet Commit, Laufetikett und
+vollständigen Auswahlhash; main, Checkout, Repository und run_attempt=1
+werden zusätzlich geprüft. Vorhandene Secrets und Host-Key-Pinning
+werden erst im künftig separat freigegebenen Livepfad verwendet.
+
+In diesem Auftrag ausschließlich Repositoryänderungen und Offline-Actions:
+null Hostingzugriffe, Providerrequests, reale DB-Verbindungen/-Writes,
+Uploads, neue Observations, Scheduler- oder Produktionsänderungen.
+Noch nicht live geprüft: neuer Batch-Supervisor, globaler Job-Lock,
+refaktorisierte PHP-Integration, serverlokale Vorher-/Nachherprüfung und
+tatsächliche Multi-Asset-Laufzeiten. Der PNE-Livebeleg bleibt historischer
+Einzelnachweis. Nach Tests und genau einem main-Abschluss-Commit stoppen.

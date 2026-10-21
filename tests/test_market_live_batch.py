@@ -26,7 +26,7 @@ def manifest(serial):
         identifier_value=value, normalized_value=value, scope_key='', is_primary=1))
 
 
-def call(manifests, outcomes=(), path_case=None, action=None):
+def call(manifests, outcomes=(), path_case=None, action=None, dogado=False, **extra):
     with tempfile.TemporaryDirectory() as temporary:
         base = Path(temporary).resolve();private = base/'private';web = base/'web'
         private.mkdir();web.mkdir();entries = []
@@ -41,7 +41,10 @@ def call(manifests, outcomes=(), path_case=None, action=None):
         if path_case == 'web':
             private = web
         data = dict(private_root=str(private), public_root=str(web), entries=entries,
-                    outcomes=list(outcomes), action=action)
+                    outcomes=list(outcomes), action=action)|extra
+        if dogado:
+            from scripts import collector_dogado_pne as dogado_driver
+            data["dogado_source"]=dogado_driver.php_source(release_root=str(ROOT),run_root=str(private),entry=False,launcher="dogado_batch_live.php")
         return json.loads(subprocess.check_output(['php',str(ROOT/'tests/market_live_batch_fixture.php')],
                           input=json.dumps(data).encode()))
 
@@ -128,3 +131,49 @@ class MarketLiveBatchTests(unittest.TestCase):
     def test_first_readback_failure_after_commit_is_partial_failed(self):
         r=call([manifest(1),manifest(2)],[dict(ok=False,committed=True,stage='readback')])['batch']
         self.assertEqual(r['overall_status'],'PARTIAL_FAILED');self.assertEqual(r['committed_count'],1)
+
+    def test_dogado_same_installed_coordinator_sizes_and_unknown_outcomes(self):
+        for size in (1,2,5,10):
+            r=call([manifest(i) for i in range(size)],dogado=True)['batch']
+            self.assertEqual(r['overall_status'],'COMPLETE');self.assertEqual(r['requested_count'],size)
+            self.assertEqual(r['insert_count'],size);self.assertEqual(r['provider_requests'],size)
+        for failure in (dict(ok=False,committed=None,status='OUTCOME_UNKNOWN',stage='transaction'),
+                        dict(throw=True)):
+            r=call([manifest(1),manifest(2),manifest(3)],[{},failure],dogado=True)['batch']
+            self.assertEqual(r['overall_status'],'OUTCOME_UNKNOWN')
+            self.assertTrue(r['item_results'][0]['committed'])
+            self.assertEqual(r['item_results'][1]['status'],'OUTCOME_UNKNOWN')
+            self.assertEqual(r['item_results'][2]['status'],'NOT_STARTED')
+            self.assertEqual(r['started_count'],2)
+
+    def test_dogado_writer_provider_readback_failures_stop_and_preserve_commits(self):
+        for stage,committed in (('provider',False),('transaction',False),('readback',True)):
+            r=call([manifest(1),manifest(2),manifest(3)],
+                [{},dict(ok=False,committed=committed,stage=stage,failure_code='collector_check_failed')],dogado=True)['batch']
+            self.assertEqual(r['overall_status'],'PARTIAL_FAILED')
+            self.assertEqual(r['committed_count'],1+int(committed))
+            self.assertEqual(r['item_results'][1]['failure_stage'],stage)
+            self.assertEqual(r['item_results'][1]['failure_code'],'collector_check_failed')
+            self.assertEqual(r['item_results'][2]['status'],'NOT_STARTED')
+        r=call([manifest(1)],[dict(writer='DUPLICATE_UNCHANGED')],dogado=True)['batch']
+        self.assertEqual((r['insert_count'],r['duplicate_unchanged_count']),(0,1))
+
+    def test_dogado_complete_qualification_equity_route_and_identity_before_runner(self):
+        import test_market_onboarding as o
+        s,m=o.MarketOnboardingTests().existing_live()
+        for label in ('valid','duplicate','etf','missing_route','missing_asset','unit_drift'):
+            state=copy.deepcopy(s);selection=[m['instrument']]
+            if label=='duplicate':selection*=2
+            if label=='etf':state['m2_assets'][0]['asset_class']='etf'
+            if label=='missing_route':state['m2_asset_source_routes']=[]
+            if label=='missing_asset':state['m2_asset_identifiers']=[]
+            if label=='unit_drift':state['m2_asset_source_routes'][0]['quote_unit_version']='2'
+            r=call([manifest(1)],action='qualify',dogado=True,state=state,selection=selection,qualified_manifests={m['instrument']:m})
+            self.assertEqual(r['ok'],label=='valid',(label,r));self.assertEqual(r['calls'],[])
+        r=call([manifest(1),manifest(1)],dogado=True)
+        self.assertFalse(r['ok']);self.assertEqual(r['calls'],[])
+
+
+    def test_dogado_outer_exception_after_coordinator_entry_is_always_unknown(self):
+        r=call([manifest(1)],action='outcome_guard',dogado=True)
+        self.assertEqual(r,dict(before='FAILED_BEFORE_FIRST_COMMIT',after='OUTCOME_UNKNOWN'))

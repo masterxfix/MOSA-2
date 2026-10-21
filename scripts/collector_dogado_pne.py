@@ -44,7 +44,7 @@ def authorize(env):
         raise PermissionError("EXACT_ONE_PNE_MANUAL_AUTHORIZATION_REQUIRED")
     return commit
 
-def php_source(project=ROOT,release_root=RELEASE,run_root=RUN,entry=True):
+def php_source(project=ROOT,release_root=RELEASE,run_root=RUN,entry=True,launcher='dogado_pne_live.php'):
     source=(project/"scripts/market_collector/actions_acceptance.php").read_text()
     # The existing generic manifest function is reused verbatim; no onboarding path.
     manifest=source[source.index("function manifest("):source.index("function privateItem(")]
@@ -55,12 +55,16 @@ use function Mosa2\\Phase2\\{check,same};
 use function Mosa2\\MarketLive\\completePlan;
 use function Mosa2\\MarketIdentity\\{planAssetIdentity,planMarketRoute};
 """
-    body=(project/"scripts/market_collector/dogado_pne_live.php").read_text()
+    namespaces={'dogado_pne_live.php':'DogadoPne','dogado_batch_live.php':'DogadoBatch'}
+    if launcher not in namespaces:raise ValueError("LAUNCHER_SOURCE_FORMAT")
+    shared_body=(project/"scripts/market_collector/dogado_runtime.php").read_text()
+    body=(project/"scripts/market_collector"/launcher).read_text()
     expected="<?php\ndeclare(strict_types=1);\n"
     if not body.startswith(expected):raise ValueError("LAUNCHER_SOURCE_FORMAT")
     body=body[len(expected):].replace("@RELEASE@",release_root).replace("@RUN@",run_root)
-    code=header+manifest+"\n"+body
-    if entry:code+="\n\\Mosa2\\DogadoPne\\main();\n"
+    if not shared_body.startswith(expected):raise ValueError("LAUNCHER_SOURCE_FORMAT")
+    code=header+manifest+"\n"+shared_body[len(expected):]+"\n"+body
+    if entry:code+="\n\\Mosa2\\"+namespaces[launcher]+"\\main();\n"
     return code[len("<?php\n"):]
 
 def remote_source():

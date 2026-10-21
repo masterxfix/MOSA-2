@@ -86,7 +86,7 @@ class ChildStop(Stop):
         self.details=dict(failure_code=safe_code(self),failure_phase=phase,
                           php_process_started=started,php_exitcode=exitcode)
 
-def child(source,password):
+def child(source,password,input_data=None,deadline=120):
     try:
         p=subprocess.Popen([PHP,*PHP_FLAGS,"-r",source],stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=RELEASE,start_new_session=True,
@@ -95,14 +95,16 @@ def child(source,password):
         raise ChildStop("PHP_SPAWN_FAILED","php_spawn",False,None) from None
     selector=selectors.DefaultSelector();out=bytearray();err=bytearray();phase="php_input"
     try:
-        wire=json.dumps(dict(isin="DE000A0JBPG2",password=password),separators=(",",":")).encode()
+        payload=dict(isin="DE000A0JBPG2",password=password) if input_data is None else dict(input_data,password=password)
+        wire=json.dumps(payload,separators=(",",":")).encode()
         need(len(wire)<=8192,"SECRET_INPUT_LIMIT")
         p.stdin.write(wire);p.stdin.close()
         phase="php_io"
         for stream,buffer in ((p.stdout,out),(p.stderr,err)):
             os.set_blocking(stream.fileno(),False)
             selector.register(stream,selectors.EVENT_READ,buffer)
-        end=time.monotonic()+120
+        need(type(deadline) is int and 1<=deadline<=1200,"COLLECTOR_DEADLINE")
+        end=time.monotonic()+deadline
         while selector.get_map():
             need(time.monotonic()<end,"COLLECTOR_DEADLINE")
             for key,unused in selector.select(timeout=0.1):

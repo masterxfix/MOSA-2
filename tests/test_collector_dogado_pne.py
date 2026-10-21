@@ -44,7 +44,7 @@ class DogadoPneTests(unittest.TestCase):
         body=original[original.index("function manifest("):original.index("function privateItem(")]
         self.assertIn(body,source)
         self.assertNotIn("function acceptance(",source)
-        self.assertIn("runtimeRun(RUN",source)
+        self.assertIn("runtimeRun($run",source)
         self.assertNotIn("INSERT INTO",source)
         self.assertNotIn("ONBOARD_NEW_ROUTE",source.replace(body,""))
         self.assertIn("existing_route_only",source)
@@ -168,7 +168,7 @@ class DogadoPneTests(unittest.TestCase):
         self.assertIn("start_new_session=True",source)
         self.assertIn('p.stdin.write(wire)',source)
         self.assertIn('len(out)+len(err)<=65536',source)
-        self.assertIn('time.monotonic()+120',source)
+        self.assertIn('deadline=120',source);self.assertIn('time.monotonic()+deadline',source)
         import ast
         tree=ast.parse(source)
         popen=next(n for n in ast.walk(tree) if isinstance(n,ast.Call)
@@ -254,8 +254,8 @@ class DogadoPneTests(unittest.TestCase):
         with self.assertRaises(PermissionError):driver.authorize(env)
         source=driver.php_source(run_root=driver.run_directory(self.commit))
         self.assertIn("const RUN='"+driver.run_directory(self.commit)+"';",source)
-        self.assertIn("RUN.'/preflight.json'",source)
-        self.assertLess(source.index("$r['baseline']="),source.index("runtimeRun(RUN"))
+        self.assertIn("$run.'/preflight.json'",source)
+        self.assertLess(source.index("$r['baseline']="),source.index("runtimeRun($run"))
 
     def test_first_attempt_files_survive_second_attempt_and_second_attempt_cannot_repeat(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
@@ -269,5 +269,117 @@ class DogadoPneTests(unittest.TestCase):
             self.assertEqual(scope["run_once"](data)["failure_code"],"RUN_ALREADY_EXISTS")
             self.assertEqual(scope["child"].call_count,1)
             self.assertEqual(before,{p.name:p.read_bytes() for p in first.iterdir()})
+
+class DogadoBatchTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest=driver.package()
+        cls.commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
+
+    def fixture(self,tmp):
+        from scripts import collector_dogado_batch as batch
+        scope,root,data=DogadoPneTests.fixture(self,tmp)
+        # Reuse the existing supervisor doubles; only the batch coordinator is new.
+        body=(ROOT/"scripts/collector_dogado_batch_remote.py").read_text().split('if __name__=="__main__":')[0]
+        exec(body,scope);scope["LIVE_ENABLED"]=True
+        (root/"locks").mkdir(mode=0o700)
+        scope["checked_fd"]=lambda api,path:os.open(path,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW) if path in (str(root/"runs"),str(root/"locks")) else (_ for _ in ()).throw(AssertionError("scope"))
+        data.update(selection=["DE000A0JBPG2"],run_id="synthetic-1")
+        digest=hashlib.sha256(json.dumps(data["selection"],separators=(",",":")).encode()).hexdigest()
+        data["authorization"]=batch.TOKEN+self.commit+":"+data["run_id"]+":"+digest
+        return scope,root,data
+
+    def test_default_live_lock_stops_before_network_files_or_credentials(self):
+        from scripts import collector_dogado_batch as batch
+        with patch.object(batch.shared,"configuration") as configuration,patch.object(batch.shared,"ssh_client") as ssh:
+            with self.assertRaises(PermissionError):batch.execute({},Mock())
+            configuration.assert_not_called();ssh.assert_not_called()
+        scope={"__name__":"fixture"};exec(batch.remote_source(),scope)
+        scope["guard"]=Mock()
+        with self.assertRaises(scope["Stop"]):scope["run_batch_once"]({})
+        scope["guard"].assert_not_called()
+        workflow=(ROOT/".github/workflows/collector-dogado-batch.yml").read_text()
+        self.assertIn("if: "+chr(36)+"{{ false }}",workflow)
+        self.assertFalse(batch.LIVE_ENABLED);self.assertFalse(scope["LIVE_ENABLED"])
+
+    def test_batch_supervisor_collision_marker_release_hash_and_no_old_run_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
+            scope,root,data=self.fixture(tmp)
+            old=root/"runs"/driver.ONCE;old.mkdir();(old/"retained").write_text("OUTCOME_UNKNOWN")
+            def child(source,password,input_data,deadline):
+                self.assertEqual(input_data,dict(selection=data["selection"]));self.assertEqual(deadline,120)
+                folder=Path(scope["RUN"])/"asset-01";folder.mkdir(mode=0o700)
+                fd=os.open(folder/"provider-consumed.lock",os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
+                return dict(ok=True,overall_status="COMPLETE",provider_requests=1,started_count=1,completed_count=1)
+            scope["child"]=Mock(side_effect=child)
+            r=scope["run_batch_once"](data);self.assertTrue(r["ok"],r)
+            self.assertEqual((r["integrity_before"],r["integrity_after"]),("PASS","PASS"))
+            self.assertEqual(r["provider_requests"],1)
+            before={p.name:p.read_bytes() for p in Path(scope["RUN"]).iterdir() if p.is_file()}
+            repeated=scope["run_batch_once"](data)
+            self.assertEqual(repeated["failure_code"],"RUN_ALREADY_EXISTS");self.assertEqual(scope["child"].call_count,1)
+            self.assertEqual(before,{p.name:p.read_bytes() for p in Path(scope["RUN"]).iterdir() if p.is_file()})
+            self.assertEqual((old/"retained").read_text(),"OUTCOME_UNKNOWN")
+            self.assertEqual((Path(scope["RELEASE"])/"unchanged").read_text(),"synthetic release")
+
+    def test_unknown_failure_partial_markers_and_integrity_failure_never_restart(self):
+        for fault in ("unknown","hash_before","hash_after"):
+            with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
+                scope,root,data=self.fixture(tmp)
+                if fault=="hash_before":scope["integrity"].side_effect=scope["Stop"]("RELEASE_HASH")
+                if fault=="hash_after":scope["integrity"].side_effect=["PASS",scope["Stop"]("RELEASE_HASH")]
+                scope["child"]=Mock(side_effect=TimeoutError("secret-canary"))
+                if fault=="hash_before":
+                    with self.assertRaises(scope["Stop"]):scope["run_batch_once"](data)
+                    scope["child"].assert_not_called()
+                else:
+                    r=scope["run_batch_once"](data);self.assertEqual(r["overall_status"],"OUTCOME_UNKNOWN")
+                    self.assertEqual(scope["child"].call_count,1);self.assertNotIn("secret-canary",json.dumps(r))
+                    if fault=="hash_after":self.assertEqual(r["integrity_after"],"FAIL")
+
+    def test_hash_verifier_rejects_changes_symlinks_and_unknown_files(self):
+        import shutil
+        from scripts import collector_dogado_batch as batch
+        namespace={"__name__":"fixture"};exec(batch.remote_source(),namespace)
+        archive,manifest_bytes=driver.release.build(ROOT,driver.RELEASE_COMMIT)
+        manifest=json.loads(manifest_bytes)
+        import io,tarfile
+        for fault in ("clean","hash","symlink","unknown"):
+            with tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp)/"release";root.mkdir(mode=0o700)
+                # Controlled local fixture extraction only; never a remote deployment.
+                with tarfile.open(fileobj=io.BytesIO(archive),mode="r:") as tar:
+                    for member in tar.getmembers():
+                        if member.isdir():continue
+                        p=root/member.name;p.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+                        p.write_bytes(tar.extractfile(member).read());p.chmod(0o600)
+                for p in root.rglob("*"):
+                    if p.is_dir():p.chmod(0o700)
+                victim=root/manifest["files"][0]["path"]
+                if fault=="hash":victim.write_bytes(b"corrupt")
+                if fault=="symlink":victim.unlink();victim.symlink_to(root/"absent")
+                if fault=="unknown":
+                    p=root/"unknown";p.write_text("unexpected");p.chmod(0o600)
+                if fault=="clean":self.assertEqual(namespace["integrity"](root,manifest,remote=False),"PASS")
+                else:
+                    with self.assertRaises(namespace["Stop"]):namespace["integrity"](root,manifest,remote=False)
+
+    def test_batch_scope_and_no_per_asset_sftp_or_business_logic_copy(self):
+        from scripts import collector_dogado_batch as batch
+        from test_market_live_batch import isin
+        env=DogadoPneTests.env(self)
+        env.update(MOSA_BATCH_EXPECTED_COMMIT=self.commit,MOSA_BATCH_RUN_ID="synthetic",MOSA_BATCH_SELECTION=json.dumps([isin(1),isin(2)]))
+        digest=hashlib.sha256(json.dumps([isin(1),isin(2)],separators=(",",":")).encode()).hexdigest()
+        env["MOSA_BATCH_AUTHORIZATION"]=batch.TOKEN+self.commit+":synthetic:"+digest
+        self.assertEqual(batch.scope(env)[2],[isin(1),isin(2)])
+        for label,change in (("duplicate",{"MOSA_BATCH_SELECTION":json.dumps([isin(1),isin(1)])}),("attempt",{"GITHUB_RUN_ATTEMPT":"2"}),("path",{"MOSA_BATCH_RUN_ID":"../escape"}),("commit",{"GITHUB_SHA":"0"*40})):
+            with self.subTest(label=label),self.assertRaises((PermissionError,ValueError)):batch.scope(env|change)
+        source=(ROOT/"scripts/collector_dogado_batch.py").read_text()
+        self.assertNotIn("SFTPClient",source);self.assertNotIn("readback(",source);self.assertNotIn("upload(",source)
+        self.assertEqual(source.count("remote.remote_call("),1)
+        php=(ROOT/"scripts/market_collector/dogado_batch_live.php").read_text()
+        self.assertEqual(php.count("\\Mosa2\\MarketBatch\\execute("),1)
+        self.assertNotIn("INSERT INTO",php);self.assertNotIn("executePlan(",php)
+        self.assertIn("\\Mosa2\\DogadoRuntime\\perform(",php)
 
 if __name__=="__main__":unittest.main()
