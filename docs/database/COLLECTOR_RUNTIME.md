@@ -2265,3 +2265,62 @@ Das vorhandene private Deploymentprofil bleibt unverändert gesperrt.
 des bereits geprüften Releasepakets mit Staging, Manifestprüfung und
 unabhängigem Dateireadback. Die jetzige Verzeichnisfreigabe umfasst weder
 diesen Upload noch einen Collector-Lauf.
+
+
+## Installiertes Release: synthetischer Remote-Offline-Test (21.10.2026)
+
+**Status: teilweise; kein erfolgreicher Remote-Abschlussnachweis.**
+Geprüft wurde ausschließlich das bereits installierte Release
+`92274a79550b8acd719434459022da6de5261d2e` unter
+`/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector/releases/92274a79550b8acd719434459022da6de5261d2e`.
+Kein neues Paket, Upload oder Collector-Start.
+
+[Manueller Diagnose-Run 39582990913](https://github.com/masterxfix/MOSA-2/actions/runs/39582990913),
+Diagnosequellstand `2b4c8c8dd0a133bcf7aa927f06d217506e5599ff`, run_attempt=1.
+Vor dem einzigen Remote-Test führte der bestehende SFTP-Readback eine vollständige
+Dateisatz-, Eigentümer-, Rechte- und SHA-256-Prüfung der 33 Dateien / 248.105 Byte
+erfolgreich durch. Dies ist durch den anschließend erreichten Remote-Testpfad
+belegt; der damalige Fehlerpfad gab den bereits erfolgreichen Readback leider
+nicht im Abschluss-JSON aus. Paket-SHA-256:
+`73e34c8d8e13ce37265ef5dded1ceae162140eee5b17341b23ee7dae3e3a68f7`.
+
+Die dateilos über SSH ausgeführte Prüfroutine brach mit PermissionError ab.
+Der damalige Treiber reduzierte den Remote-Fehler auf
+`REMOTE_TEST_REJECTED:PermissionError`; der genaue Remote-Abbruchpunkt wurde
+nicht erhalten. Daher sind PHP-/Python-Modulprüfung, Zusammenarbeit, Normalizer,
+INSERT-Plan, Replay und Referenzvergleich auf Dogado **nicht abschließend
+nachgewiesen**. Auch ein abschließender Hash-Readback aus dem Testprozess liegt
+nicht vor. Daraus folgt kein belegter Fehler im installierten Collector.
+
+Ein Fehler der Prüfroutine wurde offline nachgewiesen und korrigiert:
+Der Python-Audithook behandelte das Öffnen bereits vorhandener anonymer
+STDIN-Pipe-Dateideskriptoren wie eine Dateischreiboperation. Die Ausnahme gilt
+nun ausschließlich für als FIFO geprüfte numerische Deskriptoren. Schreibende
+Dateipfade und reguläre Dateideskriptoren bleiben gesperrt. Der Treiber erhält
+künftig strukturierte Remote-Fehler samt schon bestandenem SFTP-Readback.
+Diese Korrektur wurde **nicht erneut auf Dogado ausgeführt**.
+
+[Rein lokale Sicherheitsprüfung 39583400808](https://github.com/masterxfix/MOSA-2/actions/runs/39583400808):
+12/12 Tests PASS. Enthalten sind tatsächliche PHP-STDIO-Aufrufe unter aktivem
+Audithook, bestehende synthetische Frankfurt-/Yahoo-GBX-Referenzen, normative
+Unit-Definitionen, INSERT und DUPLICATE_UNCHANGED, exakte kanonische Bytes und
+Dedupe-Schlüssel sowie Hash-/Dateisatz-/Symlink-/Modus-, Netzwerk- und
+Prozessgrenzen. Die erste Testvorbereitung hatte lokale Zwischenverzeichnisse
+mit falschem Modus erzeugt; Run 39582628861 stoppte deshalb vor dem Remote-Schritt.
+Insgesamt wurde genau **ein** Remote-Offline-Test ausgeführt.
+
+Der Diagnoseweg verwendet die vorhandenen SSH-/Host-Key-Komponenten, keinen
+DB-Tunnel und kein DB-Secret. Remote-Python: festes Python 3.11.17 mit -I -B;
+PHP und verschachtelte Wertadapter: festes PHP 8.4 mit -n, deaktivierten Logs,
+Dateicaches, URL-Zugriffen sowie schreibenden/Netzwerkfunktionen. PHP-Includes
+werden als Bibliotheken geladen; das unbedingte Main des Frankfurt-
+Requestdeskriptors wird nur syntaktisch geprüft. Keine Provider-/HTTP-Anfrage,
+DB-Verbindung oder DB-Schreiboperation im ausgeführten Testpfad; keine
+Observation-, Current-/Bars-, Hosting- oder Releaseänderung. Prozessanzahl,
+CPU, Speicher, Dateischreibgröße, Ausgabe und Gesamtlaufzeit sind begrenzt.
+
+Der separate Diagnoseworkflow bleibt ausschließlich manuell und
+commitgebunden. Der temporäre Kontrollbranch wird auf den Vorauftragsstand
+zurückgesetzt. Kein zweiter Remote-Versuch innerhalb dieses Auftrags.
+**Offen:** ein separat beauftragter Remote-Offline-Test mit dem korrigierten
+Prüfharness; noch keine Freigabe eines echten Collector-Laufs.

@@ -1,0 +1,50 @@
+name: Manual MOSA 2 installed release synthetic offline test
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed diagnostic source commit
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: mosa-2-installed-collector-offline
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Require exact reviewed source
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: git fetch --depth=1 origin 92274a79550b8acd719434459022da6de5261d2e
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: none
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Targeted offline safety tests and existing references
+        env:
+          PYTHONPATH: '.:tests'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m unittest -v test_collector_remote_offline test_market_collector_v1.FrankfurtCollectorTests.test_frankfurt_snapshot_end_to_end_uses_existing_writer test_market_collector_v1.MarketCollectorTests.test_eur_end_to_end_uses_actual_phase3n_writer_and_plan_bytes test_collector_release.ReleaseTests.test_packaged_php_include_closure_is_loadable_with_no_legacy_main
+      - name: Exactly one fileless installed-module test; no DB credential or tunnel
+        timeout-minutes: 4
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m scripts.collector_remote_offline
