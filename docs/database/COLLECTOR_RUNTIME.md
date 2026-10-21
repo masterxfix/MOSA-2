@@ -2687,3 +2687,91 @@ Akquisition. Der historische PNE-Einzellauf und alle alten Marker
 werden erhalten. Kein Upload oder Eingriff ins installierte Release.
 
 Offline-Freigabenachweis vor Live: [Run 39594598884](https://github.com/masterxfix/MOSA-2/actions/runs/39594598884), 50/50 PASS. Exakte Aktien/Reihenfolge, Token, Laufname, Commit-/Actions-Kontext, Einmalkollision, alte Laufdaten, Hash-/Symlink-Schutz sowie bestehende Transaktions-/Readback-/Replay-Fehlerfälle geprüft. Keine Hosting-Secrets im Offline-Test.
+
+
+## Regelbetrieb: deaktivierte Planung und Monitoring (21.10.2026)
+
+Zentrale Datei: config/collector-operation.json, Vertrag
+mosa2-collector-operation-plan-v1. Standard execution_enabled=false;
+Aktienauswahl, Handelsplatz, freigegebener Kalender, Handelstage/-fenster,
+Intervall, Laufdauer und Frischegrenzen sind absichtlich leer/null,
+Providerbudgets ohne Freigabe (0). Keine erfundene Handelsfreigabe.
+Höchstens zehn zuvor qualifizierte Aktien, equity/USE_EXISTING_ROUTE,
+gemeinsamer Handelsplatz und Europe/Berlin. Keine Asset-Sonderregeln.
+Der nachgewiesene Drei-Aktien-Test bleibt der historische Livebeleg
+[39594892471](https://github.com/masterxfix/MOSA-2/actions/runs/39594892471).
+
+scripts/collector_operation_plan.py ist ausschließlich eine reine
+In-Memory-Bibliothek, kein Starter, kein Scheduler und kein Collector.
+decide() liefert nur RUN_ELIGIBLE, SKIP oder BLOCKED.
+RUN_ELIGIBLE ist ein Simulationsergebnis, niemals Ausführungsberechtigung.
+Auch execution_enabled=true ermöglicht keinen Prozessstart.
+Workflow-/Treiber-/Supervisor-Sperren, verbrauchte Einmalfreigaben und
+das installierte Release bleiben unverändert.
+
+Freigegebene Kalender benötigen Quelle, Version, Gültigkeitsbereich und
+explizite offene/geschlossene lokale Datumswerte. Unvollständige,
+widersprüchliche oder außerhalb der Gültigkeit liegende Angaben blockieren.
+Wochenenden und explizit geschlossene Tage überspringen den Start;
+ein Werktag allein reicht nicht. Zeitfenster sind am selben lokalen Tag
+start-inklusive/end-exklusive; über Mitternacht reichende und überlappende
+Fenster werden nicht unterstützt. ZoneInfo berücksichtigt Berliner
+Sommer-/Winterzeit; Fälligkeit und Nachweisalter verwenden absolute UTC-Zeit.
+
+Vor jeder simulierten Freigabe: frische vollständige Scope-Qualifikation,
+kein aktiver Lock/ungeklärter Auftrag, neue Laufkennung und bekannter
+tagesbezogener Providerbudgetstand. Maximal eine Anfrage je Aktie wird
+gegen Lauf-/Tagesbudget geprüft. FAILED/PARTIAL_FAILED/OUTCOME_UNKNOWN
+stoppen bis zur ausdrücklichen Prüfung; kein automatischer Retry oder
+stilles Zurücksetzen. Veraltete/zukünftige Nachweise blockieren.
+Marktfrische ist getrennte Monitoringinformation, keine Handelsfreigabe.
+
+Die Eingaben sind injizierte Simulationsevidenz, keine DB-Prüfung und keine
+sichere Lockreservierung. Ein späterer Adapter muss die bestehende
+vollständige qualify()/Runtime-Prüfung samt Source-/Route-/Unit-/Schema-
+Verträgen wiederverwenden und Lauf-/Budgetreservierung atomar unter dem
+bestehenden gemeinsamen Lock prüfen. Zwischen Planung und Akquisition
+muss die vollständige Prüfung erneut gelten. Der Planer ersetzt weder
+Lock noch Provider-Verbrauchsmarker. Keine Liveanbindung in diesem Auftrag.
+
+monitoring()/project_receipt() projizieren vorhandene batch/item_results-
+Belege über eine feste Feldliste: letzter Start/Erfolg, Aktien, Writer-
+Entscheidungen, Observation-IDs, bestätigte Providerfehler, Einzel-/Batchzeiten
+und feste Fehlercodes. FAILED_BEFORE_FIRST_COMMIT erscheint als FAILED;
+unbekannte Teilresultate erhalten OUTCOME_UNKNOWN, auch bei späterem Erfolg.
+Nicht zuordenbare Providerfehler bleiben unbekannt. Rohfehler, SQL, Pfade
+und zusätzliche Eingabefelder werden nicht ausgegeben. Ausgabe enthält
+execution_authorized=false. Start-/Endzeiten kommen aus vertrauenswürdigen
+Laufmetadaten; fehlende Marktzeit ergibt UNKNOWN, keine abgeleitete
+Datenfrische aus dem Abschlusszeitpunkt. Keine neue DB-Tabelle.
+Historische ungeklärte Läufe nur nach gesonderter dokumentierter Prüfung
+auflösen; der Planer tut dies nicht.
+
+**Späterer Startweg:** vorhandene Actions-Steuerung → gepinntes SSH →
+gepinntes Python/PHP auf Dogado → generischer Batch/Runtime/Normalizer/
+Writer/Dedupe/Replay. Ein separat freizugebender Regelbetriebsadapter muss
+eindeutige Laufkennungen, privaten runs-Bereich, globalen Supervisor-Lock,
+geschütztes stdin, Deadline/Prozessgruppenbeendigung und serverlokale
+Releaseintegrität erhalten. Keine Wiederverwendung verbrauchter
+Einmal-Token oder alter Laufordner. Genehmigte Laufdauer darf bestehende
+Supervisor-Höchstgrenzen nicht überschreiten. Ein späterer periodischer
+Actions-Impuls wäre nur ein Wecksignal; Entscheidung vor jedem Start neu
+prüfen. Kein Cron/Plesk/Scheduler jetzt angelegt oder aktiviert.
+Direkter Hosting-Cron würde zusätzlich eine eigens freizugebende sichere
+Secretversorgung benötigen.
+
+**Noch erforderlich:** ausdrückliche Regelbetriebs-Ausführungsfreigabe,
+Aktien/Handelsplatz, verifizierter Handelskalender, Tage/Fenster, Intervall,
+Providerbudgets, Laufdauer, Evidenz-/Frischegrenzen und geprüfter Startadapter
+mit atomarer Job-/Budgetreservierung und belastbarer Statusaufnahme.
+Kein Providerkontakt, DB-Zugriff, Upload, Deployment oder Hostingzugriff.
+
+Offline-Suite tests/test_collector_operation_plan.py: deaktivierte Defaults,
+1/2/5/10 Aktien, Kalenderlücken/Feiertag/Wochenende, Zeitgrenzen, Sommer-/
+Winterzeit/DST, Fälligkeit, Duplikate, Lock/ungeklärte Läufe, Providerfehler,
+veraltete Daten/Evidenz, ungültige Auswahl/Budgets, unveränderte Eingaben
+und sichere Feldprojektion. Zeitfenster/Freigaben sind rein synthetisch.
+
+**Testergebnis:** 21/21 PASS einschließlich Syntaxprüfung, ausschließlich offline:
+[Actions 39598760835](https://github.com/masterxfix/MOSA-2/actions/runs/39598760835).
+Kein Liveversuch und keine Hosting-Secrets im Prüflauf.

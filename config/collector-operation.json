@@ -1,0 +1,20 @@
+{
+  "format": "mosa2-collector-operation-plan-v1",
+  "execution_enabled": false,
+  "selection": [],
+  "max_batch_size": 10,
+  "venue": null,
+  "timezone": "Europe/Berlin",
+  "weekdays": [],
+  "windows": [],
+  "calendar": null,
+  "interval_seconds": null,
+  "provider_budget": {
+    "per_run": 0,
+    "per_day": 0
+  },
+  "max_duration_seconds": null,
+  "evidence_max_age_seconds": null,
+  "freshness_seconds": null,
+  "error_policy": "STOP_AND_REQUIRE_REVIEW"
+}
