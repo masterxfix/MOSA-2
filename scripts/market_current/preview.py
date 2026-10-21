@@ -105,7 +105,11 @@ def snapshot_preview(snapshot):
 def public_summary(report):
     # Explicit allowlist: no prices, IDs, dedupe hashes, timestamps, credentials or SQL.
     return dict(business_writes=0, provider_requests=0, reports=[
-        {key: item[key] for key in ('name', 'decision', 'reason', 'required_approvals')}
+        {key: item[key] for key in ('name', 'decision', 'reason', 'required_approvals')} | dict(
+            current_status=('CURRENT_VERIFIED' if item['previous_current'].get('verified') else 'CURRENT_UNVERIFIED')
+                if item.get('previous_current') else ('CURRENT_MISSING' if 'previous_current' in item else 'CURRENT_UNKNOWN'),
+            observation_status='VALID_OBSERVATION_PRESENT' if item.get('latest_observation') else 'NO_VERIFIED_OBSERVATION',
+            candidate_decision=item.get('candidate_decision'))
         for item in report['reports']])
 
 

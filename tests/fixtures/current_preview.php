@@ -48,6 +48,52 @@ class PreviewConnection extends PDO {
     public function commit():bool{throw new RuntimeException('commit forbidden');}
     public function rollBack():bool{$this->active=false;$this->events[]='ROLLBACK';return true;}
 }
+class GuardStatement extends PDOStatement {
+    public function __construct(private mixed $value){}
+    public function fetch(int $mode=PDO::FETCH_DEFAULT,int $orientation=PDO::FETCH_ORI_NEXT,int $offset=0):mixed{return $this->value;}
+    public function fetchAll(int $mode=PDO::FETCH_DEFAULT,mixed ...$args):array{return $this->value;}
+    public function fetchColumn(int $column=0):mixed{return $this->value;}
+}
+class GuardConnection extends PreviewConnection {
+    public array $queries=[];private string $readOnly='0';
+    public function __construct(array $state,private string $fault){parent::__construct($state);}
+    public function query(string $query,?int $fetchMode=null,mixed ...$fetchModeArgs):PDOStatement|false {
+        $this->queries[]=$query;
+        if(str_contains($query,'CURRENT_USER()'))return new GuardStatement(['db'=>'h29077_mosa2_test','account'=>$this->fault==='identity'?'unexpected':'h29077_mosa2_read@localhost']);
+        if(str_contains($query,'VERSION()'))return new GuardStatement(['version'=>$this->fault==='engine'?'10.11.8-MariaDB':'8.0.26-16','comment'=>'synthetic']);
+        if(str_starts_with($query,'SHOW SESSION VARIABLES'))return new GuardStatement($this->fault==='unsupported'?[]:[
+            ['Variable_name'=>'transaction_read_only','Value'=>'OFF'],['Variable_name'=>'transaction_isolation','Value'=>'REPEATABLE-READ']]);
+        if($query==='SELECT @@partial_revokes')return new GuardStatement('1');
+        if($query==='SHOW GRANTS FOR CURRENT_USER'&&$this->fault==='missing_select')return new GuardStatement([]);
+        if($query==='SHOW GRANTS FOR CURRENT_USER')return new GuardStatement([
+            ['grant'=>'GRANT '.($this->fault==='privileges'?'SELECT, INSERT':'SELECT').' ON `h29077_mosa2_test`.* TO x']]);
+        if(str_starts_with($query,'SELECT @@session.transaction_read_only')){
+            $value=$this->readOnly;
+            if($this->fault==='session'||($this->fault==='transaction'&&$this->inTransaction()))$value='0';
+            return new GuardStatement(['read_only'=>$value,'isolation'=>$this->fault==='isolation'?'READ-COMMITTED':'REPEATABLE-READ']);
+        }
+        throw new RuntimeException('SQL private detail password secret price 123.45');
+    }
+    public function exec(string $sql):int|false {
+        if($this->fault==='setup')throw new RuntimeException('SQL private detail password secret price 123.45');
+        if(!in_array($sql,['SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ','SET SESSION TRANSACTION READ ONLY'],true))throw new RuntimeException('write forbidden');
+        if($sql==='SET SESSION TRANSACTION READ ONLY')$this->readOnly='1';
+        $this->events[]=$sql;return 0;
+    }
+    public function beginTransaction():bool {if($this->fault==='begin')return false;return parent::beginTransaction();}
+    public function rollBack():bool {parent::rollBack();return $this->fault!=='rollback';}
+    public function prepare(string $query,array $options=[]):PDOStatement|false {
+        if($this->fault==='snapshot')throw new RuntimeException('private SQL secret');
+        return parent::prepare($query,$options);
+    }
+}
+if($request['action']==='guard'){
+    $db=new GuardConnection($request['items'],$request['fault']??'');$before=$db->state;
+    if(($request['fault']??'')==='active')$db->beginTransaction();
+    $reply=\Mosa2\CurrentPreview\readSnapshot($db);
+    echo json_encode(['reply'=>$reply,'calls'=>$db->calls,'events'=>$db->events,'queries'=>$db->queries,
+        'unchanged'=>$before===$db->state,'active'=>$db->inTransaction()],JSON_THROW_ON_ERROR);exit;
+}
 $db=new PreviewConnection($request['items']);$before=$db->state;
 $db->exec('SET TRANSACTION READ ONLY');$db->beginTransaction();
 try{$snapshot=\Mosa2\CurrentPreview\gather($db,$request['now']);}finally{$db->rollBack();}

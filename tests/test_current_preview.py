@@ -144,7 +144,7 @@ class CurrentPreviewTests(unittest.TestCase):
         self.assertEqual(p.stderr,'')
         lint=subprocess.run(['php','-l'],input='<?php\n'+p.stdout,capture_output=True,text=True)
         self.assertEqual(lint.returncode,0,lint.stderr+lint.stdout)
-        for required in ('function inputs(', 'function grants(', 'function scopeSql(', 'SET TRANSACTION READ ONLY',"'h29077_mosa2_read'"):
+        for required in ('function inputs(', 'function grants(', 'function scopeSql(', 'SET SESSION TRANSACTION READ ONLY',"'h29077_mosa2_read'"):
             self.assertIn(required,p.stdout)
         for forbidden in ('MOSA_TEST_DB_PASSWORD','function refresh(', 'function run(', 'file_put_contents','INSERT INTO','UPDATE m2_','DELETE FROM'):
             self.assertNotIn(forbidden,p.stdout)
@@ -170,6 +170,75 @@ class CurrentPreviewTests(unittest.TestCase):
         self.assertEqual(call.call_count,1)
         self.assertEqual(report['failure'],'READ_CONFIG_UNAVAILABLE');self.assertFalse(report['real_data_checked'])
         self.assertNotIn('password',json.dumps(report))
+
+    def guard(self, fault=''):
+        if not hasattr(self, '_guard_entries'):self._guard_entries=self.snapshot()
+        p=subprocess.run(['php','-d','display_errors=stderr',str(ROOT/'tests/fixtures/current_preview.php'),str(ROOT)],
+            input=json.dumps(dict(action='guard',items=self._guard_entries,fault=fault)),text=True,capture_output=True,check=True)
+        self.assertEqual(p.stderr,'')
+        return json.loads(p.stdout)
+
+    def test_session_scope_proof_fixes_legacy_default_and_reads_without_mutation(self):
+        result=self.guard();reply=result['reply']
+        self.assertTrue(reply['ok']);self.assertTrue(reply['read_only_confirmed'])
+        self.assertIn('LEGACY_SESSION_DEFAULT_READ_WRITE',reply['diagnostics'])
+        self.assertIn('TRANSACTION_READ_ONLY_VARIABLE_SUPPORTED',reply['diagnostics'])
+        self.assertEqual(result['events'],['SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+            'SET SESSION TRANSACTION READ ONLY','BEGIN','ROLLBACK'])
+        self.assertEqual(len(result['calls']),25);self.assertTrue(result['unchanged']);self.assertFalse(result['active'])
+        self.assertEqual(len([q for q in result['queries'] if q.startswith('SELECT @@session.transaction_read_only')]),2)
+
+    def test_invalid_guard_states_abort_before_any_business_read(self):
+        for fault,code in [('identity','READ_IDENTITY_REJECTED'),('active','READ_IDENTITY_REJECTED'),
+                ('engine','READ_DATABASE_PROPERTIES_REJECTED'),('unsupported','READ_TRANSACTION_VARIABLE_UNSUPPORTED'),
+                ('privileges','READ_PRIVILEGES_REJECTED'),('missing_select','READ_PRIVILEGES_REJECTED'),('setup','READ_SESSION_SETUP_REJECTED'),
+                ('session','READ_SESSION_STATE_REJECTED'),('begin','READ_TRANSACTION_START_REJECTED'),
+                ('isolation','READ_SESSION_STATE_REJECTED'),('transaction','READ_TRANSACTION_STATE_REJECTED'),
+                ('snapshot','READ_SNAPSHOT_DATA_REJECTED')]:
+            with self.subTest(fault=fault):
+                result=self.guard(fault)
+                self.assertEqual(result['reply']['failure'],code);self.assertFalse(result['reply']['ok'])
+                self.assertEqual(result['calls'],[]);self.assertTrue(result['unchanged']);self.assertFalse(result['active'])
+                for private in ('SQL private','password','secret','123.45'):self.assertNotIn(private,json.dumps(result['reply']))
+
+    def test_failed_rollback_invalidates_success(self):
+        result=self.guard('rollback')
+        self.assertFalse(result['reply']['ok']);self.assertEqual(result['reply']['failure'],'READ_ROLLBACK_REJECTED')
+        self.assertNotIn('snapshot',result['reply']);self.assertTrue(result['unchanged'])
+
+    def test_missing_and_invalid_remote_snapshots_never_pass(self):
+        from scripts import current_preview_remote as runner
+        @contextmanager
+        def ssh(*args):yield Mock()
+        replies=[dict(ok=True),dict(ok=True,read_only_confirmed=True),
+            dict(ok=True,read_only_confirmed=True,snapshot={}),
+            dict(ok=True,read_only_confirmed=True,snapshot=dict(items=[],as_of=CREATED)),
+            dict(ok=False,failure='SQL password private',diagnostics=['private-secret']),
+            dict(ok=False,failure='READ_TRANSACTION_STATE_REJECTED')]
+        for reply in replies:
+            with self.subTest(reply=reply),patch.object(runner.profile,'configuration',return_value={}),\
+                 patch.object(runner.access,'ssh_client',ssh),patch.object(runner.remote,'capability',return_value=('php',[])),\
+                 patch.object(runner.remote,'remote_call',return_value=(0,json.dumps(reply).encode(),False,1)) as call:
+                report=runner.execute(dict(GITHUB_RUN_ATTEMPT='1'),Mock())
+                self.assertFalse(report['real_data_checked']);self.assertEqual(call.call_count,1)
+                for private in ('password','private-secret','SQL'):self.assertNotIn(private,json.dumps(report))
+
+    def test_remote_verified_snapshot_publishes_only_statuses(self):
+        from scripts import current_preview_remote as runner
+        @contextmanager
+        def ssh(*args):yield Mock()
+        reply=dict(ok=True,read_only_confirmed=True,snapshot=dict(items=self.snapshot(),as_of=CREATED),
+            diagnostics=['MYSQL_80_PROPERTIES_CONFIRMED','private-secret'])
+        with patch.object(runner.profile,'configuration',return_value={}),patch.object(runner.access,'ssh_client',ssh),\
+             patch.object(runner.remote,'capability',return_value=('php',[])),\
+             patch.object(runner.remote,'remote_call',return_value=(0,json.dumps(reply).encode(),False,1)) as call:
+            report=runner.execute(dict(GITHUB_RUN_ATTEMPT='1'),Mock())
+        self.assertEqual(call.call_count,1);self.assertTrue(report['real_data_checked']);self.assertTrue(report['read_only_confirmed'])
+        self.assertEqual(report['diagnostics'],['MYSQL_80_PROPERTIES_CONFIRMED'])
+        self.assertEqual([item['decision'] for item in report['reports']],['BLOCKED']*5)
+        self.assertTrue(all(item['current_status']=='CURRENT_MISSING' and item['candidate_decision']=='INSERT' for item in report['reports']))
+        for private in ('private-secret','123.4500000000','observation_id','route_sha256','market_at'):
+            self.assertNotIn(private,json.dumps(report))
 
 
 if __name__=='__main__':unittest.main()

@@ -13,7 +13,7 @@ function readBundle(): string {
         'Mosa2\\ObservationRead'=>['const SCOPE='.var_export(\Mosa2\ObservationRead\SCOPE,true).';', ['scopeSql']],
         'Mosa2\\MarketCurrent'=>['use PDO; use function Mosa2\\Phase2\\check;', ['inputs']],
         'Mosa2\\MarketReadAccess'=>['use function Mosa2\\Phase2\\check;', ['grants']],
-        'Mosa2\\CurrentPreview'=>['use PDO; use function Mosa2\\Phase2\\{check,same};', ['gather','liveRead']],
+        'Mosa2\\CurrentPreview'=>['use PDO; use function Mosa2\\Phase2\\{check,same};', ['gather','readSnapshot','liveRead']],
     ];
     $source="declare(strict_types=1);\n";
     foreach($groups as $namespace=>[$imports,$names]){

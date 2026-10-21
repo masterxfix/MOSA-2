@@ -14,6 +14,14 @@ import collector_db_locality as remote
 import deploy_test_sftp as profile
 from scripts.market_current import preview
 
+READ_FAILURES = {'READ_CONFIG_UNAVAILABLE','READ_CONFIG_UNSAFE','READ_CONFIG_REJECTED',
+    'READ_CONNECTION_UNAVAILABLE','READ_IDENTITY_REJECTED','READ_DATABASE_PROPERTIES_REJECTED',
+    'READ_TRANSACTION_VARIABLE_UNSUPPORTED','READ_PRIVILEGES_REJECTED','READ_SESSION_SETUP_REJECTED',
+    'READ_SESSION_STATE_REJECTED','READ_TRANSACTION_START_REJECTED','READ_TRANSACTION_STATE_REJECTED',
+    'READ_SNAPSHOT_DATA_REJECTED','READ_ROLLBACK_REJECTED'}
+DIAGNOSTICS = {'MYSQL_80_PROPERTIES_CONFIRMED','TRANSACTION_READ_ONLY_VARIABLE_SUPPORTED',
+               'LEGACY_SESSION_DEFAULT_READ_WRITE'}
+
 
 def execute(env, paramiko):
     if env.get('GITHUB_RUN_ATTEMPT') != '1':
@@ -35,15 +43,16 @@ def execute(env, paramiko):
         phase = 'READ_SNAPSHOT_UNAVAILABLE'
         if code or errors:raise ValueError('read process')
         reply = json.loads(raw)
+        diagnostics = [code for code in reply.get('diagnostics', []) if isinstance(code, str) and code in DIAGNOSTICS]
         if reply.get('ok') is not True:
-            allowed = {'READ_CONFIG_UNAVAILABLE','READ_CONFIG_UNSAFE','READ_CONFIG_REJECTED',
-                       'READ_CONNECTION_UNAVAILABLE','READ_PRIVILEGES_REJECTED','READ_SNAPSHOT_REJECTED'}
-            return dict(real_data_checked=False, failure=reply['failure'] if reply.get('failure') in allowed else phase,
-                        business_writes=0, provider_requests=0)
+            return dict(real_data_checked=False, failure=reply['failure'] if reply.get('failure') in READ_FAILURES else phase,
+                        diagnostics=diagnostics, business_writes=0, provider_requests=0)
+        if reply.get('read_only_confirmed') is not True:
+            raise ValueError('read-only proof missing')
         phase = 'SNAPSHOT_QUALIFICATION_FAILED'
         report = preview.snapshot_preview(reply['snapshot'])
         # Full private preview stays in memory; only operational decisions leave this process.
-        return dict(real_data_checked=True, **preview.public_summary(report))
+        return dict(real_data_checked=True, read_only_confirmed=True, diagnostics=diagnostics, **preview.public_summary(report))
     except Exception:
         return dict(real_data_checked=False, failure=phase, business_writes=0, provider_requests=0)
 

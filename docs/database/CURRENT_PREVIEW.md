@@ -77,3 +77,32 @@ An unavailable reader is reported as `real_data_checked=false`, with a fixed
 failure code; it is not a successful DB preview. The allowed fallback neither
 creates access nor uses a write-capable account. Successful offline CI alone is
 not proof of real-data decisions or authorization to apply a projection.
+
+## Transaction proof and safe diagnostics
+
+The old `SET TRANSACTION READ ONLY` affected only the next transaction, while
+`@@session.transaction_read_only` reported the unchanged session default. Thus
+a READ ONLY transaction could be rejected as `READ_SNAPSHOT_REJECTED` even when
+the variable was supported. These scopes are documented separately in the
+[MySQL SET TRANSACTION contract](https://dev.mysql.com/doc/refman/8.0/en/set-transaction.html).
+
+The reader now checks `VERSION()`, `@@version_comment` and the existence of both
+transaction session variables on its actual connection. This proof admits the
+documented MySQL 8.0 platform only; an unqualified engine fails closed. Version
+strings remain private. Public diagnostics are fixed codes:
+`MYSQL_80_PROPERTIES_CONFIRMED`, `TRANSACTION_READ_ONLY_VARIABLE_SUPPORTED`, and,
+when observed before setup, `LEGACY_SESSION_DEFAULT_READ_WRITE`.
+
+On the fresh, inactive connection, session defaults are explicitly set to
+REPEATABLE READ and READ ONLY. Both values must match before BEGIN and again
+inside the transaction inherited from those defaults. No transaction override
+is issued. No asset or quote SELECT is prepared before these checks and the
+unchanged SELECT-only grant check pass. The transaction must remain active
+after gathering; rollback failure discards the snapshot. No mutation probe is
+used to test the account or transaction.
+
+Fixed failures distinguish identity, database properties, unsupported variables,
+privileges, session setup, session state, transaction start/state, snapshot data
+and rollback. Neither exception text nor database properties/values are exposed.
+The runner requires `read_only_confirmed=true` before qualifying a snapshot and
+publishes only allowlisted diagnostics and Current/Observation/decision statuses.
