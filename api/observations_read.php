@@ -60,9 +60,8 @@ function latest(array $rows,array $route,string $isin,string $now,int $stale): a
     return $base+$item+['observation_id'=>$r['id'],'age_seconds'=>\Mosa2\QuoteSelection\age($r,$now)];
 }
 
-function read(PDO $p,array $config,string $now): array {
-    $stale=$config['stale_seconds']??null;checked(is_int($stale)&&$stale>=60&&$stale<=86400);timestamp($now);
-    $scope=$p->prepare("SELECT /*+ MAX_EXECUTION_TIME(1500) */ i.normalized_value AS isin,a.entity_id AS asset_id,a.asset_class,a.status AS asset_status,
+function scopeSql(): string {
+    return "SELECT /*+ MAX_EXECUTION_TIME(1500) */ i.normalized_value AS isin,a.entity_id AS asset_id,a.asset_class,a.status AS asset_status,
         s.id AS source_id,s.source_key,s.display_name AS source_name,s.enabled AS source_enabled,s.source_type,r.id AS route_id,r.route_revision,r.route_type,r.external_key,r.priority,r.enabled,
         r.unit_contract_version,r.quote_unit_key,r.quote_unit_version,r.quantity_basis_unit_key,r.quantity_basis_unit_version,r.quantity_basis_amount,r.volume_unit_key,r.volume_unit_version,
         u.status AS unit_status,u.monetary_currency_code AS unit_currency,u.dimension_key AS unit_dimension,u.base_unit_key AS unit_base,u.base_unit_version AS unit_base_version,
@@ -72,7 +71,11 @@ function read(PDO $p,array $config,string $now): array {
         JOIN m2_asset_source_routes r ON r.asset_id=a.entity_id AND r.source_id=s.id AND r.route_type='quote'
         LEFT JOIN m2_units u ON u.unit_key=r.quote_unit_key AND u.unit_version=r.quote_unit_version AND u.unit_contract_version=r.unit_contract_version
         WHERE i.identifier_type='isin' AND i.normalized_value=? AND i.scope_key='' AND i.valid_to IS NULL
-        ORDER BY r.route_revision DESC LIMIT 2");
+        ORDER BY r.route_revision DESC LIMIT 2";
+}
+function read(PDO $p,array $config,string $now): array {
+    $stale=$config['stale_seconds']??null;checked(is_int($stale)&&$stale>=60&&$stale<=86400);timestamp($now);
+    $scope=$p->prepare(scopeSql());
     $facts=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex
         FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
     $items=[];$p->exec('SET TRANSACTION READ ONLY');$p->beginTransaction();

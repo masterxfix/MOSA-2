@@ -26,7 +26,7 @@ function inputs(PDO $p,array $approvals,string $now): array {
         $q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE asset_id=? AND source_id=? AND route_id=? AND observation_format_version=2 ORDER BY market_at DESC,observed_at DESC,id DESC LIMIT 2');
         $q->execute([$route['asset_id'],$route['source_id'],$id]);$facts=array_map('Mosa2\\MarketLive\\strings',$q->fetchAll());
         $q=$p->prepare('SELECT *,HEX(observation_dedupe_key) AS observation_dedupe_key FROM m2_market_current WHERE asset_id=?');$q->execute([$route['asset_id']]);$current=$q->fetch();$old=null;
-        if($current!==false){$current=\Mosa2\MarketLive\strings($current);$q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE id=?');$q->execute([$current['observation_id']]);$old=$q->fetch();check($old!==false,'current_origin_missing');$old=\Mosa2\MarketLive\strings($old);}
+        if($current!==false){$current=\Mosa2\MarketLive\strings($current);$q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE id=? AND asset_id=?');$q->execute([$current['observation_id'],$route['asset_id']]);$old=$q->fetch();check($old!==false,'current_origin_missing');$old=\Mosa2\MarketLive\strings($old);}
         $items[]=['route'=>$route,'approval'=>$approval,'facts'=>$facts,'current'=>$current===false?null:$current,'current_fact'=>$old,'now'=>$now];
     }return $items;
 }

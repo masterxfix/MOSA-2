@@ -1,4 +1,4 @@
-name: Manual quote selection offline regression
+name: Manual Current preview verification
 
 on:
   workflow_dispatch:
@@ -7,13 +7,17 @@ on:
         description: Exact reviewed main commit
         type: string
         required: true
+      read_inventory:
+        description: One existing SELECT-only Dogado inventory after offline tests
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -35,20 +39,23 @@ jobs:
           extensions: pdo_mysql
           coverage: none
           tools: none
-      - name: Unchanged predecessor 7f0c75d
+      - name: Current, Observations, Quote Selection and preview offline tests
         run: |
-          mkdir "$RUNNER_TEMP/quote-predecessor"
-          git archive 7f0c75dec9c4add4d63585834baeb2939b5bdf9a | tar -x -C "$RUNNER_TEMP/quote-predecessor"
-          cd "$RUNNER_TEMP/quote-predecessor"
-          python3 -B -m unittest -v test_market_current test_observation_read
-      - name: Unchanged quote selection 85d75d7
-        run: |
-          mkdir "$RUNNER_TEMP/quote-original"
-          git archive 85d75d779f317e502fc790a5c297246ed236376a | tar -x -C "$RUNNER_TEMP/quote-original"
-          cd "$RUNNER_TEMP/quote-original"
-          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection
-      - name: Exact current commit with strict fixture diagnostics
-        run: |
-          php -l tests/fixtures/observation_read.php
-          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection
+          php -l scripts/market_current/preview_read.php
+          php -l scripts/market_current/read_bundle.php
+          php -l tests/fixtures/current_preview.php
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview
           git diff --exit-code
+      - name: Existing pinned SSH client
+        if: inputs.read_inventory
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: One fileless SELECT-only inventory; public output excludes private values
+        if: inputs.read_inventory
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: python3 -B scripts/current_preview_remote.py

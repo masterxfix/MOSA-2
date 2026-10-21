@@ -64,14 +64,18 @@ def select(facts, route, now, previous=None, catalog=None):
     return reply['result']
 
 
-def plan(data, catalog=None):
-    catalog = catalog or writer.observation.catalog_module.normative_catalog()
-    route, approval, now = data['route'], data['approval'], data['now']
-    now = writer.observation.shared('timestamp', value=now)
+def check_approval(route, approval):
     require(approval['route_sha256'] == route_hash(route), 'current_route_approval_drift')
     writer.observation.shared('timestamp', value=approval['approved_at'])
     require(route['route_type']=='quote' and route['priority']=='0', 'current_route_type')
     require(route['enabled']=='1' or (route['enabled']=='0' and approval.get('allow_disabled_projection') is True), 'current_route_not_approved')
+
+
+def plan_facts(data, catalog=None):
+    """Pure projection plan; caller must keep approval checking separate from inspection."""
+    catalog = catalog or writer.observation.catalog_module.normative_catalog()
+    route = data['route']
+    now = writer.observation.shared('timestamp', value=data['now'])
     facts = data['facts'];require(type(facts) is list and len(facts)<=2, 'bounded_current_candidates')
     for fact in facts:
         qualified(fact, route, catalog)
@@ -86,6 +90,12 @@ def plan(data, catalog=None):
         return dict(decision=selected['decision'], values=previous)
     fact = selected['fact']
     return dict(decision=selected['decision'], values=projection(fact, fact, route, now))
+
+
+def plan(data, catalog=None):
+    # The write path still requires exactly the original explicit approval checks.
+    check_approval(data['route'], data['approval'])
+    return plan_facts(data, catalog)
 
 
 if __name__ == '__main__':
