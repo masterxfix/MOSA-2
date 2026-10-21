@@ -934,3 +934,242 @@ the three-command capability bound, stop before tunnel on failed capability,
 output bounds and secret guard, ratio arithmetic, and the manual-only/fileless/
 no-provider/no-business-write workflow contract. Both PHP files passed lint.
 No collector/runtime logic or previous workflow was modified.
+
+## Dogado collector runtime readiness — 21 October 2026
+
+### Result: assessment complete; unchanged collector not ready
+
+[Run 39560561990](https://github.com/masterxfix/MOSA-2/actions/runs/39560561990),
+job 119090524991, attempt 1, revision
+3a75962c32a5fd7eaef572d5c543e478369b45ae completed successfully.
+Both PHP lint checks and all ten relevant safety tests passed (0.698 s).
+The diagnostic reports ok=true / assessment_complete=true but
+collector_runtime_ready=false. A completed assessment is not a collector PASS.
+
+The currently checked SSH/chroot commands expose Python 3.6.8, while the
+unchanged collector requires Python >=3.10. dataclasses is absent,
+typing.Protocol is absent, and the representative collector annotation/dataclass
+syntax check fails. No compatible interpreter was found in the three fixed
+commands below; this is not an inventory of every interpreter on the host.
+
+| Harmless live check | Result |
+| --- | --- |
+| SSH authentication / pinned host key | PASS / PASS |
+| PHP CLI / PDO MySQL | PHP 8.4.12 / PASS |
+| PHP proc_open / process status / terminate / nonblocking pipes | Available; harmless child start and collection PASS |
+| /usr/bin/python3 | Python 3.6.8; not collector-compatible |
+| python3 | Resolves to /usr/bin/python3, Python 3.6.8; not collector-compatible |
+| /usr/local/bin/python3 | Exit 127; not executable through this checked command |
+| Python modules | 23/24 imported; dataclasses FAIL |
+| typing.Protocol / minimum version / collector annotation test | FAIL / FAIL / FAIL |
+| Python -> literal php using existing PATH | PHP 8.3.35, so the PHP-8.4 check FAILS |
+| Python -> literal php using a child-only pinned PHP-bin PATH prefix | PHP 8.4.12 with PDO MySQL; PASS |
+| Start and terminate a harmless child in its own process group | PASS |
+| PHP MD5/JSON primitives and Europe/Berlin timezone | Available |
+| Python TLS context | SNI available; 153 CA certificates; OpenSSL 1.0.2k-fips |
+| Provider requests / DB connections / business writes / remote file operations | 0 / 0 / 0 / 0 |
+
+PHP/Python process interoperability is demonstrated even with the old Python.
+That does not make the actual normalizer/writer/bridge importable on Python 3.6.
+Installing a dataclasses backport alone would not solve the typing/built-in
+generic/union-annotation requirements. No installation, compatibility port,
+fallback collector path, PATH configuration change or hosting change was made.
+The pinned PATH existed only in the harmless test child's environment.
+
+The live module imports were: argparse, ast, base64, copy, dataclasses, datetime,
+decimal, fractions, hashlib, importlib.util, json, math, pathlib, re, subprocess,
+types, typing, urllib.request, urllib.parse, urllib.error, ssl, resource, signal
+and time. All except dataclasses imported successfully. Import success for typing
+does not imply Protocol exists; that attribute was tested separately.
+MOSA project modules were not deployed or imported on Dogado.
+
+### Targeted code dependency review
+
+| Existing component | Required runtime/files and behavior |
+| --- | --- |
+| market_collector/live_batch.php, live_persistence.php, runtime_persistence.php | PHP 8.4, PDO MySQL, existing transaction/identifier locks, bounded state checks, exact Observation readbacks and stop-on-failure; transitive PHP includes under phase2/3b/3c/3d/3k/3m/3o |
+| market_collector/live_bridge.py and contracts/collector/normalizer | Python >=3.10, standard-library modules, actual repository layout and credential-free JSON stdin/stdout bridge |
+| phase3n/writer_plan.py, observation_v2.py, unit_catalog_adapter.py; phase3l/unit_seed.py; phase3o/live_plan.py | Same existing normalization, canonical bytes, unit binding and Dedupe/WriterPlanner; dynamic imports resolve real relative files |
+| phase3n/value_adapter.php and phase3c/market_flow.php | Python repeatedly invokes literal php for unchanged v1 identity/decimal/time primitives; an absolute top-level PHP command alone does not pin these nested calls |
+| docs/database/seeds/0001_market_units_v1.json and the 0004 migration SQL | Normative catalog bytes/fingerprint and schema checksum anchors; read-only validation inputs, not permission to apply migrations |
+| market_collector/boerse_frankfurt.py and frankfurt_request.php | Existing qualified descriptor, PHP subprocess, UTC/Berlin date handling and MD5 public protocol headers; one anonymous HTTPS acquisition through the existing single-use transport |
+| Per-run private_root | Existing live-manifest.json reads and exclusive provider-consumed.lock creation; a real acquisition cannot use the present fileless probe strategy unchanged |
+
+The inspected Python collector/normalizer/writer dependency closure uses the
+standard library; requests, pandas, numpy and a Python MySQL client are not
+required by this path. Paramiko/cryptography and the pinned deployment
+requirements belong to the GitHub control runner, not the Dogado collector.
+No asset-specific module, route shortcut or alternative Dedupe implementation
+is proposed.
+
+The generic bridge fetch action calls the chosen adapter's live_request.
+Frankfurt has the existing qualified acquisition descriptor; the Yahoo adapter
+currently supplies normalization only. Availability of a normalizer does not
+authorize a new live provider/acquisition path. Qualified manifests must continue
+to select supported adapters explicitly.
+
+The existing PHP bridge supplies config.python/project/runtime_path and launches
+the Python bridge with PATH plus PYTHONDONTWRITEBYTECODE=1. The reverse value
+adapter invokes php by name. The future runtime must therefore pin both the
+explicit interpreter fields and the minimal child PATH consistently; it must
+derive the PATH from the approved remote binaries, not copy GitHub runner paths.
+State-contract checks, normalizers, writer decisions, independent readbacks and
+the existing proof-mode dispatch remain unchanged.
+
+### Observed limits and provider prerequisites
+
+| Limit/primitive | Observed value |
+| --- | --- |
+| PHP memory_limit | 256M |
+| PHP max_execution_time | 0 |
+| PHP hard_timeout | 2 |
+| PHP default_socket_timeout | 60 s |
+| PHP open_basedir restriction | Not configured for this CLI |
+| Python/POSIX CPU, address space, data, RSS and file-size rlimits | Unlimited at this interface |
+| Open files | soft 1024 / hard 4096 |
+| Processes | soft 4096 / hard 175577 |
+| Stack | soft 8 MiB / hard unlimited |
+
+These are reported PHP settings and process rlimits, not measured capacity or a
+hosting-service guarantee. PHP max_execution_time=0 supplies no useful CLI wall
+deadline; hard_timeout=2 must not be interpreted as a two-second job limit.
+Account/cgroup/shared-host quotas, long-running-session termination and realistic
+peak memory were not probed or stress-tested. No workload was used to exhaust
+a limit.
+
+TLS context/SNI/CA loading, JSON, MD5 availability, decimal/date primitives and
+subprocess access are necessary building blocks, not proof of provider access.
+No DNS lookup, outbound connection, HTTPS request, provider authentication,
+IP/rate-limit behavior or clock-synchronization check was made. The existing
+HTTP transport uses one anonymous GET, no ambient authenticated proxy/cookies,
+no redirect retry and a 25-second acquisition timeout. Its response.read() has
+no explicit byte cap in the inspected path; realistic memory use still requires
+a separately scoped test. No HTTP or process policy was weakened here.
+
+### Uniform future execution concept — design only
+
+GitHub Actions remains the manual control plane: fixed reviewed commit, explicit
+qualified scope, existing secrets, pinned SSH host key and a shared concurrency
+group. SSH starts one foreground, release-bound remote supervisor. That process
+runs the existing generic PHP batch/runtime against the local test DB and its
+existing credential-free Python normalizer/writer bridge. No scheduler, remote
+daemon or per-asset implementation is needed or added.
+
+1. **Runtime/release binding.** First obtain a separately approved Python >=3.10
+   runtime through an authorized hosting route. Pin absolute PHP/Python binaries
+   and a minimal PATH covering both reverse subprocess calls. Use a secret-free,
+   immutable release tree that preserves the repository's relative paths,
+   normative files and reviewed commit/hash manifest. Fail closed if any bound
+   file, version, route, ledger or unit contract differs; no package is installed
+   by the collector.
+2. **Secrets.** Keep SSH credentials on the Actions side. Transfer the DB password
+   once over the verified SSH channel into the owning PHP process's stdin,
+   using the existing run(password, config, manifest) interface. Do not create
+   access.php, .env, command-line secrets, secret-bearing environment variables,
+   archives, diagnostic artifacts or password files. Python receives the same
+   credential-free plan/acquisition messages as now. Parent/child pipes and
+   output buffers are private and bounded; reports reuse the existing full-output
+   secret guard and fixed error codes.
+3. **Private state.** A future explicitly approved root outside every webroot
+   must hold owner-only release/run directories (umask 077, directories 0700,
+   files 0600). Per-run directories contain only the existing nonsecret
+   manifest, consumption marker and redacted evidence. Validate canonical parent
+   paths, reject symlinks/traversal and exclusive-create run files. The current
+   webroot-only authorization does not already permit creating that root.
+4. **Concurrency.** Keep the Actions concurrency group and existing per-identifier
+   MySQL GET_LOCK through independent readback. Add a remote whole-job exclusive
+   lock for the approved private root before any acquisition; Actions alone
+   cannot exclude a second SSH/manual process. A future flock-based lock needs
+   an authorized file path and a separate collision test. Do not replace the
+   existing DB/Dedupe/transaction locks or their fail-closed outcomes.
+5. **Termination/cleanup.** A foreground supervisor must own and validate its
+   child process group, enforce per-operation and total wall/output budgets,
+   monitor control-channel loss and use TERM, bounded grace, then KILL only for
+   that owned group. The harmless own-group termination mechanism worked here;
+   full collector disconnect/timeout handling is not implemented or proved.
+   Preserve the consumed-acquisition marker and an explicit OUTCOME_UNKNOWN
+   status if interruption makes commit outcome uncertain; never refetch blindly.
+   Cleanup may remove only files in the verified run-owned private directory
+   after proven success/rollback, with independent DB readback still required.
+   Passwords remain memory-only and die with their owning processes.
+6. **Status semantics.** Use explicit stages (preflight, acquire, transaction,
+   commit, independent readback, cleanup), bounded run IDs/commit identities,
+   counters and failure codes. A completed diagnostic with runtime_ready=false
+   must not be reported as a collector success. Committed-but-readback-failed,
+   rolled-back and unknown outcomes remain distinct; stop the batch on failure.
+
+This concept is not an implemented wrapper or a release/deployment authorization.
+
+### Files and the approved deployment boundary
+
+A later unchanged full run **requires files on Dogado**. __file__/__DIR__-relative
+imports/includes, hash_file/normative catalog checks, the PHP request descriptor
+(frankfurt_request.php, or the private/request.php fallback) and the private
+manifest/consumption marker cannot all be satisfied by the fileless
+interpreter probes. A release must contain an audited tracked-file dependency
+closure of the PHP/Python modules and required seed/migration files, with the
+same layout and hashes. Historical apply/test entry points must not be invoked.
+
+The current approved .github/workflows/deploy-testsite.yml uses
+deploy_test_sftp.selected_files -> deploy_sftp.web_files. That package explicitly
+excludes scripts/, docs/ and tests/, and the SFTP profile is hard-bound to
+/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de.
+Consequently the existing workflow **cannot safely provision the required
+private collector tree as-is**. Putting an archive, source tree or runtime state
+in the public webroot is not an acceptable workaround.
+
+A future separately scoped private-package operation could reuse this deployment
+route's existing secrets, fingerprint check, exact target/canonical-parent and
+symlink guards, explicit tracked-file selection, SHA-256 readback and atomic
+rename. It would need a newly explicit, fixed private-root authorization/profile,
+a minimal reviewed manifest, private modes and tests proving isolation from the
+webroot and other domains. It must not loosen the current web deployment profile.
+No such path was inspected, created, uploaded, modified or approved by this task.
+
+### Recommended gates before the first full Dogado test
+
+Current answer for the unchanged collector in the inspected environment: **NO**.
+A compatible Python runtime, consistent pinned PHP/Python PATH and an approved
+private release/run deployment mechanism are still missing. Project-module
+imports, real normative file access, lock collisions, realistic limits,
+provider reachability and full lifecycle/recovery remain unverified.
+
+After those prerequisites are separately resolved, first run the actual
+release-bound offline normalizer/writer fixtures on Dogado without provider
+or DB writes, plus bounded read-only preflight/independent checks and timeout/
+disconnect/lock-collision cases. Only then recommend a separately authorized
+manual full test of exactly one existing qualified asset, at most one acquisition
+and its bounded expected Observation write, exact independent readback,
+DUPLICATE_UNCHANGED replay and Current/Bars invariance. Do not begin with a five-
+asset or production run. No part of that proposed full test was executed here.
+
+### Diagnostic safeguards and test receipt
+
+The new manual workflow is .github/workflows/collector-runtime-readiness.yml;
+it reuses collector_actions.configuration/ssh_client/public_text and
+collector_db_locality.capability/command/remote_call without changing them.
+No DB password is included in the remote readiness payload, and no DB connection
+is made. Source is streamed in memory over the verified SSH channel. Python
+runs isolated with -I -B; PHP CLI auto-prepend/append, file cache and error logging
+are disabled. No project file or Python bytecode cache is created remotely.
+Only fixed Python commands are attempted; process permission rejection is
+reported without an alternate access protocol.
+
+The connector exposes no dispatch method, so the bounded exact-branch temporary
+trigger ran on codex/runtime-readiness-a15aee with contents:read,
+repository/event/ref/run_attempt guards and tests before SSH. The final main
+workflow is manual-only; resetting the temporary branch removes its trigger.
+The initial [test-only run 39560443617](https://github.com/masterxfix/MOSA-2/actions/runs/39560443617)
+caught a new child-output-drain defect and skipped SSH entirely. The helper
+was corrected to drain through EOF while enforcing the output bound, then the
+same safety suite passed before the single live assessment.
+
+The ten tests cover fixed/limited candidate commands and early stop; harmless
+PHP child completion; private stderr suppression and excessive-output rejection;
+local module/syntax/PHP reverse calls and own-process-group cleanup; absence
+of secrets/DB input in remote payload; correct negative-readiness semantics;
+missing-secret stop before SSH; no alternate route after exec rejection;
+manual-only workflow/no DB, provider or filesystem-mutating probe; and the
+existing secret-output guard. Only new diagnostic/workflow/tests and this
+documentation are changed. Existing collector core, proof mode, deployment and
+production workflows, database, scheduler and masterxfix/fixlab are untouched.
