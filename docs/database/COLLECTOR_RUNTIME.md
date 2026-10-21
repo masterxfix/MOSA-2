@@ -2629,3 +2629,61 @@ Noch nicht live geprüft: neuer Batch-Supervisor, globaler Job-Lock,
 refaktorisierte PHP-Integration, serverlokale Vorher-/Nachherprüfung und
 tatsächliche Multi-Asset-Laufzeiten. Der PNE-Livebeleg bleibt historischer
 Einzelnachweis. Nach Tests und genau einem main-Abschluss-Commit stoppen.
+
+
+## Einmalige Freigabe des geordneten Drei-Aktien-Tests (21.10.2026)
+
+Ausschließlich PNE AG (DE000A0JBPG2), Carl Zeiss Meditec (DE0005313704),
+DroneShield (AU000000DRO2), exakt in dieser Reihenfolge. Höchstens drei
+Providerrequests und drei neue Observations; keine automatische Wiederholung.
+Gemeinsame generische Verarbeitung und installiertes Release unverändert.
+
+Die zuvor geschlossenen drei Aktivierungsstellen erlauben jetzt allein
+diese konkrete Auswahl und den festen Laufnamen
+three-equities-20261021-01. Auswahlhash:
+1fbae8bd949490a5866efad170ca7b8bd16e26f7cd35823c810b6a8b8e510c84.
+Freigabetoken bindet MOSA2-DOGADO-THREE-20261021-01, vollständigen
+geprüften Quellcommit, Laufnamen und vollständigen Auswahlhash.
+Workflow, Actions-Treiber und Remote-Supervisor prüfen die Bindungen;
+zusätzlich GitHub Actions, Repository, workflow_dispatch, main,
+run_attempt=1 sowie Checkout-/main-Commit vor SSH. Der Remote-Prozess
+prüft den über stdin übergebenen Actions-Kontext ebenfalls.
+
+Das neue Verzeichnis ist exakt runs/three-equities-20261021-01.
+Es wird exklusiv angelegt und bindet seinen tatsächlichen Quellcommit
+über started.json und den PHP-Quellhash. Anders als eine variable
+Commit-Unterordnerkennung verhindert dieser feste Reservierungsname
+auch einen zweiten Versuch mit verändertem Quellcommit. Bereits
+vorhandenes Verzeichnis bedeutet Stopp; keine Bereinigung oder
+Wiederverwendung. Globaler Job-Lock und per-Asset-Verbrauchsmarker
+bleiben erhalten. Allgemeiner Livebetrieb, beliebige Auswahl,
+andere Laufnamen und automatischer Regelbetrieb bleiben gesperrt.
+
+Zusätzlicher Nachweis alter Laufverzeichnisse: begrenzter serverlokaler
+Vorher-/Nachher-Readback ausschließlich unter dem eigenen privaten
+runs-Bereich, über no-follow-Directory-Deskriptoren. Die beiden
+vorhandenen PNE-Laufverzeichnisse müssen vorhanden sein. Metadaten,
+Dateisatz und SHA-256 werden verglichen; keine Datei wird verändert.
+Symlinks, Hardlinks, unbekannte Objekttypen, falsche Rechte/Eigentümer,
+übermäßiger Umfang oder Änderungen stoppen sicher. Grenzen:
+128 Einträge je Verzeichnis, höchstens 128 Unterverzeichnisse,
+256 Dateien, 16 MiB gelesene Dateidaten; atime wird
+als lesebedingtes Metadatum nicht verglichen. Das neue Verzeichnis ist
+vom historischen Vergleich ausgenommen. Keine vollständige SFTP-Runde.
+
+Vor Providerkontakt bleibt die gemeinsame vollständige Identitäts-,
+equity-, Route-/Source-/Unit-, Ledger-/Schema- und Zustandsprüfung
+aller drei Aktien verpflichtend. Bestehende Transaktionen,
+Dedupe/Replay, unabhängige Readbacks und vollständige Bestandsprüfungen
+bleiben unverändert. Release-Hashprüfung vor/nach dem Batch.
+Bei Fehler stoppen spätere Aktien, bestätigte Commits bleiben erhalten;
+unbekannte Ausgänge werden nicht als sicher fehlgeschlagen ausgegeben.
+
+Der Abschluss-Commit wird vor genau einem neuen manuellen Actions-
+Versuch geprüft und auf main veröffentlicht. Messwerte und vollständiger
+Livebeleg verbleiben im Actions-Run; diese Vorbereitung behauptet
+noch keinen Liveerfolg. Danach keine weitere Codeänderung oder
+Akquisition. Der historische PNE-Einzellauf und alle alten Marker
+werden erhalten. Kein Upload oder Eingriff ins installierte Release.
+
+Offline-Freigabenachweis vor Live: [Run 39594598884](https://github.com/masterxfix/MOSA-2/actions/runs/39594598884), 50/50 PASS. Exakte Aktien/Reihenfolge, Token, Laufname, Commit-/Actions-Kontext, Einmalkollision, alte Laufdaten, Hash-/Symlink-Schutz sowie bestehende Transaktions-/Readback-/Replay-Fehlerfälle geprüft. Keine Hosting-Secrets im Offline-Test.

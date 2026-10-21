@@ -1,4 +1,4 @@
-"""Prepared manual 1..10-equity start. Deliberately disabled pending separate live approval."""
+"""One explicitly approved ordered three-equity run; general live operation remains locked."""
 import ast
 import hashlib
 import json
@@ -12,8 +12,10 @@ import collector_actions as shared
 import collector_db_locality as remote
 
 ROOT=Path(__file__).resolve().parents[1]
-LIVE_ENABLED=False
-TOKEN="MOSA2-DOGADO-BATCH:"
+LIVE_ENABLED=True  # Only the exact one-shot grant below; never a general live switch.
+GRANTED_SELECTION=("DE000A0JBPG2","DE0005313704","AU000000DRO2")
+GRANTED_RUN="three-equities-20261021-01"
+TOKEN="MOSA2-DOGADO-THREE-20261021-01:"
 
 def scope(env):
     commit=env.get("MOSA_BATCH_EXPECTED_COMMIT","");label=env.get("MOSA_BATCH_RUN_ID","")
@@ -22,6 +24,7 @@ def scope(env):
     values=json.loads(env.get("MOSA_BATCH_SELECTION","null"))
     if not isinstance(values,list) or not 1<=len(values)<=10 or any(not isinstance(v,str) or not re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]",v) for v in values) or len(set(values))!=len(values):
         raise PermissionError("BATCH_SELECTION")
+    if values!=list(GRANTED_SELECTION) or label!=GRANTED_RUN:raise PermissionError("BATCH_ONE_SHOT_SCOPE")
     digest=hashlib.sha256(json.dumps(values,separators=(",",":")).encode()).hexdigest()
     expected=TOKEN+commit+":"+label+":"+digest
     if (env.get("MOSA_BATCH_AUTHORIZATION")!=expected or env.get("GITHUB_ACTIONS")!="true"
@@ -29,7 +32,7 @@ def scope(env):
         or env.get("GITHUB_REF")!="refs/heads/main" or env.get("GITHUB_SHA")!=commit
         or env.get("GITHUB_REPOSITORY")!="masterxfix/MOSA-2"):
         raise PermissionError("BATCH_BINDING")
-    return commit,label,values,"batch-"+commit+"-"+label+"-"+digest[:16]
+    return commit,label,values,GRANTED_RUN
 
 def remote_source():
     # Reuse the proven supervisor functions, never its PNE entry point or run_once.
@@ -54,6 +57,7 @@ def execute(env,paramiko):
     php=existing.php_source(run_root=run,launcher="dogado_batch_live.php")
     data=dict(commit=commit,run_id=label,selection=selection,authorization=env["MOSA_BATCH_AUTHORIZATION"],
         release_commit=existing.RELEASE_COMMIT,manifest=manifest,password=env["MOSA_TEST_DB_PASSWORD"],
+        github_context={k:env.get(k) for k in ("GITHUB_ACTIONS","GITHUB_EVENT_NAME","GITHUB_RUN_ATTEMPT","GITHUB_REF","GITHUB_SHA","GITHUB_REPOSITORY")},
         php_source=php,php_sha256=hashlib.sha256(php.encode()).hexdigest())
     report=dict(ok=False,overall_status="FAILED_BEFORE_FIRST_COMMIT",commit=commit,run=run,
                 github=existing.actions_timing(env),requested_count=len(selection),provider_requests=0,automatic_retries=0)

@@ -284,7 +284,10 @@ class DogadoBatchTests(unittest.TestCase):
         exec(body,scope);scope["LIVE_ENABLED"]=True
         (root/"locks").mkdir(mode=0o700)
         scope["checked_fd"]=lambda api,path:os.open(path,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW) if path in (str(root/"runs"),str(root/"locks")) else (_ for _ in ()).throw(AssertionError("scope"))
-        data.update(selection=["DE000A0JBPG2"],run_id="synthetic-1")
+        data.update(selection=list(batch.GRANTED_SELECTION),run_id=batch.GRANTED_RUN,
+            github_context=dict(GITHUB_ACTIONS="true",GITHUB_EVENT_NAME="workflow_dispatch",GITHUB_RUN_ATTEMPT="1",
+                GITHUB_REF="refs/heads/main",GITHUB_SHA=self.commit,GITHUB_REPOSITORY="masterxfix/MOSA-2"))
+        for name in scope["REQUIRED_HISTORY"]:(root/"runs"/name).mkdir(mode=0o700)
         digest=hashlib.sha256(json.dumps(data["selection"],separators=(",",":")).encode()).hexdigest()
         data["authorization"]=batch.TOKEN+self.commit+":"+data["run_id"]+":"+digest
         return scope,root,data
@@ -299,22 +302,27 @@ class DogadoBatchTests(unittest.TestCase):
         with self.assertRaises(scope["Stop"]):scope["run_batch_once"]({})
         scope["guard"].assert_not_called()
         workflow=(ROOT/".github/workflows/collector-dogado-batch.yml").read_text()
-        self.assertIn("if: "+chr(36)+"{{ false }}",workflow)
-        self.assertFalse(batch.LIVE_ENABLED);self.assertFalse(scope["LIVE_ENABLED"])
+        self.assertIn("inputs.run_id == '"+batch.GRANTED_RUN+"'",workflow)
+        self.assertIn("inputs.selection_json == '"+json.dumps(list(batch.GRANTED_SELECTION),separators=(",",":"))+"'",workflow)
+        self.assertNotIn("schedule:",workflow)
+        self.assertEqual(batch.GRANTED_SELECTION,scope["GRANTED_SELECTION"])
+        self.assertEqual(batch.GRANTED_RUN,scope["GRANTED_RUN"])
 
     def test_batch_supervisor_collision_marker_release_hash_and_no_old_run_mutation(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
             scope,root,data=self.fixture(tmp)
-            old=root/"runs"/driver.ONCE;old.mkdir();(old/"retained").write_text("OUTCOME_UNKNOWN")
+            old=root/"runs"/driver.ONCE;(old/"retained").write_text("OUTCOME_UNKNOWN");(old/"retained").chmod(0o600)
             def child(source,password,input_data,deadline):
-                self.assertEqual(input_data,dict(selection=data["selection"]));self.assertEqual(deadline,120)
-                folder=Path(scope["RUN"])/"asset-01";folder.mkdir(mode=0o700)
-                fd=os.open(folder/"provider-consumed.lock",os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
-                return dict(ok=True,overall_status="COMPLETE",provider_requests=1,started_count=1,completed_count=1)
+                self.assertEqual(input_data,dict(selection=data["selection"]));self.assertEqual(deadline,360)
+                for i in range(3):
+                    folder=Path(scope["RUN"])/("asset-"+format(i+1,"02d"));folder.mkdir(mode=0o700)
+                    fd=os.open(folder/"provider-consumed.lock",os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
+                return dict(ok=True,overall_status="COMPLETE",provider_requests=3,started_count=3,completed_count=3)
             scope["child"]=Mock(side_effect=child)
             r=scope["run_batch_once"](data);self.assertTrue(r["ok"],r)
             self.assertEqual((r["integrity_before"],r["integrity_after"]),("PASS","PASS"))
-            self.assertEqual(r["provider_requests"],1)
+            self.assertEqual(r["provider_requests"],3)
+            self.assertEqual(r["old_runs_unchanged"],"PASS")
             before={p.name:p.read_bytes() for p in Path(scope["RUN"]).iterdir() if p.is_file()}
             repeated=scope["run_batch_once"](data)
             self.assertEqual(repeated["failure_code"],"RUN_ALREADY_EXISTS");self.assertEqual(scope["child"].call_count,1)
@@ -368,10 +376,12 @@ class DogadoBatchTests(unittest.TestCase):
         from scripts import collector_dogado_batch as batch
         from test_market_live_batch import isin
         env=DogadoPneTests.env(self)
-        env.update(MOSA_BATCH_EXPECTED_COMMIT=self.commit,MOSA_BATCH_RUN_ID="synthetic",MOSA_BATCH_SELECTION=json.dumps([isin(1),isin(2)]))
-        digest=hashlib.sha256(json.dumps([isin(1),isin(2)],separators=(",",":")).encode()).hexdigest()
-        env["MOSA_BATCH_AUTHORIZATION"]=batch.TOKEN+self.commit+":synthetic:"+digest
-        self.assertEqual(batch.scope(env)[2],[isin(1),isin(2)])
+        selection=list(batch.GRANTED_SELECTION)
+        env.update(MOSA_BATCH_EXPECTED_COMMIT=self.commit,MOSA_BATCH_RUN_ID=batch.GRANTED_RUN,MOSA_BATCH_SELECTION=json.dumps(selection))
+        digest=hashlib.sha256(json.dumps(selection,separators=(",",":")).encode()).hexdigest()
+        env["MOSA_BATCH_AUTHORIZATION"]=batch.TOKEN+self.commit+":"+batch.GRANTED_RUN+":"+digest
+        self.assertEqual(batch.scope(env)[2],selection)
+        self.assertEqual(batch.scope(env)[3],batch.GRANTED_RUN)
         for label,change in (("duplicate",{"MOSA_BATCH_SELECTION":json.dumps([isin(1),isin(1)])}),("attempt",{"GITHUB_RUN_ATTEMPT":"2"}),("path",{"MOSA_BATCH_RUN_ID":"../escape"}),("commit",{"GITHUB_SHA":"0"*40})):
             with self.subTest(label=label),self.assertRaises((PermissionError,ValueError)):batch.scope(env|change)
         source=(ROOT/"scripts/collector_dogado_batch.py").read_text()
@@ -381,5 +391,58 @@ class DogadoBatchTests(unittest.TestCase):
         self.assertEqual(php.count("\\Mosa2\\MarketBatch\\execute("),1)
         self.assertNotIn("INSERT INTO",php);self.assertNotIn("executePlan(",php)
         self.assertIn("\\Mosa2\\DogadoRuntime\\perform(",php)
+
+    def test_three_equity_grant_rejects_other_order_asset_run_context_and_token_before_access(self):
+        from scripts import collector_dogado_batch as batch
+        values=list(batch.GRANTED_SELECTION)
+        env=DogadoPneTests.env(self)
+        env.update(MOSA_BATCH_EXPECTED_COMMIT=self.commit,MOSA_BATCH_RUN_ID=batch.GRANTED_RUN,MOSA_BATCH_SELECTION=json.dumps(values))
+        digest=hashlib.sha256(json.dumps(values,separators=(",",":")).encode()).hexdigest()
+        env["MOSA_BATCH_AUTHORIZATION"]=batch.TOKEN+self.commit+":"+batch.GRANTED_RUN+":"+digest
+        self.assertEqual(digest,"1fbae8bd949490a5866efad170ca7b8bd16e26f7cd35823c810b6a8b8e510c84")
+        changes=[
+            dict(MOSA_BATCH_SELECTION=json.dumps(values[::-1])),
+            dict(MOSA_BATCH_SELECTION=json.dumps(values[:2])),
+            dict(MOSA_BATCH_SELECTION=json.dumps(values+["CNE100000296"])),
+            dict(MOSA_BATCH_SELECTION=json.dumps(["DE000A0JBPG2","DE0005313704","CNE100000296"])),
+            dict(MOSA_BATCH_RUN_ID="three-equities-20261021-02"),
+            dict(GITHUB_EVENT_NAME="push"),dict(GITHUB_REF="refs/heads/other"),
+            dict(GITHUB_RUN_ATTEMPT="2"),dict(GITHUB_SHA="0"*40),
+            dict(MOSA_BATCH_AUTHORIZATION=batch.TOKEN+"0"*40),
+        ]
+        with patch.object(batch.shared,"configuration") as config,patch.object(batch.shared,"ssh_client") as ssh:
+            for change in changes:
+                with self.subTest(change=change),self.assertRaises(PermissionError):batch.execute(env|change,Mock())
+            config.assert_not_called();ssh.assert_not_called()
+        with tempfile.TemporaryDirectory() as tmp:
+            scope,root,data=self.fixture(tmp)
+            self.assertEqual(scope["validate_batch"](data),batch.GRANTED_RUN)
+            for change in (dict(selection=values[::-1]),dict(selection=values[:1]),dict(run_id="other"),
+                           dict(github_context={}),dict(authorization="invalid"),dict(commit="0"*40)):
+                with self.subTest(change=change),self.assertRaises(scope["Stop"]):scope["validate_batch"](data|change)
+            # Fixed reservation survives source commit changes; no new per-commit directory.
+            changed=data|dict(commit="1"*40)
+            changed["github_context"]=data["github_context"]|dict(GITHUB_SHA="1"*40)
+            changed["authorization"]=batch.TOKEN+"1"*40+":"+batch.GRANTED_RUN+":"+digest
+            self.assertEqual(scope["validate_batch"](changed),batch.GRANTED_RUN)
+
+    def test_old_history_changes_symlinks_and_missing_required_run_fail_closed(self):
+        for fault in ("content","symlink","missing"):
+            with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
+                scope,root,data=self.fixture(tmp)
+                old=root/"runs"/driver.ONCE
+                if fault=="symlink":
+                    (old/"link").symlink_to(root/"releases")
+                if fault=="missing":old.rmdir()
+                def child(*args,**kwargs):
+                    p=old/"unexpected";p.write_text("synthetic mutation");p.chmod(0o600)
+                    return dict(ok=True,overall_status="COMPLETE",provider_requests=0,started_count=0,completed_count=0)
+                scope["child"]=Mock(side_effect=child)
+                r=scope["run_batch_once"](data)
+                self.assertFalse(r["ok"],r)
+                if fault=="content":
+                    self.assertEqual(r["overall_status"],"OUTCOME_UNKNOWN")
+                    self.assertEqual(r["failure_code"],"HISTORY_CHANGED")
+                else:scope["child"].assert_not_called()
 
 if __name__=="__main__":unittest.main()

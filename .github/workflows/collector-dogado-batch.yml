@@ -1,4 +1,4 @@
-name: Manual MOSA 2 Dogado equity batch (live locked)
+name: Manual MOSA 2 Dogado equity batch (one three-stock grant)
 on:
   workflow_dispatch:
     inputs:
@@ -15,8 +15,8 @@ on:
         required: true
         type: string
       authorization:
-        description: Reserved for separate future explicit live authorization
-        required: false
+        description: Exact one-shot three-equity authorization and full commit
+        required: true
         type: string
 permissions:
   contents: read
@@ -41,13 +41,20 @@ jobs:
           php-version: '8.4'
           coverage: none
           tools: none
+      - name: Validate exact three-equity authorization before accessing any secret
+        env:
+          MOSA_BATCH_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_BATCH_SELECTION: ${{ inputs.selection_json }}
+          MOSA_BATCH_RUN_ID: ${{ inputs.run_id }}
+          MOSA_BATCH_AUTHORIZATION: ${{ inputs.authorization }}
+        run: python3 -B -c 'import os; from scripts.collector_dogado_batch import scope; scope(os.environ)'
       - env:
           PYTHONPATH: '.:tests'
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python3 -B -m unittest -v test_collector_dogado_pne test_collector_dogado_pne_diagnose test_market_live_batch test_market_runtime
+        run: python3 -B -m unittest -v test_collector_dogado_pne test_collector_dogado_pne_diagnose test_market_live_batch test_market_runtime.RuntimeTests.test_insert_and_duplicate_use_exact_same_observation_and_readback test_market_runtime.RuntimeTests.test_runtime_writes_only_observations test_market_runtime.RuntimeTests.test_provider_and_drift_fail_before_commit test_market_runtime.RuntimeTests.test_failed_replay_rolls_back_insert_and_independently_proves_rollback test_market_runtime.RuntimeTests.test_readback_failure_retains_committed_observation test_market_runtime.RuntimeTests.test_ledger_unit_and_identity_drift_rejected_before_provider test_market_runtime.RuntimeTests.test_old_route_group_conflicts_and_acquisition_mismatch_fail_closed test_market_runtime.RuntimeTests.test_corrupt_duplicate_payload_fails_closed
   live:
-    # This assignment authorizes OFFLINE work only. No input can enable this job.
-    if: ${{ false }}
+    # Exact one-shot grant only; fixed remote directory prevents reuse across commits.
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && inputs.expected_commit == github.sha && inputs.run_id == 'three-equities-20261021-01' && inputs.selection_json == '["DE000A0JBPG2","DE0005313704","AU000000DRO2"]' && inputs.authorization == format('MOSA2-DOGADO-THREE-20261021-01:{0}:three-equities-20261021-01:1fbae8bd949490a5866efad170ca7b8bd16e26f7cd35823c810b6a8b8e510c84', github.sha)
     needs: offline
     runs-on: ubuntu-24.04
     timeout-minutes: 25
