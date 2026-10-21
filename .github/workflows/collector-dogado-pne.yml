@@ -1,0 +1,61 @@
+name: Manual MOSA 2 one PNE collector directly on Dogado
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main launcher commit
+        type: string
+        required: true
+      authorization:
+        description: MOSA2-PNE-FIRST-LIVE-20261021 token plus colon and full commit
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: mosa-2-collector-live-test
+  cancel-in-progress: false
+jobs:
+  one-pne:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Require exact main source and explicit one-PNE authorization
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$AUTHORIZATION" = "MOSA2-PNE-FIRST-LIVE-20261021:$EXPECTED_COMMIT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: git fetch --depth=1 origin 92274a79550b8acd719434459022da6de5261d2e
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Relevant offline safety and unchanged runtime regressions
+        env:
+          PYTHONPATH: '.:tests'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m unittest -v test_collector_dogado_pne test_collector_private_directories test_market_runtime.RuntimeTests.test_insert_and_duplicate_use_exact_same_observation_and_readback test_market_runtime.RuntimeTests.test_runtime_writes_only_observations test_market_runtime.RuntimeTests.test_provider_and_drift_fail_before_commit test_market_runtime.RuntimeTests.test_failed_replay_rolls_back_insert_and_independently_proves_rollback test_market_runtime.RuntimeTests.test_readback_failure_retains_committed_observation test_market_runtime.RuntimeTests.test_ledger_unit_and_identity_drift_rejected_before_provider test_market_runtime.RuntimeTests.test_old_route_group_conflicts_and_acquisition_mismatch_fail_closed test_market_runtime.RuntimeTests.test_corrupt_duplicate_payload_fails_closed
+      - name: Exactly one PNE attempt on the immutable installed release
+        timeout-minutes: 7
+        env:
+          MOSA_PNE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_PNE_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m scripts.collector_dogado_pne
