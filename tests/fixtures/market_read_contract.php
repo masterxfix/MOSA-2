@@ -29,7 +29,8 @@ class ProvisionConnection extends ReadConnection {
     }
     public function prepare(string $query,array $options=[]):PDOStatement|false{$this->sql[]=$query;return new ScalarStatement(null);}
 }
-$p=new ReadConnection();$config=['assets'=>[['asset_id'=>'101','route_id'=>'301','venue'=>'Venue'],['asset_id'=>'102','route_id'=>'302','venue'=>'Venue']],'stale_seconds'=>1800];
+require_once $argv[1].'/tests/fixtures/current_web.php';
+$p=new WebCurrentConnection();$config=['assets'=>[['asset_id'=>'101','route_id'=>'301','venue'=>'Venue'],['asset_id'=>'102','route_id'=>'302','venue'=>'Venue']],'stale_seconds'=>1800];
 $result=\Mosa2\MarketRead\read($p,$config,'2026-01-01 00:00:02.000000');
 $failures=[];foreach(['GRANT ALL PRIVILEGES ON `h29077_mosa2_test`.* TO x','GRANT SELECT ON *.* TO x','GRANT SELECT ON `h29077_mosa2_test`.* TO x WITH GRANT OPTION','GRANT EXECUTE ON `h29077_mosa2_test`.* TO x','GRANT SELECT ON `h29077_mosa2_test`.* TO x'] as $grant){try{\Mosa2\MarketReadAccess\grants([[$grant]]);$failures[]=false;}catch(Throwable){$failures[]=true;}}
 \Mosa2\MarketReadAccess\grants([['GRANT USAGE ON *.* TO x'],['GRANT SELECT, SHOW VIEW ON `h29077\\_mosa2\\_test`.* TO x']]);

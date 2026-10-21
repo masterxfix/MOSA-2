@@ -1,0 +1,65 @@
+{
+  "manifest_format": "mosa2-unit-seed-manifest-v1",
+  "package_key": "market-units-v1",
+  "package_version": "1",
+  "unit_contract_version": "mosa2-market-unit-v1",
+  "definitions": [
+    {
+      "unit_key": "EUR",
+      "unit_version": "1",
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "dimension_key": "monetary",
+      "base_unit_key": "EUR",
+      "base_unit_version": "1",
+      "monetary_currency_code": "EUR",
+      "scale_numerator": "1",
+      "scale_denominator": "1",
+      "status": "frozen",
+      "definition_sha256": "4d2e721264795c68d1d5434cdab7c53199ba4270c1cd43114200f9e86de1c4c4",
+      "definition_reference": "docs/database/PHASE3I_UNIT_CONTRACT.md; docs/database/PHASE3L_UNIT_SEEDS.md"
+    },
+    {
+      "unit_key": "GBP",
+      "unit_version": "1",
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "dimension_key": "monetary",
+      "base_unit_key": "GBP",
+      "base_unit_version": "1",
+      "monetary_currency_code": "GBP",
+      "scale_numerator": "1",
+      "scale_denominator": "1",
+      "status": "frozen",
+      "definition_sha256": "dcf7b65464052cd34b4e98a0fc7abcf32b53543117af2a612965f0ed3f4fb10a",
+      "definition_reference": "docs/database/PHASE3I_UNIT_CONTRACT.md; docs/database/PHASE3L_UNIT_SEEDS.md"
+    },
+    {
+      "unit_key": "POINT",
+      "unit_version": "1",
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "dimension_key": "index_point",
+      "base_unit_key": "POINT",
+      "base_unit_version": "1",
+      "monetary_currency_code": null,
+      "scale_numerator": "1",
+      "scale_denominator": "1",
+      "status": "frozen",
+      "definition_sha256": "29c50d2fad8e5176e9c4204579c1b33b9e7883f3afe8fe3cbfc097efd72b7092",
+      "definition_reference": "docs/database/PHASE3I_UNIT_CONTRACT.md; docs/database/PHASE3L_UNIT_SEEDS.md"
+    },
+    {
+      "unit_key": "GBX",
+      "unit_version": "1",
+      "unit_contract_version": "mosa2-market-unit-v1",
+      "dimension_key": "monetary",
+      "base_unit_key": "GBP",
+      "base_unit_version": "1",
+      "monetary_currency_code": "GBP",
+      "scale_numerator": "1",
+      "scale_denominator": "100",
+      "status": "frozen",
+      "definition_sha256": "c80d04b9e0b1ee996242364ffbfea7b37fbda9c23f746356072b43cce551ddd6",
+      "definition_reference": "docs/database/PHASE3I_UNIT_CONTRACT.md; docs/database/PHASE3L_UNIT_SEEDS.md"
+    }
+  ],
+  "package_sha256": "b66df6f972ad13c05c3f34c604088c0281dcd9f0ff4bafad45b9600aa2b747ee"
+}

@@ -40,6 +40,15 @@ class CurrentReconcileTests(unittest.TestCase):
         self.assertEqual(report['classification'],'A')
         self.assertTrue(all(x['provenance']=='VALID' and x['state']=='TARGET' for x in report['reports']))
 
+    def test_target_web_digest_uses_exact_native_current_projection(self):
+        import hashlib
+        from scripts.market_current import preview
+        snapshot=self.target()
+        result=preview.php(snapshot,ROOT/'scripts/current_web_verify.php')
+        self.assertRegex(result['expected_web_sha256'],r'^[a-f0-9]{64}$')
+        snapshot['items'][0]['input']['current']['price']='9.0000000000'
+        with self.assertRaises(ValueError):preview.php(snapshot,ROOT/'scripts/current_web_verify.php')
+
     def test_c_mixed_original_and_target(self):
         report=reconcile.compare(self.plan,self.target(2))
         self.assertEqual(report['classification'],'C')

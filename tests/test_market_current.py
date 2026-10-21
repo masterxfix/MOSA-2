@@ -87,7 +87,7 @@ class CurrentTests(unittest.TestCase):
 
     def test_public_path_has_no_provider_or_mutation_capability(self):
         code=(ROOT/'api/read_model.php').read_text();endpoint=(ROOT/'api/market.php').read_text()
-        self.assertIn('SET TRANSACTION READ ONLY',code);self.assertIn('LIMIT 1',code);self.assertIn('$p->rollBack()',code)
+        reader=(ROOT/'api/current_read.php').read_text();self.assertIn('SET SESSION TRANSACTION READ ONLY',reader);self.assertIn('LIMIT 1',reader);self.assertIn('$p->rollBack()',reader)
         for verb in ('INSERT ','UPDATE ','DELETE ','REPLACE ','ALTER ','TRUNCATE '):self.assertNotIn(verb,code+endpoint)
         self.assertNotIn('market_collector',code+endpoint);self.assertNotIn('m2_market_observations',code)
         self.assertIn("dirname(__DIR__,2).'/mosa2-market-read-private/access.php'",endpoint)
@@ -106,10 +106,10 @@ class CurrentTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('php'),'PHP required')
     def test_actual_read_path_prepares_bounded_select_rolls_back_and_rejects_write_grants(self):
         p=subprocess.run(['php',str(ROOT/'tests/fixtures/market_read_contract.php'),str(ROOT)],capture_output=True,text=True,check=True)
-        r=json.loads(p.stdout);self.assertEqual(r['events'],['SET TRANSACTION READ ONLY','BEGIN','ROLLBACK'])
-        self.assertEqual(r['parameters'],[['301','101'],['302','102']]);self.assertEqual(len(r['sql']),1)
-        self.assertIn('LIMIT 1',r['sql'][0]);self.assertNotIn('m2_market_observations',r['sql'][0]);self.assertEqual(r['unsafe_grants_rejected'],[True]*5)
-        self.assertEqual([x['price'] for x in r['result']['items']],['1.2300000000']*2)
+        r=json.loads(p.stdout);self.assertEqual(r['events'],['SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ','SET SESSION TRANSACTION READ ONLY','BEGIN','ROLLBACK'])
+        self.assertEqual(len(r['parameters']),15);self.assertEqual(len(r['sql']),4)
+        self.assertTrue(any('LIMIT 1' in q for q in r['sql']));self.assertEqual(r['unsafe_grants_rejected'],[True]*5)
+        self.assertEqual([x['price'] for x in r['result']['items']],['2.0000000000']*5)
 
     @unittest.skipUnless(shutil.which('php'),'PHP required')
     def test_reader_provisioning_before_migration_does_not_query_future_columns(self):

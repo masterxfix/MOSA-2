@@ -28,7 +28,11 @@ def execute(env, paramiko):
         return dict(status='RECONCILE_ORIGINAL_ARTIFACT_REJECTED', business_writes=0)
     def consume(snapshot, unused_preview):
         report = reconcile.compare(plan, snapshot)
-        return dict(status='READONLY_RECONCILIATION_COMPLETE', **reconcile.public_summary(report))
+        web = {}
+        if report['classification'] == 'A':
+            web = reader.preview.php(snapshot, Path(__file__).with_name('current_web_verify.php'))
+            web.pop('ok', None)
+        return dict(status='READONLY_RECONCILIATION_COMPLETE', **reconcile.public_summary(report), **web)
     return reader.execute(env, paramiko, consume)
 
 

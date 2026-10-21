@@ -73,7 +73,7 @@ jobs:
           php -l scripts/market_current/preview_read.php
           php -l scripts/market_current/read_bundle.php
           php -l tests/fixtures/current_preview.php
-          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover test_current_reconcile
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover test_current_reconcile test_current_web
           git diff --exit-code
       - name: One fileless SELECT-only inventory; public output excludes private values
         if: inputs.read_inventory && inputs.takeover_mode == 'NONE'
