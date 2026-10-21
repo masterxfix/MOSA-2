@@ -15,7 +15,7 @@ on:
       takeover_mode:
         description: Preparation only unless explicit plan-bound authorization is supplied
         type: choice
-        options: [NONE, PREPARE, APPLY]
+        options: [NONE, PREPARE, APPLY, RECONCILE]
         default: NONE
       recipient_public_key:
         description: Public RSA recipient DER in base64; never a private key
@@ -26,6 +26,13 @@ on:
       authorization:
         description: Exact plan-bound EXECUTE_CURRENT_ONCE phrase, including disabled-route permission
         type: string
+      plan_source_commit:
+        description: Immutable source revision of historical plan for READ ONLY reconciliation
+        type: string
+      plan_sha256:
+        description: Expected digest of historical plan for READ ONLY reconciliation
+        type: string
+
 
 permissions:
   contents: read
@@ -66,7 +73,7 @@ jobs:
           php -l scripts/market_current/preview_read.php
           php -l scripts/market_current/read_bundle.php
           php -l tests/fixtures/current_preview.php
-          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover test_current_reconcile
           git diff --exit-code
       - name: One fileless SELECT-only inventory; public output excludes private values
         if: inputs.read_inventory && inputs.takeover_mode == 'NONE'
@@ -89,7 +96,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Prepare exact pending plan or explicitly authorize the existing Current writer
-        if: inputs.takeover_mode != 'NONE'
+        if: inputs.takeover_mode == 'PREPARE' || inputs.takeover_mode == 'APPLY'
         env:
           TAKEOVER_MODE: ${{ inputs.takeover_mode }}
           TAKEOVER_RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}
@@ -111,3 +118,17 @@ jobs:
           path: ${{ runner.temp }}/current-takeover-plan.sealed.json
           retention-days: 7
           if-no-files-found: error
+      - name: One READ ONLY comparison with original encrypted plan; never APPLY
+        if: inputs.takeover_mode == 'RECONCILE'
+        env:
+          TAKEOVER_PLAN_SOURCE_RUN: ${{ inputs.plan_source_run }}
+          RECONCILE_SOURCE_COMMIT: ${{ inputs.plan_source_commit }}
+          RECONCILE_PLAN_SHA256: ${{ inputs.plan_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: python3 -B scripts/current_reconcile_remote.py
