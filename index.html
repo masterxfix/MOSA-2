@@ -6,9 +6,8 @@
   <meta name="description" content="MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Projektziel, geprüfte Ergebnisse und nächste Entwicklungsschritte.">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Projektüberblick</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=homecopy-20261020">
-  <script src="assets/js/page_load_time.js" defer></script>
-  <script src="assets/js/market.js" defer></script>
+  <link rel="stylesheet" href="assets/css/main.css?v=pages-20261021">
+  <script src="assets/js/navigation.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -16,6 +15,7 @@
     <a class="brand" href="#inhalt" aria-label="MOSA 2 – Projektüberblick"><span class="brand-symbol" aria-hidden="true">m</span>MOSA <span class="brand-version">2</span></a>
     <span class="project-label">Projektüberblick <span class="dot" aria-hidden="true"></span> Im Aufbau</span>
   </header>
+  <nav class="site-nav wrap" aria-label="Seitennavigation" data-site-nav></nav>
   <main id="inhalt" class="wrap">
     <section class="hero" aria-labelledby="projekt-titel">
       <div class="eyebrow">Klare Daten. Nachvollziehbare Antworten.</div>
@@ -41,40 +41,17 @@
         </article>
         <article class="status-card" data-status="version">
           <span class="badge neutral">Version 3</span><h3>Schema-Version</h3>
-          <p>Schema Version 3 ist geprüft; versionierte Einheiten sind hinterlegt. Die acht bisherigen Marktbeobachtungen bleiben unverändert erhalten.</p>
-        </article>
-        <article class="status-card" data-status="read-paths">
-          <span class="badge success">Erster Live-Fact gespeichert</span><h3>Marktdaten-Collector</h3>
-          <p>Collector v1 verarbeitet Rohdaten über getrennte Provideradapter. PNE AG ist über den gemeinsamen Asset-/ISIN-Vertrag gebunden; der erste echte PNE-Live-Snapshot ist als Observation-v2 gespeichert.</p>
-        </article>
-        <article class="status-card data-card" data-status="data">
-          <span class="badge success">Kontrolliert übernommen</span><h3>Importe &amp; erster Live-Snapshot</h3>
-          <p><strong>Neun echte Marktbeobachtungen.</strong> Zu den acht importierten Beobachtungen kommt ein neuer Live-Snapshot. Die gespeicherte Wiederholung erzeugt keine Dublette.</p>
+          <p>Schema Version 3 ist geprüft; versionierte Einheiten sind hinterlegt. Die weitere Entwicklung baut auf diesen geprüften Verträgen auf.</p>
         </article>
       </div>
-    </section>
-
-    <section class="market-section" aria-labelledby="kurse-titel" data-market-view>
-      <div class="section-heading"><h2 id="kurse-titel">Letzter gespeicherter Stand</h2><span class="snapshot" data-market-summary role="status">Marktdaten werden geladen …</span></div>
-      <div class="market-table-wrap" aria-busy="true" data-market-region>
-        <table class="market-table">
-          <caption class="visually-hidden">Gespeicherte Kurse mit Einheit, Quelle, Markt- und Erfassungszeit</caption>
-          <thead><tr><th scope="col">Asset</th><th scope="col">Kurs</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Zeitpunkt</th><th scope="col">Datenstatus</th></tr></thead>
-          <tbody data-market-rows><tr class="market-placeholder"><td colspan="5">Gespeicherte Marktdaten werden geladen …</td></tr></tbody>
-        </table>
-      </div>
-      <noscript><p>Für die Marktdatenanzeige bitte JavaScript aktivieren.</p></noscript>
     </section>
 
     <section class="next-step" aria-labelledby="naechstes-ziel">
-      <div class="next-copy"><p class="eyebrow">Aktueller Schwerpunkt <span class="badge planned">Begonnen</span></p>
-        <h2 id="naechstes-ziel">Marktdaten-Collector<br> &amp; kontrollierte Live-Daten</h2>
-        <p>Der gemeinsame Weg von qualifizierter Assetidentität über Collector und Provideradapter bis zur atomaren Persistenz ist mit dem ersten echten Frankfurt-Snapshot geprüft. Weitere Assets und Live-Läufe folgen ausschließlich kontrolliert und mit eigener Freigabe.</p>
+      <div class="next-copy"><p class="eyebrow">Unser Ziel</p>
+        <h2 id="naechstes-ziel">Informationen verbinden,<br>Zusammenhänge verstehen.</h2>
+        <p>MOSA 2 entwickelt eine gemeinsame Grundlage für persönliche Finanzdaten und nachvollziehbare Auswertungen. Die Plattform wächst schrittweise und bleibt zunächst eine Testumgebung.</p>
       </div>
-      <dl class="market-types">
-        <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Technisch validiert; bleibt bis zur Freigabe der Routenauswahl bewusst leer.</dd></div>
-        <div><dt><span aria-hidden="true">02</span> History</dt><dd>Acht importierte Beobachtungen und der erste echte Live-Snapshot sind kontrolliert gespeichert und unabhängig nachgeprüft.</dd></div>
-      </dl>
+      <p class="intro">Gespeicherte Kurse, Datenstatus und Messungen finden sich auf der eigenen Seite „Marktdaten &amp; Messungen“.</p>
     </section>
 
     <section class="progress-section" aria-labelledby="entwicklung-titel">
@@ -83,14 +60,13 @@
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Erster Live-Snapshot kontrolliert gespeichert</p></li>
+        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Kontrollierte Testentwicklung</p></li>
       </ol>
       <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Weitere kontrollierte Asset- und Live-Datenübernahmen</li><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
     </section>
   </main>
   <footer class="wrap footer">
     <span>MOSA 2 · Auf verlässlichen Grundlagen aufgebaut.</span>
-    <span class="footer-latency">Seitenladezeit · <span data-page-load-time aria-label="Seitenladezeit wird gemessen">— ms</span><br>Mit Daten · <span data-data-ready-time aria-label="Datenladezeit wird gemessen">— ms</span></span>
     <span class="footer-release">Entwicklung · Keine Produktivfreigabe</span>
   </footer>
 </body>
