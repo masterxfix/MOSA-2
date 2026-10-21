@@ -2461,3 +2461,45 @@ absichtlich durch sein unverändertes Laufverzeichnis gesperrt
 (RUN_ALREADY_EXISTS); keine automatische Wiederfreigabe und kein neuer
 PNE-Livetest in diesem Auftrag. Ein künftiger separat freigegebener
 Versuch muss diese Sperre und die erhaltene Historie berücksichtigen.
+
+
+## Zweiter begrenzter PNE-Livetest: eigener commitgebundener Startweg (21.10.2026)
+
+Separate ausdrückliche Freigabe für PNE AG / DE000A0JBPG2: genau ein
+Providerrequest, höchstens eine Observation, kein Retry. Unverändertes
+installiertes Release 92274a79550b8acd719434459022da6de5261d2e; vorhandener
+generischer Runtime-, Normalizer-, Writer-, Dedupe- und Readback-Pfad.
+PHP 8.4.12, Python 3.11.17, RLIMIT_AS 1 GiB und PHP-Heaplimit 128 MiB bleiben
+gepinnt. Kein Upload und keine Veränderung des ersten Versuchs.
+
+Der neue manuelle Start verlangt MOSA2-PNE-SECOND-LIVE-20261021:<source-commit>,
+exaktes main/Checkout, run_attempt=1. Laufbereich ausschließlich
+runs/second-live-PNE-DE000A0JBPG2-<vollständiger-source-commit>, exklusives
+mkdir, job.lock und bestehender identifier_lock vor Providerkontakt.
+Kollisionen stoppen; keine automatische Wiederholung oder Bereinigung.
+
+Vor der Akquisition: bestehende DB-Identitäts-, Schema-/Ledger-/Unit- und
+USE_EXISTING_ROUTE-Prüfungen. Neuer ausschließlich privater preflight.json-
+Beleg (0600, exklusiv, fsync) enthält Observation-IDs, Zeilenzahlen sowie
+Prüfsummen des unmittelbar gelesenen Ausgangszustands, keine Passwörter
+oder Rohkurse. Bestehende vier Prüfstellen vergleichen Current/Bars,
+Katalog, Units und alle alten Observations vollständig; höchstens eine
+neue Observation der qualifizierten PNE-Route. Unabhängiger Readback und
+Replay bleiben erhalten. Release und historische Laufdateien erhalten
+zusätzlichen unabhängigen SFTP-Vorher-/Nachhervergleich.
+
+Das Actions-Ergebnis dokumentiert Ausgangs- und End-IDs, Commit/Dedupe,
+Readback/Replay, Integrität und gemessene Zeiten getrennt: Vorbereitung,
+SSH, SFTP, Remote-Supervisor, lokaler Collector einschließlich Provider,
+Providerzeit, DB-Prüfstellen und gesamter Treiber. Supervisor-Aufwand
+ist die Differenz zwischen gemessener Remote-Dauer und PHP-Gesamtdauer,
+keine separate CPU-Messung. Der historische Wert 37,6 s ist ein
+Referenzvergleich bei anderem Abrufzeitpunkt und damals fünf Assets;
+der lokale Lauf enthält zusätzliche vollständige Zustandsprüfungen.
+Actions-/SSH-/SFTP-Zeiten gehören nicht zum Collector-Geschwindigkeitsvergleich.
+
+Der Abschluss-Commit wird vor genau einem neuen manuellen Liveversuch
+geprüft und auf main veröffentlicht. Der vollständige Livebeleg verbleibt
+im [manuellen PNE-Workflow](https://github.com/masterxfix/MOSA-2/actions/workflows/collector-dogado-pne.yml);
+diese Vorbereitung behauptet noch keinen erfolgreichen Liveausgang.
+Nach dem Versuch keine weiteren Codeänderungen oder erneute Akquisition.

@@ -24,7 +24,15 @@ PRIVATE=private.PROPOSED_ROOT
 RELEASE=PRIVATE+"/releases/"+RELEASE_COMMIT
 ONCE="first-live-PNE-DE000A0JBPG2-"+RELEASE_COMMIT
 RUN=PRIVATE+"/runs/"+ONCE
-TOKEN="MOSA2-PNE-FIRST-LIVE-20261021:"
+TOKEN="MOSA2-PNE-SECOND-LIVE-20261021:"
+SECOND_PREFIX="second-live-PNE-DE000A0JBPG2-"
+
+def run_name(commit):
+    if not re.fullmatch(r"[0-9a-f]{40}",commit):raise ValueError("RUN_COMMIT")
+    return SECOND_PREFIX+commit
+
+def run_directory(commit):
+    return PRIVATE+"/runs/"+run_name(commit)
 
 def authorize(env):
     commit=env.get("MOSA_PNE_EXPECTED_COMMIT","")
@@ -92,14 +100,15 @@ def execute(env,paramiko):
     if release.git(ROOT,"ls-remote","origin","refs/heads/main").decode().split()[0]!=commit:
         raise PermissionError("MAIN_BINDING")
     config=shared.configuration(env)
-    manifest=package();php=php_source()
+    manifest=package();run=run_directory(commit);php=php_source(run_root=run)
     data=dict(commit=commit,authorization=TOKEN+commit,isin="DE000A0JBPG2",release_commit=RELEASE_COMMIT,
               password=env["MOSA_TEST_DB_PASSWORD"],manifest=manifest,php_source=php,
               php_sha256=hashlib.sha256(php.encode()).hexdigest())
     report=dict(ok=False,status="FAILED",stage="ssh",asset="PNE AG",isin="DE000A0JBPG2",
-                commit=commit,release=RELEASE,provider_requests=0,automatic_retries=0,
+                commit=commit,release=RELEASE,run=run,provider_requests=0,automatic_retries=0,
                 github=actions_timing(env))
     logging.getLogger("paramiko").disabled=True
+    from scripts.collector_dogado_pne_diagnose import fingerprint
     dispatched=False;clock=time.perf_counter()
     try:
         status={}
@@ -109,6 +118,7 @@ def execute(env,paramiko):
             with paramiko.SFTPClient.from_transport(transport) as sftp:
                 sftp.get_channel().settimeout(12)
                 report["release_before"]=private.readback(sftp,RELEASE,manifest)
+                report["previous_run_before"]=fingerprint(sftp)
             report["sftp_before_ms"]=(time.perf_counter()-t)*1000
             report["stage"]="remote_attempt"
             print(json.dumps(dict(event="remote_attempt_start",commit=commit,isin="DE000A0JBPG2")),flush=True)
@@ -125,6 +135,9 @@ def execute(env,paramiko):
             with paramiko.SFTPClient.from_transport(transport) as sftp:
                 sftp.get_channel().settimeout(12)
                 report["release_after"]=private.readback(sftp,RELEASE,manifest)
+                report["previous_run_after"]=fingerprint(sftp)
+                if report["previous_run_before"]!=report["previous_run_after"]:raise RuntimeError("PREVIOUS_RUN_CHANGED")
+                report["previous_run_unchanged"]="PASS"
             report["sftp_after_ms"]=(time.perf_counter()-t)*1000
             if report["ok"]:
                 report["historical_comparison"]=dict(historical_collector_ms=37600,
@@ -132,6 +145,7 @@ def execute(env,paramiko):
                     local_with_preflight_ms=result["total_with_preflight_ms"],
                     runtime_reduction_percent=round((1-result["collector_ms"]/37600)*100,2),
                     caveat="Different acquisition time; additional exhaustive integrity checkpoints; excludes Actions/SSH/SFTP")
+            report["supervisor_overhead_ms"]=max(0,elapsed-result.get("total_with_preflight_ms",0))
             report["stage"]="finished"
     except Exception as error:
         report.update(ok=False,failure_type=type(error).__name__,

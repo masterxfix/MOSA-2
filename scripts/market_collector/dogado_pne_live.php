@@ -17,7 +17,7 @@ require_once RELEASE.'/scripts/collector_release/runtime.php';
 /** Public errors are an explicit closed vocabulary, never arbitrary exception text. */
 function safeFailureCode(string $code): string {
     $allowed=['one_isin_scope','php_pin','php_binary','release_path','run_path','run_owner_mode',
-        'db_secret_required','database_operation_failed','existing_route_only','existing_asset_only',
+        'db_secret_required','pinned_php_required','pinned_python_required','runtime_probe_output_limit','runtime_probe_timeout','baseline_exists','baseline_create','baseline_write','baseline_mode','database_operation_failed','existing_route_only','existing_asset_only',
         'bounded_test_state','manifest_exists','manifest_create','manifest_write','manifest_mode',
         'one_observation_budget','observation_scope','schema_drift','full_preflight_drift',
         'rollback_full_delta','independent_full_delta','checkpoint_budget','bridge_action',
@@ -123,6 +123,7 @@ function perform(string $password,array $input): array {
         $config=\Mosa2\CollectorRelease\configuration(RELEASE);
         $config+=['state_contract'=>['schema_version'=>4,'allow_current'=>true]];
         $r['stage']='database_preflight';
+        $dbStart=hrtime(true);
         $t=hrtime(true);$prim=connection($password);$connectionMs+=(hrtime(true)-$t)/1e6;
         $prim->exec('SET TRANSACTION READ ONLY');$prim->beginTransaction();
         try{
@@ -135,6 +136,16 @@ function perform(string $password,array $input): array {
             same($plan['route']['decision'],'EXISTING_MATCH','existing_route_only');
             $scope=['asset_id'=>$plan['asset']['asset_id'],'source_id'=>$plan['source']['source_id'],'route_id'=>$plan['route']['route_id']];
         }finally{if($prim->inTransaction())$prim->rollBack();}
+        $r['preflight_db_ms']=(hrtime(true)-$dbStart)/1e6;
+        $r['baseline']=['observation_ids'=>array_column($before['m2_market_observations'],'id'),
+            'pne_observation_ids'=>array_column(array_values(array_filter($before['m2_market_observations'],
+                static fn($row)=>$row['asset_id']===$scope['asset_id'])),'id'),'schema_sha256'=>$schema,
+            'state'=>array_map(static fn($rows)=>['rows'=>count($rows),'sha256'=>hash('sha256',json_encode($rows,JSON_THROW_ON_ERROR))],$before)];
+        check(!file_exists(RUN.'/preflight.json')&&!is_link(RUN.'/preflight.json'),'baseline_exists');
+        $baselineFile=fopen(RUN.'/preflight.json','x');check(is_resource($baselineFile),'baseline_create');
+        try{$wire=json_encode($r['baseline'],JSON_THROW_ON_ERROR);same(fwrite($baselineFile,$wire),strlen($wire),'baseline_write');fflush($baselineFile);check(fsync($baselineFile),'baseline_write');}
+        finally{fclose($baselineFile);}
+        same(fileperms(RUN.'/preflight.json')&0777,0600,'baseline_mode');
         $r['stage']='manifest';
         $r['preflight']='PASS';$r['scope']=$scope;
         $r['preflight_ms']=(hrtime(true)-$start)/1e6;
@@ -162,6 +173,7 @@ function perform(string $password,array $input): array {
         if($r['ok']){
             same($audit->checkpoint,4,'four_checkpoints');same($result['readback'],'PASS','independent_readback');
             same(count($audit->new),$result['writer']==='INSERT'?1:0,'exact_observation_delta');
+            $r['observation_ids_after']=array_column($audit->transactionAfter['m2_market_observations'],'id');
             $r+=['observation_delta'=>count($audit->new),'current_unchanged'=>'PASS','bars_unchanged'=>'PASS',
                 'catalog_route_unit_unchanged'=>'PASS','old_observations_unchanged'=>'PASS','unexpected_business_writes'=>'NONE'];
         }

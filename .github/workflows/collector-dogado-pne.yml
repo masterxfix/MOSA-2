@@ -7,7 +7,7 @@ on:
         type: string
         required: true
       authorization:
-        description: MOSA2-PNE-FIRST-LIVE-20261021 token plus colon and full commit
+        description: MOSA2-PNE-SECOND-LIVE-20261021 token plus colon and full commit
         type: string
         required: true
 permissions:
@@ -27,7 +27,7 @@ jobs:
           AUTHORIZATION: ${{ inputs.authorization }}
         run: |
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
-          test "$AUTHORIZATION" = "MOSA2-PNE-FIRST-LIVE-20261021:$EXPECTED_COMMIT"
+          test "$AUTHORIZATION" = "MOSA2-PNE-SECOND-LIVE-20261021:$EXPECTED_COMMIT"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}

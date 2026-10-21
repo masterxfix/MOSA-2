@@ -13,7 +13,7 @@ ROOT=BASE+"/private/mosa2-collector"
 RELEASE=ROOT+"/releases/"+RELEASE_COMMIT
 ONCE="first-live-PNE-DE000A0JBPG2-"+RELEASE_COMMIT
 RUN=ROOT+"/runs/"+ONCE
-TOKEN="MOSA2-PNE-FIRST-LIVE-20261021:"
+TOKEN="MOSA2-PNE-SECOND-LIVE-20261021:"
 PHP="/opt/plesk/php/8.4/bin/php"
 PHP_FLAGS=("-d","display_errors=0","-d","log_errors=0","-d","opcache.enable_cli=0",
            "-d","opcache.file_cache=","-d","memory_limit=128M")
@@ -128,7 +128,11 @@ def child(source,password):
             if not stream.closed:stream.close()
 
 def run_once(data):
-    valid_input(data);guard();integrity(Path(RELEASE),data["manifest"])
+    global ONCE,RUN
+    valid_input(data)
+    ONCE="second-live-PNE-DE000A0JBPG2-"+data["commit"]
+    RUN=ROOT+"/runs/"+ONCE
+    guard();integrity(Path(RELEASE),data["manifest"])
     os.umask(0o077)
     runs=checked_fd(os,ROOT+"/runs")
     fd=None;lock=None;begun=False
@@ -138,7 +142,8 @@ def run_once(data):
                 php_process_started=False,php_exitcode=None,commit_state="nicht bestätigt")
     try:
         guard()
-        # Deterministic across source commits. Never reuse, overwrite or clean up.
+        # Full source commit identifies this explicitly authorized SECOND attempt.
+        # Exclusive creation prevents any retry of that commit; never touch the first run.
         try:os.mkdir(ONCE,0o700,dir_fd=runs)
         except FileExistsError:raise Stop("RUN_ALREADY_EXISTS") from None
         s=os.stat(ONCE,dir_fd=runs,follow_symlinks=False);new_metadata(s,0o700,True)

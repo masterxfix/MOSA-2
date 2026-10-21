@@ -99,7 +99,7 @@ class DogadoPneTests(unittest.TestCase):
         for name in ("runs","releases"):(root/name).mkdir(mode=0o700)
         release=root/"releases"/driver.RELEASE_COMMIT;release.mkdir(mode=0o700)
         (release/"unchanged").write_text("synthetic release")
-        scope["ROOT"]=str(root);scope["RELEASE"]=str(release);scope["RUN"]=str(root/"runs"/driver.ONCE)
+        scope["ROOT"]=str(root);scope["RELEASE"]=str(release);scope["RUN"]=str(root/"runs"/driver.run_name(self.commit))
         scope["guard"]=lambda:None
         scope["integrity"]=Mock(return_value="PASS")
         def checked(api,path):
@@ -244,5 +244,30 @@ class DogadoPneTests(unittest.TestCase):
                 (resource.RLIMIT_AS,(1024*1024*1024,1024*1024*1024))])
             self.assertIn("memory_limit=128M",scope["PHP_FLAGS"])
             self.assertEqual(scope["integrity"].call_count,2)
+
+    def test_second_attempt_uses_exact_commit_directory_and_rejects_first_token(self):
+        self.assertEqual(driver.run_name(self.commit),"second-live-PNE-DE000A0JBPG2-"+self.commit)
+        self.assertNotEqual(driver.run_directory(self.commit),driver.RUN)
+        for bad in ("main","../escape","0"*39):
+            with self.assertRaises(ValueError):driver.run_directory(bad)
+        env=self.env();env["MOSA_PNE_AUTHORIZATION"]="MOSA2-PNE-FIRST-LIVE-20261021:"+self.commit
+        with self.assertRaises(PermissionError):driver.authorize(env)
+        source=driver.php_source(run_root=driver.run_directory(self.commit))
+        self.assertIn("const RUN='"+driver.run_directory(self.commit)+"';",source)
+        self.assertIn("RUN.'/preflight.json'",source)
+        self.assertLess(source.index("$r['baseline']="),source.index("runtimeRun(RUN"))
+
+    def test_first_attempt_files_survive_second_attempt_and_second_attempt_cannot_repeat(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(resource,"setrlimit"),patch.dict(os.environ,{}):
+            scope,root,data=self.fixture(tmp)
+            first=root/"runs"/driver.ONCE;first.mkdir(mode=0o700)
+            (first/"result.json").write_bytes(b'{"status":"OUTCOME_UNKNOWN"}')
+            (first/"retained-marker").write_bytes(b"first-attempt-evidence")
+            before={p.name:p.read_bytes() for p in first.iterdir()}
+            scope["child"]=Mock(return_value=dict(ok=True,status="COMPLETE",result=dict(committed=True)))
+            self.assertTrue(scope["run_once"](data)["ok"])
+            self.assertEqual(scope["run_once"](data)["failure_code"],"RUN_ALREADY_EXISTS")
+            self.assertEqual(scope["child"].call_count,1)
+            self.assertEqual(before,{p.name:p.read_bytes() for p in first.iterdir()})
 
 if __name__=="__main__":unittest.main()
