@@ -39,8 +39,13 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Relevant diagnostic tests
         run: |
+          php -l scripts/market_collector/runtime_persistence.php
+          php -l scripts/market_collector/performance_reference.php
           php -l scripts/market_collector/performance_diagnostic.php
+          php -l tests/market_runtime_fixture.php
           php -l tests/market_performance_fixture.php
+          python3 -m unittest discover -s tests -p 'test_market_runtime.py' -v
+          python3 -m unittest discover -s tests -p 'test_runtime_optimization.py' -v
           python3 -m unittest discover -s tests -p 'test_collector_performance.py' -v
       - name: One read-only performance diagnosis
         env:
@@ -51,4 +56,4 @@ jobs:
           MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
           MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
           MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
-        run: python3 scripts/collector_performance.py
+        run: python3 scripts/collector_performance.py --compare-runtime

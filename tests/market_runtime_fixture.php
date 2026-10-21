@@ -1,9 +1,17 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__).'/scripts/market_collector/live_batch.php';
+require dirname(__DIR__).'/scripts/market_collector/performance_diagnostic.php';
+require dirname(__DIR__).'/scripts/market_collector/performance_reference.php';
 // In-memory SQL contract double: no PDO driver, socket, credentials or provider network.
 class MemoryDatabase {
-    public array $rows,$sql=[],$events=[];public int $returned=0,$last=1000;
+    public array $rows,$sql=[],$events=[];public int $returned=0,$last=1000;public bool $indexFault=false,$metadataError=false;
+    public function indexRows(string $table): array {
+        $groups=match($table){'m2_asset_source_routes'=>[['source_id','route_type','external_key','route_revision'],['asset_id','source_id','route_type','route_revision']],
+            'm2_market_observations'=>[['id'],['dedupe_key']],'m2_asset_identifiers'=>[['identifier_type','normalized_value','scope_key']],default=>[['id']]};
+        $rows=[];foreach($groups as $i=>$cols)foreach($cols as $j=>$col)$rows[]=['Non_unique'=>0,'Key_name'=>'key'.$i,'Seq_in_index'=>$j+1,'Column_name'=>$col];
+        return $this->indexFault&&$table==='m2_market_observations'?[]:$rows;
+    }
     public function __construct(array $rows){$this->rows=$rows;}
 }
 class MemoryStatement extends PDOStatement {
@@ -12,11 +20,18 @@ class MemoryStatement extends PDOStatement {
     public function execute(?array $params=null):bool {
         $params??=[];$sql=$this->sql;$this->db->state->sql[]=$sql;$this->affected=0;
         if(str_contains($sql,'GET_LOCK')||str_contains($sql,'RELEASE_LOCK')){$this->rows=[['value'=>'1']];return true;}
+        if(str_contains($sql,'AS runtime_kind')){
+            if($this->db->state->metadataError)throw new PDOException('synthetic_metadata_denied');
+            $this->rows=[];$names=array_keys($this->db->state->rows);sort($names);
+            foreach($names as $name)$this->rows[]=['runtime_kind'=>'table','table_name'=>$name,'non_unique'=>null,'key_name'=>null,'seq_in_index'=>null,'column_name'=>null];
+            foreach(['m2_asset_source_routes','m2_market_observations','m2_asset_identifiers'] as $table)
+                foreach($this->db->state->indexRows($table) as $r)$this->rows[]=['runtime_kind'=>'index','table_name'=>$table,
+                    'non_unique'=>$r['Non_unique'],'key_name'=>$r['Key_name'],'seq_in_index'=>$r['Seq_in_index'],'column_name'=>$r['Column_name']];
+            return true;
+        }
         if(str_contains($sql,'information_schema.tables')){$names=array_keys($this->db->state->rows);sort($names);$this->rows=array_map(static fn($n)=>['TABLE_NAME'=>$n],$names);return true;}
         if(preg_match('/SHOW (?:INDEX|KEYS) FROM `?(\w+)`?/',$sql,$m)){
-            $groups=match($m[1]){'m2_asset_source_routes'=>[['source_id','route_type','external_key','route_revision'],['asset_id','source_id','route_type','route_revision']],
-                'm2_market_observations'=>[['id'],['dedupe_key']],'m2_asset_identifiers'=>[['identifier_type','normalized_value','scope_key']],default=>[['id']]};
-            $this->rows=[];foreach($groups as $i=>$cols)foreach($cols as $j=>$col)$this->rows[]=['Non_unique'=>0,'Key_name'=>'key'.$i,'Seq_in_index'=>$j+1,'Column_name'=>$col];
+            $this->rows=$this->db->state->indexRows($m[1]);
             if(str_contains($sql,"Key_name='PRIMARY'"))$this->rows=[['Column_name'=>$m[1]==='m2_assets'?'entity_id':'id']];return true;
         }
         if(preg_match('/SHOW COLUMNS FROM `(\w+)`/',$sql,$m)){
@@ -70,13 +85,40 @@ for($i=0;$i<($in['history_size']??0);$i++)$state['m2_market_observations'][]=['i
 if(isset($in['bad_ledger']))$state['m2_schema_migrations'][2]['checksum']=str_repeat('0',64);
 if(isset($in['bad_unit']))$state['m2_units'][0]['scale_numerator']='99';
 $memory=new MemoryDatabase($state);$connections=0;$providers=0;
-$connect=static function()use($memory,&$connections,$in){$connections++;if(($in['fault']??'')==='readback'&&$connections===2)throw new RuntimeException('synthetic_readback_failure');return new MemoryConnection($memory);};
+$memory->metadataError=($in['fault']??'')==='metadata_error';$memory->indexFault=($in['fault']??'')==='bad_index';
+$reader=($in['reference']??false)?'Mosa2\\MarketPerformanceReference\\state':'Mosa2\\MarketLive\\runtimeState';
+$connect=static function()use($memory,&$connections,$in){$connections++;if(($in['fault']??'')==='readback'&&$connections===2)throw new RuntimeException('synthetic_readback_failure');if($connections===2){
+        if(($in['fault']??'')==='independent_route')$memory->rows['m2_asset_source_routes'][0]['enabled']='1';
+        if(($in['fault']??'')==='independent_observation')$memory->rows['m2_market_observations'][0]['price']='999.0000000000';
+    }return new MemoryConnection($memory);};
 $invoke=static function($config,$request)use($in,$memory,&$providers){
-    if($request['action']==='fetch'){$providers++;if(($in['fault']??'')==='provider'||($in['batch_fault_index']??-1)===$providers-1)throw new RuntimeException('synthetic_provider_failure');if(($in['fault']??'')==='drift')$memory->rows['m2_sources'][0]['enabled']='0';if(($in['fault']??'')==='ledger_drift')$memory->rows['m2_schema_migrations'][0]['applied_at']='2002-01-01 00:00:00.000000';return $in['acquired_batch'][$providers-1]??$in['acquired'];}
+    if($request['action']==='fetch'){$providers++;if(($in['fault']??'')==='provider'||($in['batch_fault_index']??-1)===$providers-1)throw new RuntimeException('synthetic_provider_failure');if(($in['fault']??'')==='drift')$memory->rows['m2_sources'][0]['enabled']='0';if(($in['fault']??'')==='ledger_drift')$memory->rows['m2_schema_migrations'][0]['applied_at']='2002-01-01 00:00:00.000000';if(($in['fault']??'')==='unit_drift')$memory->rows['m2_units'][0]['scale_numerator']='99';
+        if(($in['fault']??'')==='route_drift')$memory->rows['m2_asset_source_routes'][0]['priority']='99';
+        if(($in['fault']??'')==='schema_drift')$memory->rows['m2_extra']=[];
+        if(($in['fault']??'')==='index_drift')$memory->indexFault=true;
+        return $in['acquired_batch'][$providers-1]??$in['acquired'];}
     $reply=\Mosa2\MarketLive\bridge($config,$request);
+    if($request['action']==='replay'){
+        if(($in['fault']??'')==='late_ledger')$memory->rows['m2_schema_migrations'][0]['applied_at']='2003-01-01 00:00:00.000000';
+        if(($in['fault']??'')==='late_unit')$memory->rows['m2_units'][0]['scale_numerator']='99';
+        if(($in['fault']??'')==='late_route')$memory->rows['m2_asset_source_routes'][0]['priority']='99';
+        if(($in['fault']??'')==='late_index')$memory->indexFault=true;
+    }
     if(($in['fault']??'')==='replay'&&$request['action']==='replay')$reply['plan']['decision']='INSERT';return $reply;
 };
-if(($in['action']??'')==='acceptance'){
+if(($in['action']??'')==='states'){
+    $reports=[];$scoped=$in['batch']??[['manifest'=>$in['manifest']]];
+    foreach($scoped as $entry){
+        $p=new MemoryConnection($memory);$p->beginTransaction();$baseline=null;$phases=[];
+        for($i=0;$i<4;$i++){
+            if($i===3){$p->rollBack();$p=new MemoryConnection($memory);$p->beginTransaction();}
+            [$s,$phase]=\Mosa2\MarketPerformance\summarizePhase('state',$p,fn($db)=>$reader($db,$entry['manifest'],['schema_version'=>4]));
+            if($baseline===null)$baseline=$s;else \Mosa2\Phase2\same($s,$baseline,'offline_state_match');
+            $phases[]=$phase;
+        }
+        $p->rollBack();$reports[]=['state'=>$baseline,'phases'=>$phases];
+    }
+}elseif(($in['action']??'')==='acceptance'){
     require dirname(__DIR__).'/scripts/market_collector/actions_acceptance.php';
     $connect=static function()use($memory,&$connections,$in){$connections++;if(($in['fault']??'')==='authentication')throw new PDOException('synthetic');return new MemoryConnection($memory);};
     $invoke=static function($config,$request)use($in,$memory,&$providers){
@@ -94,8 +136,8 @@ if(($in['action']??'')==='acceptance'){
     try{\Mosa2\MarketLive\compareDelta($before,$after,['deltas'=>[]],[]);$detected=false;}catch(Throwable){$detected=true;}
     $reports=[['global_change_detected'=>$detected]];
 }elseif(isset($in['batch'])){
-    $reports=[\Mosa2\MarketBatch\execute($in['batch'],static fn($entry)=>\Mosa2\MarketLive\runtimeRun('unused',$in['config'],$entry['manifest'],$connect,$invoke))];unset($reports[0]['private_evidence']);
+    $reports=[\Mosa2\MarketBatch\execute($in['batch'],static fn($entry)=>\Mosa2\MarketLive\runtimeRun('unused',$in['config'],$entry['manifest'],$connect,$invoke,$reader))];unset($reports[0]['private_evidence']);
 }else{
-    $reports=[];for($i=0;$i<($in['runs']??1);$i++)$reports[]=\Mosa2\MarketLive\runtimeRun('unused',$in['config'],$in['manifest'],$connect,$invoke);
+    $reports=[];for($i=0;$i<($in['runs']??1);$i++)$reports[]=\Mosa2\MarketLive\runtimeRun('unused',$in['config'],$in['manifest'],$connect,$invoke,$reader);
 }
 echo json_encode(['reports'=>$reports,'queries'=>$memory->sql,'returned_rows'=>$memory->returned,'events'=>$memory->events,'providers'=>$providers,'state'=>$memory->rows],JSON_THROW_ON_ERROR);

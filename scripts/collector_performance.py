@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def php_diagnostic(port, env):
     config = dict(python=sys.executable, php='php', project=str(ROOT), runtime_path=env.get('PATH', ''),
-                  db_host='127.0.0.1', db_port=port, state_contract=dict(schema_version=4, allow_current=True))
+                  compare_runtime='--compare-runtime' in sys.argv, db_host='127.0.0.1', db_port=port, state_contract=dict(schema_version=4, allow_current=True))
     child_env = {key: env[key] for key in ('PATH', 'HOME', 'LANG') if key in env}
     child_env['PYTHONDONTWRITEBYTECODE'] = '1'
     command = ['php', str(ROOT/'scripts/market_collector/performance_diagnostic.php')]

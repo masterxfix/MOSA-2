@@ -168,9 +168,74 @@ function diagnose(string $password,array $config): array {
     }
     $report['configured_connection_ms']=$connections;$report['ok']=true;return $report;
 }
+
+/** One bounded same-run A/B comparison. Reference code is diagnostic-only. */
+function compareRuntime(string $password,array $config): array {
+    require_once __DIR__.'/performance_reference.php';
+    same($config['db_host'],'127.0.0.1','diagnostic_loopback');
+    check(is_int($config['db_port'])&&$config['db_port']>0&&$config['db_port']<=65535,'diagnostic_port');
+    $connections=[];$report=['ok'=>false,'mode'=>'runtime_metadata_comparison','provider_requests'=>0,'business_writes'=>0,'assets'=>[]];
+    $global=configured($password,$config,$connections);
+    try{
+        same((int)$global->query('SELECT @@session.transaction_read_only')->fetchColumn(),1,'diagnostic_server_read_only');
+        $scope=json_decode(file_get_contents(__DIR__.'/live_test_scope.json'),true,32,JSON_THROW_ON_ERROR);
+        [$items,$setup]=summarizePhase('bounded_scope_setup',$global,fn($db)=>manifests($db,$scope,$config['state_contract']));
+        $report['scope_setup']=$setup;
+    }finally{$global->rollBack();$global=null;}
+    foreach($items as $assetIndex=>$m){
+        progress('comparison_asset',$m['instrument']);$p=configured($password,$config,$connections);$baseline=null;$pairs=[];$fact=null;$plan=null;
+        try{
+            foreach(['preflight','transaction_recheck','before_commit_recheck','independent_readback_state'] as $i=>$label){
+                if($i===3){$p->rollBack();$p=null;$p=configured($password,$config,$connections);}
+                // Alternate A/B and B/A across checkpoints/assets; no concurrency.
+                $order=($i+$assetIndex)%2===0?['reference','optimized']:['optimized','reference'];
+                $states=[];$pair=['checkpoint'=>$label,'order'=>$order];
+                foreach($order as $mode){
+                    [$state,$phase]=summarizePhase($label.'_'.$mode,$p,fn($db)=>$mode==='reference'
+                        ?\Mosa2\MarketPerformanceReference\state($db,$m,$config['state_contract'])
+                        :runtimeState($db,$m,$config['state_contract']));
+                    $pair[$mode]=$phase;$states[$mode]=$state;
+                }
+                same($states['optimized'],$states['reference'],'comparison_state_equivalence');
+                if($baseline===null){
+                    $baseline=$states['reference'];$plan=completePlan($baseline,$m);
+                    same(completePlan($states['optimized'],$m),$plan,'comparison_plan_equivalence');
+                    same($plan['policy'],'USE_EXISTING_ROUTE','comparison_existing_route');
+                    $facts=boundedRows($p,'SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE asset_id=? AND source_id=? AND route_id=? ORDER BY id DESC LIMIT 2',
+                        [$plan['asset']['asset_id'],$plan['source']['source_id'],$plan['route']['route_id']],2);
+                    check($facts!==[],'comparison_existing_observation');$fact=$facts[0];
+                }else same($states['optimized'],$baseline,'comparison_checkpoint_drift');
+                if($i===3)exactObservation($p,$fact['id'],$fact);
+                $pair['identical']=true;$pairs[]=$pair;progress($label.'_compared',$m['instrument']);
+            }
+        }finally{if($p!==null&&$p->inTransaction())$p->rollBack();$p=null;}
+        $stored=array_intersect_key($fact,array_flip(array_merge(\Mosa2\Phase3O\CORE,\Mosa2\Phase3O\UNITS)));
+        $replay=bridge($config,['action'=>'replay','route'=>routeBinding($plan['route']['row']+['id'=>$plan['route']['route_id']]),
+            'stored'=>$stored,'created_at'=>$fact['created_at'],'existing'=>existing([$fact])]);
+        same($replay['plan']['decision'],'DUPLICATE_UNCHANGED','comparison_offline_replay');
+        $totals=[];
+        foreach(['reference','optimized'] as $mode){
+            $total=['wall_ms'=>0.0,'pdo_ms'=>0.0,'sql_executions'=>0,'pdo_calls'=>0,'returned_rows'=>0];
+            foreach($pairs as $pair){$phase=$pair[$mode];
+                foreach(['wall_ms','pdo_ms','pdo_calls','returned_rows'] as $key)$total[$key]+=$phase[$key];
+                foreach(['execute','query'] as $op)$total['sql_executions']+=$phase['by_operation'][$op]['calls']??0;
+            }$totals[$mode]=$total;
+        }
+        same($totals['reference']['sql_executions'],68,'comparison_reference_sql');
+        same($totals['optimized']['sql_executions'],56,'comparison_optimized_sql');
+        same($totals['reference']['pdo_calls'],188,'comparison_reference_pdo');
+        same($totals['optimized']['pdo_calls'],164,'comparison_optimized_pdo');
+        same($totals['reference']['returned_rows'],$totals['optimized']['returned_rows'],'comparison_returned_rows');
+        $report['assets'][]=['isin'=>$m['instrument'],'checkpoints'=>$pairs,'totals'=>$totals,
+            'improvement_percent'=>100.0*(1.0-$totals['optimized']['wall_ms']/$totals['reference']['wall_ms']),
+            'states_identical'=>true,'plans_identical'=>true,'independent_observation_readback'=>'PASS','offline_replay'=>'DUPLICATE_UNCHANGED'];
+    }
+    $report['configured_connection_ms']=$connections;$report['ok']=true;return $report;
+}
+
 function main(): void {
     ini_set('display_errors','0');ini_set('log_errors','0');
-    try{$in=json_decode(stream_get_contents(STDIN),true,32,JSON_THROW_ON_ERROR);$r=diagnose($in['password'],$in['config']);unset($in);
+    try{$in=json_decode(stream_get_contents(STDIN),true,32,JSON_THROW_ON_ERROR);$r=($in['config']['compare_runtime']??false)?compareRuntime($in['password'],$in['config']):diagnose($in['password'],$in['config']);unset($in);
         echo json_encode(['event'=>'result','report'=>$r],JSON_THROW_ON_ERROR)."\n";}
     catch(Throwable $e){echo json_encode(['event'=>'result','report'=>['ok'=>false,'failure_type'=>$e instanceof \PDOException?'DATABASE_OPERATION_FAILED':get_class($e),
         'provider_requests'=>0,'business_writes'=>0]],JSON_THROW_ON_ERROR)."\n";}

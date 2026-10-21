@@ -582,3 +582,184 @@ transaction/write APIs, required transaction ownership, actual bounded query
 shapes, separate operation/row/residual accounting, missing-secret rejection,
 secret-output rejection, manual-only final workflow and the ten-SELECT budget.
 No production collector logic or existing acceptance workflow is changed.
+
+
+## Runtime metadata round-trip consolidation — 21 October 2026
+
+This change addresses the repeated metadata I/O identified by diagnostic
+[39553694338](https://github.com/masterxfix/MOSA-2/actions/runs/39553694338).
+It changes the shared runtime path, with no asset-specific cases or cache.
+
+### Implementation and safety
+
+Previously each runtimeContract call retrieved the database table set in one
+query and the three required tables' indexes in three SHOW INDEX queries.
+runtimeMetadata now retrieves those same relevant metadata fields in one
+UNION ALL SELECT over information_schema.tables and information_schema.statistics.
+The table branch retains the original DATABASE() scope without a table-name
+prefix filter. The index branch is restricted to the same three tables.
+All unique-key column groups are still reconstructed by index name and sequence
+and validated by the unchanged fail-closed checks. Nonunique indexes do not
+satisfy uniqueness requirements. An unavailable metadata query or absent unique
+group fails the runtime; there is no silent SHOW/cached fallback.
+
+No metadata is retained between calls, assets, transactions or connections.
+All four runtimeState checkpoints remain: initial preflight, transaction recheck,
+before-commit recheck and independent state readback. The rollback path also
+performs a fresh independent state read. Ledger rows/checksums and all unit
+definitions are reread in full at every checkpoint; identity, source, route
+bindings, both historical route-conflict probes, bounded fact reads, exact dedupe,
+writer replay, observation readbacks, identifier lock, commit/rollback and
+sequential stop-on-failure behavior are unchanged. The public runtime entry point
+fixes the optimized reader; injectable readers are explicit offline test seams.
+The old metadata reader exists only in performance_reference.php for comparisons,
+with the same contract/state validation code, and is never selected as a fallback.
+
+Proof mode, exhaustive snapshots, migrations, indexes, Current and Bars paths are
+unchanged. A cache of schema/ledger/units was rejected here because no guaranteed
+invalidation contract protects those values from later changes. This conservative
+change removes round trips while continuing to observe metadata at every original
+checkpoint. It does not introduce stronger guarantees about concurrent changes
+between SQL statements than the previous implementation had.
+
+### Evidence definitions
+
+The offline suite runs the existing runtime integrity tests against both readers,
+then compares actual state results and full runtime decisions for 1, 2 and 5
+synthetic assets with transactional PDO doubles and the real local writer bridge.
+Provider acquisitions in these tests are fixed offline fixtures, never HTTP.
+Additional faults cover ledger/unit/route/schema/index changes after preflight
+and immediately before commit; missing/denied metadata; independent route and
+observation corruption; INSERT/duplicate/corrupt facts; rollback and middle-item
+failure. Writes and Current/Bars contents are compared between paths.
+
+The live comparison reuses collector_performance.py, the fixed existing Actions
+configuration, pinned host-key validation and SSH forwarding. The --compare-runtime
+mode calls only the read-only diagnostic, never runtimeRun, a provider fetch or
+writer apply. Each of the five already qualified assets is checked at the same
+four checkpoints, with alternating reference/optimized order and an independent
+second connection for the fourth checkpoint. State and completePlan results must
+be identical; an existing Observation is read independently and replayed offline.
+The server READ ONLY transaction, diagnostic SQL allowlist and secret-output guard
+remain in force. Setup, connection and existing-fact/replay costs are outside the
+state-check comparison timers. There is exactly one live comparison, with no
+warmup/repeated full collector batch.
+
+The GitHub connector exposes no workflow_dispatch operation. Execution therefore
+uses a temporary, exact-branch push trigger on the isolated verification branch,
+with contents:read permissions, run_attempt == 1 and a strict repository/ref/event
+job guard. All offline tests must pass before the secret-bearing read-only step.
+The committed performance workflow on main remains workflow_dispatch-only; the
+temporary workflow is excluded from the completion commit and its branch reset
+removes the trigger after the run.
+
+### Successful offline and live results
+
+Run [39555265402](https://github.com/masterxfix/MOSA-2/actions/runs/39555265402),
+job 119073457499, attempt 1, revision
+3b6aa5bd27c75e7480d54c173c312eb61c14a0d2 completed successfully.
+All 46 relevant tests passed: 15 existing optimized-runtime tests (38.442 s),
+22 comparison/reference tests (107.593 s, including the same 15 integrity tests
+against the reference reader), and nine diagnostic safety tests (1.369 s).
+All five PHP lint checks passed. Runner: Ubuntu 24.04, PHP 8.4.26, region westus3.
+
+Offline measured operation counts, for the four state checks only:
+
+| Synthetic assets | SQL before | SQL after | PDO before | PDO after | Returned rows before/after |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 68 | 56 | 188 | 164 | 188 / 188 |
+| 2 | 136 | 112 | 376 | 328 | 376 / 376 |
+| 5 | 340 | 280 | 940 | 820 | 940 / 940 |
+
+The offline row count depends on the deliberately small synthetic index fixture;
+it is not the live row count. Both paths returned identical states per asset.
+Full offline runtime results also matched for 1/2/5 assets: decisions, identifiers,
+deltas, transaction events and business-write SQL. Only generated created_at
+timestamps are excluded when comparing newly created rows across separate runs.
+INSERT followed by DUPLICATE_UNCHANGED, conflicts, corrupt observations, early
+and late drift, independent corruption, rollback and partial-batch stop cases
+passed. Existing Current/Bars sentinel rows remained unchanged, and successful
+offline INSERT paths had exactly one Observation INSERT per asset, matching the
+old path; duplicate paths added none.
+
+Live timings below sum all four state checks per asset. They do not include
+connection/setup, provider, writer, transaction control or replay time.
+
+| Asset | Reference checks s | Optimized checks s | Saved s | Improvement |
+| --- | ---: | ---: | ---: | ---: |
+| DroneShield | 30.769 | 25.443 | 5.326 | 17.31% |
+| BYD | 31.021 | 25.440 | 5.581 | 17.99% |
+| Ubtech Robotics | 30.959 | 25.442 | 5.517 | 17.82% |
+| Carl Zeiss Meditec | 31.026 | 25.089 | 5.937 | 19.14% |
+| PNE AG | 30.419 | 25.451 | 4.969 | 16.33% |
+| Mean per asset | 30.839 | 25.373 | 5.466 | 17.72% |
+
+The aggregate improvement is computed as
+100 × (1 − 126.864014327 / 154.193654934) = 17.72423%.
+All five assets improved, with individual reductions of 16.33–19.14%.
+
+| Four checks, per live asset | Reference | Optimized | Reduction |
+| --- | ---: | ---: | ---: |
+| SQL executions | 68 | 56 | 12 / 17.65% |
+| PDO API calls, including fetches | 188 | 164 | 24 / 12.77% |
+| Fetched rows, including schema/index metadata | 356 | 356 | 0 |
+
+At a single checkpoint these counts are 17 → 14 SQL executions,
+47 → 41 PDO API calls and 89 → 89 returned rows. The three eliminated
+query/fetchAll pairs per checkpoint account for the 24-call reduction per asset.
+Prepared identity/ledger/unit/source/route reads are not removed.
+
+Checkpoint wall times, seconds (reference / optimized):
+
+| Asset | Initial preflight | Transaction recheck | Before-commit recheck | Independent state readback |
+| --- | ---: | ---: | ---: | ---: |
+| DroneShield | 7.599 / 6.403 | 7.782 / 6.407 | 7.606 / 6.405 | 7.782 / 6.229 |
+| BYD | 7.779 / 6.226 | 7.796 / 6.404 | 7.833 / 6.402 | 7.612 / 6.408 |
+| Ubtech Robotics | 7.601 / 6.401 | 7.779 / 6.403 | 7.791 / 6.405 | 7.787 / 6.233 |
+| Carl Zeiss Meditec | 7.801 / 6.227 | 7.780 / 6.229 | 7.821 / 6.227 | 7.624 / 6.405 |
+| PNE AG | 7.598 / 6.410 | 7.780 / 6.406 | 7.262 / 6.406 | 7.779 / 6.229 |
+
+All 20 checkpoint comparisons returned identical states; completePlan equality
+passed for each of the five assets. Each asset's existing Observation was
+read exactly on the independent connection, and its stored-fact offline replay
+returned DUPLICATE_UNCHANGED. These are read-only acceptance checks, not new
+Observation commits.
+
+SSH, fingerprint verification and DB tunnel reported PASS. The result reports
+provider_requests = 0, business_writes = 0, ok = true and secrets_in_log =
+NEIN/PASS. No new secret, password input, remote file/deployment, production action
+or additional live run was used. The database path was server-enforced read-only;
+Current/Bars were not written. No new full-database before/after checksum was
+taken, so global absence of unrelated concurrent writes is not claimed.
+
+### Limits and remaining opportunities
+
+The measured 17.72% improvement applies to the four runtime-state checks.
+The historical full collector average of about 37.6 seconds was not remeasured:
+a full collector run, provider request, INSERT and commit were forbidden here.
+It would be incorrect to present 25.37 seconds as the new full asset runtime
+or 17.72% as a measured full-collector improvement.
+
+The earlier diagnosis ran in centralus (25.1–29.1 s for its four checks), the
+historical collector in westcentralus, and this comparison in westus3.
+Only the paired same-run comparison supports the percentage above. A/B order
+alternates to reduce simple ordering bias, but this remains one bounded run
+with no statistical confidence interval or claim for other network conditions.
+The reference uses the previous four metadata statements with unchanged
+contract/state validation; it materializes the metadata at the beginning of
+the contract call, rather than reproducing the historical interleaving with
+ledger/unit reads. No historical per-phase timing is reconstructed.
+
+The change retains every checkpoint and all data checks. It does not solve
+pre-existing concurrency limitations between separate statements, or provide
+new protection against a valid metadata change that the previous contract
+would also accept. Missing required metadata and invalid unique groups still
+fail closed. DB execution, network, SSH and driver time remain combined within
+PDO wall time.
+
+The remaining serial prepared catalog/fact reads and the two configured
+connections per asset are possible future investigation points. Any further
+bundling must retain excess-row/conflict detection, full drift visibility and
+independent readback; a schema/unit cache needs a proven invalidation mechanism.
+No such further change, connection reuse, parallelism, index change or scheduler
+is included in this commit.
