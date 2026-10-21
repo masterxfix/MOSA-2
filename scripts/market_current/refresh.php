@@ -16,33 +16,36 @@ function approvalScope(array $state,array $prepared,array $approvals): void {
 }
 
 /** At most two candidates per explicitly approved physical route; no provider I/O. */
-function inputs(PDO $p,array $approvals,string $now): array {
+function inputs(PDO $p,array $approvals,string $now,bool $lock=false): array {
+    $suffix=$lock?' FOR UPDATE':'';
     check(count($approvals)>0&&count($approvals)<=10,'current_scope');$items=[];$seen=[];$assets=[];
     foreach($approvals as $approval){
         $id=$approval['route_id'];check(is_string($id)&&preg_match('/^[1-9][0-9]*$/D',$id)===1&&!isset($seen[$id]),'current_route_scope');$seen[$id]=true;
-        $q=$p->prepare('SELECT * FROM m2_asset_source_routes WHERE id=?');$q->execute([$id]);$route=$q->fetch();check($route!==false,'current_route_missing');$route=\Mosa2\MarketLive\strings($route);
+        $q=$p->prepare('SELECT * FROM m2_asset_source_routes WHERE id=?'.$suffix);$q->execute([$id]);$route=$q->fetch();check($route!==false,'current_route_missing');$route=\Mosa2\MarketLive\strings($route);
         check(!isset($assets[$route['asset_id']]),'current_duplicate_asset');$assets[$route['asset_id']]=true;
-        $q=$p->prepare("SELECT a.entity_id FROM m2_assets a JOIN m2_entities e ON e.id=a.entity_id JOIN m2_sources s ON s.id=? WHERE a.entity_id=? AND e.status='active' AND s.enabled=1 AND s.source_type='market_data'");$q->execute([$route['source_id'],$route['asset_id']]);check($q->fetchColumn()!==false,'current_reference_status');
-        $q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE asset_id=? AND source_id=? AND route_id=? AND observation_format_version=2 ORDER BY market_at DESC,observed_at DESC,id DESC LIMIT 2');
+        $q=$p->prepare("SELECT a.entity_id FROM m2_assets a JOIN m2_entities e ON e.id=a.entity_id JOIN m2_sources s ON s.id=? WHERE a.entity_id=? AND e.status='active' AND s.enabled=1 AND s.source_type='market_data'".$suffix);$q->execute([$route['source_id'],$route['asset_id']]);check($q->fetchColumn()!==false,'current_reference_status');
+        $q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE asset_id=? AND source_id=? AND route_id=? AND observation_format_version=2 ORDER BY market_at DESC,observed_at DESC,id DESC LIMIT 2'.$suffix);
         $q->execute([$route['asset_id'],$route['source_id'],$id]);$facts=array_map('Mosa2\\MarketLive\\strings',$q->fetchAll());
-        $q=$p->prepare('SELECT *,HEX(observation_dedupe_key) AS observation_dedupe_key FROM m2_market_current WHERE asset_id=?');$q->execute([$route['asset_id']]);$current=$q->fetch();$old=null;
-        if($current!==false){$current=\Mosa2\MarketLive\strings($current);$q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE id=? AND asset_id=?');$q->execute([$current['observation_id'],$route['asset_id']]);$old=$q->fetch();check($old!==false,'current_origin_missing');$old=\Mosa2\MarketLive\strings($old);}
+        $q=$p->prepare('SELECT *,HEX(observation_dedupe_key) AS observation_dedupe_key FROM m2_market_current WHERE asset_id=?'.$suffix);$q->execute([$route['asset_id']]);$current=$q->fetch();$old=null;
+        if($current!==false){$current=\Mosa2\MarketLive\strings($current);$q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE id=? AND asset_id=?'.$suffix);$q->execute([$current['observation_id'],$route['asset_id']]);$old=$q->fetch();check($old!==false,'current_origin_missing');$old=\Mosa2\MarketLive\strings($old);}
         $items[]=['route'=>$route,'approval'=>$approval,'facts'=>$facts,'current'=>$current===false?null:$current,'current_fact'=>$old,'now'=>$now];
     }return $items;
 }
-function plans(array $config,array $items): array {
-    $proc=proc_open([$config['python'],$config['project'].'/scripts/market_current/planner.py'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,$config['project'],['PATH'=>$config['runtime_path'],'PYTHONDONTWRITEBYTECODE'=>'1']);check(is_resource($proc),'current_planner_process');
-    try{$wire=json_encode(['items'=>$items],JSON_THROW_ON_ERROR);check(fwrite($pipes[0],$wire)===strlen($wire),'current_planner_input');fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);same(proc_close($proc),0,'current_planner_exit');$proc=null;same($err,'','current_planner_stderr');}
+function plans(array $config,array $items,?array $takeover=null): array {
+    $script=$takeover===null?'/scripts/market_current/planner.py':'/scripts/market_current/takeover.py';
+    $proc=proc_open([$config['python'],$config['project'].$script],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,$config['project'],['PATH'=>$config['runtime_path'],'PYTHONDONTWRITEBYTECODE'=>'1']);check(is_resource($proc),'current_planner_process');
+    try{$wire=json_encode(['items'=>$items,'takeover'=>$takeover],JSON_THROW_ON_ERROR);check(fwrite($pipes[0],$wire)===strlen($wire),'current_planner_input');fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);same(proc_close($proc),0,'current_planner_exit');$proc=null;same($err,'','current_planner_stderr');}
     finally{if(is_resource($proc))proc_close($proc);}
     $reply=json_decode($out,true,512,JSON_THROW_ON_ERROR);check(($reply['ok']??false)===true,'current_plan_'.($reply['failure']??'invalid'));same(count($reply['plans']),count($items),'current_plan_count');return $reply['plans'];
 }
 /** Current-only atomic transaction; all other business tables must remain identical. */
-function refresh(string $password,array $config,array $approvals): array {
-    $p=connection($password);$locked=false;$committed=false;$before=null;$after=null;
+function transaction(PDO $p,callable $readInputs,callable $makePlans,callable $capture): array {
+    $locked=false;$committed=false;$before=null;$after=null;
     try{
-        $q=$p->query("SELECT GET_LOCK('m2-current-refresh',0)");$locked=(int)$q->fetchColumn()===1;check($locked,'current_lock_busy');$p->beginTransaction();
-        $before=\Mosa2\MarketLive\snapshot($p,CONTRACT);
-        $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');$items=inputs($p,$approvals,$now);$plans=plans($config,$items);$expected=$before['m2_market_current'];
+        $q=$p->query("SELECT GET_LOCK('m2-current-refresh',0)");$locked=(int)$q->fetchColumn()===1;check($locked,'current_lock_busy');
+        $p->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');check($p->beginTransaction()&&$p->inTransaction(),'current_transaction_start');
+        $before=$capture($p);
+        $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');$items=$readInputs($p,$now);$plans=$makePlans($items);$expected=$before['m2_market_current'];
         foreach($plans as $i=>$plan){
             if(in_array($plan['decision'],['INSERT','UPDATE'],true)){
                 $values=$plan['values'];$fields=array_keys($values);$expressions=array_map(static fn($f)=>$f==='observation_dedupe_key'?'UNHEX(?)':'?',$fields);
@@ -52,13 +55,40 @@ function refresh(string $password,array $config,array $approvals): array {
                 $expected=array_values(array_filter($expected,static fn($r)=>$r['asset_id']!==$plan['values']['asset_id']));$expected[]=$plan['values'];
             }else check(in_array($plan['decision'],['MISSING','UNCHANGED','UNCHANGED_OLDER'],true),'current_decision');
         }
-        $after=\Mosa2\MarketLive\snapshot($p,CONTRACT);$actual=$after['m2_market_current'];
+        $after=$capture($p);$actual=$after['m2_market_current'];
         $sort=static function(&$rows){usort($rows,static fn($a,$b)=>strlen($a['asset_id'])<=>strlen($b['asset_id'])?:strcmp($a['asset_id'],$b['asset_id']));foreach($rows as &$r)ksort($r);};$sort($expected);$sort($actual);same($actual,$expected,'current_exact_readback');
         $other=$after;$other['m2_market_current']=$before['m2_market_current'];same($other,$before,'current_unplanned_delta');same($p->commit(),true,'current_commit');$committed=true;
     }finally{if($p->inTransaction())$p->rollBack();if($locked)$p->query("SELECT RELEASE_LOCK('m2-current-refresh')");$p=null;}
-    $read=connection($password);unset($password);$read->exec('SET TRANSACTION READ ONLY');$read->beginTransaction();
-    try{same(\Mosa2\MarketLive\snapshot($read,CONTRACT),$after,'current_independent_readback');}finally{$read->rollBack();$read=null;}
-    return ['committed'=>$committed,'readback'=>'PASS','decisions'=>array_column($plans,'decision'),'private_evidence'=>['before'=>$before,'after'=>$after,'inputs'=>$items,'plans'=>$plans]];
+    return ['committed'=>$committed,'readback'=>'PENDING','decisions'=>array_column($plans,'decision'),'private_evidence'=>['before'=>$before,'after'=>$after,'inputs'=>$items,'plans'=>$plans]];
+}
+function verifyReadback(array $result,array $actual,?array $replay=null): array {
+    same($actual,$result['private_evidence']['after'],'current_independent_readback');
+    if($replay!==null)same(array_column($replay,'decision'),array_fill(0,5,'UNCHANGED'),'current_replay');
+    $result['readback']='PASS';return $result;
+}
+function refresh(string $password,array $config,array $approvals,?array $takeover=null): array {
+    $connect=static fn()=>connection($password,'127.0.0.1',(int)($config['db_port']??3307));
+    $capture=static function(PDO $db)use($takeover){
+        $state=\Mosa2\MarketLive\snapshot($db,CONTRACT);
+        if($takeover!==null)\Mosa2\CurrentTakeover\atomicContract($db);
+        return $state;
+    };
+    if($takeover!==null)require_once __DIR__.'/takeover.php';
+    $readInputs=$takeover===null?static fn(PDO $db,string $now)=>inputs($db,$approvals,$now):
+        static fn(PDO $db,string $now)=>\Mosa2\CurrentTakeover\fresh($db,$now);
+    $result=transaction($connect(),$readInputs,static fn($items)=>plans($config,$items,$takeover),$capture);
+    $read=$connect();unset($password);
+    $read->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    $read->exec('SET SESSION TRANSACTION READ ONLY');check($read->beginTransaction()&&$read->inTransaction(),'readback_transaction_start');
+    try{
+        same((string)$read->query('SELECT @@session.transaction_read_only')->fetchColumn(),'1','readback_read_only');
+        $actual=$capture($read);$replay=null;
+        if($takeover!==null){
+            $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
+            $replayItems=inputs($read,$approvals,$now);$replay=plans($config,$replayItems);
+        }
+        return verifyReadback($result,$actual,$replay);
+    }finally{if($read->inTransaction())$read->rollBack();$read=null;}
 }
 /** Existing sequential collector first; Current projection only after COMPLETE. */
 function run(string $root,string $password,array $config,array $entries,array $approvals): array {

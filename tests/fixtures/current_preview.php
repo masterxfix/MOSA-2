@@ -39,7 +39,8 @@ class PreviewConnection extends PDO {
     public array $calls=[],$events=[];private bool $active=false;
     public function __construct(public array $state){}
     public function prepare(string $query,array $options=[]):PDOStatement|false {
-        if(!str_starts_with($query,'SELECT ')||preg_match('/\b(?:INTO|OUTFILE|DUMPFILE|UPDATE|DELETE|INSERT)\b/',$query))throw new RuntimeException('write attempt');
+        $readSql=str_ends_with($query,' FOR UPDATE')?substr($query,0,-11):$query;
+        if(!str_starts_with($readSql,'SELECT ')||preg_match('/\b(?:INTO|OUTFILE|DUMPFILE|UPDATE|DELETE|INSERT)\b/',$readSql))throw new RuntimeException('write attempt');
         return new PreviewStatement($this,$query);
     }
     public function exec(string $sql):int|false {if($sql!=='SET TRANSACTION READ ONLY')throw new RuntimeException('non-readonly control');$this->events[]=$sql;return 0;}
@@ -95,6 +96,11 @@ if($request['action']==='guard'){
         'unchanged'=>$before===$db->state,'active'=>$db->inTransaction()],JSON_THROW_ON_ERROR);exit;
 }
 $db=new PreviewConnection($request['items']);$before=$db->state;
+if($request['action']==='fresh'){
+    require_once $argv[1].'/scripts/market_current/takeover.php';$db->beginTransaction();
+    try{$items=\Mosa2\CurrentTakeover\fresh($db,$request['now']);}finally{$db->rollBack();}
+    echo json_encode(['items'=>$items,'calls'=>$db->calls,'unchanged'=>$before===$db->state],JSON_THROW_ON_ERROR);exit;
+}
 $db->exec('SET TRANSACTION READ ONLY');$db->beginTransaction();
 try{$snapshot=\Mosa2\CurrentPreview\gather($db,$request['now']);}finally{$db->rollBack();}
 echo json_encode(['snapshot'=>$snapshot,'calls'=>$db->calls,'events'=>$db->events,'unchanged'=>$before===$db->state],JSON_THROW_ON_ERROR);

@@ -23,7 +23,7 @@ DIAGNOSTICS = {'MYSQL_80_PROPERTIES_CONFIRMED','TRANSACTION_READ_ONLY_VARIABLE_S
                'LEGACY_SESSION_DEFAULT_READ_WRITE'}
 
 
-def execute(env, paramiko):
+def execute(env, paramiko, private_consumer=None):
     if env.get('GITHUB_RUN_ATTEMPT') != '1':
         return dict(real_data_checked=False, failure='FIRST_ATTEMPT_ONLY', business_writes=0, provider_requests=0)
     phase = 'EXISTING_SSH_ACCESS_UNAVAILABLE'
@@ -51,6 +51,8 @@ def execute(env, paramiko):
             raise ValueError('read-only proof missing')
         phase = 'SNAPSHOT_QUALIFICATION_FAILED'
         report = preview.snapshot_preview(reply['snapshot'])
+        if private_consumer is not None:
+            return private_consumer(reply['snapshot'],report)
         # Full private preview stays in memory; only operational decisions leave this process.
         return dict(real_data_checked=True, read_only_confirmed=True, diagnostics=diagnostics, **preview.public_summary(report))
     except Exception:

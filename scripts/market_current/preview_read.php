@@ -7,8 +7,8 @@ require_once dirname(__DIR__,2).'/api/observations_read.php';
 require_once __DIR__.'/read_access.php';
 
 /** Existing bounded resolver + existing Current inputs, in one caller-owned RO snapshot. */
-function gather(PDO $p,string $now): array {
-    $q=$p->prepare(\Mosa2\ObservationRead\scopeSql());$items=[];
+function gather(PDO $p,string $now,bool $lock=false): array {
+    $q=$p->prepare(\Mosa2\ObservationRead\scopeSql().($lock?' FOR UPDATE':''));$items=[];
     foreach(\Mosa2\ObservationRead\SCOPE as $isin=>$name){
         $entry=['isin'=>$isin,'name'=>$name,'input'=>null,'scope_rows'=>[]];
         try{
@@ -17,7 +17,7 @@ function gather(PDO $p,string $now): array {
             if(count($rows)===2)check((int)$rows[1]['route_revision']<(int)$rows[0]['route_revision'],'qualified_route_ambiguous');
             $entry['scope_rows']=$rows;
             // An ID is query scope, never a newly generated route approval.
-            $entry['input']=\Mosa2\MarketCurrent\inputs($p,[['route_id'=>$rows[0]['route_id']]],$now)[0];
+            $entry['input']=\Mosa2\MarketCurrent\inputs($p,[['route_id'=>$rows[0]['route_id']]],$now,$lock)[0];
             $entry['input']['approval']=null;
         }catch(\Throwable){$entry['blocked_reason']='READ_SCOPE_OR_INPUT_REJECTED';}
         $items[]=$entry;

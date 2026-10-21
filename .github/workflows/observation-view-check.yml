@@ -12,8 +12,28 @@ on:
         type: boolean
         default: false
 
+      takeover_mode:
+        description: Preparation only unless explicit plan-bound authorization is supplied
+        type: choice
+        options: [NONE, PREPARE, APPLY]
+        default: NONE
+      recipient_public_key:
+        description: Public RSA recipient DER in base64; never a private key
+        type: string
+      plan_source_run:
+        description: Successful PREPARE run containing the encrypted plan
+        type: string
+      authorization:
+        description: Exact plan-bound EXECUTE_CURRENT_ONCE phrase, including disabled-route permission
+        type: string
+
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: mosa2-current-once
+  cancel-in-progress: false
 
 jobs:
   offline:
@@ -39,18 +59,17 @@ jobs:
           extensions: pdo_mysql
           coverage: none
           tools: none
+      - name: Existing pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Current, Observations, Quote Selection and preview offline tests
         run: |
           php -l scripts/market_current/preview_read.php
           php -l scripts/market_current/read_bundle.php
           php -l tests/fixtures/current_preview.php
-          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover
           git diff --exit-code
-      - name: Existing pinned SSH client
-        if: inputs.read_inventory
-        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: One fileless SELECT-only inventory; public output excludes private values
-        if: inputs.read_inventory
+        if: inputs.read_inventory && inputs.takeover_mode == 'NONE'
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
@@ -59,3 +78,36 @@ jobs:
           MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
           MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
         run: python3 -B scripts/current_preview_remote.py
+      - name: Claim an explicitly requested execution attempt, before any database connection
+        if: inputs.takeover_mode == 'APPLY'
+        run: python3 -c "import os,pathlib;pathlib.Path(os.environ['RUNNER_TEMP'],'current-takeover-claim.txt').write_text('ONE_ATTEMPT_NO_RETRY')"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: inputs.takeover_mode == 'APPLY'
+        with:
+          name: current-takeover-consumed-${{ inputs.plan_source_run }}
+          path: ${{ runner.temp }}/current-takeover-claim.txt
+          retention-days: 7
+          if-no-files-found: error
+      - name: Prepare exact pending plan or explicitly authorize the existing Current writer
+        if: inputs.takeover_mode != 'NONE'
+        env:
+          TAKEOVER_MODE: ${{ inputs.takeover_mode }}
+          TAKEOVER_RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}
+          TAKEOVER_PLAN_SOURCE_RUN: ${{ inputs.plan_source_run }}
+          TAKEOVER_AUTHORIZATION: ${{ inputs.authorization }}
+          GH_TOKEN: ${{ github.token }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: python3 -B scripts/current_takeover_remote.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: inputs.takeover_mode == 'PREPARE'
+        with:
+          name: current-takeover-sealed-plan
+          path: ${{ runner.temp }}/current-takeover-plan.sealed.json
+          retention-days: 7
+          if-no-files-found: error
