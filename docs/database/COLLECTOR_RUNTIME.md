@@ -2105,3 +2105,89 @@ Testlauf dieses Auftrags.
 Keine Verzeichnisanlage, kein Upload, keine gespeicherte Plesk-Änderung,
 kein SSH-/SFTP-/DB-/Provider-/Collector-Lauf und keine Hosteranfrage.
 Privates Deployment und Ausführung bleiben technisch gesperrt.
+
+
+## Praktische Plesk-Prüfung: Verzeichnisanlage empfohlen (21.10.2026)
+
+Die bestehende Chrome-Erweiterungsverbindung und die vorhandene oneHome-/
+Plesk-Anmeldung wurden jetzt erfolgreich genutzt, ohne neue Browserinstanz,
+Passwort oder Nutzeraktion. Die zuvor offene Browserprüfung ist damit erledigt.
+Gelesen wurden nur Account-/Hosting-Metadaten; keine Dateimanager, Websiteinhalte
+oder Datenbanken geöffnet, keine Einstellungen gespeichert.
+
+**Öffentliche Pfadzuordnung: PASS im Umfang aller in der Plesk-Übersicht
+ausgewiesenen Zuordnungen.** „Websites & Domains“ zeigte vollständig 8 Elemente,
+passend zu den Ressourcenangaben 6 Domains und 2 Subdomains. Die angezeigten
+Verzeichnisse („Dateimanager unter“, ohne diesen zu öffnen), relativ zum bereits
+bestätigten Accountpfad, waren:
+
+| Plesk-Eintrag | Öffentlich zugeordnetes Verzeichnis |
+| --- | --- |
+| handel.scharwerk.de | httpdocs/handel.scharwerk.de |
+| privat.scharwerk.de | httpdocs/privat.scharwerk.de |
+| scharwerk.de | httpdocs/scharwerk.de |
+| mosa.scharwerk.de | mosa.scharwerk.de |
+| mosa2-test.scharwerk.de | mosa2-test.scharwerk.de |
+| schmitfranz.de | httpdocs/schmitfranz.de |
+| web213.server10.configcenter.info | httpdocs |
+| zen.scharwerk.de | httpdocs/zen.scharwerk.de |
+
+Für die Account-Hauptdomain wurde zusätzlich das Dokumentstammfeld httpdocs
+in den Hosting-Einstellungen gelesen. Damit liegt der geplante Root
+/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector
+außerhalb sämtlicher oben ausgewiesener öffentlicher Verzeichnisbäume.
+Keine angezeigte Zuordnung bindet private oder mosa2-collector öffentlich ein.
+Versteckte serverweite Alias-/Bind-/Proxyregeln sind damit nicht vollständig
+auditiert; eine solche tatsächliche Einbindung wurde aber auch nicht festgestellt.
+Dies ist keine Behauptung absoluter Isolation gegenüber jeder denkbaren URL.
+
+**Speicherplatz: 64 MiB plausibel nutzbar.** Plesk zeigte aktuell WEB M 3.0,
+8262,2 MB genutzt von 150 GB; in den Webspace-Einstellungen ist das
+Datenträgerkontingent aktiviert und mit 153600 MB angegeben. Innerhalb dieser
+Plesk-Anzeigen verbleiben rechnerisch 145337,8 MB. Die vom Nutzer bereits
+bestätigte aktuelle oneHome-Anzeige beträgt 7,58 GB von 150 GB, also dort
+rechnerisch 142,42 GB Reserve. Die unterschiedlichen Anzeigen werden nicht
+gleichgesetzt. Beide sprechen deutlich für ausreichenden Spielraum für das
+gesamte anfängliche MOSA-2-Budget von 64 MiB = 67108864 Byte. Das ist eine
+praktische Kapazitätsbewertung, keine Vorausreservierung. Ein Inode-Limit wurde
+in der gelesenen Ressourcenansicht nicht ausgewiesen; es bleibt unbekannt,
+ohne dass ein konkreter Inode-/Quota-Fehler beobachtet wurde.
+
+**Benutzerrechte: kein konkreter Anlageblocker.** Plesk bestätigt web213 als
+Systembenutzer, gemeinsame Webspace-Einstellungen für 8 Domains und
+/bin/bash (chrooted). Hosting-Verwaltung und SSH-Verwaltung sind erlaubt.
+Numerische Gruppen zeigt diese Oberfläche nicht. Der vorhandene Nachweis
+10317 als UID, primäre GID 1003 und Account-Vorfahre 10317:1002 / 0710 wird
+übernommen und nicht erneut per SSH getestet. Der Eigentümer besitzt damit
+am vorhandenen Account-Vorfahren die erforderlichen POSIX-Verzeichnisrechte.
+
+Für einen später ausdrücklich genehmigten Anlageauftrag gilt weiterhin:
+neue private Verzeichnisse 10317:1003 / 0700, einschließlich des fehlenden
+Zwischenordners private, des Roots mosa2-collector und ausschließlich seiner
+vier initialen Unterordner releases, staging, runs und locks. Vor Anlage
+Identität/Pfad/Vorfahren prüfen, danach tatsächliche Eigentümer, Gruppe und
+Modi zurückprüfen. Bei anderer Gruppe, Symlink, unerwartetem Objekt,
+Zugriffs-/Quota-Fehler stoppen; keine automatische chown-/Rechtekorrektur.
+
+Verbleibende tatsächliche Betriebsgrenze ist die gemeinsame UID: vorhandene
+Webanwendungen mit derselben UID können durch 0700 nicht voneinander isoliert
+werden. In der gelesenen Apache-/nginx-Ansicht der Account-Hauptdomain war
+„Fähigkeit, symbolischen Verknüpfungen zu folgen, einschränken“ nicht aktiviert;
+das allein belegt keine bestehende Verknüpfung zum privaten Ziel. Künftige
+öffentliche Symlinks/Zuordnungen zum privaten Bereich müssen vermieden werden.
+Keine Webserver- oder sonstige Sicherheitseinstellung wurde geändert.
+Nicht sichtbare Serverregeln und Inodegrenzen bleiben unbestätigt, sind für
+die reine kleine Verzeichnisanlage aber keine nachgewiesenen Blocker.
+
+**Empfehlung: VERZEICHNISANLAGE FREIGEBEN**, eng auf die genannten sechs Ordner,
+0700, den Eigentümervertrag und insgesamt maximal 64 MiB begrenzt. Die vorherige
+pauschale Zurückstellung bis zu einer Hosterantwort wird für diese Testphase
+durch die aktuelle praktische Bewertung ersetzt. Kein Kontakt zu Dogado nötig,
+solange die spätere Anlage ihre normalen Pfad-/Eigentümer-/Fehlerkontrollen
+besteht. Diese Empfehlung führt selbst noch keine Anlage aus und erteilt
+weder Upload- noch Collector-Freigabe; das Deploymentprofil bleibt gesperrt.
+
+Keine zusätzlichen SSH-/Actions-Läufe, Laufzeit- oder Paketwiederholungstests.
+Nur dieser neue Dokumentationsabschnitt; Konsistenz der acht Zuordnungen,
+Pfadüberschneidungen, Budgetrechnung und auf eine Datei begrenzter Diff geprüft.
+Die beiden Einstellungsansichten wurden ohne Speichern über Abbrechen verlassen.
