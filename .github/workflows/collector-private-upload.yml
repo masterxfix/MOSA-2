@@ -1,0 +1,57 @@
+name: Manual MOSA 2 one-shot private collector upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full reviewed main commit
+        type: string
+        required: true
+      authorization:
+        description: Explicit MOSA2-PRIVATE-UPLOAD-20261021-A15AEE token plus colon and full commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+concurrency:
+  group: mosa-2-private-collector-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Require exact main revision and explicit upload authorization
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          UPLOAD_AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$UPLOAD_AUTHORIZATION" = "MOSA2-PRIVATE-UPLOAD-20261021-A15AEE:$EXPECTED_COMMIT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install existing pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Relevant offline package and upload security tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          PYTHONPATH: '.:tests'
+        run: python3 -B -m unittest -v test_private_collector_upload test_collector_private_directories test_deploy_testsite test_deployment test_collector_release.PrivateDeploymentTests test_collector_release.ReleaseTests.test_reproducible_commit_hashes_sizes_modes_and_exact_closure test_collector_release.ReleaseTests.test_archive_rejects_paths_links_duplicate_unknown_metadata_and_corruption test_collector_release.ReleaseTests.test_manifest_forgery_other_commit_and_unknown_json_fail_closed test_collector_release.ReleaseTests.test_materialized_missing_extra_symlinks_modes_and_hashes_rejected test_collector_release.ReleaseTests.test_git_source_and_static_missing_dependencies_fail_closed test_collector_release.ReleaseTests.test_package_has_no_secret_environment_or_unlisted_private_files
+      - name: One-shot private upload, atomic publication and independent readbacks
+        timeout-minutes: 8
+        env:
+          MOSA_PRIVATE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_PRIVATE_UPLOAD_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m scripts.deploy_private_collector upload
