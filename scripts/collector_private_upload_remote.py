@@ -87,13 +87,29 @@ def make(parent,name):
     finally:os.close(fd)
 
 def capability():
-    # No unsafe overwrite-capable rename fallback.
+    # Linux x86_64 renameat2 syscall ABI: arch/x86/entry/syscalls/syscall_64.tbl, number 316.
+    # Reject other ABIs instead of risking a different syscall number.
+    import errno
+    need(sys.platform=="linux" and os.uname().machine=="x86_64"
+         and ctypes.sizeof(ctypes.c_void_p)==8 and ctypes.sizeof(ctypes.c_long)==8,
+         "ATOMIC_NOREPLACE_ABI_UNSUPPORTED")
     libc=ctypes.CDLL(None,use_errno=True)
-    need(hasattr(libc,"renameat2"),"ATOMIC_NOREPLACE_UNAVAILABLE")
-    f=libc.renameat2
-    f.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint]
-    f.restype=ctypes.c_int
-    return f
+    need(hasattr(libc,"syscall"),"ATOMIC_NOREPLACE_UNAVAILABLE")
+    syscall=libc.syscall
+    syscall.argtypes=[ctypes.c_long]
+    syscall.restype=ctypes.c_long
+    def rename(src,name,dst,target,flags):
+        need(flags==1,"RENAME_NOREPLACE_REQUIRED")
+        ctypes.set_errno(0)
+        return syscall(ctypes.c_long(316),ctypes.c_int(src),ctypes.c_char_p(name),
+                       ctypes.c_int(dst),ctypes.c_char_p(target),ctypes.c_uint(1))
+    # Empty source names cannot designate any filesystem object. Only ENOENT
+    # proves syscall recognition; ENOSYS/EINVAL/EPERM and all other results stop.
+    # No file or directory is created, renamed or removed by this probe.
+    result=rename(-100,b"",-100,b"",1)
+    need(result==-1 and ctypes.get_errno()==errno.ENOENT,
+         "ATOMIC_NOREPLACE_KERNEL_UNAVAILABLE")
+    return rename
 
 def audit(path,rows,dirs):
     """Bounded full set and hash check, only inside this owned release tree."""

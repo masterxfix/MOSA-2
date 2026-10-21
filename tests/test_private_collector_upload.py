@@ -242,13 +242,69 @@ class UploadTests(unittest.TestCase):
         attrs={n.func.attr for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute)}
         self.assertFalse(attrs & {"chmod","chown","unlink","rmdir","remove","system","popen","connect"})
         imports={n.names[0].name for n in ast.walk(tree) if isinstance(n,ast.Import)}
-        self.assertEqual(imports,{"base64","ctypes","hashlib","re"})
+        self.assertEqual(imports,{"base64","ctypes","hashlib","re","errno"})
         self.assertFalse({n.func.id for n in ast.walk(tree) if isinstance(n,ast.Call)
                           and isinstance(n.func,ast.Name)} & {"exec","eval","compile","__import__"})
         self.assertIn("renameat2",own)
         self.assertIn("O_EXCL",own)
         self.assertIn("PRIVATE_INODES",own)
         self.assertIn('guard()\n                    need(os.write',own)
+
+
+    def test_direct_syscall_capability_accepts_only_missing_empty_source(self):
+        with self.fixture() as (scope,root,calls):
+            seen=[]
+            def syscall(*args):
+                seen.append([a.value for a in args])
+                ctypes.set_errno(errno.ENOENT)
+                return -1
+            function=Mock(side_effect=syscall)
+            with patch.object(ctypes,"CDLL",return_value=SimpleNamespace(syscall=function)):
+                rename=scope["capability"]()
+                self.assertEqual(seen,[[316,-100,b"",-100,b"",1]])
+                with self.assertRaises(scope["Stop"]):rename(3,b"source",4,b"target",0)
+                self.assertEqual(len(seen),1)
+                self.assertEqual(function.argtypes,[ctypes.c_long])
+                self.assertEqual(function.restype,ctypes.c_long)
+            self.assertFalse(list((root/"staging").iterdir()))
+            self.assertFalse(list((root/"locks").iterdir()))
+
+    def test_unsupported_kernel_or_abi_prevents_first_write(self):
+        for error in (errno.ENOSYS,errno.EINVAL,errno.EPERM,errno.EACCES,errno.EEXIST):
+            with self.subTest(error=error), self.fixture() as (scope,root,calls):
+                def syscall(*args):
+                    ctypes.set_errno(error)
+                    return -1
+                function=Mock(side_effect=syscall)
+                with patch.object(ctypes,"CDLL",return_value=SimpleNamespace(syscall=function)):
+                    with self.assertRaisesRegex(scope["Stop"],"KERNEL_UNAVAILABLE"):
+                        scope["upload_operation"](dict(self.data(),action="prepare"))
+                self.assertFalse(list((root/"staging").iterdir()))
+                self.assertFalse(list((root/"locks").iterdir()))
+                self.assertFalse(list((root/"releases").iterdir()))
+        with self.fixture() as (scope,root,calls):
+            with patch.object(os,"uname",return_value=SimpleNamespace(machine="aarch64")), \
+                 patch.object(ctypes,"CDLL") as library:
+                with self.assertRaisesRegex(scope["Stop"],"ABI_UNSUPPORTED"):scope["capability"]()
+                library.assert_not_called()
+            with patch.object(ctypes,"CDLL",return_value=SimpleNamespace()):
+                with self.assertRaisesRegex(scope["Stop"],"NOREPLACE_UNAVAILABLE"):scope["capability"]()
+
+    def test_direct_syscall_real_kernel_never_overwrites_existing_release(self):
+        with self.fixture() as (scope,root,calls):
+            rename=scope["capability"]()
+            source=root/"staging"/"source"
+            target=root/"releases"/"existing"
+            source.mkdir(mode=0o700);target.mkdir(mode=0o700)
+            (target/"keep").write_text("existing release must survive")
+            src=os.open(source.parent,os.O_RDONLY|os.O_DIRECTORY)
+            dst=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY)
+            try:
+                self.assertEqual(rename(src,b"source",dst,b"existing",1),-1)
+                self.assertEqual(ctypes.get_errno(),errno.EEXIST)
+                self.assertTrue(source.is_dir())
+                self.assertEqual((target/"keep").read_text(),"existing release must survive")
+            finally:os.close(src);os.close(dst)
 
     def test_existing_testsite_blobs_unchanged_and_output_guard(self):
         release=deploy.modules()[3]
