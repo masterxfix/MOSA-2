@@ -1,0 +1,45 @@
+{
+  "format": "mosa2-provider-budget-plan-v1",
+  "execution_enabled": false,
+  "operation_config": "config/collector-operation.json",
+  "proposal": {
+    "timezone": "Europe/Berlin",
+    "assets": 5,
+    "weekday_fast_window": [
+      "06:00",
+      "24:00"
+    ],
+    "weekday_fast_seconds": 60,
+    "night_weekend_holiday_seconds": 900,
+    "calendar_approved": false
+  },
+  "providers": {
+    "boerse_frankfurt_api_v1": {
+      "host": "api.live.deutsche-boerse.com",
+      "endpoint_family": "/v1/data/price_information/single",
+      "rights_confirmed": false,
+      "documented_provider_limit": null,
+      "mosa_baseline": null,
+      "limits": {
+        "mosa2_per_run": 5,
+        "mosa2_parallel": 1,
+        "mosa2_per_60s": 0,
+        "mosa2_per_day": 0,
+        "combined_per_60s": null,
+        "combined_per_day": null,
+        "combined_parallel": null,
+        "evidence_max_age_seconds": null
+      },
+      "monitoring": {
+        "window_size": 20,
+        "min_samples": null,
+        "error_ratio_stop": null,
+        "consecutive_error_stop": null,
+        "latency_ms_stop": null,
+        "stale_seconds": null
+      },
+      "automatic_retries": 0,
+      "automatic_resume": false
+    }
+  }
+}
