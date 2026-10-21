@@ -1424,3 +1424,309 @@ ABI/library-only inspection, negative-result semantics and manual/no-install/
 no-transfer workflow contract. Only a new diagnosis helper/workflow/tests and
 this document change; collector, normalizer/writer, production/deployment
 workflows, database, system Python and the existing domains are untouched.
+
+
+## Offline private collector release preparation (2026-10-21)
+
+This phase changes the repository only. It does not connect to Dogado, inspect
+or create the proposed private root, read Actions secrets, upload a file,
+contact a provider, connect to MySQL or start a collector batch.
+
+### Audited payload and dependency boundary
+
+The versioned allowlist is
+[collector_release_contract.json](collector_release_contract.json).
+It contains exactly 33 files, with an explicit dependency graph and Git-blob
+pins for every qualified source. No directory glob becomes a release allowlist.
+Repository-relative paths are preserved.
+
+The payload consists of the existing generic MarketBatch/MarketLive path,
+its onboarding/schema/ledger/unit/transaction/readback libraries, the existing
+Python bridge, contracts, transport, Collector, normalizer, writer and unit
+catalog, both registered normalizer adapters, the Frankfurt request descriptor,
+the shared PHP value adapter, the normative unit seed and the 0004 migration
+**as a checksum input only**. The Yahoo adapter remains a supported offline
+normalizer; packaging it does not qualify a Yahoo live acquisition path.
+A disabled, secret-free configuration template and a library-only interpreter
+binding complete the payload.
+
+The include chain was followed through Phase 2, 3B, 3C, 3D, 3K, 3M and 3O.
+Some historically named files are unavoidable current library dependencies.
+They are copied byte-for-byte, with mode 0600, and are **not** allowed CLI
+entrypoints. Their dormant historical apply/migration/report routines are not
+called; private historical access.php/secret.php, migration inputs, reports,
+diagnostics, fixtures and old Actions acceptance programs are not packaged.
+No SQL migration is executed by packaging or its validator.
+
+Static Python imports must resolve to the standard library or a listed local
+module. Static PHP includes must have recorded edges. Dynamic imports,
+subprocess scripts and active file reads are explicitly audited graph edges:
+live_bridge → selected registered adapter; writer_plan → observation_v2 →
+unit_catalog_adapter → unit_seed → normative JSON; observation_v2 →
+value_adapter → market_flow; Frankfurt → frankfurt_request; runtime/proof
+state checks → normative JSON and migration checksum. Inactive historical
+function resources are outside the supported collector entrypoint boundary.
+Changing a pinned source requires an explicit dependency re-audit, rather
+than silently trusting a previously generated graph.
+
+The extracted package is tested independently of the repository import path:
+PHP includes load without executing historical mains; Python loads its actual
+relative files, normative catalog and nested PHP adapter, and produces the
+same INSERT and DUPLICATE_UNCHANGED plans for synthetic 1/2/5-asset cases.
+These are offline plans, not DB inserts or live collector runs.
+
+### Reproducible artifacts and verification
+
+scripts/collector_release.py builds only from a full, existing 40-character Git
+commit. Each allowlisted working file must match that commit's regular tracked
+blob and its qualified-source pin. Every source ancestor is checked for links.
+The graph must be closed and every payload file reachable from the approved
+roots. Missing files, unknown imports/includes, unreachable additions and
+source changes abort.
+
+The result is <commit>.tar plus <commit>.manifest.json. The USTAR archive has
+sorted regular-file members, mode 0600, uid/gid 0, empty owner/group names and
+mtime 0. It contains no links, directory entries, credentials or generated
+bytecode. All required directories have a separate intended mode 0700.
+The canonical sidecar lists each payload path, SHA-256, size and target mode,
+the complete source commit, interpreter contract, allowed entrypoints and
+the dependency-contract SHA-256. Build output also records archive and sidecar
+SHA-256. The sidecar is control metadata outside the payload archive, avoiding
+a self-referential manifest hash.
+
+Verification reconstructs the expected bytes from the caller's trusted exact
+commit and reviewed contract; an archive-supplied manifest is never its own
+trust anchor. It rejects unknown/duplicate/missing members, absolute/traversal/
+backslash/hidden paths, symbolic/hard links, metadata changes, hash mismatch,
+noncanonical JSON and extra archive bytes. The local materialized-tree check
+also rejects extra directories/files, changed owners, permissive modes,
+symlinked ancestors and missing/changed dependencies. It is an offline
+validator, not an enabled remote extractor.
+
+A payload cap of 4 MiB is enforced. The 64 MiB initial reserve remains a
+planning ceiling, not a measured hosting quota. No Python runtime, pip cache,
+third-party package, dependency installer, database password, SFTP credential,
+run manifest or provider payload is shipped. Ambient secret/environment values
+are never inputs to the builder; synthetic canaries verify their absence.
+The existing qualified source pins prevent unnoticed source/template injection.
+
+For a later trusted completion revision, on a clean checkout:
+    python3 -B scripts/collector_release.py build --commit FULL_REVIEWED_SHA --output NEW_LOCAL_DIRECTORY
+    python3 -B scripts/collector_release.py verify --commit FULL_REVIEWED_SHA --output SAME_LOCAL_DIRECTORY
+
+The output directory must not exist before build. Do not place output in a
+webroot. Artifacts should later be retained privately with the expected commit,
+archive hash and sidecar hash in the reviewed control-plane receipt.
+
+### Interpreter and execution contract
+
+The library scripts/collector_release/runtime.php pins:
+- /opt/alt/python311/bin/python3.11, exactly 3.11.17;
+- /opt/plesk/php/8.4/bin/php, exactly 8.4.12;
+- child PATH /opt/plesk/php/8.4/bin:/usr/bin:/bin.
+
+It checks the actual CLI/PHP binary/version and a bounded, isolated, bytecode-free
+Python version subprocess, then returns existing bridge configuration including
+the packaged Frankfurt descriptor. It starts no collector, reads no password
+and changes no global PATH. The existing bridge receives this fixed runtime_path;
+therefore observation_v2's unchanged literal php child resolves to PHP 8.4.
+The bridge already prevents Python bytecode writes. Interpreter updates require
+explicit requalification and a new release contract.
+
+Existing generic collector, normalizer, writer, dedupe, runtime/proof modes,
+transaction and independent readback code remain byte-identical. No alternative
+collector implementation or per-asset package exists. Asset identity/route/run
+manifests belong to separately reviewed run data, never release source.
+
+This phase does not provide an executable batch supervisor. Its later contract
+must accept only the release-bound generic batch API and the three listed
+child entrypoints (bridge, value adapter, request descriptor); historical
+apply programs are never accepted as entrypoints. It must enforce the disabled
+execution flag, immutable verified release, qualified USE_EXISTING_ROUTE run
+inputs, single-job lock, bounded output, timeout/disconnect termination and
+cleanup before any real run can be authorized.
+
+### Private root proposal and explicit approval contract
+
+Proposed host-side root, **not authorized or remotely inspected**:
+    /var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector
+
+Proposed structure:
+    releases/<full-commit>/     immutable verified application payload
+    staging/<release-id>/      exclusive partial transfer, never executed
+    runs/<run-id>/             bounded run manifests/evidence; no saved passwords
+    locks/                     exclusive MOSA-2 supervisor lock
+
+Every directory is intended 0700; payload/config/evidence files 0600; umask 0077.
+No symlinks, shared website workspaces, public URL, public handler or site
+deployment mapping is allowed. The path string alone proves none of these
+properties. The host-side to chroot-visible mapping is still unknown.
+
+A later **explicit path-scoped authorization** must name the canonical root,
+host/account, its chroot mapping, permitted directory/file operations, release
+commit and limits. Only after that authorization may a bounded verification
+check every ancestor with lstat, canonical equality, numeric owner/group and
+restrictive permissions; establish that it is outside every account webroot
+and has no public alias/URL; and verify available byte/inode quota and permitted
+CLI use. Obtain hoster/operator confirmation for the eight-domain boundary
+rather than enumerating other domains without authorization. A visible SSH
+path is not approval. Owner web213 by name is not proof of the numeric UID.
+
+No root is created, opened, written, treated as preapproved or inferred from
+the earlier testsite authorization in this phase. The disabled template uses
+approved_root=null, execution_enabled=false and upload_enabled=false.
+
+### Separate, permanently closed preparation profile
+
+scripts/deploy_private_collector.py imports the existing deploy_sftp module
+and reuses its fixed public-root constants and host-key fingerprint algorithm.
+It offers only an offline lexical proposal review. Known webroots, their
+ancestors, malformed paths and any supplied public-root overlap are rejected.
+This is not a substitute for complete future remote verification.
+
+The upload entrypoint unconditionally raises
+PRIVATE_COLLECTOR_UPLOAD_NOT_IMPLEMENTED_OR_AUTHORIZED before reading
+configuration, environment/secrets, loading a client or touching a remote
+object. A forged approval object or changing a JSON flag cannot unlock it.
+There is no implemented connect, mkdir, upload, rename, extraction or cleanup
+path. This deliberate code gate remains until a later separately authorized
+implementation. No workflow invokes private deployment.
+
+After explicit approval, a future implementation may reuse the existing
+pinned-host-key/SFTP transport while keeping a separate immutable private-root
+policy. It must transfer only the verified allowlist to exclusive staging,
+verify permissions/owner/hash by independent readback, and atomically publish
+a commit-named release without symlink switching. No blind recursive copy,
+remote tar extraction or overwrite of a running release. Cleanup must be
+bounded to manifest-owned files under that exact root and must never traverse
+links or delete unrelated files.
+
+Secret transport is a separate future launch concern: existing Actions secrets
+only, strict host-key verification, protected in-memory stdin framing, no
+passwords in argv/environment/files/artifacts/logs, no echo or tracing.
+The supervisor must retain secrets only for the required process lifetime,
+close pipes, redact status output and terminate/wait for the entire child
+process group on failure, timeout or disconnect. Lock collision must fail
+closed. These operational guarantees are design requirements, not tested
+remote behavior in this phase.
+
+The existing deploy_sftp.py, deploy_test_sftp.py and deploy-testsite.yml are
+unchanged and tested. The testsite profile cannot select the private proposal.
+No production workflow, scheduler, database, hosting configuration or fixlab
+file changes.
+
+### Remaining gates before a first upload
+
+1. Explicitly authorize the exact private root and its allowed verification/
+   creation/transfer operations; resolve host-side/chroot mapping and all-webroot
+   isolation, owner/group, no-symlink/no-public-alias evidence.
+2. Confirm account byte/inode quotas, private storage/CLI policy, release/run
+   retention and the initial maximum 64 MiB plan reserve. The earlier proposed
+   allocation (three 4-MiB releases, 16 MiB run evidence, 8 MiB logs/manifests,
+   28 MiB slack) remains a planning limit, not available-space evidence.
+3. In a separate scoped implementation, replace the hard-disabled upload gate
+   with verified staging/readback/atomic publication and bounded rollback.
+4. Qualify the future supervisor's lock/timeout/disconnect/secret cleanup and
+   asset-neutral run manifest contract. Only then consider an explicitly
+   authorized private file-fixture test; a provider/DB-writing collector test
+   still needs its own scope.
+
+No upload or collector move is authorized by this documentation.
+
+### Validated payload manifest
+
+All rows have intended mode **0600**; directory mode is **0700**. These exact
+payload bytes are unchanged between the successful verification revision and
+the completion revision; only control-plane documentation/workflow metadata
+and commit identity differ. Rebuild the sidecar for the exact completion SHA.
+
+| Repository-relative path | Bytes | SHA-256 | Mode |
+| --- | ---: | --- | --- |
+| config/collector-private.example.json | 820 | 6392e084d2aad6008ef4d00faf7a561bdfa6be156666d0ca3f266a43570b1e3c | 0600 |
+| docs/database/migrations/0004_current_observation_provenance.sql | 901 | 46238979889d2fe1bdaac4c5ba4c1ddda7f5810cd87cdf1a8b806db71f63df70 | 0600 |
+| docs/database/seeds/0001_market_units_v1.json | 2475 | 0d9f196e4ccbd5e687292fa3d7a1a087b343ec81fb609b8b64b6454713246bbf | 0600 |
+| scripts/collector_release/runtime.php | 2024 | 8eee1230907dbe3d60f308e4bc0c3d1c1f01557302a8b7dc4e341bf1cd2fb4d3 | 0600 |
+| scripts/market_collector/boerse_frankfurt.py | 4299 | 1f15fe806b71cd78925de8b0301c97849f4bb3730a09917f33b371b86c3e9f99 | 0600 |
+| scripts/market_collector/collector.py | 2960 | 200c4ea06c7a25602b4056a3b648f33191c3980c282c66906ed8f1f46bdd4efb | 0600 |
+| scripts/market_collector/contracts.py | 4137 | 66ea63e24f9ba11cc4fb8777b3a50e3dd91f3e148fd1cae025fe79075e76a996 | 0600 |
+| scripts/market_collector/frankfurt_request.php | 3102 | 36aff6eb1e00145cfa54de72c97e504f2cc12b1a80d3a81d698ee01f81cae356 | 0600 |
+| scripts/market_collector/http_transport.py | 4151 | 89536225178a405aae3e87ae433c6864bdfb81b8ae45416cf45a5c36911ea5a7 | 0600 |
+| scripts/market_collector/live_batch.php | 6347 | fb779dd9daf7b5facc0d0b441d04f8fec76f0b8b707c0a98af22c9bbd0a1362a | 0600 |
+| scripts/market_collector/live_bridge.py | 4987 | 052235ff01dbff0dda4a65ada1b730a124fabba71c70d7af99b8518d300ae535 | 0600 |
+| scripts/market_collector/live_persistence.php | 14165 | 15ce37c95a1318eff4bce094770f9378799fe4d25c55a57a92e3eda157574a35 | 0600 |
+| scripts/market_collector/normalizer.py | 4385 | 51972b80d463d319760adffabd82dae4e0404ee17bc573cc8e881f375f49259d | 0600 |
+| scripts/market_collector/onboarding.php | 12246 | 8d965adfb1a9fbe04c69b3e1a9f9eec6d571074fb0deedcd89d46e9d38b05b4f | 0600 |
+| scripts/market_collector/runtime_persistence.php | 14394 | e87ca09f49b07db7c242ff3151c85f6bd78817c8b18ebaca55d1b57039f49c4f | 0600 |
+| scripts/market_collector/yahoo_chart.py | 3372 | e8a94b32d6fc82ba3784e60c35708c0b7267efaa1830e12f8f9905b441568eff | 0600 |
+| scripts/phase2/check_expression.php | 7701 | f0ee3266231931d334b2e5dca4a40c17228a90552d6c0f7ac50046ced0bfcac9 | 0600 |
+| scripts/phase2/postcheck.php | 24874 | 141a6f50e2682b318af44ad7c39e9aca2f86f4d0856becdbb07d241770c7e5d0 | 0600 |
+| scripts/phase3b/postcheck.php | 14850 | 14b69fd726a24175d7370c4a551b0bc0a0e70425d2f109e8132b50521b22b102 | 0600 |
+| scripts/phase3c/market_flow.php | 7355 | ab2b9510da0a76b549b587e10db5d768f079b57cd1d4e0d6542b46f805cd33af | 0600 |
+| scripts/phase3d/dry_run.php | 13961 | 28e3d689178c6aece3bc77c2c721fc81399defb4854cfbe1420fe583990c7bdc | 0600 |
+| scripts/phase3k/live_apply.php | 21429 | 1797852129ed6e898af0fcd6c72af606a62ea46f38c69274f819024825a78101 | 0600 |
+| scripts/phase3k/unit_schema.php | 12749 | f681eb92324bb5ec1726c3d92300fe9238c58eebd7b4aab029d2d9b11bfe0f4f | 0600 |
+| scripts/phase3l/unit_seed.py | 7842 | f067537f4a9f610469369fd0376830e0551ea12b966931c444924a63914a894c | 0600 |
+| scripts/phase3m/live_seed.php | 10514 | 8ab75743cca0acf3953add99cf58cd456467f36a4fda810cd401639bf0e8ce60 | 0600 |
+| scripts/phase3m/state_integrity.php | 8437 | 9ae5d26bcf1bcecdf73ffcda732fe967a84a3e9fe72cd459cab44876ade534b2 | 0600 |
+| scripts/phase3n/observation_v2.py | 4063 | 2c072d60aade3a4d74963835dad99cb4dcc3ed04b48ade32e1b14e303dc89c61 | 0600 |
+| scripts/phase3n/unit_catalog_adapter.py | 2025 | de132450146ec23ccb02b2cec67af3cb38eb604ce5c7861b920389e6d72a897b | 0600 |
+| scripts/phase3n/value_adapter.php | 2078 | 6d66f9d1328b4de678081f3e212de89e9ed4a0c71dd390ca157fbfd1f39111e8 | 0600 |
+| scripts/phase3n/writer_plan.py | 6955 | 514f826b63d70dc229ebf75caf4f0b039e16ee1f7d71c2ef3128d537976b831d | 0600 |
+| scripts/phase3o/live_plan.py | 2298 | cc94d3d1cdb6515d7851c62ec9e436802f01b3aa3423b9af318f796c91ad0782 | 0600 |
+| scripts/phase3o/live_writer.php | 14553 | 5276bf33b5e283866cdd4816ed47561fd287a7034a29f58571a39f8136a5bb02 | 0600 |
+| scripts/phase3o/state_integrity.php | 1656 | 5f2d758dfcc9f566f17917b98fd93663884d9b770571c1d6dfaa41bafb7f7866 | 0600 |
+
+### Offline test and artifact receipt
+
+- Successful run: [39568896048](https://github.com/masterxfix/MOSA-2/actions/runs/39568896048).
+- Verified source snapshot: 498fcf70803c5d91f365829a78555fe71a664f2b.
+- Payload: **33 files / 248105 bytes**, about 242.29 KiB.
+- Deterministic USTAR length from member/header/block sizes: 276480 bytes.
+- Archive SHA-256: 73e34c8d8e13ce37265ef5dded1ceae162140eee5b17341b23ee7dae3e3a68f7.
+- Verification-snapshot sidecar SHA-256: 1b9c6456c79e1258166ef8c05a1e672fa3c99e969fab3e8bd60fc044578985f2.
+- Audited dependency-contract SHA-256: 26f636d66b880dfd62891230fbcf97a91091c20cc567f255bef806ad7710dcd2.
+- Build followed by separate full verify: PASS, identical receipt.
+
+The first offline run
+[39568209508](https://github.com/masterxfix/MOSA-2/actions/runs/39568209508)
+ran 110 tests: the 98 existing collector/batch/runtime/deployment regressions
+and 11 of 12 new release/profile tests passed. One new unchanged-testsite
+comparison attempted to read the historical base commit from a shallow
+checkout and errored. It was corrected to compare the three immutable,
+independently recorded base Git-blob IDs with the current commit, without
+fetching history or weakening the equality check.
+
+The successful second run repeated all 12 new tests and the 20 existing
+deployment tests: **32/32 PASS**. It also strengthened the extracted-package
+fixture to use distinct synthetic ISINs and bound source/output ancestor
+checks. The 98 existing tests had already passed; the collector and deployment
+implementation bytes did not change between runs. Thus all 110 distinct
+relevant tests have passing evidence across the two runs; this is not a claim
+that the first run itself was green. Existing deployment test messages saying
+“Deployed” concern in-memory FakeSFTP objects only.
+
+Covered: exact dependency closure/loadability; deterministic bytes and hashes;
+full commit binding; malformed/absolute/traversal/backslash paths; symlink/
+hardlink/unknown/duplicate/missing files; archive owner/mode/timestamp changes;
+materialized owner/mode/hash integrity; source tampering; synthetic credential
+canaries; default-disabled/forged approval; public-root exclusion; unchanged
+testsite blobs and behavior; same extracted package with 1/2/5 distinct assets;
+actual normalizer INSERT/replay parity. Existing unchanged tests additionally
+cover conflict/corruption/drift, rollback, stop-on-failure, independent readback
+and no Current/Bars or extra observation writes using PDO doubles.
+
+The control runner used Python 3.12 and PHP 8.4.26. The new PHP binding was
+linted and its fixed runtime/PATH contract checked offline; the absolute
+Dogado interpreter paths were not executed in this phase. Their prior
+3.11.17/8.4.12 evidence remains separate from these package fixtures.
+No remote readiness, quotas, provider connectivity, real DB behavior, process
+disconnect cleanup or operational lock collision is newly claimed.
+
+The final .github/workflows/collector-release-offline.yml is manual only,
+requires the exact expected_commit, has contents:read and has no MOSA secrets,
+SSH/SFTP client installation, DB/provider call or remote deployment step.
+Its only execution commands are offline tests and package build/verify on the
+runner. The isolated branch trigger used for verification is omitted from
+main and removed by resetting the temporary branch to the original base.
+Exactly one completion commit is added to main; verification commits are not
+merged. No generated archive or credential is committed.

@@ -1,0 +1,327 @@
+{
+  "format": "mosa2-collector-release-contract-v1",
+  "runtime": {
+    "python": "/opt/alt/python311/bin/python3.11",
+    "python_version": "3.11.17",
+    "php": "/opt/plesk/php/8.4/bin/php",
+    "php_version": "8.4.12",
+    "runtime_path": "/opt/plesk/php/8.4/bin:/usr/bin:/bin"
+  },
+  "roots": [
+    "scripts/market_collector/live_batch.php",
+    "scripts/collector_release/runtime.php",
+    "config/collector-private.example.json"
+  ],
+  "entrypoints": [
+    "scripts/market_collector/live_bridge.py",
+    "scripts/market_collector/frankfurt_request.php",
+    "scripts/phase3n/value_adapter.php"
+  ],
+  "adapters": {
+    "scripts.market_collector.boerse_frankfurt": "FrankfurtSnapshotV1",
+    "scripts.market_collector.yahoo_chart": "YahooChartSnapshotV1"
+  },
+  "files": [
+    {
+      "path": "config/collector-private.example.json",
+      "mode": "0600",
+      "role": "disabled-template",
+      "source_blob": "6dfc2849e92273830d0c9d58f744863e114a98a6",
+      "requires": []
+    },
+    {
+      "path": "docs/database/migrations/0004_current_observation_provenance.sql",
+      "mode": "0600",
+      "role": "hash-contract-only",
+      "source_blob": "b07c06f81abbe3a42052ebdf31f7d4f4155785ec",
+      "requires": []
+    },
+    {
+      "path": "docs/database/seeds/0001_market_units_v1.json",
+      "mode": "0600",
+      "role": "normative-seed",
+      "source_blob": "ab60800b2275d3c8d9dca1501b2f853dd799dde7",
+      "requires": []
+    },
+    {
+      "path": "scripts/collector_release/runtime.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "4003d5988b683477f67ca4a1b2da8c836cc11fb1",
+      "requires": []
+    },
+    {
+      "path": "scripts/market_collector/boerse_frankfurt.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "3342c1ad3ad3df4941df0b22c0f2ceb6dc833e08",
+      "requires": [
+        "scripts/market_collector/contracts.py",
+        "scripts/market_collector/frankfurt_request.php"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/collector.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "c0bfcf58562ca352b53b55c615c60eb53487bfe4",
+      "requires": [
+        "scripts/market_collector/contracts.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/contracts.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "416e7cb8d4c8a4b7a60295a3af94230a5eae0f42",
+      "requires": [
+        "scripts/phase3n/writer_plan.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/frankfurt_request.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "00c736e00be6361c23c531bc656f93cc2aae4387",
+      "requires": []
+    },
+    {
+      "path": "scripts/market_collector/http_transport.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "1f8e07455cd458e82d4239717e7366c85cd9aba0",
+      "requires": [
+        "scripts/market_collector/contracts.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/live_batch.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "5720d2039872be550dab12469a0a0b89c9cb7e72",
+      "requires": [
+        "scripts/market_collector/live_persistence.php"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/live_bridge.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "9262a67a3c03dfb0f8b21345433feeb353fd35c8",
+      "requires": [
+        "scripts/market_collector/contracts.py",
+        "scripts/market_collector/collector.py",
+        "scripts/market_collector/http_transport.py",
+        "scripts/market_collector/normalizer.py",
+        "scripts/phase3o/live_plan.py",
+        "scripts/market_collector/boerse_frankfurt.py",
+        "scripts/market_collector/yahoo_chart.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/live_persistence.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "7fed55c69e7f2be3e1b8e0a892edbee605af855e",
+      "requires": [
+        "scripts/market_collector/onboarding.php",
+        "scripts/phase3o/live_writer.php",
+        "scripts/market_collector/runtime_persistence.php",
+        "docs/database/seeds/0001_market_units_v1.json",
+        "docs/database/migrations/0004_current_observation_provenance.sql",
+        "scripts/market_collector/live_bridge.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/normalizer.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "e36086c7415102b9c243668c3b86014f19a8fe00",
+      "requires": [
+        "scripts/phase3n/writer_plan.py",
+        "scripts/market_collector/collector.py",
+        "scripts/market_collector/contracts.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/onboarding.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "96677ddfb39aad0204e534cf651dff3d12b29b8a",
+      "requires": [
+        "scripts/phase2/postcheck.php",
+        "scripts/phase3d/dry_run.php"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/runtime_persistence.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "e133b141c3611d69656133a09ea6c50fd70fb3d4",
+      "requires": [
+        "docs/database/seeds/0001_market_units_v1.json",
+        "docs/database/migrations/0004_current_observation_provenance.sql"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/yahoo_chart.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "34e272c720c97caf1e3443d61476e51e2e050324",
+      "requires": [
+        "scripts/market_collector/contracts.py"
+      ]
+    },
+    {
+      "path": "scripts/phase2/check_expression.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "790c15b4106348eac569d98ae0c22a2e2a0aecc7",
+      "requires": []
+    },
+    {
+      "path": "scripts/phase2/postcheck.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "644465c0f07da0663ab2ae6f19af4cccd5049a6f",
+      "requires": [
+        "scripts/phase2/check_expression.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3b/postcheck.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "f7f2ade4425ab68529714c3c8e8ac4082c5395e8",
+      "requires": [
+        "scripts/phase2/postcheck.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3c/market_flow.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "e53d8092d621a645316f31af2074e290aa24cac0",
+      "requires": []
+    },
+    {
+      "path": "scripts/phase3d/dry_run.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "42f3cb55e1ab313b10a85f4acdbba84f1d97a976",
+      "requires": [
+        "scripts/phase3c/market_flow.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3k/live_apply.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "57edff19c6362d0b4e03edd65d6bd38a1b64b14c",
+      "requires": [
+        "scripts/phase3k/unit_schema.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3k/unit_schema.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "5677c97d481744b93384a95d9d292106a6cdb46c",
+      "requires": [
+        "scripts/phase3b/postcheck.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3l/unit_seed.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "63e9d79e7c972bae50d082f61857df77ab589f37",
+      "requires": [
+        "docs/database/seeds/0001_market_units_v1.json"
+      ]
+    },
+    {
+      "path": "scripts/phase3m/live_seed.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "8534a002a7ce8ef17288639441e74eb5bdaae4b4",
+      "requires": [
+        "scripts/phase3k/live_apply.php",
+        "scripts/phase3m/state_integrity.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3m/state_integrity.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "69b47d3f9d696cf8b9ebfd1e8b21e082132f3703",
+      "requires": [
+        "scripts/phase3k/live_apply.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3n/observation_v2.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "450208c318ddaec636b156a6a59371e154630d2e",
+      "requires": [
+        "scripts/phase3n/unit_catalog_adapter.py",
+        "scripts/phase3n/value_adapter.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3n/unit_catalog_adapter.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "77389fc48ea501aed5dcaf1b6958607813c541bd",
+      "requires": [
+        "scripts/phase3l/unit_seed.py"
+      ]
+    },
+    {
+      "path": "scripts/phase3n/value_adapter.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "466d364382cd43e912807adad64f87cce238f428",
+      "requires": [
+        "scripts/phase3c/market_flow.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3n/writer_plan.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "e73de5ea0403e4f61b748122e75b01d3a5730449",
+      "requires": [
+        "scripts/phase3n/observation_v2.py"
+      ]
+    },
+    {
+      "path": "scripts/phase3o/live_plan.py",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "1142dbf8cc374d74925f979973eb835a3b9c6134",
+      "requires": [
+        "scripts/phase3n/writer_plan.py"
+      ]
+    },
+    {
+      "path": "scripts/phase3o/live_writer.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "b4a311694be24d487864646be40575b382e5379e",
+      "requires": [
+        "scripts/phase3o/state_integrity.php"
+      ]
+    },
+    {
+      "path": "scripts/phase3o/state_integrity.php",
+      "mode": "0600",
+      "role": "module",
+      "source_blob": "245a3c39959929ae152d3456551cecd26c2ddd2b",
+      "requires": [
+        "scripts/phase3m/live_seed.php"
+      ]
+    }
+  ]
+}

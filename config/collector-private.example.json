@@ -1,0 +1,26 @@
+{
+  "format": "mosa2-private-collector-plan-v1",
+  "execution_enabled": false,
+  "upload_enabled": false,
+  "approved_root": null,
+  "proposed_root": "/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector",
+  "directories": {
+    "releases": "0700",
+    "staging": "0700",
+    "runs": "0700",
+    "locks": "0700"
+  },
+  "file_mode": "0600",
+  "plan_reserve_bytes": 67108864,
+  "runtime": {
+    "python": "/opt/alt/python311/bin/python3.11",
+    "python_version": "3.11.17",
+    "php": "/opt/plesk/php/8.4/bin/php",
+    "php_version": "8.4.12",
+    "runtime_path": "/opt/plesk/php/8.4/bin:/usr/bin:/bin"
+  },
+  "release_commit": null,
+  "secret_transport": "future reviewed stdin-only framing; no environment/argv/file persistence",
+  "owner_verification": null,
+  "all_webroots_verification": null
+}
