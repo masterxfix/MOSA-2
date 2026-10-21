@@ -40,12 +40,15 @@ class ObservationReadTests(unittest.TestCase):
         self.assertEqual(r["items"][0]["status"],"stale")
 
     def test_bad_binding_hash_unit_time_route_conflicts_fail_closed(self):
-        for mode in ("route","source","unit","hash","future","format","equal_conflict","scope","scope_unit","scope_key","boundary"):
+        for mode in ("route","source","unit","hash","future","format","equal_conflict","scope","scope_unit","scope_key","boundary","source_disabled","source_type"):
             with self.subTest(mode=mode):
                 r=self.run_case(mode)
                 self.assertEqual(r["status"],"error")
                 self.assertNotIn("PRIVATE_CANARY",json.dumps(r))
                 self.assertEqual(r["events"][-1],"ROLLBACK")
+
+    def test_selection_has_no_equity_class_special_case(self):
+        self.assertEqual(self.run_case('generic_class')['status'], 'ok')
 
     def test_query_failure_rolls_back_and_no_diagnostics(self):
         r=self.run_case("query")

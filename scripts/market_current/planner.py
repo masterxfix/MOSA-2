@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -44,6 +45,25 @@ def projection(fact, normalized, route, now):
     return result
 
 
+def select(facts, route, now, previous=None, catalog=None):
+    """Shared PHP contract, also called directly by the read-only Observations view."""
+    catalog = catalog or writer.observation.catalog_module.normative_catalog()
+    units = {}
+    for key, version in (('quote_unit_key', 'quote_unit_version'),
+                         ('quantity_basis_unit_key', 'quantity_basis_unit_version'),
+                         ('volume_unit_key', 'volume_unit_version')):
+        if route[key] is not None:
+            value = catalog.resolve(route[key], route[version], route['unit_contract_version'])
+            units[(value['unit_key'], value['unit_version'])] = value
+    request = dict(facts=facts, route=route, now=now, previous=previous, units=list(units.values()))
+    process = subprocess.run(['php', str(Path(__file__).with_name('selection.php'))],
+        input=json.dumps(request), capture_output=True, text=True, timeout=10)
+    require(process.returncode == 0 and not process.stderr, 'quote_selection_process')
+    reply = json.loads(process.stdout)
+    require(reply['ok'], reply.get('failure', 'quote_selection_failure'))
+    return reply['result']
+
+
 def plan(data, catalog=None):
     catalog = catalog or writer.observation.catalog_module.normative_catalog()
     route, approval, now = data['route'], data['approval'], data['now']
@@ -53,28 +73,19 @@ def plan(data, catalog=None):
     require(route['route_type']=='quote' and route['priority']=='0', 'current_route_type')
     require(route['enabled']=='1' or (route['enabled']=='0' and approval.get('allow_disabled_projection') is True), 'current_route_not_approved')
     facts = data['facts'];require(type(facts) is list and len(facts)<=2, 'bounded_current_candidates')
-    checked = [(f, *qualified(f, route, catalog)) for f in facts]
-    checked.sort(key=lambda x:(x[1]['market_at'],x[1]['observed_at']), reverse=True)
-    if len(checked)==2 and all(checked[0][1][k]==checked[1][1][k] for k in ('market_at','observed_at')):
-        require(checked[0][2]==checked[1][2], 'current_equal_time_conflict')
+    for fact in facts:
+        qualified(fact, route, catalog)
     previous = data.get('current');old = data.get('current_fact')
     if previous is not None:
         require(old is not None and previous['observation_id']==str(old['id']), 'current_origin_missing')
         normalized, canonical = qualified(old, route, catalog)
         expected = projection(old, normalized, route, previous['updated_at'])
         require(previous==expected, 'current_projection_drift')
-    if not checked:
-        return dict(decision='UNCHANGED' if previous else 'MISSING', values=previous)
-    fact, normalized, canonical = checked[0]
-    if previous is not None:
-        order = (normalized['market_at'],normalized['observed_at'])
-        prior = (previous['market_at'],previous['observed_at'])
-        if order < prior:
-            return dict(decision='UNCHANGED_OLDER', values=previous)
-        if order == prior:
-            require(canonical==qualified(old,route,catalog)[1], 'current_equal_time_conflict')
-            return dict(decision='UNCHANGED', values=previous)
-    return dict(decision='UPDATE' if previous else 'INSERT', values=projection(fact,normalized,route,now))
+    selected = select(facts, route, now, old if previous is not None else None, catalog)
+    if selected['decision'] not in ('INSERT', 'UPDATE'):
+        return dict(decision=selected['decision'], values=previous)
+    fact = selected['fact']
+    return dict(decision=selected['decision'], values=projection(fact, fact, route, now))
 
 
 if __name__ == '__main__':

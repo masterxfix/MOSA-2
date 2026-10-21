@@ -10,9 +10,7 @@ const SCOPE=[
     'DE000A0JBPG2'=>'PNE AG','DE0005313704'=>'Carl Zeiss Meditec',
     'AU000000DRO2'=>'DroneShield','CNE100000296'=>'BYD','CNE100006CQ4'=>'Ubtech Robotics'
 ];
-const FIELDS=['asset_id','source_id','route_id','currency','market_at','observed_at','price','bid','ask','volume',
-    'unit_contract_version','quote_unit_key','quote_unit_version','quantity_basis_unit_key','quantity_basis_unit_version',
-    'quantity_basis_amount','volume_unit_key','volume_unit_version'];
+const FIELDS=\Mosa2\QuoteSelection\FIELDS;
 function checked(bool $ok): void {if(!$ok)throw new RuntimeException('observation_binding');}
 function strings(array $row): array {foreach($row as &$v)if($v!==null)$v=(string)$v;return $row;}
 function canonical(array $value): string {
@@ -27,59 +25,45 @@ function externalKey(string $isin): string {
         'external'=>['isin'=>$isin,'venue'=>'boerse_frankfurt']]));
 }
 function binding(array $r,string $isin): array {
-    checked(isset(SCOPE[$isin])&&$r['isin']===$isin&&$r['asset_class']==='equity'&&$r['asset_status']==='active');
+    checked(isset(SCOPE[$isin])&&$r['isin']===$isin&&$r['asset_status']==='active');
     foreach(['asset_id','source_id','route_id','route_revision'] as $k)checked(is_string($r[$k])&&preg_match('/^[1-9][0-9]*$/D',$r[$k])===1);
     checked($r['source_key']==='provider:boerse_frankfurt_api'&&$r['route_type']==='quote'&&$r['priority']==='0'
         &&in_array($r['enabled'],['0','1'],true)&&$r['external_key']===externalKey($isin));
-    checked($r['unit_contract_version']==='mosa2-market-unit-v1'&&$r['quote_unit_key']==='EUR'&&$r['quote_unit_version']==='1');
-    foreach(['quantity_basis_unit_key','quantity_basis_unit_version','quantity_basis_amount','volume_unit_key','volume_unit_version'] as $k)checked($r[$k]===null);
-    checked($r['unit_status']==='frozen'&&$r['unit_currency']==='EUR'&&$r['unit_dimension']==='monetary'
-        &&$r['unit_base']==='EUR'&&$r['unit_base_version']==='1'&&$r['unit_scale_numerator']==='1'&&$r['unit_scale_denominator']==='1');
+    $physical=$r+['id'=>$r['route_id']];
+    \Mosa2\QuoteSelection\route($physical,\Mosa2\QuoteSelection\catalog());
+    checked($r['source_enabled']==='1'&&$r['source_type']==='market_data');
+    $unit=\Mosa2\QuoteSelection\unit(\Mosa2\QuoteSelection\catalog(),$r['quote_unit_key'],$r['quote_unit_version']);
+    foreach(['status','monetary_currency_code','dimension_key','base_unit_key','base_unit_version','scale_numerator','scale_denominator'] as $i=>$key){
+        $column=['unit_status','unit_currency','unit_dimension','unit_base','unit_base_version','unit_scale_numerator','unit_scale_denominator'][$i];
+        checked($r[$column]===$unit[$key]);
+    }
     return $r;
 }
 /** Bounded candidate set. The 101st row is a completeness sentinel, not displayed. */
 function latest(array $rows,array $route,string $isin,string $now,int $stale): array {
     checked(count($rows)<=101);
     $base=['name'=>SCOPE[$isin],'isin'=>$isin,'source'=>$route['source_name'],'venue'=>'Börse Frankfurt · XFRA'];
-    $valid=[];
+    $facts=[];
     foreach(array_slice($rows,0,100) as $raw){
         $r=strings($raw);
-        if($r['observation_format_version']===null)continue; // legacy facts are outside the collector-v2 view
-        checked($r['observation_format_version']==='2');
-        foreach(['asset_id','source_id','route_id'] as $k)checked($r[$k]===$route[$k]);
-        foreach(array_slice(FIELDS,10) as $k)checked($r[$k]===$route[$k]);
-        checked(preg_match('/^[1-9][0-9]*$/D',$r['id'])===1&&$r['currency']==='EUR'&&$r['volume']===null);
-        foreach(['price','bid','ask'] as $k)checked($r[$k]===null&&$k!=='price'||is_string($r[$k])&&preg_match('/^[0-9]+\.[0-9]{10}$/D',$r[$k])===1);
-        checked(trim(str_replace('.','',$r['price']),'0')!=='');
-        checked($r['bid']===null||$r['ask']===null||strcmp(str_pad($r['bid'],30,'0',STR_PAD_LEFT),str_pad($r['ask'],30,'0',STR_PAD_LEFT))<=0);
-        $payload=[];foreach(FIELDS as $k)$payload[$k]=$r[$k];
-        checked(is_string($r['dedupe_hex'])&&hash_equals(strtolower($r['dedupe_hex']),hash('sha256',"mosa2-observation-v2\n".json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR))));
-        // Reuse the existing reader's exact-price, timestamp and market-age validation.
-        $item=present($r+['display_name'=>SCOPE[$isin],'source_name'=>$route['source_name'],'venue'=>$base['venue'],'valid_binding'=>'1'],$now,$stale);
-        checked(timestamp($r['market_at'])<=timestamp($now)); // no future market value advertised
-        $valid[]=['row'=>$r,'item'=>$item];
+        if($r['observation_format_version']===null)continue;
+        $r['dedupe_key']=$r['dedupe_hex'];$facts[]=$r;
     }
-    usort($valid,static function($a,$b){
-        foreach(['market_at','observed_at'] as $k){$c=strcmp($b['row'][$k],$a['row'][$k]);if($c)return $c;}
-        return strlen($b['row']['id'])<=>strlen($a['row']['id'])?:strcmp($b['row']['id'],$a['row']['id']);
-    });
+    $selection=\Mosa2\QuoteSelection\select($facts,$route+['id'=>$route['route_id']],$now);
+    $r=$selection['fact'];
     if(count($rows)===101){
-        // ORDER BY market_at,id cannot order observed_at; never hide an unexamined winning tie.
-        checked($valid!==[]&&$rows[100]['market_at']<$valid[0]['row']['market_at']);
+        // The sentinel must be strictly older; never hide an unexamined tie.
+        checked($r!==null&&$rows[100]['market_at']<$r['market_at']);
     }
-    if(!$valid)return $base+['status'=>'missing'];
-    $winner=$valid[0];$r=$winner['row'];
-    foreach($valid as $v)if($v['row']['market_at']===$r['market_at']&&$v['row']['observed_at']===$r['observed_at']){
-        // ID is a deterministic tie-breaker, never permission to hide conflicting facts.
-        checked($v['row']['dedupe_hex']===$r['dedupe_hex']);
-    }
-    return $base+$winner['item']+['observation_id'=>$r['id'],
-        'age_seconds'=>max(0,timestamp($now)->getTimestamp()-timestamp($r['market_at'])->getTimestamp())];
+    if($r===null)return $base+['status'=>'missing'];
+    $item=present($r+['display_name'=>$base['name'],'source_name'=>$route['source_name'],'venue'=>$base['venue'],'valid_binding'=>'1'],$now,$stale);
+    return $base+$item+['observation_id'=>$r['id'],'age_seconds'=>\Mosa2\QuoteSelection\age($r,$now)];
 }
+
 function read(PDO $p,array $config,string $now): array {
     $stale=$config['stale_seconds']??null;checked(is_int($stale)&&$stale>=60&&$stale<=86400);timestamp($now);
     $scope=$p->prepare("SELECT /*+ MAX_EXECUTION_TIME(1500) */ i.normalized_value AS isin,a.entity_id AS asset_id,a.asset_class,a.status AS asset_status,
-        s.id AS source_id,s.source_key,s.display_name AS source_name,r.id AS route_id,r.route_revision,r.route_type,r.external_key,r.priority,r.enabled,
+        s.id AS source_id,s.source_key,s.display_name AS source_name,s.enabled AS source_enabled,s.source_type,r.id AS route_id,r.route_revision,r.route_type,r.external_key,r.priority,r.enabled,
         r.unit_contract_version,r.quote_unit_key,r.quote_unit_version,r.quantity_basis_unit_key,r.quantity_basis_unit_version,r.quantity_basis_amount,r.volume_unit_key,r.volume_unit_version,
         u.status AS unit_status,u.monetary_currency_code AS unit_currency,u.dimension_key AS unit_dimension,u.base_unit_key AS unit_base,u.base_unit_version AS unit_base_version,
         u.scale_numerator AS unit_scale_numerator,u.scale_denominator AS unit_scale_denominator

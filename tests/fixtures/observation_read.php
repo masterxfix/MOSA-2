@@ -7,7 +7,7 @@ use const Mosa2\ObservationRead\SCOPE;
 const NOW='2026-01-01 01:00:00.000000';
 function routeRow(string $isin): array {
     return ['isin'=>$isin,'asset_id'=>'101','asset_class'=>'equity','asset_status'=>'active',
-        'source_id'=>'201','source_key'=>'provider:boerse_frankfurt_api','source_name'=>'Synthetic source',
+        'source_enabled'=>'1','source_type'=>'market_data','source_id'=>'201','source_key'=>'provider:boerse_frankfurt_api','source_name'=>'Synthetic source',
         'route_id'=>'301','route_revision'=>'1','route_type'=>'quote','external_key'=>externalKey($isin),'priority'=>'0','enabled'=>'0',
         'unit_contract_version'=>'mosa2-market-unit-v1','quote_unit_key'=>'EUR','quote_unit_version'=>'1',
         'quantity_basis_unit_key'=>null,'quantity_basis_unit_version'=>null,'quantity_basis_amount'=>null,'volume_unit_key'=>null,'volume_unit_version'=>null,
@@ -29,7 +29,10 @@ class ObservationStatement extends PDOStatement {
         $case=$this->db->case;
         if(!str_contains($this->sql,'m2_market_observations')){
             $r=routeRow($this->params[0]);
-            if($case==='scope')$r['asset_class']='etf';
+            if($case==='scope')$r['asset_status']='inactive';
+            if($case==='source_disabled')$r['source_enabled']='0';
+            if($case==='source_type')$r['source_type']='other';
+            if($case==='generic_class')$r['asset_class']='index';
             if($case==='scope_unit')$r['unit_currency']='GBP';
             if($case==='scope_key')$r['external_key']='market-v1:wrong';
             return [$r];
