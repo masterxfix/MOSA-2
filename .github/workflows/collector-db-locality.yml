@@ -1,0 +1,54 @@
+name: Manual MOSA 2 read-only DB locality diagnosis
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed diagnostic commit SHA
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-collector-performance-readonly
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Require exact reviewed revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Install existing pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Relevant locality safety tests
+        run: |
+          php -l scripts/market_collector/db_locality_probe.php
+          php -l tests/db_locality_fixture.php
+          python3 -m unittest discover -s tests -p 'test_db_locality.py' -v
+      - name: One read-only DB locality diagnosis
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: python3 scripts/collector_db_locality.py

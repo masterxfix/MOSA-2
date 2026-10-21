@@ -763,3 +763,174 @@ bundling must retain excess-row/conflict detection, full drift visibility and
 independent readback; a schema/unit cache needs a proven invalidation mechanism.
 No such further change, connection reuse, parallelism, index change or scheduler
 is included in this commit.
+
+## DB locality measurement — 21 October 2026
+
+### Scope and execution
+
+[Run 39557709233](https://github.com/masterxfix/MOSA-2/actions/runs/39557709233),
+job 119081282922, attempt 1, revision
+d7073943492b38dc4dfb13cf526f7953474b4475 completed successfully.
+Both PHP lint checks and all twelve relevant offline safety tests passed
+(0.461 s). This is a measurement only: collector placement, runtime/persistence
+logic, hosting configuration and deployment remain unchanged.
+
+A uses PHP on a GitHub-hosted Ubuntu 24.04 runner (eastus) with the existing
+pinned SSH direct-tcpip tunnel. B uses PHP directly through the same authenticated
+web213 chrooted SSH transport and TCP 127.0.0.1:3307. The first explicitly approved
+PHP candidate, /opt/plesk/php/8.4/bin/php, succeeded; no other candidate was needed.
+PHP CLI and PDO MySQL were confirmed before any DB password was sent to a remote
+command. The fixed candidate fallback list contains only that PHP 8.4 command,
+/usr/bin/php and php; an SSH exec rejection stops immediately, with no alternate
+access protocol or hosting change.
+
+Both variants execute the exact same PHP source (SHA-256
+8e68a98f2d564b6f713a60689fdf8ab367a52d822e0649a8a78d23888a70253b), database h29077_mosa2_test and account
+h29077_mosa2_test@localhost. The authenticated DB identity, version 8.0.26-16
+and server port 3307 must match the existing fixed profile.
+The source and DB password travel only in process stdin; for B this is the
+encrypted, fingerprint-verified SSH channel. The command arguments contain only
+a fixed bootstrap and PHP options, never the secret or a secret-bearing source
+string. No remote file, directory, SFTP operation, PTY, environment-secret request,
+password prompt, Plesk action or provider request is used. PHP CLI file caching,
+automatic prepend/append and error logging are explicitly disabled. Raw remote
+stderr and exception messages/traces are never published.
+
+The probe sets SESSION TRANSACTION READ ONLY, applies the same five session
+settings as the existing connection helper, begins a transaction and verifies
+the read-only flag before its target-identity SELECT or any timed SELECT.
+The PDO constructor is timed separately from session/identity setup.
+Each variant executes exactly ten SELECT 1 AS probe statements: five direct
+queries followed by five fresh native prepare/execute pairs, with no warmup
+or retry. There are additionally two fixed one-row read-only verification SELECTs
+per variant. No other bounded business query was necessary to establish the
+locality difference, so none was added. Both transactions end with rollback.
+
+The new manual workflow is .github/workflows/collector-db-locality.yml. It reuses
+collector_actions.configuration, ssh_client, tunnel and public_text, the existing
+three secrets/four variables, pinned dependencies/actions and the shared live
+diagnostic concurrency group. The connector has no workflow_dispatch operation;
+the explicitly permitted temporary exact-branch trigger ran on
+codex/db-locality-a15aee, guarded by repository, event, ref and run_attempt == 1.
+Tests gated the secret-bearing live step. The final main tree contains only the
+manual workflow; resetting the temporary branch to the initial revision removes
+its one-time trigger.
+
+### Measured A/B comparison
+
+PHP/mysqlnd differ at the patch level: A = PHP/mysqlnd 8.4.26,
+B = PHP/mysqlnd 8.4.12. Both use native prepares, native result types,
+FETCH_ASSOC, a 5-second PDO timeout, utf8mb4 / utf8mb4_0900_ai_ci, UTC and the
+existing strict SQL mode. Configured options were identical and native-prepare/
+native-type settings were checked. This is an observed environment comparison,
+not an isolated experiment attributing every difference exclusively to SSH.
+
+All timings below are milliseconds unless explicitly marked:
+
+| Measurement | A: GitHub PHP / tunnel | B: Dogado PHP / local DB |
+| --- | ---: | ---: |
+| Bare PDO constructor/authentication, n=1 | 259.659 | 0.994 |
+| Session setup plus read-only/target verification | 1241.508 | 1.494 |
+| Direct SELECT mean, n=5 | 256.600 | 0.261233 |
+| Direct SELECT min–max | 200.178–341.309 | 0.200223–0.403082 |
+| Native prepare/execute SELECT mean, n=5 | 284.263 | 0.216166 |
+| Native SELECT min–max | 200.153–480.563 | 0.206893–0.224898 |
+| All ten SELECTs mean | 270.432 | 0.238700 |
+| All ten SELECTs min–max | 200.153–480.563 | 0.200223–0.403082 |
+| Ten-SELECT sequence | 2704.331 | 2.398 |
+| Total internal PHP measurement sequence, including connect/setup/rollback | 4305.755 | 5.038 |
+| Parent-observed process/SSH-command duration | 4354.070 | 433.454 |
+
+PDO and whole-sequence timing each have only one sample per variant; no
+repeatability range or confidence interval can be inferred for those values.
+The ten-SELECT mean combines the explicitly reported five direct and five native
+measurements; the separate mode statistics are the primary like-for-like result.
+SQL wall timers include prepare/query, execute where applicable and fetch.
+
+| Comparison | A / B factor | B reduction relative to A |
+| --- | ---: | ---: |
+| Direct SELECT mean | 982.26× | 99.8982% |
+| Native SELECT mean | 1315.02× | 99.9240% |
+| Combined SELECT mean | 1132.94× | 99.9117% |
+| PDO constructor/authentication | 261.15× | 99.6171% |
+| Internal PHP sequence | 854.68× | 99.8830% |
+
+Raw SELECT wall times, in execution order, milliseconds:
+
+| Mode / sample | A | B |
+| --- | ---: | ---: |
+| direct 1 | 341.309240 | 0.209388 |
+| direct 2 | 200.386413 | 0.288659 |
+| direct 3 | 200.208570 | 0.204815 |
+| direct 4 | 340.919341 | 0.200223 |
+| direct 5 | 200.177600 | 0.403082 |
+| native 1 | 480.563481 | 0.222991 |
+| native 2 | 200.152506 | 0.211163 |
+| native 3 | 340.024780 | 0.206893 |
+| native 4 | 200.166060 | 0.224898 |
+| native 5 | 200.408982 | 0.214886 |
+
+The local PHP sequence took only 5.038 ms, while the runner-observed B command
+took 433.454 ms. The latter also includes SSH command/channel/control transport,
+interpreter startup, stdin transfer and result delivery. It must not be called
+local SQL time. Similarly the internal A sequence excludes initial SSH login,
+the forwarding setup and the earlier capability command.
+
+### What is measured, estimated and still unverified
+
+**Measured:** this run's combined cheap-SELECT latency fell from 270.432 ms to
+0.238700 ms, approximately 1,133× / 99.9117% lower. Direct and native modes
+individually show the same large order-of-magnitude advantage. PDO connection
+latency also fell from 259.659 ms to 0.994 ms. The previous roughly 431 ms
+tunnel value is historical; this run's eastus latency differs substantially.
+No uniform network latency or statistical guarantee is claimed from ten probes.
+
+**Illustrative estimate, not a collector prediction:** the optimized collector's
+four state checks contain 52 prepared executions and four direct queries per
+asset. Substituting only this run's SELECT 1 means gives a cheap-query component
+of 52 × 284.263162 + 4 × 256.600233 = 15808.085 ms for A and
+52 × 0.216166 + 4 × 0.261233 = 12.286 ms for B, a difference of
+about 15.80 seconds. Two PDO constructors at the observed difference
+would add about 0.517 seconds of possible savings.
+This scaling assumes every real query behaves like SELECT 1, which is unproven.
+It excludes real schema/catalog/fact query execution, row transfer, validations,
+provider work, writer/commit, process startup and independent readback overhead.
+It is a transport/cheap-query sensitivity calculation, neither a lower bound nor
+a reliable total-runtime estimate. Do not subtract it from the historical
+37.6-second collector runtime or present a new measured collector duration.
+
+**Architecture assessment:** prioritize a future, separately authorized
+feasibility/integration design for running the collector close to the DB over
+further small round-trip reductions. Local DB access removes the large per-query
+remote-path penalty for every retained integrity checkpoint, whereas another
+small SQL consolidation affects only a few calls. The measurements strongly
+support this direction, while leaving all current checks and placement intact.
+They do not authorize a collector move or deployment.
+
+Still untested are the actual bounded runtime queries on Dogado, Python/provider
+adapter dependencies and network access, the complete PHP/Python collector
+runtime, private workspace and secret provisioning without files, failure and
+resource limits, concurrent/manual-run exclusion and recovery/operational
+ownership. No scheduling mechanism was added or tested. A full collector run
+with real acquisition/writer/commit would require a separate explicit scope;
+the present result does not establish its end-to-end speed or production readiness.
+
+### Safety outcome and relevant tests
+
+SSH, host-key verification, tunnel, both fixed DB-identity checks, read-only
+enforcement and rollback: PASS. Dogado PHP 8.4 CLI, PDO MySQL and local test DB:
+available. Both variants report provider_requests = 0, business_writes = 0 and
+select1_executions = 10; the existing secret-output guard reports NEIN/PASS.
+No new Observation, Current/Bars write, schema change, production change or
+remote file operation was performed. This is enforced by the fixed read-only
+probe path; no global before/after checksum of unrelated concurrent activity
+was taken.
+
+Twelve offline tests cover the exact SELECT budget/modes and read-only ownership,
+identity/value failure and rollback, invalid endpoint/missing secret before PDO,
+exception-text suppression, stdin-only secret/source transport and sanitized
+child environment, no PTY and channel cleanup, exec rejection before password/DB,
+the three-command capability bound, stop before tunnel on failed capability,
+output bounds and secret guard, ratio arithmetic, and the manual-only/fileless/
+no-provider/no-business-write workflow contract. Both PHP files passed lint.
+No collector/runtime logic or previous workflow was modified.
