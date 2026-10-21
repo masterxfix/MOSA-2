@@ -1,0 +1,56 @@
+name: Manual MOSA 2 authorized six private directories
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed directory-operation commit
+        type: string
+        required: true
+      authorization:
+        description: Explicit six-directory authorization token
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-private-collector-directories
+  cancel-in-progress: false
+
+jobs:
+  directories:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Require exact revision and explicit directory authorization
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          DIRECTORY_AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$DIRECTORY_AUTHORIZATION" = 'MOSA2-CREATE-SIX-DIRS-2026-10-21'
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install existing pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Relevant offline directory safety tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m unittest discover -s tests -p 'test_collector_private_directories.py' -v
+      - name: Create once and independently read back exactly six directories
+        timeout-minutes: 3
+        env:
+          MOSA_PRIVATE_DIRECTORY_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/collector_private_directories.py

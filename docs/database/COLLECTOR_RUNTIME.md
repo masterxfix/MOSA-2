@@ -2191,3 +2191,77 @@ Keine zusätzlichen SSH-/Actions-Läufe, Laufzeit- oder Paketwiederholungstests.
 Nur dieser neue Dokumentationsabschnitt; Konsistenz der acht Zuordnungen,
 Pfadüberschneidungen, Budgetrechnung und auf eine Datei begrenzter Diff geprüft.
 Die beiden Einstellungsansichten wurden ohne Speichern über Abbrechen verlassen.
+
+
+## Freigegebene private Verzeichnisanlage: PASS (21.10.2026)
+
+Die ausdrückliche Nutzerfreigabe wurde ausschließlich für die sechs unten
+aufgeführten Verzeichnisse umgesetzt. Basis:
+    /var/www/vhosts/web213.server10.configcenter.info
+
+| Relativer Pfad | UID:GID | Rechte | Device:Inode | Anlage / unmittelbare Prüfung / unabhängiger Readback |
+| --- | --- | --- | --- | --- |
+| private | 10317:1003 | 0700 | 64768:97002064 | PASS |
+| private/mosa2-collector | 10317:1003 | 0700 | 64768:97002065 | PASS |
+| private/mosa2-collector/releases | 10317:1003 | 0700 | 64768:97002066 | PASS |
+| private/mosa2-collector/staging | 10317:1003 | 0700 | 64768:97002067 | PASS |
+| private/mosa2-collector/runs | 10317:1003 | 0700 | 64768:97002068 | PASS |
+| private/mosa2-collector/locks | 10317:1003 | 0700 | 64768:97002069 | PASS |
+
+**6/6 PASS:** reguläre Verzeichnisse, keine Symlinks, exakte kanonische Pfade,
+UID 10317, GID 1003, Modus 0700. Der Prozess setzte umask 0077. Das spätere
+Gesamtbudget bleibt 64 MiB / 67108864 Byte; keine Quotaänderung oder
+Speichervorausallokation wurde vorgenommen.
+
+[Actions-Nachweis 39577244026](https://github.com/masterxfix/MOSA-2/actions/runs/39577244026),
+geprüfter Stand cc815d059e6041575caff6687a3fc04aefb5c4df.
+**11/11 Offline-Sicherheitstests PASS**, danach genau ein Remote-Anlageaufruf.
+Der vorgelagerte Lauf 39577132312 scheiterte an einem SFTP-Kontextmanager-
+Testdouble und übersprang den gesamten Remote-Schritt. Nach dessen Korrektur
+wurde der Sicherheitsblock vollständig wiederholt; keine Anlage wurde wiederholt.
+
+Die Routine collector_private_directories.py verwendet den bestehenden
+festen SSH-Account-/Serververtrag und gepinnten Host-Key. Vor der Anlage wurden
+reale/effektive UID/GID, cwd, der unveränderte Account-Vorfahre
+10317:1002 / 0710 sowie Device/Inode 64768:5248112 überprüft. Die festen Ziele
+überschneiden sich nicht mit den drei öffentlichen Hauptbäumen httpdocs,
+mosa.scharwerk.de und mosa2-test.scharwerk.de, die sämtliche acht zuvor in Plesk
+gelesenen Zuordnungen umfassen. Keine erneute Domain-/Websiteinventur.
+
+Nur sechs exklusive, nichtrekursive mkdir-Aufrufe. No-follow-Verzeichnisdeskriptoren
+und erneutes Öffnen des geprüften Elternpfads vor jedem mkdir begrenzen die
+Operation; vorhandene Ziele, Symlinks, fremde Eigentümer, Pfaddrift und
+OS-Fehler führen zum Stopp. Jedes neue Verzeichnis wurde sofort geprüft.
+Keine chmod-/chown-Reparatur, Löschung, Wiederholungs- oder Weiterlaufautomatik.
+
+Anschließend wurden die sechs Verzeichnisse durch einen neuen Python-Prozess
+über eine zweite, erneut Host-Key-geprüfte SSH-Verbindung unabhängig gelesen.
+UID/GID, Modus, Typ, Device/Inode und Pfade stimmten exakt mit der unmittelbaren
+Prüfung überein. Ein zusätzlicher SFTP-Metadatenreadback bestätigte alle sechs
+Eigentümer-/Gruppen-/Rechtewerte, Verzeichnistyp und kanonischen Pfade.
+SSH und Host-Key: für beide Verbindungen PASS. Keine Abweichung am Server.
+
+Die 11 Tests decken exakte Anzahl/Reihenfolge, unmittelbare Kontrolle,
+fehlende Freigabe, falsche Identität, Basispfaddrift, vorhandene Objekte,
+Symlinks, kanonische Abweichung, Objektwechsel, falsche neue Rechte/UID/GID,
+Teilfehler und Kollision ohne Reparatur/Retry, schreibfreien Readback,
+strikten SFTP-Scope, zwei unabhängige Verbindungen, unterdrückte private
+Fehlermeldungen und weiterhin gesperrten privaten Upload ab.
+
+Der neue Workflow collector-private-directories.yml bleibt auf main manuell,
+mit erwartetem Commit, ausdrücklichem Verzeichnis-Freigabetoken,
+run_attempt=1 und eigener Nebenläufigkeitssperre. Der temporäre, exakt
+branchgebundene Prüftrigger auf codex/private-directories-a15aee wird entfernt,
+indem der Prüfbranch auf den Vorauftragsstand zurückgesetzt wird.
+Die Prüfcommits werden nicht nach main übernommen. Ein erneuter Anlageversuch
+würde bereits am vorhandenen Zwischenordner ohne Änderung abbrechen.
+
+Keine Programm- oder Testdatei übertragen/angelegt; die begrenzten Python-
+Befehle liefen dateilos mit -I -B. Keine DB-Verbindung, Provideranfrage,
+Collector-Ausführung, Website-/Plesk-Änderung oder Supportnachricht.
+Das vorhandene private Deploymentprofil bleibt unverändert gesperrt.
+
+**Nächster Schritt:** separat freizugebendes privates Collector-Deployment
+des bereits geprüften Releasepakets mit Staging, Manifestprüfung und
+unabhängigem Dateireadback. Die jetzige Verzeichnisfreigabe umfasst weder
+diesen Upload noch einen Collector-Lauf.
