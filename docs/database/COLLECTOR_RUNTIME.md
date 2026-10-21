@@ -1730,3 +1730,171 @@ runner. The isolated branch trigger used for verification is omitted from
 main and removed by resetting the temporary branch to the original base.
 Exactly one completion commit is added to main; verification commits are not
 merged. No generated archive or credential is committed.
+
+
+## Read-only private-root assessment (2026-10-21)
+
+### Authorization and bounded execution
+
+The user explicitly authorized **read-only metadata inspection** of:
+    /var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector
+
+Necessary ancestor metadata is included; directory inventories, other-domain
+inspection, creation, transfer, chmod/chown, deletion and collector execution
+remain excluded. This read authorization does not approve a deployment root
+or lift the hard upload gate from the previous release-preparation phase.
+
+The new manual workflow .github/workflows/collector-private-path.yml uses the
+existing pinned SSH client/host-key verification from collector_actions.py,
+the existing two-secret deploy_test_sftp configuration and the bounded,
+stderr-suppressing SSH command runner from collector_db_locality.py.
+No DB secret is requested or needed. The existing pinned Paramiko dependency
+set is installed on the Actions runner only.
+
+scripts/collector_private_path.py performs a finite lstat chain, SFTP
+canonicalization of the checked account anchor/current-directory string,
+and one fileless Python command using the already qualified absolute
+/opt/alt/python311/bin/python3.11 with -I -B. That command calls only current
+directory/process-ID APIs, lstat and statvfs on named, checked locations.
+No directory is listed and no remote file/source/cache is created.
+Unknown current-directory strings are never used as probe targets.
+
+The finite chroot alias is conditional on a missing absolute namespace,
+SSH cwd=/ and a verified SFTP account anchor. Permission errors, symlinks
+and non-directory ancestors stop inspection; they never trigger alternate
+protocol/path attempts. This fallback was offline-tested but **not used**
+in the observed live run, since full absolute host paths were visible.
+SFTP metadata calls have an eight-second per-call/45-second admission budget;
+the SSH command has a 30-second bound, and the live step a two-minute limit.
+
+### Observed path and ownership results
+
+The existing SSH and SFTP connections and pinned host key passed. Both protocols
+observed the account anchor and its documented test-webroot sibling using the
+same full absolute names. SSH cwd and SFTP normalize(".") were both:
+    /var/www/vhosts/web213.server10.configcenter.info
+
+SFTP normalize(account anchor) returned that same exact absolute name.
+SSH selected HOST_ABSOLUTE; no additional chroot alias was needed.
+The permitted scope does not establish the entire jail boundary or physical
+host mount configuration. This is an observed path-view mapping, not proof
+that the account is restricted to MOSA 2.
+
+- Target mosa2-collector: **NICHT VORHANDEN**, because its direct parent is absent.
+- Direct parent .../private: **NICHT VORHANDEN**, independently reported by both
+  protocols. No child lstat was attempted through the missing parent.
+- No target owner, group or permissions exist to verify.
+- SSH real/effective UID: 10317; real/effective primary GID: 1003.
+- Existing account directory owner/group: **10317:1002**, mode **0710**.
+- Known test-webroot owner/group: **10317:1002**, mode **0750**.
+- All inspected existing ancestors are directories; no symlinks were observed.
+  There is no claim about uninspected paths or a subsequently created target.
+
+The numeric primary GID differs from the account-directory GID. Any future
+private-directory contract must explicitly choose/verify the intended group;
+this diagnosis neither changes it nor infers new group permissions.
+
+| Exact SSH path | Result/type | UID:GID | Mode | Device:inode |
+| --- | --- | --- | --- | --- |
+| / | directory | 0:0 | 0755 | 64768:1313004 |
+| /var | directory | 0:0 | 0755 | 64768:2101312 |
+| /var/www | directory | 0:0 | 0755 | 64768:2238886 |
+| /var/www/vhosts | directory | 0:0 | 0755 | 64768:13108822 |
+| /var/www/vhosts/web213.server10.configcenter.info | directory | 10317:1002 | 0710 | 64768:5248112 |
+| /var/www/vhosts/web213.server10.configcenter.info/private | NICHT VORHANDEN | —:— | — | —:— |
+| /var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector | NICHT VORHANDEN (parent missing; not traversed) | — | — | — |
+| /var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de | directory, known MOSA-2 test webroot | 10317:1002 | 0750 | 64768:35128320 |
+
+SFTP matched existence, directory type, UID/GID, mode, byte size and integer
+mtime for the account anchor and known test webroot; the missing parent
+matched too. SFTP v3 does not expose device/inode identity, so these are
+cross-protocol path/metadata matches rather than inode-identity proof.
+SSH supplies device/inode values in the table.
+
+### Isolation and suitability
+
+The proposed path is a separate future sibling branch of the documented
+mosa2-test.scharwerk.de webroot, with no symlink in its existing prefix.
+The routine's **PASS** is restricted to this known-test-webroot comparison
+and the checked path prefix. The private target and its parent do not exist;
+their future ownership, modes and isolation cannot already have passed.
+
+**Overall private/public webroot isolation: UNBESTÄTIGT.**
+Existing approved documentation (AGENTS.md, docs/DEPLOYMENT.md and
+docs/dogado/README.md) identifies the MOSA-2 test document root but does not
+provide sufficient evidence that no domain alias, public URL mapping or other
+webroot could expose the proposed private location. No other domain, public
+URL, Plesk configuration, directory listing or mount inventory was inspected.
+
+The location appears **technically plausible as a proposal**, given the
+consistent account anchor, matching current UID and separate path branch.
+It is **not ready for private deployment**: both directories are absent and
+no creation/write authorization, complete public-isolation evidence or hosting
+quota confirmation has been obtained. No unsafe alternative path was selected.
+
+### Filesystem capacity, not hosting quota
+
+statvfs was called only on the nearest existing authorized ancestor:
+    /var/www/vhosts/web213.server10.configcenter.info
+
+| Filesystem metric | Observed value |
+| --- | ---: |
+| Fragment size | 4096 bytes |
+| Total filesystem bytes | 3059424206848 |
+| Free bytes (including privileged reserve) | 1482807173120 |
+| Bytes available to an unprivileged process | 1482790395904 |
+| Total filesystem inodes | 189726720 |
+| Free inodes | 178663444 |
+| Available inodes | 178663444 |
+| Confirmed account/hosting byte quota | **UNBESTÄTIGT** |
+| Confirmed account/hosting inode quota | **UNBESTÄTIGT** |
+
+These are a snapshot of a potentially shared filesystem, not an account
+allocation or a guarantee of usable MOSA-2 space. The numbers exceed the planned
+64 MiB reserve arithmetically, but do not prove that the hosting account has
+64 MiB quota headroom. No quota command, capacity allocation or stress test ran.
+
+### Tests and live receipt
+
+- Successful [Actions run 39571023928](https://github.com/masterxfix/MOSA-2/actions/runs/39571023928).
+- Tested revision: 0fcfa4e728565157b6e8588c94748e90f594716e.
+- **11/11 offline safety tests PASS** before the live step.
+- SSH PASS; pinned host key PASS; finite SSH/SFTP metadata assessment completed.
+- Remote Python command elapsed: about 555 ms; no retry/alternative live route.
+- Provider requests 0; DB connections 0; remote writes 0; directory listings 0.
+- No target creation, upload, test file, chmod/chown, removal, hosting change
+  or collector run. Existing private deployment remains disabled.
+- Only the two existing SSH/SFTP secrets are consumed in memory by the common
+  pinned client. No secret value was published; public_text suppresses an
+  entire report if a known credential appears. Raw stderr/exception messages
+  are not emitted.
+
+Tests cover finite allowed paths, metadata fields/capacity semantics, missing
+parent/target without creation or child traversal, tightly gated chroot aliases,
+denial/symlink/non-directory stops without bypass, cross-protocol mismatches,
+known-webroot inode alias detection, SFTP time budgets, absence of write/list/
+DB/provider/subprocess capability in the remote payload, pinned-client reuse,
+credential-free remote stdin, configuration failure before connection,
+secret-output suppression and the restricted workflow contract. Fake OS/SFTP
+objects provide these safety cases without remote fixtures.
+
+The isolated codex/private-path-a15aee branch supplied the permitted one-shot
+push trigger for this diagnostic. The final workflow on main is manual only,
+requires the exact expected_commit and run_attempt=1, with contents:read and
+the existing diagnostic concurrency lock. The temporary trigger is removed by
+resetting that branch to the pre-task base; verification commits are not merged.
+No existing collector, release payload/contract, deployment profile or testsite
+workflow is changed.
+
+### Remaining authorization and evidence
+
+Before any first upload, obtain explicit authorization to create/use the exact
+private root and its scoped subdirectories, plus hoster/operator evidence of
+no public mapping and account byte/inode quota headroom. Then separately
+implement/review restrictive owner/group/mode verification and the staging/
+readback/publication path. The upload gate stays unimplemented and closed.
+A later authorization to create directories would still not authorize a
+collector batch, DB writes, providers or production changes.
+
+This task ends with read-only findings and repository documentation. No action
+is taken to resolve the missing directories.

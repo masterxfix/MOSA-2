@@ -1,0 +1,48 @@
+name: Manual MOSA 2 read-only private path assessment
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed read-only diagnostic commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-collector-performance-readonly
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Require exact reviewed revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install existing pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Offline finite-path safety tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m unittest discover -s tests -p 'test_collector_private_path.py' -v
+      - name: One authorized read-only metadata assessment
+        timeout-minutes: 2
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/collector_private_path.py
