@@ -7,6 +7,7 @@
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Projektüberblick</title>
   <link rel="stylesheet" href="assets/css/main.css?v=pages-20261021">
+  <script src="assets/js/page_load_time.js" defer></script>
   <script src="assets/js/navigation.js" defer></script>
 </head>
 <body>
@@ -24,7 +25,7 @@
     </section>
 
     <section class="results" aria-labelledby="ergebnisse-titel">
-      <div class="section-heading"><div><p class="eyebrow">Das Fundament steht</p><h2 id="ergebnisse-titel">Was wir geschafft haben</h2></div><p class="snapshot">Geprüfter Projektstand<br><time datetime="2026-10-20">20. Oktober 2026</time></p></div>
+      <div class="section-heading"><div><p class="eyebrow">Das Fundament steht</p><h2 id="ergebnisse-titel">Was wir geschafft haben</h2></div><p class="snapshot">Geprüfter Projektstand<br><time datetime="2026-10-21">21. Oktober 2026</time></p></div>
       <!-- Statische Statussektion: eine gemeinsame Stelle für spätere Datenanbindung. -->
       <div class="status-grid">
         <article class="status-card" data-status="platform">
@@ -40,10 +41,19 @@
           <p><strong>17 Tabellen</strong> für den gemeinsamen Kern, eindeutige Identitäten, Marktdaten und versionierte Einheiten bilden die technische Grundlage.</p>
         </article>
         <article class="status-card" data-status="version">
-          <span class="badge neutral">Version 3</span><h3>Schema-Version</h3>
-          <p>Schema Version 3 ist geprüft; versionierte Einheiten sind hinterlegt. Die weitere Entwicklung baut auf diesen geprüften Verträgen auf.</p>
+          <span class="badge neutral">Version 4</span><h3>Schema-Version</h3>
+          <p>Schema Version 4 ist geprüft; versionierte Einheiten sind hinterlegt. Die weitere Entwicklung baut auf diesen geprüften Verträgen auf.</p>
+        </article>
+        <article class="status-card" data-status="collector">
+          <span class="badge success">Live getestet</span><h3>Collector auf Dogado</h3>
+          <p>Der PNE-Einzelaktientest und der gemeinsame Drei-Aktien-Test mit PNE, Carl Zeiss Meditec und DroneShield waren erfolgreich.</p>
+        </article>
+        <article class="status-card" data-status="integrity">
+          <span class="badge success">Bestätigt</span><h3>Kontrollierte Datenübernahme</h3>
+          <p>Die drei neuen Observations 4909, 4910 und 4911 sind unabhängig zurückgelesen. Dedupe und Replay sind bestätigt; Current und Bars blieben unverändert.</p>
         </article>
       </div>
+      <p class="context-note">Im Drei-Aktien-Test: durchschnittlich rund 4,43 Sekunden Collector-Laufzeit je Aktie. Automatischer Regelbetrieb bleibt gesperrt.</p>
     </section>
 
     <section class="next-step" aria-labelledby="naechstes-ziel">
@@ -60,13 +70,14 @@
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
         <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Kontrollierte Testentwicklung</p></li>
+        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Einzel- und Drei-Aktien-Livetest bestätigt</p></li>
       </ol>
-      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Weitere kontrollierte Asset- und Live-Datenübernahmen</li><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Produktivfreigabe</li></ul></aside>
+      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Weitere einzeln freigegebene Asset- und Live-Datenübernahmen</li><li>Breitere MOSA-Datenmigration</li><li>Current-Routenauswahl</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Freigabe des automatischen Regelbetriebs</li><li>Produktivfreigabe</li></ul></aside>
     </section>
   </main>
   <footer class="wrap footer">
     <span>MOSA 2 · Auf verlässlichen Grundlagen aufgebaut.</span>
+    <span class="footer-latency">Seitenladezeit · <span data-page-load-time aria-label="Seitenladezeit wird gemessen">— ms</span></span>
     <span class="footer-release">Entwicklung · Keine Produktivfreigabe</span>
   </footer>
 </body>
