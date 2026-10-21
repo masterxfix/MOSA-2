@@ -1898,3 +1898,210 @@ collector batch, DB writes, providers or production changes.
 
 This task ends with read-only findings and repository documentation. No action
 is taken to resolve the missing directories.
+
+
+## Hosting-Voraussetzungen vor privater Verzeichnisanlage (21.10.2026)
+
+### Nachweisstand und Browsergrenze
+
+Gezielt ausgewertet wurden
+[DOGADO_PLATFORM_QUALIFICATION.md](DOGADO_PLATFORM_QUALIFICATION.md),
+der vorstehende private Pfadnachweis und
+[docs/dogado/README.md](../dogado/README.md).
+Historische Kontoanzeigen, der lesende SSH-/SFTP-Nachweis und heutige
+öffentliche Produktdokumentation sind unterschiedliche Nachweisarten.
+
+Eine aktuelle angemeldete Kontoansicht konnte in diesem Auftrag nicht über
+einen nachgewiesen zulässigen, laufwerksgrenzenkonformen Browserzugang geprüft
+werden. Die bekannte lokale Initialisierungsroute ist durch die
+Werkzeug-/Laufwerksregeln ausgeschlossen und wurde nicht gestartet.
+**Chrome-/Anmeldestatus: UNGEPRÜFT**, nicht „nachweislich abgemeldet“.
+Es wurde keine neue Browsersitzung gestartet, kein Login/Passwort angefordert
+und keine erneute Authentifizierung ausgelöst. Eine öffentliche Hilfeseite ist
+kein Ersatz für aktuelle persönliche Kontoanzeigen.
+
+Es gab in dieser Phase auch keinen weiteren SSH-/SFTP-Lauf. Die folgenden
+numerischen Eigentümer- und Pfadangaben stammen ausdrücklich aus dem
+vorherigen [Nachweis 39571023928](https://github.com/masterxfix/MOSA-2/actions/runs/39571023928)
+und Abschluss-Commit 26c4516, nicht aus einer neuen Servermessung.
+
+### Tarif, Belegung und tatsächlich belegbare Reserve
+
+| Frage | Belegbarer Stand | Aussagegrenze |
+| --- | --- | --- |
+| Hostingtarif / Speicherlimit | WEB M 3.0, 150 GB, in der Kontoaufnahme vom **17.10.2026** bestätigt | Heute nicht erneut im Konto verifiziert; keine aktuelle Vertrags-/Quota-Zusage |
+| oneHome-Belegung | Historisch 6,32 GB am 17.10.2026 | Keine aktuelle Belegung |
+| Plesk-Belegung | Historisch 7725,7 MB am 17.10.2026 | Andere Anzeige/Bezugsgröße; nicht mit oneHome verrechnen oder stillschweigend gleichsetzen |
+| Aktuelle verbrauchte Account-Quota | **UNBESTÄTIGT** | Keine aktuelle Kontoansicht oder Hosterbestätigung |
+| Aktuelle freie Tarif-/Quota-Reserve | **UNBESTÄTIGT** | Keine aktuelle Differenz aus 150 GB und alten Verbrauchswerten berechnen |
+| Inode-Quota / aktueller Account-Inodeverbrauch | **UNBESTÄTIGT** | In der damaligen Ressourcenansicht nicht ausgewiesen; das bedeutet nicht unbegrenzt |
+| Geplante zusätzliche MOSA-2-Obergrenze | 64 MiB = **67108864 Byte**, einschließlich Releases, Staging, Laufdaten, Locks und temporärer Daten | Planlimit, keine reservierte oder zugesicherte Hostingkapazität |
+| Vorheriger statvfs-Befund | 1482790395904 verfügbare Dateisystem-Byte; 178663444 verfügbare Inodes | Shared-Dateisystemkapazität, **keine Account-Quota** |
+
+Die frühere Plesk-Anzeige erlaubte Überbeanspruchung von Speicher/Traffic.
+Das erweitert weder das bestätigte historische 150-GB-Limit noch begründet es
+eine heute verfügbare Reserve. Zu klären bleiben außerdem Abrechnung von
+Datenbanken, Mail, Backups, Logs und temporären Dateien sowie Einheiten und
+Aktualisierungsverzug der beiden Belegungsanzeigen.
+
+Die öffentliche
+[Dogado-Anleitung zur Paketverwaltung](https://help.dogado.de/hc/de/articles/27647035445649-Ansicht-der-Hosting-Paketverwaltung-im-Kundencenter)
+beschreibt eine Speicherübersicht in oneHome. Sie liefert keine aktuellen
+Werte dieses Kontos und keinen Nachweis einer Inodegrenze.
+
+### Private Verzeichnisse und öffentliche Zuordnungen
+
+**Öffentliche Isolation des vorgeschlagenen Roots: UNBESTÄTIGT.**
+
+Die letzte Prüfung zeigte den übereinstimmenden SSH-/SFTP-Accountpfad:
+    /var/www/vhosts/web213.server10.configcenter.info
+
+Dessen Unterordner private war nicht vorhanden; folglich existierte auch
+private/mosa2-collector nicht. Der geplante Pfad liegt als Zeichenpfad außerhalb
+des bekannten Test-Webroots mosa2-test.scharwerk.de; in seinem geprüften
+bestehenden Vorlauf wurden keine Symlinks gefunden. Das schmale PASS des
+vorherigen bekannten-Test-Webroot-Vergleichs ist **kein** vollständiger
+Nachweis gegen alle öffentlichen Einbindungen.
+
+Die aktuelle öffentliche
+[Dogado-Dokumentation zur Domain-/Ordnerzuordnung](https://help.dogado.de/hc/de/articles/25447619916561-Domain-und-Ordnerzugeh%C3%B6rigkeit-im-Webhosting-und-WordPress-Hosting)
+erläutert, dass Domains aus einem zugewiesenen Verzeichnis ausgeliefert werden
+und mehrere Domains dasselbe Verzeichnis verwenden können. Die Anleitung zum
+[Dokumentenstamm](https://help.dogado.de/hc/de/articles/22595937740305-Dokumentenstamm-bzw-Verzeichnis-einer-Domain-%C3%A4ndern)
+beschreibt veränderbare Zuordnungen. Diese öffentlichen Anleitungen wurden
+nur gelesen; ihre Änderungsschritte wurden nicht ausgeführt.
+
+Die allgemeine
+[Plesk-Obsidian-Dokumentation zur Linux-Verzeichnisstruktur](https://docs.plesk.com/en-US/obsidian/advanced-administration-guide-linux/virtual-hosts-configuration/website-directory-structure/virtual-host-structure-linux.68806/)
+führt private unter den seit Plesk 11.5 nicht mehr standardmäßig enthaltenen
+Virtual-Host-Verzeichnissen. Daraus folgt weder ein Verbot eines selbst
+angelegten Ordners noch eine besondere Schutzgarantie für dessen Namen.
+Eine kontospezifische Dogado-Freigabe für den vorgeschlagenen Ordner ist
+damit nicht belegt.
+
+Aus den vorhandenen freigegebenen Unterlagen ergibt sich keine vollständige
+aktuelle Liste aller Document Roots, Domain-/Subdomain-Aliase, Webserver-Aliase,
+Weiterleitungen oder sonstigen öffentlichen Pfadabbildungen dieses Accounts.
+Keine fremden Domaininhalte, Dateiverzeichnisse oder Konfigurationen wurden
+geöffnet oder durchsucht. Deshalb ist weder PASS noch FAIL für die vollständige
+öffentliche Isolation gerechtfertigt.
+
+0700 ist eine notwendige Dateisystemgrenze zu anderen Betriebssystem-UIDs,
+aber kein Schutz vor Prozessen mit derselben UID 10317. Auch ein außerhalb
+des Document Roots liegender Pfad könnte von einer unter demselben Account
+laufenden Webanwendung gelesen und ausgegeben werden. Der Plan schafft
+keine neue Betriebssystemidentität und behauptet keine gegenseitige Isolation
+der acht Websites. Eine fehlende direkte URL-Zuordnung und die gemeinsame
+Account-Laufzeitgrenze müssen getrennt bewertet werden.
+
+### Konkreter Vertrag für eine spätere, ausdrücklich freizugebende Anlage
+
+Dies ist ein **Plan**, keine Anlage- oder Schreibfreigabe.
+
+| Gegenstand | Vorgabe |
+| --- | --- |
+| Vorhandener, unveränderter Account-Vorfahre | /var/www/vhosts/web213.server10.configcenter.info; zuletzt UID 10317, GID 1002, Modus 0710 |
+| Neu anzulegender Zwischenordner, falls weiterhin fehlend | Exakt .../private; muss in einer späteren Freigabe separat mitgenannt sein |
+| Neuer privater MOSA-2-Root | Exakt .../private/mosa2-collector |
+| Ausschließlich initial erlaubte Unterordner | releases, staging, runs, locks direkt unter dem Root |
+| Soll-UID aller neuen privaten Verzeichnisse | **10317** (bestehender Account, kein neuer Benutzer) |
+| Vorgeschlagene Soll-GID aller neuen privaten Verzeichnisse | **1003**, aus der zuletzt gemessenen realen/effektiven primären SSH-GID; vor Anlage durch Hoster bzw. aktuellen Identitätsnachweis bestätigen |
+| Rolle der beobachteten GID 1002 | Bereits bestehende Account-/Webroot-Gruppe; keine automatische Sollgruppe für neue private Ordner |
+| Andere Eigentümer/Gruppen | Nicht stillschweigend zulässig; bei Abweichung stoppen, keine automatische chown-/Gruppenreparatur |
+| Modus neuer privater Verzeichnisse | **0700**, ohne SGID/SUID/Sticky-Sonderbits; restriktive Erzeugungsmaske 0077 |
+| Spätere Dateien | 0600 gemäß Releasevertrag, aber in einer reinen Verzeichnisanlagephase noch keine Dateien |
+| Gesamtes anfängliches Planbudget | Höchstens **64 MiB / 67108864 Byte**; nicht pro Unterverzeichnis und nicht als Vorausallokation |
+
+Die numerische Gruppenrolle ist bislang nicht unabhängig im Hostingpanel
+bestätigt; Gruppennamen werden nicht aus einer üblichen Plesk-Installation
+erraten. GID 1003 ist der konkrete vorgeschlagene Sollwert. Sollte der Hoster
+für private Ordner GID 1002 oder eine andere Gruppe vorschreiben, muss der
+Vertrag vor einer Ausführung ausdrücklich angepasst werden. Bestehende
+Account- und Systemverzeichnisse bleiben unverändert.
+
+Erforderliche Kontrollen vor und nach einer später erlaubten Anlage:
+
+1. Exakte Host-/Accountidentität, gepinnter Host-Key und dieselbe bestätigte
+   SSH-/SFTP-Abbildung; keine automatische Ausweichroute oder Pfadverkürzung.
+2. Gesamten notwendigen Vorlauf einzeln mit lstat prüfen; keine Symlinks,
+   Nicht-Verzeichnisse, verweigerten Zugriffe oder unerwarteten Eigentümer
+   übergehen. Systemvorfahren dürfen ihre nachgewiesenen Systemeigentümer
+   behalten; der Account-Vorfahre muss unverändert zum bestätigten Account
+   gehören. Keine fremden Ordner inventarisieren.
+3. Canonical-Pfadgleichheit und strikte Eingrenzung auf die ausdrücklich
+   genannten sechs neuen Verzeichnisse (private, mosa2-collector und vier
+   Unterordner) prüfen. Bereits vorhandene unerwartete Objekte nicht übernehmen,
+   überschreiben oder „reparieren“. Eine wiederholte Ausführung ist kein Anlass
+   für neue Berechtigungsänderungen.
+4. Vorab einen aktuellen, kontospezifischen Quota-Nachweis mit wenigstens
+   64 MiB zusätzlichem Headroom sowie geklärter Inodegrenze verlangen.
+   Bereits belegte gemeinsame Ressourcen und die vereinbarte Reserve
+   berücksichtigen; statvfs allein genügt nicht.
+5. Den Nachweis aller öffentlichen Pfadabbildungen bzw. eine konkrete
+   Hosterbestätigung für diesen Root einholen. Keine bloße Ordnerbezeichnung
+   oder .htaccess-Datei als Ersatz verwenden.
+6. Eine spätere Implementierung muss Symlink-/Austauschrennen beim
+   pfadgebundenen Anlegen verhindern und anschließend numerischen Eigentümer,
+   Gruppe, Typ, exakten Modus 0700 und Pfadzuordnung unabhängig zurückprüfen.
+   Bei Abweichung stoppen; kein rekursives chmod/chown und kein Aufweichen
+   bestehender Vorfahren.
+
+Eine spätere Freigabe muss sowohl den fehlenden Zwischenordner private als
+auch den MOSA-2-Root und die vier Unterordner, Soll-UID/GID, Rechte und
+Budget ausdrücklich benennen. Sie darf nicht als Upload-, Collector-,
+Provider- oder DB-Schreibfreigabe ausgelegt werden.
+
+### Vorbereitete Fragen an Dogado – NICHT VERSANDT
+
+Die folgenden Fragen sind ein Entwurf für eine spätere, vom Nutzer veranlasste
+Hosteranfrage. Codex hat keine Anfrage oder Nachricht abgesendet.
+
+1. Gilt für das bestehende WEB-M-3.0-Abonnement aktuell weiterhin ein Limit
+   von 150 GB? Wie hoch sind derzeit abrechnungsrelevante Belegung und freie
+   Account-Quota, jeweils mit Einheit, Messzeitpunkt und Hard-/Soft-Limit?
+   Welche Anteile aus Webspace, Datenbanken, Mail, Backups, Logs und temporären
+   Dateien werden gezählt? Warum unterscheiden sich oneHome- und Plesk-Werte?
+2. Gibt es eine Datei-/Inodegrenze für dieses Abonnement, wie hoch ist sie und
+   wie viel ist belegt? Sind mindestens zusätzliche 64 MiB und die für ein
+   kleines versioniertes Collector-Paket samt begrenzten Laufdaten benötigten
+   Inodes innerhalb der bestehenden Quota nutzbar?
+3. Darf web213 unter
+   /var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector
+   einen ausschließlich privaten CLI-Anwendungsbereich anlegen? Ist der
+   Zwischenordner private frei nutzbar oder plattformseitig reserviert/
+   verwaltet? Welchen bestehenden Benutzer-/Gruppenkennungen und Rechten
+   müssen diese neuen Ordner entsprechen? Ist 10317:1003 mit 0700 zulässig?
+4. Können Sie für genau diesen Pfad bestätigen, dass er außerhalb **aller**
+   öffentlich eingebundenen Document Roots dieses Abonnements liegt und weder
+   durch Domains/Subdomains/Aliase noch durch Apache-/nginx-Aliase,
+   Weiterleitungen, Bind-/Pfadabbildungen oder öffentliche Dateidienste direkt
+   ausgeliefert wird? Bitte die Account-Zuordnung administrativ bestätigen,
+   ohne Websiteinhalte anderer Domains bereitzustellen oder zu verändern.
+5. Gibt es für diesen privaten Bereich zusätzliche Hostingbedingungen,
+   automatische Lösch-/Berechtigungsprozesse oder Einschränkungen für die
+   bereits verfügbaren CLI-Interpreter
+   /opt/alt/python311/bin/python3.11 und /opt/plesk/php/8.4/bin/php?
+   Bitte auch die gemeinsame UID-Grenze zu vorhandenen PHP-Webanwendungen
+   erläutern; eine neue Benutzeranlage ist nicht gewünscht.
+
+### Empfehlung und Prüfabschluss
+
+**Die Verzeichnisanlage jetzt noch nicht freigeben.** Der vorgeschlagene
+Speicherort bleibt technisch plausibel, aber aktuelle Account-Quota,
+Inodebedingungen, zulässige neue GID und vollständige öffentliche Isolation
+sind noch offen. Erst nach deren Bestätigung kann ein eng begrenzter
+Anlageauftrag für die oben genannten Pfade formuliert werden. Im vorliegenden
+Auftrag wird niemand zur Anmeldung, Passwortübergabe oder Klickaktion
+aufgefordert.
+
+Geändert wird ausschließlich diese Dokumentation. Geprüft wurden
+Quellen-/Datumszuordnung, Trennung historischer und aktueller Werte,
+64-MiB-Umrechnung, Soll-/Ist-Eigentümervertrag, unveränderte bisherige
+Dokumentation und der auf genau eine Datei begrenzte Git-Diff.
+Mangels Codeänderung sind keine zusätzlichen Laufzeit-/Actions-Tests nötig.
+Der frühere 11/11-Sicherheitstest ist ein historischer Nachweis, kein neuer
+Testlauf dieses Auftrags.
+
+Keine Verzeichnisanlage, kein Upload, keine gespeicherte Plesk-Änderung,
+kein SSH-/SFTP-/DB-/Provider-/Collector-Lauf und keine Hosteranfrage.
+Privates Deployment und Ausführung bleiben technisch gesperrt.
