@@ -139,3 +139,46 @@ permanent read-only configuration and necessary rollback backup protected.
 Production deployment is excluded. The completion commit uses `[skip ci]` on
 main; the exact commit gets one workflow_dispatch on a temporary branch with
 the production deploy skipped. Delete that branch after the Linux run.
+
+## Latest collector observations (21 October 2026)
+
+The separate "Neueste Collector-Beobachtungen" section uses
+`api/market.php?view=observations` and the existing private read-only login.
+Current remains the default view; its query, renderer and timing are unchanged.
+The five qualified equities are resolved by their existing ISINs and verified
+Frankfurt snapshot route keys, without fixed numeric database IDs. Source,
+route revision and frozen EUR unit bindings are checked. No collector code or
+provider is called by this reader.
+
+For each equity, one indexed asset/source query reads at most 101 candidates
+using the existing (asset_id, source_id, market_at, id) index. At most 100 facts
+are validated against Observation-v2 and their canonical SHA-256 dedupe keys.
+The extra row proves that no unseen equal/newer market-time winner is hidden;
+otherwise the reader fails closed rather than scanning history. Selection uses
+market time, observed time and ID; contradictory winning facts fail closed.
+Legacy facts are excluded. Responses contain at most five items. All SELECTs
+share a READ ONLY transaction, ended by rollback; no business data is written.
+
+Market age is based on the stored market timestamp, never on page retrieval.
+Missing facts and stale values are explicit. The browser reuses the existing
+price/time formatters and requests only the same-origin API after Current's
+initial request finishes. A completed refresh schedules the next refresh in
+120 seconds. Hidden tabs pause; becoming visible performs one controlled
+refresh without catching up. Requests cannot overlap. Failure preserves the
+previous valid rows and pauses automatic refresh until explicit manual recovery.
+Page-load timing scripts are unchanged.
+
+Synthetic regressions cover ordering/ties, stale/missing/legacy facts, invalid
+source/route/unit/dedupe bindings, bounded-query completeness and sanitized
+database failure. Browser fixtures cover 1280px/390px layout, 120-second refresh,
+hidden/visible lifecycle, serialization, retained data and no automatic retry.
+Deployment and live evidence are recorded in the linked Actions run for the
+completion commit; a synthetic viewport is distinct from live mobile proof.
+
+Verification: [offline suite and original-file backup](https://github.com/masterxfix/MOSA-2/actions/runs/39610285899)
+passed 53 focused tests plus desktop/mobile browser scenarios.
+[In-memory read-only database proof](https://github.com/masterxfix/MOSA-2/actions/runs/39610675060)
+resolved all five bindings and returned PNE 4909, Carl Zeiss 4910, DroneShield
+4911, BYD 4904 and Ubtech 4905; all were correctly stale. These are evidence
+examples, never display constants. The newer PNE market/observation pair selects
+4909 rather than historical 4908. No provider, collector or database writer ran.

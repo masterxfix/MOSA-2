@@ -6,10 +6,11 @@
   <meta name="description" content="MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Gespeicherte Marktdaten, Datenstatus und Messungen der Testumgebung.">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Marktdaten &amp; Messungen</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=pages-20261021">
+  <link rel="stylesheet" href="assets/css/main.css?v=observations-20261021">
   <script src="assets/js/page_load_time.js" defer></script>
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/market.js" defer></script>
+  <script src="assets/js/observations.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -35,6 +36,22 @@
         </table>
       </div>
       <noscript><p>Für die Marktdatenanzeige bitte JavaScript aktivieren.</p></noscript>
+    </section>
+
+
+    <section class="market-section observation-section" aria-labelledby="observations-titel" data-observation-view>
+      <div class="section-heading"><h2 id="observations-titel">Neueste Collector-Beobachtungen</h2>
+        <span class="snapshot" data-observation-summary role="status">Observations werden geladen …</span></div>
+      <p class="context-note">Nur gespeicherte Beobachtungen. Das Datenalter bezieht sich auf den Marktzeitpunkt. Die Anzeige aktualisiert alle 120 Sekunden, solange der Tab sichtbar ist; sie startet keinen Collector.</p>
+      <p><button class="observation-refresh" type="button" data-observation-refresh>Anzeige aktualisieren</button></p>
+      <div class="observation-table-wrap" aria-busy="true" data-observation-region>
+        <table class="market-table observation-table">
+          <caption class="visually-hidden">Neueste gültige gespeicherte Observation je qualifizierter Aktie; alle Zeitangaben UTC</caption>
+          <thead><tr><th scope="col">Aktie</th><th scope="col">Kurs</th><th scope="col">Währung / Einheit</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Marktzeitpunkt</th><th scope="col">Erfasst</th><th scope="col">Datenalter</th><th scope="col">Observation-ID</th><th scope="col">Datenstatus</th></tr></thead>
+          <tbody data-observation-rows><tr><td colspan="9">Gespeicherte Observations werden geladen …</td></tr></tbody>
+        </table>
+      </div>
+      <noscript><p>Für die Observation-Anzeige bitte JavaScript aktivieren.</p></noscript>
     </section>
 
     <section class="market-section" aria-labelledby="messungen-titel">

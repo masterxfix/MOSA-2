@@ -134,3 +134,15 @@ dd { color: #bdcbd6; font-size: .86rem; margin: 7px 0 0 30px; }
 .site-nav a { color: var(--muted); text-decoration: none; text-underline-offset: 5px; }
 .site-nav a:hover, .site-nav a[aria-current="page"] { color: var(--text); text-decoration: underline; }
 .footer-release { grid-column: -2 / -1; }
+
+.observation-table-wrap { overflow-x: auto; }
+.observation-table { font-size: .78rem; }
+.observation-table th, .observation-table td { padding: 16px 10px; }
+.observation-table th { white-space: nowrap; }
+.observation-refresh { font: inherit; font-size: .82rem; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.observation-refresh:disabled { color: var(--muted); cursor: wait; }
+.observation-refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+@media (max-width: 760px) {
+  .observation-table-wrap { overflow-x: visible; }
+  .observation-table td { padding: 7px 0; }
+}
