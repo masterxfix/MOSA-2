@@ -5,14 +5,25 @@ import subprocess
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
+PHP=['php','-d','error_reporting=-1','-d','display_errors=stderr']
 
 
 class ObservationReadTests(unittest.TestCase):
     def run_case(self,case):
-        p=subprocess.run(["php",str(ROOT/"tests/fixtures/observation_read.php"),str(ROOT),case],
+        p=subprocess.run([*PHP,str(ROOT/"tests/fixtures/observation_read.php"),str(ROOT),case],
                          capture_output=True,text=True,check=True)
         self.assertEqual(p.stderr,"")
         return json.loads(p.stdout)
+
+    def test_missing_fixture_family_cannot_pass_silently(self):
+        source=(ROOT/'tests/fixtures/observation_read.php').read_text(encoding='utf-8')
+        field="'family'=>'frankfurt_snapshot',"
+        self.assertEqual(source.count(field),1)
+        # Reproduce the historical fixture defect in memory, never alter stored facts.
+        broken=source.replace(field,'').removeprefix('<?php')
+        p=subprocess.run([*PHP,'-r',broken,str(ROOT),'normal'],capture_output=True,text=True,check=True)
+        self.assertIn('Undefined array key "family"',p.stderr)
+        self.assertTrue(self.run_case('normal')['route_contract_matches'])
 
     def test_latest_market_observed_and_id_with_unchanged_current(self):
         r=self.run_case("normal")

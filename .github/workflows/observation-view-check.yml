@@ -1,0 +1,54 @@
+name: Manual quote selection offline regression
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: .:tests
+    steps:
+      - name: Require exact reviewed revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Unchanged predecessor 7f0c75d
+        run: |
+          mkdir "$RUNNER_TEMP/quote-predecessor"
+          git archive 7f0c75dec9c4add4d63585834baeb2939b5bdf9a | tar -x -C "$RUNNER_TEMP/quote-predecessor"
+          cd "$RUNNER_TEMP/quote-predecessor"
+          python3 -B -m unittest -v test_market_current test_observation_read
+      - name: Unchanged quote selection 85d75d7
+        run: |
+          mkdir "$RUNNER_TEMP/quote-original"
+          git archive 85d75d779f317e502fc790a5c297246ed236376a | tar -x -C "$RUNNER_TEMP/quote-original"
+          cd "$RUNNER_TEMP/quote-original"
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection
+      - name: Exact current commit with strict fixture diagnostics
+        run: |
+          php -l tests/fixtures/observation_read.php
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection
+          git diff --exit-code
