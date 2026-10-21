@@ -2324,3 +2324,53 @@ commitgebunden. Der temporäre Kontrollbranch wird auf den Vorauftragsstand
 zurückgesetzt. Kein zweiter Remote-Versuch innerhalb dieses Auftrags.
 **Offen:** ein separat beauftragter Remote-Offline-Test mit dem korrigierten
 Prüfharness; noch keine Freigabe eines echten Collector-Laufs.
+
+
+## Remote-Funktionsnachweis des installierten Releases abgeschlossen (21.10.2026)
+
+**PASS:** [Actions-Run 39584169023](https://github.com/masterxfix/MOSA-2/actions/runs/39584169023).
+Neuer workflow_dispatch auf main, Diagnose-Commit
+`8adcef6f643ff70cdab8053c082b066c4d927da5`, run_attempt=1.
+Der bestehende Workflow collector-remote-offline.yml wurde unverändert genutzt:
+zuerst 12/12 relevante Sicherheits-/Referenztests PASS, danach genau ein
+Remote-Offline-Test. Keine Wiederholung oder isolierter Ersatztrigger.
+
+Ausschließlich installiertes Release
+`92274a79550b8acd719434459022da6de5261d2e`:
+unabhängiger SFTP-Readback aller 33 Dateien / 248.105 Byte einschließlich
+vollständigem Dateisatz, SHA-256, UID/GID 10317:1003 und Modi 0700/0600 PASS.
+Die vollständigen Integritätsprüfungen im Testprozess vor **und nach** dem
+Funktionstest sind ebenfalls PASS. Das Release blieb unverändert.
+
+| Prüfung auf Dogado | Ergebnis |
+| --- | --- |
+| Python 3.11.17, 12 Paketmodule und Herkunft der Imports | PASS |
+| PHP 8.4.12, Syntax aller 18 PHP-Dateien | PASS |
+| 17 PHP-Bibliotheken mit vollständiger Include-Menge | PASS |
+| PHP → Python und Python → fest gepinntes PHP | PASS |
+| Normative Unit-Definitionen und bestehender Normalizer | PASS |
+| WriterPlanner: zwei synthetische INSERT-Pläne im Speicher | PASS |
+| Replay beider Fälle: DUPLICATE_UNCHANGED | PASS |
+| Kanonische Bytes, Dedupe-Schlüssel und Offline-Referenzen identisch | PASS |
+
+Die vorhandenen synthetischen Frankfurt-/EUR- und Yahoo-/GBX-Fälle verwenden
+dieselbe generische Normalizer-/WriterPlanner-Logik. Keine Asset-Sonderlogik.
+Die Dedupe-Schlüssel sind `9ca94b0d411dc5c7909a298cc96a9a993387b3cf5ea0dcb63303ba1859d0bde0`
+und `735d68d152e0842a6b94b7f88e9bb24c63c240fe6064d2727bd80192d5eeb267`.
+40 verschachtelte PHP-Wertadapteraufrufe liefen mit den vorgeschriebenen Pins
+und deaktivierten Logs/Caches erfolgreich. Die zuvor korrigierte
+STDIN-Pipe-Ausnahme ist damit erstmals auf Dogado bestätigt.
+
+SSH und gepinnter Host-Key PASS. Abschlussbericht:
+database_connections=0, provider_requests=0, remote_files_written=0;
+auch der Python-Audithook registrierte keine blockierten Netzwerk- oder
+Dateischreibversuche. Kein DB-Secret übergeben, kein Tunnel, HTTP-/Provider-
+Aufruf, Upload, Paketinstallation, echter Collector-Start, Scheduler oder
+Produktionszugriff. Der Testcode lief nur im Speicher; keine Observation-,
+Current-/Bars- oder Releaseänderung.
+
+Der frühere offene Remote-Offline-Nachweis ist damit abgeschlossen.
+**Nicht geprüft:** echte Providerakquisition, DB-Persistenz und vollständiger
+Collector-Livebetrieb auf Dogado. **Nächster Schritt:** einen begrenzten
+Dogado-Livetest separat freigeben und vorbereiten; dieser Auftrag führt ihn
+nicht aus. Nur Dokumentation geändert, keine Laufzeit- oder Workflowänderung.
