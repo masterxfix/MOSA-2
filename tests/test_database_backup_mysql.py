@@ -86,6 +86,74 @@ class BackupMySQLTests(unittest.TestCase):
         m['dump_sha256']=b.sha(dump);raw=b.state_bytes(state);m['state_sha256']=b.sha(raw)
         m['table_sha256']={t:b.sha(b.canonical(rows)) for t,rows in state['rows'].items()}
         b.seal(self.root,m,dump,raw,self.password,self.key)
+    def prove_schema_read_lock_consistency(self):
+        import pymysql
+        # Only the already verified ephemeral service, no hosting access.
+        for sql in ('DROP TRIGGER backup_fixture_trigger','DROP PROCEDURE backup_fixture_procedure',
+                    'DROP FUNCTION backup_fixture_function','DROP EVENT backup_fixture_event'):
+            self.sql(sql)
+        user='mosa2_schema_lock_fixture';locker=None
+        with connect() as admin:
+            self.engine.guard(admin)
+            with admin.cursor() as q:
+                q.execute("CREATE USER 'mosa2_schema_lock_fixture'@'localhost'")
+                q.execute("GRANT ALL PRIVILEGES ON `h29077\\_mosa2\\_test`.* TO 'mosa2_schema_lock_fixture'@'localhost'")
+            admin.commit()
+        def session():
+            c=pymysql.connect(host='127.0.0.1',port=3307,user=user,password='',database=b.SOURCE,
+                autocommit=True,cursorclass=pymysql.cursors.DictCursor,connect_timeout=3,
+                read_timeout=5,write_timeout=5,charset='utf8mb4')
+            try:
+                with c.cursor() as q:
+                    q.execute('SELECT DATABASE() AS db,@@server_uuid AS uuid,@@hostname AS hostname,@@port AS port,CURRENT_USER() AS account')
+                    self.assertEqual(q.fetchone(),dict(db=b.SOURCE,uuid=self.engine.uuid,hostname=self.engine.hostname,
+                        port=3306,account=user+'@localhost'))
+                    q.execute('SET SESSION lock_wait_timeout=1')
+                    q.execute('SET SESSION innodb_lock_wait_timeout=1')
+                return c
+            except Exception:c.close();raise
+        try:
+            locker=session()
+            with locker.cursor() as q:
+                q.execute('SHOW GRANTS');grants=[next(iter(row.values())) for row in q.fetchall()]
+                self.assertEqual(len(grants),2)
+                self.assertEqual(sum(' ON *.* ' in g and g.startswith('GRANT USAGE ') for g in grants),1)
+                q.execute('SET SESSION wait_timeout=20')
+                names=migration.contract()['envelope4']['tables'];self.assertEqual(len(names),17)
+                q.execute('LOCK TABLES '+','.join(b.qi(name)+' READ' for name in names))
+            args=['--single-transaction','--quick','--skip-lock-tables','--no-tablespaces','--set-gtid-purged=OFF',
+                  '--hex-blob','--tz-utc','--skip-routines','--events','--triggers','--default-character-set=utf8mb4',
+                  '--column-statistics=0','--skip-comments','--skip-dump-date','--skip-add-locks',b.SOURCE]
+            command=self.engine.sql_client('mysqldump',*args)
+            command[command.index('--user=root')]='--user='+user
+            dump=b.command(command,seconds=8)
+            self.assertEqual(dump.count(b'CREATE TABLE `'),17)
+            blocked={}
+            for code,statement in (
+                ('DML',"UPDATE m2_files SET storage_key=storage_key"),
+                ('EXISTING_TABLE_DDL','ALTER TABLE m2_events ADD backup_lock_probe INT'),
+                ('NEW_TABLE_DDL','CREATE TABLE m2_backup_lock_probe (id INT PRIMARY KEY) ENGINE=InnoDB')):
+                with session() as competitor:
+                    with competitor.cursor() as q:
+                        try:q.execute(statement)
+                        except pymysql.err.OperationalError as error:
+                            self.assertEqual(error.args[0],1205);blocked[code]=True
+                        else:blocked[code]=False
+            print(json.dumps(dict(status='SCHEMA_READ_LOCK_PROOF',synthetic_export='PASS',blocked=blocked)))
+            self.assertTrue(all(blocked.values()),'SCHEMA_READ_LOCK_DOES_NOT_BLOCK_ALL_DDL')
+        finally:
+            if locker is not None:
+                try:
+                    with locker.cursor() as q:q.execute('UNLOCK TABLES')
+                finally:locker.close()
+            with self.engine.database(b.SOURCE) as admin:
+                with admin.cursor() as q:q.execute('DROP TABLE IF EXISTS m2_backup_lock_probe')
+                admin.commit()
+            with connect() as admin:
+                self.engine.guard(admin)
+                with admin.cursor() as q:q.execute("DROP USER 'mosa2_schema_lock_fixture'@'localhost'")
+                admin.commit()
+
     def prove_schema_scoped_export(self):
         # Match the qualified hosting state: zero stored objects, no other
         # writers/DDL in this isolated one-test fixture. No global read lock.
