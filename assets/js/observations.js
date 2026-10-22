@@ -16,7 +16,7 @@
     node.dataset.label = label; node.textContent = value; row.append(node); return node;
   }
   function render(data, elapsed = 0) {
-    if (data.status !== "ok" || !Array.isArray(data.items) || data.items.length !== 5 ||
+    if (data.status !== "ok" || !Array.isArray(data.items) || data.items.length > 10 ||
         !Number.isInteger(data.stale_seconds) || data.stale_seconds < 60) throw Error("payload");
     const fragment = document.createDocumentFragment(), seen = new Set();
     for (const item of data.items) {

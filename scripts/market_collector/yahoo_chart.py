@@ -2,6 +2,9 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
+import re
+import subprocess
+from urllib.parse import urlsplit, parse_qs, quote
 
 from .contracts import ObservationCandidate, require, validate_payload
 
@@ -22,6 +25,25 @@ def invalid_constant(value):
 
 class YahooChartSnapshotV1:
     provider_key = 'yahoo_finance_chart_v1'
+
+    def live_request(self, instrument, instant, *, php_cli, request_script):
+        """Consume an existing qualified private descriptor; never discover symbols."""
+        require(type(instrument) is str and re.fullmatch(r'[A-Za-z0-9^][A-Za-z0-9.^=_-]{0,63}', instrument),
+                'qualified symbol context required')
+        reply = subprocess.run([php_cli, request_script], input=json.dumps(
+            dict(symbol=instrument, instant=instant+' UTC')).encode(), capture_output=True, timeout=10)
+        require(reply.returncode == 0 and not reply.stderr, 'provider request descriptor')
+        endpoint = json.loads(reply.stdout)
+        url = urlsplit(endpoint['url'])
+        require(url.scheme == 'https' and url.netloc == 'query1.finance.yahoo.com'
+                and url.path == '/v8/finance/chart/'+quote(instrument, safe='')
+                and not url.fragment and parse_qs(url.query, strict_parsing=True) ==
+                    {'interval':['1d'], 'range':['1d']}
+                and endpoint['series'] == 'snapshot' and endpoint['role'] == 'chart_snapshot',
+                'qualified snapshot request')
+        require(type(endpoint['headers']) is list and type(endpoint['request_key']) is str,
+                'provider request descriptor')
+        return endpoint
 
     def normalize(self, payload, route):
         validate_payload(payload)

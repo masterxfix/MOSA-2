@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once $argv[1].'/scripts/market_current/historical_scope.php';
 require __DIR__.'/current_web.php';
 $db=new WebCurrentConnection();$out=[];$i=0;
 foreach(\Mosa2\ObservationRead\SCOPE as $isin=>$name){

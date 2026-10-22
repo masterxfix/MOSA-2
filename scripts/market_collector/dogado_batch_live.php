@@ -10,26 +10,9 @@ const PUBLIC_ROOT='/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.
 require_once RELEASE.'/scripts/market_collector/live_batch.php';
 require_once RELEASE.'/scripts/collector_release/runtime.php';
 
-/** Complete, ordered, equity-only qualification before the first acquisition. */
+/** Historical launcher delegates to the common registered-asset qualifier. */
 function qualify(array $state,array $selection,?callable $manifestFactory=null): array {
-    check(array_is_list($selection)&&count($selection)>=1&&count($selection)<=10,'batch_size');
-    $manifestFactory??='\Mosa2\MarketAcceptance\manifest';
-    $seen=[];$prepared=[];
-    foreach($selection as $isin){
-        check(is_string($isin)&&\Mosa2\Phase3D\isinValid($isin),'batch_selection');
-        check(!isset($seen[$isin]),'batch_duplicate_identifier');$seen[$isin]=true;
-        $ids=array_values(array_filter($state['m2_asset_identifiers'],static fn($r)=>$r['identifier_type']==='isin'&&$r['normalized_value']===$isin&&$r['scope_key']===''));
-        same(count($ids),1,'batch_existing_asset');$id=$ids[0]['asset_id'];
-        $assets=array_values(array_filter($state['m2_assets'],static fn($r)=>$r['entity_id']===$id));
-        same(count($assets),1,'batch_existing_asset');same($assets[0]['asset_class'],'equity','batch_equity_only');
-        $m=$manifestFactory($state,['isin'=>$isin,'name'=>$assets[0]['display_name']]);
-        same($m['policy']??null,'USE_EXISTING_ROUTE','batch_qualification');
-        $plan=completePlan($state,$m);
-        same($plan['asset']['decision'],'EXISTING_MATCH','batch_existing_asset');
-        same($plan['route']['decision'],'EXISTING_MATCH','batch_qualification');
-        $prepared[]=['isin'=>$isin,'name'=>$assets[0]['display_name'],'manifest'=>$m];
-    }
-    return $prepared;
+    return \Mosa2\MarketBatch\qualify($state,$selection,$manifestFactory??'\Mosa2\MarketAcceptance\manifest');
 }
 /** Use the installed sequential coordinator unchanged, then expose unknown outcomes. */
 function coordinate(array $prepared,callable $runner): array {

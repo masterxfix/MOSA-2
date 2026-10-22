@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once $argv[1].'/scripts/market_current/historical_scope.php';
 require $argv[1].'/scripts/market_current/preview_read.php';
 // Reuse the existing synthetic qualified-scope builder, without its executable tail.
 $source=file_get_contents($argv[1].'/tests/fixtures/observation_read.php');

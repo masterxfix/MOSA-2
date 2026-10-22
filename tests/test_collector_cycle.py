@@ -64,6 +64,23 @@ class CycleTests(unittest.TestCase):
         self.assertEqual(decide(data), result)
         self.assertEqual(data, before)
 
+    def test_registry_scope_is_bounded_without_a_fixed_five_asset_requirement(self):
+        for count in (1, 2, 5):
+            data = fixture()
+            selected = ASSETS[:count]
+            data['operation_config']['selection'] = selected
+            data['evidence']['qualification'].update(selection=selected, asset_class='etf')
+            data['budget_config']['proposal']['assets'] = count
+            provider = data['budget_config']['providers'].pop(flow.PROVIDER)
+            data['budget_config']['providers']['synthetic_adapter_v1'] = provider
+            for field in ('budget_state', 'mosa_baseline'):
+                data['evidence'][field]['provider'] = 'synthetic_adapter_v1'
+            result = flow.cycle(data['operation_config'], data['budget_config'], data['evidence'],
+                                op.instant(data['now']), provider_key='synthetic_adapter_v1')
+            self.assertEqual(result['decision'], 'RUN_ELIGIBLE', result)
+            self.assertEqual(result['expected_provider_requests'], count)
+            self.assertEqual(result['actual_provider_requests'], 0)
+
     def test_berlin_0600_midnight_night_weekend_holiday(self):
         for stamp, holiday, seconds in [
             ("2026-10-21T05:45:00+02:00", False, 900),

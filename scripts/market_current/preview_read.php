@@ -5,6 +5,7 @@ use PDO;
 use function Mosa2\Phase2\{check,same};
 require_once dirname(__DIR__,2).'/api/observations_read.php';
 require_once __DIR__.'/read_access.php';
+require_once __DIR__.'/historical_scope.php';
 
 /** Existing bounded resolver + existing Current inputs, in one caller-owned RO snapshot. */
 function gather(PDO $p,string $now,bool $lock=false): array {

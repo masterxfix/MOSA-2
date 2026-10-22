@@ -142,7 +142,7 @@ class LocalityTests(unittest.TestCase):
         self.assertEqual(result['direct']['reduction_percent'],99.5)
 
     def test_workflow_manual_and_probe_has_no_business_write_or_provider_path(self):
-        workflow=(ROOT/'.github/workflows/collector-db-locality.yml').read_text()
+        workflow=(ROOT/'.github/archived-workflows/collector-db-locality.yml').read_text()
         self.assertIn('workflow_dispatch:',workflow)
         self.assertNotIn('  push:',workflow);self.assertNotIn('  schedule:',workflow)
         self.assertIn('persist-credentials: false',workflow)

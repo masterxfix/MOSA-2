@@ -117,7 +117,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(result['failure_type'], 'RuntimeError')
 
     def test_workflow_manual_only_no_artifact_no_deploy(self):
-        source = (ROOT/'.github/workflows/collector-live-test.yml').read_text()
+        source = (ROOT/'.github/archived-workflows/collector-live-test.yml').read_text()
         for forbidden in ['  push:', '  schedule:', 'upload-artifact', 'deploy_sftp.py deploy', 'workflow_run:']:
             self.assertNotIn(forbidden, source)
         self.assertIn('github.run_attempt == 1', source)

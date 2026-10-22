@@ -107,7 +107,7 @@ class CurrentTests(unittest.TestCase):
     def test_actual_read_path_prepares_bounded_select_rolls_back_and_rejects_write_grants(self):
         p=subprocess.run(['php',str(ROOT/'tests/fixtures/market_read_contract.php'),str(ROOT)],capture_output=True,text=True,check=True)
         r=json.loads(p.stdout);self.assertEqual(r['events'],['SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ','SET SESSION TRANSACTION READ ONLY','BEGIN','ROLLBACK'])
-        self.assertEqual(len(r['parameters']),15);self.assertEqual(len(r['sql']),4)
+        self.assertEqual(len(r['parameters']),11);self.assertEqual(len(r['sql']),4)
         self.assertTrue(any('LIMIT 1' in q for q in r['sql']));self.assertEqual(r['unsafe_grants_rejected'],[True]*5)
         self.assertEqual([x['price'] for x in r['result']['items']],['2.0000000000']*5)
 

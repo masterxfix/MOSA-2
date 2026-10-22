@@ -8,14 +8,30 @@ class CurrentWebTests(unittest.TestCase):
         self.assertEqual(p.stderr,'');return json.loads(p.stdout)
     def test_five_resolved_scope_ignores_legacy_numeric_private_scope(self):
         r=self.fixture();self.assertEqual(r['status'],'ok');self.assertEqual([x['name'] for x in r['items']],['PNE AG','Carl Zeiss Meditec','DroneShield','BYD','Ubtech Robotics'])
-        self.assertEqual(len(r['parameters']),15);self.assertTrue(all(x['status']=='stale' for x in r['items']))
+        self.assertEqual(len(r['parameters']),11);self.assertTrue(all(x['status']=='stale' for x in r['items']))
         self.assertEqual(r['events'],['SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ','SET SESSION TRANSACTION READ ONLY','BEGIN','ROLLBACK'])
+    def test_registry_is_private_until_current_is_present_and_validated(self):
+        self.assertEqual(self.fixture('empty')['items'], [])
+        rows=self.fixture('dynamic')['items']
+        self.assertEqual(len(rows),6)
+        self.assertEqual(rows[-1]['name'],'Synthetic registered ETF')
+        scope=(ROOT/'api/qualified_scope.php').read_text(encoding='utf-8')
+        self.assertNotIn('const SCOPE=',scope)
+        self.assertIn('FROM m2_market_current c',scope)
+        self.assertIn('LIMIT 11',scope)
+
+    def test_other_qualified_source_uses_current_provenance_without_invented_venue(self):
+        r=self.fixture('other_provider')
+        self.assertEqual(r['status'],'ok')
+        self.assertEqual(r['items'][0]['venue'],'—')
+        self.assertEqual(r['items'][0]['price'],'2.0000000000')
+
     def test_invalid_binding_source_units_or_provenance_fail_closed(self):
         for case in ('route','unit','source','provenance','current_price','current_source'):
             with self.subTest(case=case):
                 r=self.fixture(case);self.assertEqual(r['status'],'error');self.assertEqual(r['events'][-1],'ROLLBACK')
     def test_current_missing_has_no_observation_fallback(self):
-        r=self.fixture('missing');self.assertEqual(r['items'][0]['status'],'missing');self.assertNotIn('price',r['items'][0]);self.assertEqual(len(r['parameters']),14)
+        r=self.fixture('missing');self.assertEqual(len(r['items']),4);self.assertNotIn('PNE AG',[i['name'] for i in r['items']]);self.assertEqual(len(r['parameters']),9)
     def test_native_decimal_market_age_and_acquisition_time(self):
         r=self.fixture('decimal');self.assertEqual(r['items'][0]['price'],'123456789012345678.1234567890')
         self.assertEqual(r['items'][0]['market_at'],'2026-01-01 00:00:00.000000Z');self.assertEqual(r['items'][0]['observed_at'],'2026-01-01 00:00:03.000000Z')

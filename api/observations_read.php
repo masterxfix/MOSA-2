@@ -10,7 +10,7 @@ require_once __DIR__.'/qualified_scope.php';
 /** Bounded candidate set. The 101st row is a completeness sentinel, not displayed. */
 function latest(array $rows,array $route,string $isin,string $now,int $stale): array {
     checked(count($rows)<=101);
-    $base=['name'=>SCOPE[$isin],'isin'=>$isin,'source'=>$route['source_name'],'venue'=>'Börse Frankfurt · XFRA'];
+    $base=['name'=>$route['display_name'],'isin'=>$isin,'source'=>$route['source_name'],'venue'=>$route['source_key']==='provider:boerse_frankfurt_api'?'Börse Frankfurt · XFRA':'—'];
     $facts=[];
     foreach(array_slice($rows,0,100) as $raw){
         $r=strings($raw);
@@ -30,18 +30,17 @@ function latest(array $rows,array $route,string $isin,string $now,int $stale): a
 
 function read(PDO $p,array $config,string $now): array {
     $stale=$config['stale_seconds']??null;checked(is_int($stale)&&$stale>=60&&$stale<=86400);timestamp($now);
-    $scope=$p->prepare(scopeSql());
-    $facts=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex
-        FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
-    $items=[];$p->exec('SET TRANSACTION READ ONLY');$p->beginTransaction();
-    try{
-        foreach(SCOPE as $isin=>$name){
-            $scope->execute([$isin]);$routes=$scope->fetchAll(PDO::FETCH_ASSOC);checked(count($routes)>=1&&count($routes)<=2);
-            $r=binding(strings($routes[0]),$isin);
-            if(count($routes)===2)checked((int)$routes[1]['route_revision']<(int)$r['route_revision']);
-            $facts->execute([$r['asset_id'],$r['source_id']]);$rows=$facts->fetchAll(PDO::FETCH_ASSOC);
-            $items[]=latest($rows,$r,$isin,$now,$stale);
+    require_once __DIR__.'/current_read.php';
+    $items=readTransaction($p,static function()use($p,$now,$stale){
+        $published=\Mosa2\CurrentRead\published($p,$now,$stale);
+        $facts=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex
+            FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
+        $items=[];
+        foreach($published as $entry){
+            $r=$entry['route'];$facts->execute([$r['asset_id'],$r['source_id']]);
+            $items[]=latest($facts->fetchAll(PDO::FETCH_ASSOC),$r,$r['isin'],$now,$stale);
         }
-    }finally{if($p->inTransaction())$p->rollBack();}
+        return $items;
+    });
     return ['status'=>'ok','as_of'=>$now.'Z','stale_seconds'=>$stale,'items'=>$items];
 }

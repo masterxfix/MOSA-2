@@ -79,7 +79,7 @@ class DiagnosticTests(unittest.TestCase):
             self.assertFalse(json.loads(output)['ok'])
 
     def test_diagnostic_workflow_is_manual_and_contains_only_diagnostic_invocation(self):
-        text = (ROOT/'.github/workflows/collector-performance.yml').read_text()
+        text = (ROOT/'.github/archived-workflows/collector-performance.yml').read_text()
         self.assertIn('workflow_dispatch:', text)
         self.assertNotIn('  push:', text); self.assertNotIn('  schedule:', text)
         self.assertIn('python3 scripts/collector_performance.py', text)

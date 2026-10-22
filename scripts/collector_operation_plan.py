@@ -196,7 +196,7 @@ def decide(config, state, qualification, now, candidate_id, *, simulation=False)
         if (qualification["contract"] != "mosa2-operation-qualification-v1" or
                 qualification["selection"] != assets or qualification["venue"] != config["venue"] or
                 qualification["policy"] != "USE_EXISTING_ROUTE" or
-                qualification["asset_class"] != "equity" or qualification["all_qualified"] is not True):
+                qualification["asset_class"] not in {"equity", "etf"} or qualification["all_qualified"] is not True):
             return "BLOCKED"
         # This is an injected complete-scope attestation of existing qualify()/runtime checks.
         if state["provider_budget_date"] != local.date().isoformat() or not natural(state["provider_requests_used"]):

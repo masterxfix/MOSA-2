@@ -161,15 +161,18 @@ class MarketLiveBatchTests(unittest.TestCase):
     def test_dogado_complete_qualification_equity_route_and_identity_before_runner(self):
         import test_market_onboarding as o
         s,m=o.MarketOnboardingTests().existing_live()
-        for label in ('valid','duplicate','etf','missing_route','missing_asset','unit_drift'):
+        for label in ('valid','duplicate','etf','class_drift','missing_route','missing_asset','unit_drift'):
             state=copy.deepcopy(s);selection=[m['instrument']]
             if label=='duplicate':selection*=2
-            if label=='etf':state['m2_assets'][0]['asset_class']='etf'
+            if label in ('etf','class_drift'):
+                state['m2_assets'][0]['asset_class']='etf'
+                if label=='etf':m=copy.deepcopy(m);m['identity']['asset_class']='etf'
+                else:m=copy.deepcopy(m);m['identity']['asset_class']='equity'
             if label=='missing_route':state['m2_asset_source_routes']=[]
             if label=='missing_asset':state['m2_asset_identifiers']=[]
             if label=='unit_drift':state['m2_asset_source_routes'][0]['quote_unit_version']='2'
             r=call([manifest(1)],action='qualify',dogado=True,state=state,selection=selection,qualified_manifests={m['instrument']:m})
-            self.assertEqual(r['ok'],label=='valid',(label,r));self.assertEqual(r['calls'],[])
+            self.assertEqual(r['ok'],label in ('valid','etf'),(label,r));self.assertEqual(r['calls'],[])
         r=call([manifest(1),manifest(1)],dogado=True)
         self.assertFalse(r['ok']);self.assertEqual(r['calls'],[])
 

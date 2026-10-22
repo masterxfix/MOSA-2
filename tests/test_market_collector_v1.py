@@ -55,6 +55,20 @@ class MarketCollectorTests(unittest.TestCase):
         self.assertIsNone(result['dedupe_key']);self.assertIsNone(result['canonical_bytes'])
         return result
 
+    def test_yahoo_live_descriptor_is_symbol_bound_without_a_provider_request(self):
+        endpoint=dict(url='https://query1.finance.yahoo.com/v8/finance/chart/SYNTH-EUR?interval=1d&range=1d',
+            series='snapshot',role='chart_snapshot',headers=[],request_key='synthetic')
+        with patch('scripts.market_collector.yahoo_chart.subprocess.run',
+                   return_value=Mock(returncode=0,stderr=b'',stdout=json.dumps(endpoint).encode())):
+            self.assertEqual(self.adapter.live_request('SYNTH-EUR',self.created,
+                php_cli='synthetic-php',request_script='private-qualified-descriptor.php'),endpoint)
+        for url in ('http://query1.finance.yahoo.com/v8/finance/chart/SYNTH-EUR?interval=1d&range=1d',
+                    endpoint['url'].replace('SYNTH-EUR','OTHER'), endpoint['url']+'&crumb=private'):
+            with patch('scripts.market_collector.yahoo_chart.subprocess.run',
+                       return_value=Mock(returncode=0,stderr=b'',stdout=json.dumps(endpoint|dict(url=url)).encode())):
+                with self.assertRaises(ValueError):self.adapter.live_request('SYNTH-EUR',self.created,
+                    php_cli='synthetic-php',request_script='private-qualified-descriptor.php')
+
     def test_fixture_bytes_metadata_and_immutable_snapshots(self):
         request,route,response=self.inputs()
         bindings={request:response};transport=FixtureTransport(bindings);bindings.clear()
@@ -88,6 +102,44 @@ class MarketCollectorTests(unittest.TestCase):
         self.assertIs(result['dedupe_key'],result['writer_plan']['dedupe_key'])
         self.assertEqual(len(result['dedupe_key']),32)
         self.assertEqual(result['route_binding']['route_id'],'301')
+
+    def test_snapshot_to_current_to_web_and_replay_uses_shared_components(self):
+        # Synthetic persistence boundary: plans supply exact stored values, no DB/network.
+        from scripts.market_current import planner as current
+        import subprocess
+        for unit in ('EUR', 'GBX'):
+            request, contract, response = self.inputs(unit)
+            result = self.run_pipeline((request, contract, response))
+            self.assertEqual(result['decision'], 'INSERT')
+            fact = result['writer_plan']['normalized'] | dict(id='401',
+                observation_format_version='2', dedupe_key=result['dedupe_key'].hex().upper(),
+                created_at=self.created)
+            route = dict(contract.route) | dict(route_type='quote', priority='0', enabled='1')
+            data = dict(route=route, facts=[fact], now=self.created,
+                approval=dict(route_sha256=current.route_hash(route), approved_at=self.created))
+            projection = current.plan(data)
+            self.assertEqual(projection['decision'], 'INSERT')
+            stored = projection['values']
+            self.assertEqual(stored['observation_id'], fact['id'])
+            self.assertEqual(stored['price'], fact['price'])
+            data.update(current=stored, current_fact=fact)
+            self.assertEqual(current.plan(data)['decision'], 'UNCHANGED')
+            row = stored | dict(display_name='Synthetic registered instrument',
+                source_name='Synthetic adapter', venue='Synthetic qualified venue', valid_binding='1')
+            code = "require $argv[1].'/api/read_model.php'; $d=json_decode(stream_get_contents(STDIN),true); echo json_encode(\\Mosa2\\MarketRead\\present($d['row'],$d['now'],60));"
+            reply = subprocess.run(['php', '-r', code, str(ROOT)],
+                input=json.dumps(dict(row=row, now=self.created)), text=True, capture_output=True, check=True)
+            self.assertEqual(reply.stderr, '')
+            web = json.loads(reply.stdout)
+            self.assertEqual(web['price'], fact['price'])
+            self.assertEqual(web['unit'], unit)
+            self.assertEqual(web['market_at'], fact['market_at']+'Z')
+            self.assertEqual(web['observed_at'], fact['observed_at']+'Z')
+            self.assertEqual(web['status'], 'stale')  # New capture never refreshes old market data.
+            duplicate = pipeline(request, contract, FixtureTransport({request:response}), [self.adapter],
+                catalog=self.catalog, created_at=self.created, existing=[dict(format_version=2,
+                    payload=result['writer_plan']['normalized'], dedupe_key=result['dedupe_key'])])
+            self.assertEqual(duplicate['decision'], 'DUPLICATE_UNCHANGED')
 
     def test_gbx_native_snapshot_both_yahoo_spellings_no_division(self):
         for spelling in (b'GBp',b'GBX'):

@@ -301,7 +301,7 @@ class DogadoBatchTests(unittest.TestCase):
         scope["guard"]=Mock()
         with self.assertRaises(scope["Stop"]):scope["run_batch_once"]({})
         scope["guard"].assert_not_called()
-        workflow=(ROOT/".github/workflows/collector-dogado-batch.yml").read_text()
+        workflow=(ROOT/".github/archived-workflows/collector-dogado-batch.yml").read_text()
         self.assertIn("inputs.run_id == '"+batch.GRANTED_RUN+"'",workflow)
         self.assertIn("inputs.selection_json == '"+json.dumps(list(batch.GRANTED_SELECTION),separators=(",",":"))+"'",workflow)
         self.assertNotIn("schedule:",workflow)

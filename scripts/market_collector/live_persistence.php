@@ -37,7 +37,10 @@ function completePlan(array $state,array $m): array {
     $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']===$key));same(count($sources),1,'qualified_source');
     check(matchFields($sources[0],['source_type'=>'market_data','enabled'=>1]),'source_semantics');
     same($m['identity']['normalized_value'],$m['route_evidence']['row']['isin'],'asset_route_identity');
-    same($m['instrument'],$m['identity']['normalized_value'],'request_identity');
+    // The request identifier is part of the qualified route hash (ISIN or adapter symbol).
+    $requestField=$m['request_identity_field']??'isin';
+    check(is_string($requestField)&&preg_match('/^[a-z_]{1,32}$/D',$requestField)===1,'request_identity_field');
+    same($m['instrument'],$m['route_evidence']['proof']['external_identity'][$requestField]??null,'request_identity');
     $unit=$m['unit_binding'];$unitRows=array_values(array_filter($state['m2_units'],static fn($r)=>matchFields($r,['unit_key'=>$unit['quote_unit_key'],'unit_version'=>$unit['quote_unit_version'],'unit_contract_version'=>$unit['unit_contract_version']])));same(count($unitRows),1,'quote_unit_exists');
     same($unitRows[0]['monetary_currency_code'],$m['route_evidence']['row']['currency'],'quote_currency');
     $qualified=['asset_id'=>$asset['asset_id'],'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>0,'evidence'=>$m['route_evidence']];
@@ -138,4 +141,25 @@ function run(string $privateRoot,string $password,array $config,array $manifest)
     try{$result=runtimeRun($privateRoot,$config,$manifest,static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307),__NAMESPACE__.'\\bridge');
         $result['provider_requests']=!$consumed&&is_file($privateRoot.'/provider-consumed.lock')?1:0;return $result;}
     finally{unset($password);}
+}
+
+/** Complete, ordered, registry-backed qualification before the first acquisition. */
+function qualifyBatch(array $state,array $selection,callable $manifestFactory): array {
+    check(array_is_list($selection)&&count($selection)>=1&&count($selection)<=10,'batch_size');
+    $seen=[];$prepared=[];
+    foreach($selection as $isin){
+        check(is_string($isin)&&\Mosa2\Phase3D\isinValid($isin),'batch_selection');
+        check(!isset($seen[$isin]),'batch_duplicate_identifier');$seen[$isin]=true;
+        $ids=array_values(array_filter($state['m2_asset_identifiers'],static fn($r)=>$r['identifier_type']==='isin'&&$r['normalized_value']===$isin&&$r['scope_key']===''));
+        same(count($ids),1,'batch_existing_asset');$id=$ids[0]['asset_id'];
+        $assets=array_values(array_filter($state['m2_assets'],static fn($r)=>$r['entity_id']===$id));
+        same(count($assets),1,'batch_existing_asset');check(in_array($assets[0]['asset_class'],['equity','etf'],true),'batch_qualified_class');
+        $m=$manifestFactory($state,['isin'=>$isin,'name'=>$assets[0]['display_name']]);
+        same($m['policy']??null,'USE_EXISTING_ROUTE','batch_qualification');
+        $plan=\Mosa2\MarketLive\completePlan($state,$m);
+        same($plan['asset']['decision'],'EXISTING_MATCH','batch_existing_asset');
+        same($plan['route']['decision'],'EXISTING_MATCH','batch_qualification');
+        $prepared[]=['isin'=>$isin,'name'=>$assets[0]['display_name'],'manifest'=>$m];
+    }
+    return $prepared;
 }

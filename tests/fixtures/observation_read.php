@@ -1,9 +1,11 @@
 <?php
 declare(strict_types=1);
+require_once $argv[1].'/scripts/market_current/historical_scope.php';
 require $argv[1].'/api/observations_read.php';
 require $argv[1].'/scripts/phase3d/dry_run.php';
 use function Mosa2\ObservationRead\externalKey;
 use const Mosa2\ObservationRead\SCOPE;
+require_once $argv[1].'/tests/fixtures/market_read_fakes.php';
 const NOW='2026-01-01 01:00:00.000000';
 function routeRow(string $isin): array {
     return ['isin'=>$isin,'asset_id'=>'101','asset_class'=>'equity','asset_status'=>'active',
@@ -53,13 +55,21 @@ class ObservationStatement extends PDOStatement {
             while(count($rows)<101){$old=fact((string)(1000+count($rows)),'2025-12-31 22:00:00.000000','2025-12-31 22:00:01.000000');$old['observation_format_version']=null;$rows[]=$old;}
             if($case==='boundary')$rows[100]['market_at']='2026-01-01 00:00:00.000000';
         }
+        foreach($rows as &$row){
+            $row['asset_id']=$this->params[0];$row['route_id']=(string)((int)$this->params[0]+6000);
+            $payload=array_intersect_key($row,array_flip(\Mosa2\QuoteSelection\FIELDS));
+            $row['dedupe_hex']=strtoupper(hash('sha256',"mosa2-observation-v2\n".json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)));
+            if($case==='hash')$row['dedupe_hex']=str_repeat('0',64);
+            if($case==='route')$row['route_id']='999';
+        }unset($row);
         return $rows;
     }
 }
 class ObservationConnection extends PDO {
     public array $events=[],$sql=[],$parameters=[];private bool $active=false;
     public function __construct(public string $case){}
-    public function prepare(string $query,array $options=[]):PDOStatement|false{$this->sql[]=$query;return new ObservationStatement($this,$query);}
+    public function prepare(string $query,array $options=[]):PDOStatement|false{$this->sql[]=$query;return str_contains($query,'ORDER BY market_at')?new ObservationStatement($this,$query):new WebCurrentStatement($this,$query);}
+    public function query(string $sql,?int $fetchMode=null,mixed ...$args):PDOStatement|false{$this->sql[]=$sql;return new WebScalar();}
     public function exec(string $statement):int|false{$this->events[]=$statement;return 0;}
     public function beginTransaction():bool{$this->active=true;$this->events[]='BEGIN';return true;}
     public function inTransaction():bool{return $this->active;}

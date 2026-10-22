@@ -119,7 +119,7 @@ if(($in['action']??'')==='states'){
         $p->rollBack();$reports[]=['state'=>$baseline,'phases'=>$phases];
     }
 }elseif(($in['action']??'')==='acceptance'){
-    require dirname(__DIR__).'/scripts/market_collector/actions_acceptance.php';
+    require_once dirname(__DIR__).'/scripts/market_collector/actions_acceptance.php';
     $connect=static function()use($memory,&$connections,$in){$connections++;if(($in['fault']??'')==='authentication')throw new PDOException('synthetic');return new MemoryConnection($memory);};
     $invoke=static function($config,$request)use($in,$memory,&$providers){
         if($request['action']==='fetch'){

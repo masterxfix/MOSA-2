@@ -32,12 +32,13 @@ class ObservationReadTests(unittest.TestCase):
         self.assertEqual(r["items"][0]["observation_id"],"9002")
         self.assertEqual(r["items"][0]["status"],"stale")
         self.assertEqual(r["items"][0]["age_seconds"],3600)
-        self.assertEqual(r["events"],["SET TRANSACTION READ ONLY","BEGIN","ROLLBACK"])
-        self.assertEqual(len(r["parameters"]),10)
-        self.assertEqual(r["parameters"][0],["DE000A0JBPG2"])
-        self.assertTrue(all("m2_market_current" not in q and "m2_market_bars" not in q for q in r["sql"]))
-        self.assertIn("WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101",r["sql"][1])
-        self.assertIn("MAX_EXECUTION_TIME",r["sql"][1])
+        self.assertEqual(r["events"],["SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ","SET SESSION TRANSACTION READ ONLY","BEGIN","ROLLBACK"])
+        self.assertEqual(len(r["parameters"]),16)
+        self.assertEqual(r["parameters"][0],[])
+        self.assertTrue(any("FROM m2_market_current c" in q for q in r["sql"]))
+        self.assertTrue(all("m2_market_bars" not in q for q in r["sql"]))
+        self.assertIn("WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101",r["sql"][-1])
+        self.assertIn("MAX_EXECUTION_TIME",r["sql"][-1])
 
     def test_missing_and_legacy_missing_are_clear(self):
         for mode in ("missing","legacy"):
@@ -77,7 +78,7 @@ class ObservationReadTests(unittest.TestCase):
         r=self.run_case("bounded")
         self.assertEqual(len(r["items"]),5)
         self.assertEqual(r["items"][0]["observation_id"],"9002")
-        self.assertNotIn("WHERE observation_format_version",r["sql"][1])
+        self.assertNotIn("WHERE observation_format_version",r["sql"][-1])
 
     def test_endpoint_reuses_private_config_and_fixed_selector(self):
         api=(ROOT/"api/market.php").read_text()

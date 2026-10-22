@@ -10,7 +10,7 @@ from scripts import provider_budget_plan as budget
 PROVIDER = "boerse_frankfurt_api_v1"
 
 
-def cycle(operation_config, budget_config, evidence, now):
+def cycle(operation_config, budget_config, evidence, now, provider_key=PROVIDER):
     result = dict(simulation_only=True, execution_authorized=False, atomic_reservation=False,
                   decision="BLOCKED", reason="INVALID_EVIDENCE", evaluated_at=None, scheduled_at=None,
                   interval_seconds=None, assets=[], expected_provider_requests=0, actual_provider_requests=0,
@@ -30,8 +30,8 @@ def cycle(operation_config, budget_config, evidence, now):
             result["reason"] = "EXPLICIT_V2_POLICY_REQUIRED"
             return result
         assets = operation.selection(operation_config["selection"])
-        if len(assets) != 5:
-            result["reason"] = "FIVE_ASSET_SCOPE_REQUIRED"
+        if not 1 <= len(assets) <= 10:
+            result["reason"] = "BOUNDED_ASSET_SCOPE_REQUIRED"
             return result
         result.update(assets=list(assets), expected_provider_requests=len(assets))
         holiday = operation.calendar_holiday(operation_config, utc)
@@ -47,8 +47,8 @@ def cycle(operation_config, budget_config, evidence, now):
         candidate = "cycle-" + utc.strftime("%Y%m%dt%H%M%Sz")
         result["cycle_id"] = candidate
         state, baseline = evidence["budget_state"], evidence["mosa_baseline"]
-        provider = budget_config["providers"][PROVIDER]
-        admission = budget.admission(budget_config, PROVIDER, state, baseline,
+        provider = budget_config["providers"][provider_key]
+        admission = budget.admission(budget_config, provider_key, state, baseline,
                                      planned_requests=len(assets), now=utc, simulation=True)
         result.update(budget_decision=admission["decision"], budget_reason=admission["reason"])
         # The v1 budget API historically models internal limits. The common gate
@@ -67,7 +67,7 @@ def cycle(operation_config, budget_config, evidence, now):
         if proposal["calendar_approved"] is not True:
             result["reason"] = "CALENDAR_PROPOSAL_UNCONFIRMED"
             return result
-        if (proposal["timezone"] != "Europe/Berlin" or proposal["assets"] != 5 or
+        if (proposal["timezone"] != "Europe/Berlin" or proposal["assets"] != len(assets) or
                 proposal["weekday_fast_window"] != ["06:00", "24:00"] or
                 proposal["weekday_fast_seconds"] != 60 or proposal["night_weekend_holiday_seconds"] != 900):
             result["reason"] = "CONFLICTING_SCHEDULE_PROPOSAL"

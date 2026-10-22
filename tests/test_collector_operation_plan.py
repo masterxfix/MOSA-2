@@ -59,6 +59,13 @@ class PlanningTests(unittest.TestCase):
     def test_eligible_simulation_never_executes(self):
         self.assertEqual(self.decision(), "RUN_ELIGIBLE")
 
+    def test_registered_etf_uses_the_same_qualified_plan(self):
+        c, state, qualification = fixture()
+        qualification["asset_class"] = "etf"
+        self.assertEqual(self.decision(c, state, qualification), "RUN_ELIGIBLE")
+        qualification["all_qualified"] = False
+        self.assertEqual(self.decision(c, state, qualification), "BLOCKED")
+
     def test_valid_and_invalid_window_boundaries(self):
         for hour, minute, expected in [(6, 59, "SKIP"), (7, 0, "RUN_ELIGIBLE"), (14, 59, "RUN_ELIGIBLE"), (15, 0, "SKIP")]:
             now = NOW.replace(hour=hour, minute=minute)
@@ -124,7 +131,7 @@ class PlanningTests(unittest.TestCase):
 
     def test_unqualified_equity_route_venue_and_order(self):
         c, s, q = fixture()
-        for change in ({"asset_class": "etf"}, {"all_qualified": False}, {"all_qualified": 1},
+        for change in ({"asset_class": "unqualified"}, {"all_qualified": False}, {"all_qualified": 1},
                        {"venue": "XXXX"}, {"policy": "CREATE_ROUTE"}, {"selection": [B, A]}):
             self.assertEqual(self.decision(c, s, q | change), "BLOCKED")
 

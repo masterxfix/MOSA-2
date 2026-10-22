@@ -6,6 +6,10 @@ use function Mosa2\Phase2\{check,same};
 require_once __DIR__.'/live_persistence.php';
 
 const CONTRACT='mosa2-manual-live-batch-v2';
+/** Registry qualification belongs to the shared planning library. */
+function qualify(array $state,array $selection,callable $manifestFactory): array {
+    return \Mosa2\MarketLive\qualifyBatch($state,$selection,$manifestFactory);
+}
 function path(string $value): string {
     $resolved=realpath($value);check(is_string($resolved)&&is_dir($resolved)&&!is_link($value),'batch_directory');
     $canonical=str_replace('\\','/',$resolved);same(str_replace('\\','/',$value),$canonical,'batch_canonical_path');return $canonical;
