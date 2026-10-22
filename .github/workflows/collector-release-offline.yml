@@ -10,8 +10,13 @@ on:
       verification_scope:
         description: Release packaging or pure simulated cycle and collector regressions
         type: choice
-        options: [release, cycle, persistence, migration5, schema5]
+        options: [release, cycle, persistence, migration5, schema5, backup-restore]
         default: release
+      backup_stage:
+        description: Bounded backup diagnosis, focused correction, or final regression
+        type: choice
+        options: [full, diagnosis, focused]
+        default: full
       read_preflight:
         description: Exactly one PREPARE-only read of existing Dogado schema4, on main after isolated tests
         type: boolean
@@ -26,7 +31,7 @@ concurrency:
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5'
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5' && inputs.verification_scope != 'backup-restore'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
@@ -66,7 +71,7 @@ jobs:
           cat "$RUNNER_TEMP/mosa2-release/$GITHUB_SHA.manifest.json"
 
   persistence:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && (inputs.verification_scope == 'persistence' || inputs.verification_scope == 'migration5' || inputs.verification_scope == 'schema5')
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && (inputs.verification_scope == 'persistence' || inputs.verification_scope == 'migration5' || (inputs.verification_scope == 'schema5' || inputs.verification_scope == 'backup-restore'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -106,24 +111,25 @@ jobs:
           "$RUNNER_TEMP/collector-db-venv/bin/python" -m pip install --disable-pip-version-check PyMySQL==1.1.2
           "$RUNNER_TEMP/collector-db-venv/bin/python" -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Persistent state and real MySQL8 transaction and locking tests
+        if: inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full'
         timeout-minutes: 3
         env:
           MOSA2_ISOLATED_MYSQL: '1'
         run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_collector_persistence test_collector_persistence_mysql'
       - name: Unchanged 0005 migration, exact schema5, every interrupted step and independent synthetic readbacks
-        if: inputs.verification_scope == 'migration5' || inputs.verification_scope == 'schema5'
+        if: (inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full') && (inputs.verification_scope == 'migration5' || (inputs.verification_scope == 'schema5' || inputs.verification_scope == 'backup-restore'))
         timeout-minutes: 5
         env:
           MOSA2_ISOLATED_MYSQL: '1'
         run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_migration5 test_migration5_mysql test_check_expression'
       - name: Explicit schema4 and schema5 compatibility, Current atomic readback and replay
-        if: inputs.verification_scope == 'schema5'
+        if: (inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full') && ((inputs.verification_scope == 'schema5' || inputs.verification_scope == 'backup-restore'))
         timeout-minutes: 5
         env:
           MOSA2_ISOLATED_MYSQL: '1'
         run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_schema5_compat_mysql test_schema5_release'
       - name: Unchanged historical 33-file release regressions at its qualified commit
-        if: inputs.verification_scope == 'schema5'
+        if: (inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full') && ((inputs.verification_scope == 'schema5' || inputs.verification_scope == 'backup-restore'))
         timeout-minutes: 3
         run: |
           git worktree add --detach "$RUNNER_TEMP/historical-release" 6fa0655088f5ae2b37b7043b10a568d4aa2f14fb
@@ -131,15 +137,47 @@ jobs:
           "$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_collector_release
           "$RUNNER_TEMP/collector-db-venv/bin/python" -B scripts/collector_release.py build --commit 6fa0655088f5ae2b37b7043b10a568d4aa2f14fb --output "$RUNNER_TEMP/historical-artifact"
       - name: Separate reproducible schema5 candidate, hashes and closed dependency manifest
-        if: inputs.verification_scope == 'schema5'
+        if: (inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full') && ((inputs.verification_scope == 'schema5' || inputs.verification_scope == 'backup-restore'))
         run: |
           python3 -B scripts/collector_release.py build --profile schema5 --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema5-candidate"
           python3 -B scripts/collector_release.py verify --profile schema5 --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema5-candidate"
           cat "$RUNNER_TEMP/schema5-candidate/$GITHUB_SHA.manifest.json"
+      - name: Bind the synthetic backup service identity and prohibit event execution
+        if: inputs.verification_scope == 'backup-restore'
+        env:
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+        run: |
+          client_version=$(docker exec "$MYSQL_CONTAINER" mysqldump --version)
+          printf '%s\n' "$client_version"
+          [[ "$client_version" =~ (Distrib|Ver)[[:space:]]+8\.0\. ]]
+          printf 'MOSA2_MYSQL_CONTAINER=%s\n' "$MYSQL_CONTAINER" >> "$GITHUB_ENV"
+          printf 'MOSA2_ISOLATED_SERVER_HOSTNAME=%s\n' "$(docker inspect --format '{{.Config.Hostname}}' "$MYSQL_CONTAINER")" >> "$GITHUB_ENV"
+          printf 'MOSA2_ISOLATED_SERVER_UUID=%s\n' "$(docker exec "$MYSQL_CONTAINER" mysql --no-defaults --user=root --batch --skip-column-names -e 'SET GLOBAL event_scheduler=OFF; SET GLOBAL log_bin_trust_function_creators=ON; SELECT @@server_uuid;')" >> "$GITHUB_ENV"
+      - name: Synthetic encrypted backup, independent full restore, schema5 and fresh schema4 restore
+        if: inputs.verification_scope == 'backup-restore'
+        timeout-minutes: 8
+        env:
+          MOSA2_ISOLATED_MYSQL: '1'
+          MOSA2_BACKUP_RESTORE_ISOLATED: '1'
+          BACKUP_STAGE: ${{ inputs.backup_stage }}
+        run: |
+          py="$RUNNER_TEMP/collector-db-venv/bin/python"
+          case "$BACKUP_STAGE" in
+            diagnosis) "$py" -B -m unittest -v test_database_backup_mysql.BackupMySQLTests.diagnose_restore_evidence ;;
+            focused)
+              "$py" -B -m unittest -v test_database_backup_mysql.BackupMySQLTests.test_basis_restore
+              "$py" -B -m unittest -v test_database_backup_mysql.BackupMySQLTests.test_complete_backup_restore_migrate5_then_fresh_schema4_restore
+              "$py" -B -c 'import sys,unittest,test_database_backup as p,test_database_backup_mysql as m; c=m.BackupMySQLTests; names=[n for n in unittest.defaultTestLoader.getTestCaseNames(c) if n not in ("test_basis_restore","test_complete_backup_restore_migrate5_then_fresh_schema4_restore")]; s=unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromModule(p),unittest.TestSuite(c(n) for n in names)]); sys.exit(not unittest.TextTestRunner(verbosity=2).run(s).wasSuccessful())'
+              ;;
+            full) "$py" -B -m unittest -v test_database_backup test_database_backup_mysql ;;
+            *) exit 1 ;;
+          esac
       - name: Collector and budget regressions
+        if: inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full'
         timeout-minutes: 4
         run: python3 -B -m unittest -v test_collector_cycle test_collector_operation_plan test_provider_budget_plan test_market_collector_v1 test_market_live_batch test_market_runtime
       - name: Current and quote selection regressions offline only
+        if: inputs.verification_scope != 'backup-restore' || inputs.backup_stage == 'full'
         timeout-minutes: 6
         run: |
           python3 -B -m unittest -v test_market_current test_current_takeover test_current_outcome test_current_reconcile test_current_preview test_current_web test_quote_selection test_observation_read
