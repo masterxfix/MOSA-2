@@ -33,15 +33,19 @@ class CurrentMemory extends PDO {
     public function exec(string $sql):int|false {$this->events[]=$sql;return 0;}
     public function beginTransaction():bool{$this->events[]='BEGIN';$this->active=$this->fault!=='begin';return $this->active;}
     public function inTransaction():bool{return $this->active;}
-    public function rollBack():bool{$this->events[]='ROLLBACK';$this->state=$this->baseline;$this->active=false;return true;}
-    public function commit():bool{if($this->fault==='commit')return false;$this->events[]='COMMIT';$this->active=false;return true;}
+    public function rollBack():bool{if($this->fault==='rollback')throw new RuntimeException('private rollback SQL secret');$this->events[]='ROLLBACK';$this->state=$this->baseline;$this->active=false;return true;}
+    public function commit():bool{if($this->fault==='commit')return false;$this->events[]='COMMIT';$this->active=false;if($this->fault==='commit_unknown')throw new RuntimeException('private commit secret');return true;}
 }
-$db=new CurrentMemory($in['before'],$in['fault']??'');$captures=0;
+$db=new CurrentMemory($in['before'],$in['fault']??'');$captures=0;$progress=[];
+$outcome=new \Mosa2\MarketCurrent\Outcome(static function($event)use(&$progress){$progress[]=$event;});
 try{
-    $capture=static function($p)use(&$captures){$captures++;if($captures===2&&$p->fault==='other')$p->state['m2_market_observations'][]=['corruption'=>'synthetic'];return $p->state;};
-    $result=\Mosa2\MarketCurrent\transaction($db,static fn($p,$now)=>[],static fn($items)=>$in['plans'],$capture);
+    $capture=static function($p)use(&$captures,$outcome){$captures++;if($p->fault==='rollback')throw new RuntimeException('private failure');if($p->fault==='timeout_before_commit'){$outcome->cause='PLANNER_TIMEOUT';throw new RuntimeException('current_planner_timeout');}if($captures===2&&$p->fault==='other')$p->state['m2_market_observations'][]=['corruption'=>'synthetic'];return $p->state;};
+    $result=\Mosa2\MarketCurrent\transaction($db,static fn($p,$now)=>[],static fn($items)=>$in['plans'],$capture,$outcome);
+    if($db->fault==='timeout_after_commit'){$outcome->cause='PHASE_TIMEOUT';throw new RuntimeException('current_phase_timeout');}
     $actual=$db->state;if($db->fault==='readback')$actual['m2_market_current']=[];
-    $result=\Mosa2\MarketCurrent\verifyReadback($result,$actual,array_fill(0,5,['decision'=>'UNCHANGED']));
+    $outcome->step('READBACK');
+    $result=\Mosa2\MarketCurrent\verifyReadback($result,$actual,array_fill(0,5,['decision'=>$db->fault==='replay'?'UPDATE':'UNCHANGED']),$outcome);
+    $outcome->step('COMPLETE');
     $reply=['ok'=>true,'readback'=>$result['readback']];
-}catch(Throwable $error){$reply=['ok'=>false,'failure'=>$error->getMessage()];}
-echo json_encode($reply+['events'=>$db->events,'state'=>$db->state,'writes'=>$db->writes],JSON_THROW_ON_ERROR);
+}catch(Throwable $error){if($outcome->cause==='NONE')$outcome->cause=$outcome->commit==='CONFIRMED'?'POST_COMMIT_ERROR':'TRANSACTION_ERROR';$reply=['ok'=>false];}
+echo json_encode($reply+['outcome'=>$outcome->report($reply['ok']),'progress'=>$progress,'events'=>$db->events,'state'=>$db->state,'writes'=>$db->writes],JSON_THROW_ON_ERROR);

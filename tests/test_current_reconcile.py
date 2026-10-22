@@ -104,12 +104,12 @@ class CurrentReconcileTests(unittest.TestCase):
             runner.execute(dict(GITHUB_RUN_ATTEMPT='2'),Mock())
         read.assert_not_called()
 
-    def test_150_second_timeout_is_possible_but_generic_failure_cannot_prove_it(self):
-        from scripts import current_takeover_remote as failed
-        for error in (subprocess.TimeoutExpired('private',150),ValueError('different cause')):
-            with patch.object(failed.subprocess,'run',side_effect=error),self.assertRaises(Exception):failed.php({})
-        self.assertIn('except Exception:',(ROOT/'scripts/current_takeover_remote.py').read_text())
-        self.assertIn("timeout=150",(ROOT/'scripts/current_takeover_remote.py').read_text())
+    def test_missing_final_is_unknown_and_reconcile_remains_separate(self):
+        from scripts.market_current import process
+        result=process.outcome('', 'PROCESS_TIMEOUT')
+        self.assertEqual(result['status'],'OUTCOME_UNKNOWN')
+        self.assertFalse(result['retry_allowed'])
+        self.assertEqual(result['reconciliation'],'SEPARATE_READ_ONLY_EXISTING_RECONCILE')
 
     def test_reconcile_workflow_has_no_writer_secret_or_apply_call(self):
         workflow=(ROOT/'.github/workflows/observation-view-check.yml').read_text()

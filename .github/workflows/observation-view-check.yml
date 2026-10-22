@@ -44,9 +44,11 @@ concurrency:
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    # Reviewed branches may run offline only; every live mode still requires main.
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && (github.ref == 'refs/heads/main' || (inputs.takeover_mode == 'NONE' && inputs.read_inventory == false))
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # 5m offline tests + 7m bounded preparation/execution + 3m setup/cleanup.
+    timeout-minutes: 15
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONPATH: .:tests
@@ -69,11 +71,12 @@ jobs:
       - name: Existing pinned SSH client
         run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Current, Observations, Quote Selection and preview offline tests
+        timeout-minutes: 5
         run: |
           php -l scripts/market_current/preview_read.php
           php -l scripts/market_current/read_bundle.php
           php -l tests/fixtures/current_preview.php
-          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover test_current_reconcile test_current_web
+          python3 -B -m unittest -v test_market_current test_observation_read test_quote_selection test_current_preview test_current_takeover test_current_outcome test_current_reconcile test_current_web
           git diff --exit-code
       - name: One fileless SELECT-only inventory; public output excludes private values
         if: inputs.read_inventory && inputs.takeover_mode == 'NONE'
@@ -97,6 +100,8 @@ jobs:
           if-no-files-found: error
       - name: Prepare exact pending plan or explicitly authorize the existing Current writer
         if: inputs.takeover_mode == 'PREPARE' || inputs.takeover_mode == 'APPLY'
+        # Artifact API: at most 3x30s; PHP tree: 240s; SSH/setup/cleanup reserve.
+        timeout-minutes: 7
         env:
           TAKEOVER_MODE: ${{ inputs.takeover_mode }}
           TAKEOVER_RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}

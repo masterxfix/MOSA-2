@@ -60,11 +60,11 @@ function readiness(string $password,int $port): array {
     finally{if($p!==null&&$p->inTransaction())$p->rollBack();$p=null;}
 }
 if(PHP_SAPI==='cli'&&realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){
-    $stage='TAKEOVER_INPUT_REJECTED';
+    $outcome=new \Mosa2\MarketCurrent\Outcome(static function($event){echo json_encode($event,JSON_THROW_ON_ERROR)."\n";flush();});
     try{
+        $outcome->step('PREFLIGHT');
         $in=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);
         if(($in['operation']??null)==='readiness'){
-            $stage='EXISTING_WRITER_READONLY_PREFLIGHT_FAILED';
             $reply=readiness($in['password'],(int)$in['port']);
         }else{
             // No default execution mode: all execution authority must be explicit.
@@ -75,19 +75,22 @@ if(PHP_SAPI==='cli'&&realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){
                 $data=$item['reference']['input'];$data['now']=$takeover['plan']['as_of'];
                 $data['qualified_scope']=array_intersect_key($item['reference'],array_flip(['isin','name','scope_rows']));$items[]=$data;
             }
-            $stage='TAKEOVER_AUTHORIZATION_REJECTED';
             \Mosa2\MarketCurrent\plans($config,$items,$takeover);
-            $stage='TAKEOVER_FRESH_RUNTIME_PREFLIGHT_FAILED';
             same(readiness($in['password'],(int)$config['db_port'])['status'],
                 'EXISTING_WRITER_RIGHTS_AND_ATOMIC_RUNTIME_CONFIRMED','takeover_runtime');
             $approvals=[];
             foreach($takeover['plan']['items'] as $item)$approvals[]=['route_id'=>$item['reference']['input']['route']['id'],
                 'route_sha256'=>$item['route_sha256'],'approved_at'=>$takeover['plan']['as_of'],
                 'allow_disabled_projection'=>$item['disabled_projection_required']===true];
-            $stage='TAKEOVER_FAILED_NO_RETRY_POSSIBLY_COMMITTED';
-            $result=\Mosa2\MarketCurrent\refresh($in['password'],$config,$approvals,$takeover);
-            $reply=['status'=>'CURRENT_COMMITTED_READBACK_AND_REPLAY_PASS','decisions'=>$result['decisions']];
+            $outcome->budget();
+            $result=\Mosa2\MarketCurrent\refresh($in['password'],$config,$approvals,$takeover,$outcome);
+            $outcome->budget();$outcome->step('COMPLETE');
+            $reply=$outcome->report(true);
         }
-        echo json_encode(['ok'=>true]+$reply,JSON_THROW_ON_ERROR);
-    }catch(\Throwable){echo json_encode(['ok'=>false,'failure'=>$stage],JSON_THROW_ON_ERROR);}
+        echo json_encode(['kind'=>'final','ok'=>true]+$reply,JSON_THROW_ON_ERROR)."\n";
+    }catch(\Throwable $error){
+        if($outcome->cause==='NONE')$outcome->cause=$error->getMessage()==='current_planner_timeout'?'PLANNER_TIMEOUT':
+            ($outcome->commit==='CONFIRMED'?'POST_COMMIT_ERROR':'PREFLIGHT_OR_TRANSACTION_ERROR');
+        echo json_encode(['kind'=>'final','ok'=>false]+$outcome->report(),JSON_THROW_ON_ERROR)."\n";
+    }
 }

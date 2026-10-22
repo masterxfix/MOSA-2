@@ -5,6 +5,8 @@ use PDO;
 use Throwable;
 use function Mosa2\Phase2\{check,same,qi,connection};
 require_once __DIR__.'/../market_collector/live_batch.php';
+require_once __DIR__.'/outcome.php';
+require_once __DIR__.'/bounded_process.php';
 
 const CONTRACT=['schema_version'=>4,'allow_current'=>true];
 
@@ -33,17 +35,19 @@ function inputs(PDO $p,array $approvals,string $now,bool $lock=false): array {
 }
 function plans(array $config,array $items,?array $takeover=null): array {
     $script=$takeover===null?'/scripts/market_current/planner.py':'/scripts/market_current/takeover.py';
-    $proc=proc_open([$config['python'],$config['project'].$script],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,$config['project'],['PATH'=>$config['runtime_path'],'PYTHONDONTWRITEBYTECODE'=>'1']);check(is_resource($proc),'current_planner_process');
-    try{$wire=json_encode(['items'=>$items,'takeover'=>$takeover],JSON_THROW_ON_ERROR);check(fwrite($pipes[0],$wire)===strlen($wire),'current_planner_input');fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);same(proc_close($proc),0,'current_planner_exit');$proc=null;same($err,'','current_planner_stderr');}
-    finally{if(is_resource($proc))proc_close($proc);}
+    $out=boundedPlanner([$config['python'],$config['project'].$script],
+        json_encode(['items'=>$items,'takeover'=>$takeover],JSON_THROW_ON_ERROR),$config,(float)($config['planner_seconds']??60));
     $reply=json_decode($out,true,512,JSON_THROW_ON_ERROR);check(($reply['ok']??false)===true,'current_plan_'.($reply['failure']??'invalid'));same(count($reply['plans']),count($items),'current_plan_count');return $reply['plans'];
 }
 /** Current-only atomic transaction; all other business tables must remain identical. */
-function transaction(PDO $p,callable $readInputs,callable $makePlans,callable $capture): array {
+function transaction(PDO $p,callable $readInputs,callable $makePlans,callable $capture,?Outcome $outcome=null): array {
+    $outcome??=new Outcome();
     $locked=false;$committed=false;$before=null;$after=null;
     try{
         $q=$p->query("SELECT GET_LOCK('m2-current-refresh',0)");$locked=(int)$q->fetchColumn()===1;check($locked,'current_lock_busy');
+        $outcome->budget(true);$outcome->step('TRANSACTION_BEGIN');
         $p->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');check($p->beginTransaction()&&$p->inTransaction(),'current_transaction_start');
+        $outcome->transaction=true;$outcome->step('TRANSACTION_ACTIVE');
         $before=$capture($p);
         $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');$items=$readInputs($p,$now);$plans=$makePlans($items);$expected=$before['m2_market_current'];
         foreach($plans as $i=>$plan){
@@ -51,22 +55,45 @@ function transaction(PDO $p,callable $readInputs,callable $makePlans,callable $c
                 $values=$plan['values'];$fields=array_keys($values);$expressions=array_map(static fn($f)=>$f==='observation_dedupe_key'?'UNHEX(?)':'?',$fields);
                 if($plan['decision']==='INSERT')$sql='INSERT INTO m2_market_current ('.implode(',',array_map('Mosa2\\Phase2\\qi',$fields)).') VALUES ('.implode(',',$expressions).')';
                 else {$sql='UPDATE m2_market_current SET '.implode(',',array_map(static fn($f,$e)=>qi($f).'='.$e,$fields,$expressions)).' WHERE asset_id=?';$values[]=$plan['values']['asset_id'];}
+                $outcome->budget(true);$outcome->writeAttempted=true;
                 $q=$p->prepare($sql);$q->execute(array_values($values));same($q->rowCount(),1,'current_write_count');
                 $expected=array_values(array_filter($expected,static fn($r)=>$r['asset_id']!==$plan['values']['asset_id']));$expected[]=$plan['values'];
             }else check(in_array($plan['decision'],['MISSING','UNCHANGED','UNCHANGED_OLDER'],true),'current_decision');
         }
         $after=$capture($p);$actual=$after['m2_market_current'];
         $sort=static function(&$rows){usort($rows,static fn($a,$b)=>strlen($a['asset_id'])<=>strlen($b['asset_id'])?:strcmp($a['asset_id'],$b['asset_id']));foreach($rows as &$r)ksort($r);};$sort($expected);$sort($actual);same($actual,$expected,'current_exact_readback');
-        $other=$after;$other['m2_market_current']=$before['m2_market_current'];same($other,$before,'current_unplanned_delta');same($p->commit(),true,'current_commit');$committed=true;
-    }finally{if($p->inTransaction())$p->rollBack();if($locked)$p->query("SELECT RELEASE_LOCK('m2-current-refresh')");$p=null;}
+        $other=$after;$other['m2_market_current']=$before['m2_market_current'];same($other,$before,'current_unplanned_delta');
+        $outcome->budget(true);$outcome->commit='UNKNOWN';$outcome->step('COMMIT_ATTEMPT');
+        same($p->commit(),true,'current_commit');$committed=true;
+        $outcome->commit='CONFIRMED';$outcome->step('COMMIT_CONFIRMED');
+    }catch(Throwable $error){
+        if($outcome->cause==='NONE')$outcome->cause=$error->getMessage()==='current_planner_timeout'?'PLANNER_TIMEOUT':'TRANSACTION_ERROR';
+        throw $error;
+    }finally{
+        try{
+            if($p->inTransaction()){
+                $outcome->rollback='UNKNOWN';
+                if($p->rollBack()&&!$p->inTransaction())$outcome->rollback='CONFIRMED';
+                else throw new \RuntimeException('current_rollback_unconfirmed');
+                $outcome->step('ROLLBACK');
+            }
+        }finally{
+            try{if($locked)same((string)$p->query("SELECT RELEASE_LOCK('m2-current-refresh')")->fetchColumn(),'1','current_unlock');}
+            finally{$p=null;}
+        }
+    }
     return ['committed'=>$committed,'readback'=>'PENDING','decisions'=>array_column($plans,'decision'),'private_evidence'=>['before'=>$before,'after'=>$after,'inputs'=>$items,'plans'=>$plans]];
 }
-function verifyReadback(array $result,array $actual,?array $replay=null): array {
+function verifyReadback(array $result,array $actual,?array $replay=null,?Outcome $outcome=null): array {
+    check(($result['committed']??false)===true,'current_commit_not_confirmed');
     same($actual,$result['private_evidence']['after'],'current_independent_readback');
+    if($outcome!==null){$outcome->readback=true;$outcome->step('READBACK_CONFIRMED');}
     if($replay!==null)same(array_column($replay,'decision'),array_fill(0,5,'UNCHANGED'),'current_replay');
+    if($outcome!==null&&$replay!==null){$outcome->replay=true;$outcome->step('REPLAY_CONFIRMED');}
     $result['readback']='PASS';return $result;
 }
-function refresh(string $password,array $config,array $approvals,?array $takeover=null): array {
+function refresh(string $password,array $config,array $approvals,?array $takeover=null,?Outcome $outcome=null): array {
+    $outcome??=new Outcome();
     $connect=static fn()=>connection($password,'127.0.0.1',(int)($config['db_port']??3307));
     $capture=static function(PDO $db)use($takeover){
         $state=\Mosa2\MarketLive\snapshot($db,CONTRACT);
@@ -76,19 +103,33 @@ function refresh(string $password,array $config,array $approvals,?array $takeove
     if($takeover!==null)require_once __DIR__.'/takeover.php';
     $readInputs=$takeover===null?static fn(PDO $db,string $now)=>inputs($db,$approvals,$now):
         static fn(PDO $db,string $now)=>\Mosa2\CurrentTakeover\fresh($db,$now);
-    $result=transaction($connect(),$readInputs,static fn($items)=>plans($config,$items,$takeover),$capture);
+    $writer=$connect();
+    if($takeover!==null){
+        $writer->exec('SET SESSION innodb_lock_wait_timeout=10');
+        $writer->exec('SET SESSION max_execution_time=10000');
+    }
+    try{$result=transaction($writer,$readInputs,static fn($items)=>plans($config,$items,$takeover),$capture,$outcome);}
+    finally{$writer=null;}
+    $outcome->budget();$outcome->step('READBACK');
     $read=$connect();unset($password);
+    $read->exec('SET SESSION max_execution_time=10000');
     $read->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
     $read->exec('SET SESSION TRANSACTION READ ONLY');check($read->beginTransaction()&&$read->inTransaction(),'readback_transaction_start');
     try{
         same((string)$read->query('SELECT @@session.transaction_read_only')->fetchColumn(),'1','readback_read_only');
         $actual=$capture($read);$replay=null;
+        verifyReadback($result,$actual,null,$outcome);
+        $outcome->budget();
         if($takeover!==null){
             $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
+            $outcome->step('REPLAY');$config['planner_seconds']=45;
             $replayItems=inputs($read,$approvals,$now);$replay=plans($config,$replayItems);
         }
-        return verifyReadback($result,$actual,$replay);
-    }finally{if($read->inTransaction())$read->rollBack();$read=null;}
+        return verifyReadback($result,$actual,$replay,$outcome);
+    }finally{
+        try{if($read->inTransaction())check($read->rollBack()&&!$read->inTransaction(),'readback_rollback');}
+        finally{$read=null;}
+    }
 }
 /** Existing sequential collector first; Current projection only after COMPLETE. */
 function run(string $root,string $password,array $config,array $entries,array $approvals): array {
@@ -105,6 +146,6 @@ function run(string $root,string $password,array $config,array $entries,array $a
     $result['database_connections']=($result['database_connections']??0)+1;
     if(($result['overall_status']??null)==='COMPLETE'){
         try{$result['current']=refresh($password,$config,$approvals);$result['database_connections']+=2;$result['ok']=true;}
-        catch(Throwable $e){$result['overall_status']='CURRENT_FAILED';$result['ok']=false;$result['database_connections']=null;$result['current_failure']=$e->getMessage();}
+        catch(Throwable $e){$result['overall_status']='CURRENT_FAILED';$result['ok']=false;$result['database_connections']=null;$result['current_failure']='CURRENT_REFRESH_FAILED';}
     }unset($password);return $result;
 }

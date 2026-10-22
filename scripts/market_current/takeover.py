@@ -9,6 +9,9 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from scripts.market_current import planner, preview
 
 CONTRACT='mosa2-current-once-v1'
+# Permanent historical tombstone, independent of seven-day artifact retention.
+# Reconcile may still read this plan as evidence; it never calls approvals().
+CONSUMED_RUN_IDS=frozenset({'current-once-39634298612'})
 
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
@@ -38,6 +41,7 @@ def phrase(plan):
     return 'EXECUTE_CURRENT_ONCE:'+plan['run_id']+':'+digest(plan)+':ALLOW_DISABLED_ROUTE_PROJECTION'
 
 def approvals(plan,authorization,now):
+    planner.require(plan['run_id'] not in CONSUMED_RUN_IDS,'takeover_consumed')
     planner.require(plan['contract']==CONTRACT and plan['status']=='PENDING_EXPLICIT_AUTHORIZATION'
         and plan['authorization'] is None,'takeover_pending_required')
     planner.require(authorization==phrase(plan),'takeover_explicit_authorization_required')
