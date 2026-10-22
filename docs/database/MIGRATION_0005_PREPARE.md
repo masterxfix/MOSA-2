@@ -157,3 +157,24 @@ Dies ist weder ein Dogado-Migrations- noch ein Wiederherstellungsnachweis.
 
 Die tatsaechlichen Actions-Ergebnisse und die einmalige private Bestandspruefung
 werden im Abschlussbericht mit den exakten Lauf-/Commitlinks ausgewiesen.
+
+## Backup-Berechtigungsnachweis (22.10.2026)
+
+Eigenstaendiger Pruefmodus `backup-permissions` im vorhandenen manuellen
+Actions-Workflow. Bestehender gepinnter SSH-Tunnel und unveraenderte
+`Phase2\connection` pruefen das bestehende DB-Konto, Testschema, Port und
+MySQL-Version. Eine nachgewiesene READ-ONLY-Transaktion liest ausschliesslich
+Grants und begrenzte Trigger-/Routine-/Event-Metadaten samt SHOW CREATE.
+Keine Geschaeftsdaten, Sperren, Rechteaenderungen, Sicherung oder Migration.
+Roh-Grants, Objektidentitaeten und Definitionen werden nicht protokolliert.
+
+Null sichtbare Objekte gelten nur zusammen mit schemaweiten Enumerationsrechten
+als vollstaendig; vorhandene Definitionen muessen zusaetzlich lesbar sein.
+Unaufgeloeste Rollen oder unerkannte Grants brechen den Nachweis ab.
+Das vorhandene Backup-Verfahren haelt einen globalen Read-Lock und prueft
+globale RELOAD- und SELECT-Rechte; schemaweites LOCK TABLES ersetzt RELOAD nicht.
+Routine-Enumerationsrechte allein garantieren keine fremden Definitionen.
+Referenzen: [MySQL Routine-Rechte](https://dev.mysql.com/doc/refman/8.0/en/stored-routines-privileges.html),
+[MySQL FLUSH](https://dev.mysql.com/doc/refman/8.0/en/flush.html).
+
+Ergebnis des exakt einmaligen Live-Prueflaufs: ausstehend.

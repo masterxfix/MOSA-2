@@ -10,7 +10,7 @@ on:
       verification_scope:
         description: Release packaging or pure simulated cycle and collector regressions
         type: choice
-        options: [release, cycle, persistence, migration5, schema5, backup-restore]
+        options: [release, cycle, persistence, migration5, schema5, backup-restore, backup-permissions]
         default: release
       backup_stage:
         description: Bounded backup diagnosis, focused correction, or final regression
@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5' && inputs.verification_scope != 'backup-restore'
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5' && inputs.verification_scope != 'backup-restore' && inputs.verification_scope != 'backup-permissions'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
@@ -182,6 +182,38 @@ jobs:
         run: |
           python3 -B -m unittest -v test_market_current test_current_takeover test_current_outcome test_current_reconcile test_current_preview test_current_web test_quote_selection test_observation_read
           git diff --exit-code
+
+  backup-permissions:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope == 'backup-permissions'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Require exact reviewed revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: One read-only permission and object metadata inspection, no locks or business data
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: python3 -B scripts/backup_permissions_remote.py
 
   migration5-readonly:
     needs: persistence
