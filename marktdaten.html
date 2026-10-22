@@ -6,28 +6,29 @@
   <meta name="description" content="MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Gespeicherte Marktdaten, Datenstatus und Messungen der Testumgebung.">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Marktdaten &amp; Messungen</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=observations-20261021">
+  <link rel="stylesheet" href="assets/css/main.css?v=editorial-20261022">
   <script src="assets/js/page_load_time.js" defer></script>
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/market.js" defer></script>
   <script src="assets/js/observations.js" defer></script>
 </head>
-<body>
+<body class="market-page">
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
   <header class="topbar wrap">
     <a class="brand" href="./" aria-label="MOSA 2 – Projektüberblick"><span class="brand-symbol" aria-hidden="true">m</span>MOSA <span class="brand-version">2</span></a>
-    <span class="project-label">Marktdaten &amp; Messungen <span class="dot" aria-hidden="true"></span> Im Aufbau</span>
+    <span class="project-label">Gespeicherte Marktdaten <span class="dot" aria-hidden="true"></span> Testumgebung</span>
   </header>
   <nav class="site-nav wrap" aria-label="Seitennavigation" data-site-nav></nav>
   <main id="inhalt" class="wrap">
     <section class="hero" aria-labelledby="markt-titel">
-      <div class="eyebrow">MOSA 2 · Testumgebung</div>
-      <h1 id="markt-titel">Marktdaten &amp; Messungen</h1>
-      <p class="intro">Gespeicherte Kurse mit Quelle, Einheit und Erfassungszeit. Die Anzeige liest vorhandene Daten; sie startet keinen Kursabruf.</p>
+      <div class="eyebrow">Der gespeicherte Marktstand · MOSA 2</div>
+      <h1 id="markt-titel">Marktdaten.<br><em>Mit Herkunft.</em></h1>
+      <p class="intro">Fünf Aktien. Klare Quellen. Ein nachvollziehbarer Datenstand. Die Anzeige liest vorhandene Kurse und startet keinen Kursabruf.</p>
     </section>
 
     <section class="market-section" aria-labelledby="kurse-titel" data-market-view>
-      <div class="section-heading"><h2 id="kurse-titel">Letzter gespeicherter Stand</h2><span class="snapshot" data-market-summary role="status">Marktdaten werden geladen …</span></div>
+      <div class="section-heading"><div><p class="eyebrow">01 / Current</p><h2 id="kurse-titel">Letzter gespeicherter Stand</h2></div><span class="snapshot" data-market-summary role="status">Marktdaten werden geladen …</span></div>
+      <p class="section-description">Der bestätigte Current-Bestand. Veraltete Kurse sind gekennzeichnet und keine Live-Kurse. Markt- und Erfassungszeit werden getrennt in UTC angezeigt.</p>
       <div class="market-table-wrap" aria-busy="true" data-market-region>
         <table class="market-table">
           <caption class="visually-hidden">Gespeicherte Kurse mit Einheit, Quelle, Markt- und Erfassungszeit</caption>
@@ -40,7 +41,7 @@
 
 
     <section class="market-section observation-section" aria-labelledby="observations-titel" data-observation-view>
-      <div class="section-heading"><h2 id="observations-titel">Neueste Collector-Beobachtungen</h2>
+      <div class="section-heading"><div><p class="eyebrow">02 / Observations</p><h2 id="observations-titel">Neueste Collector-Beobachtungen</h2></div>
         <span class="snapshot" data-observation-summary role="status">Observations werden geladen …</span></div>
       <p class="context-note">Nur gespeicherte Beobachtungen. Das Datenalter bezieht sich auf den Marktzeitpunkt. Die Anzeige aktualisiert alle 120 Sekunden, solange der Tab sichtbar ist; sie startet keinen Collector.</p>
       <p><button class="observation-refresh" type="button" data-observation-refresh>Anzeige aktualisieren</button></p>
@@ -55,7 +56,7 @@
     </section>
 
     <section class="market-section" aria-labelledby="messungen-titel">
-      <div class="section-heading"><h2 id="messungen-titel">Messungen der Anzeige</h2></div>
+      <div class="section-heading"><div><p class="eyebrow">Zur Einordnung</p><h2 id="messungen-titel">Messungen der Anzeige</h2></div></div>
       <p class="intro">Die Seitenladezeit und die Zeit bis zur Darstellung der Daten stehen im Fußbereich. Sie werden bei jedem Seitenaufruf im Browser gemessen und sind keine Collector-Laufzeiten.</p>
     </section>
 
