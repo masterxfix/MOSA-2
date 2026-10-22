@@ -14,13 +14,16 @@ import unittest
 from unittest.mock import Mock,patch
 from types import SimpleNamespace
 from scripts import collector_dogado_pne as driver
+from historical_release_fixture import historical_checkout
 
 ROOT=Path(__file__).resolve().parents[1]
 
 class DogadoPneTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.manifest=driver.package()
+        with historical_checkout(ROOT,driver.RELEASE_COMMIT) as historical:
+            with patch.object(driver,"ROOT",historical):
+                cls.manifest=driver.package()
         cls.commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
 
     def env(self):
@@ -273,7 +276,9 @@ class DogadoPneTests(unittest.TestCase):
 class DogadoBatchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.manifest=driver.package()
+        with historical_checkout(ROOT,driver.RELEASE_COMMIT) as historical:
+            with patch.object(driver,"ROOT",historical):
+                cls.manifest=driver.package()
         cls.commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
 
     def fixture(self,tmp):
@@ -349,7 +354,8 @@ class DogadoBatchTests(unittest.TestCase):
         import shutil
         from scripts import collector_dogado_batch as batch
         namespace={"__name__":"fixture"};exec(batch.remote_source(),namespace)
-        archive,manifest_bytes=driver.release.build(ROOT,driver.RELEASE_COMMIT)
+        with historical_checkout(ROOT,driver.RELEASE_COMMIT) as historical:
+            archive,manifest_bytes=driver.release.build(historical,driver.RELEASE_COMMIT)
         manifest=json.loads(manifest_bytes)
         import io,tarfile
         for fault in ("clean","hash","symlink","unknown"):
