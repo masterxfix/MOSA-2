@@ -23,6 +23,7 @@ function snapshot(PDO $p,array $contract=[]): array {
     same(count($out['m2_units']),4,'four_units');same(array_column($out['m2_schema_migrations'],'version'),$envelope['versions'],'ledger_versions');
     $digests=$envelope['digests'];
     foreach($out['m2_schema_migrations'] as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
+    if(($contract['schema_version']??3)===5){\Mosa2\CollectorSchema5\ledger5($out['m2_schema_migrations']);\Mosa2\CollectorSchema5\lockedDatabase($p);}
     $seed=json_decode(file_get_contents(dirname(__DIR__,2).'/docs/database/seeds/0001_market_units_v1.json'),true,32,JSON_THROW_ON_ERROR);
     foreach($seed['definitions'] as $d){$rows=array_values(array_filter($out['m2_units'],static fn($r)=>$r['unit_key']===$d['unit_key']&&$r['unit_version']===$d['unit_version']));same(count($rows),1,'seed_binding');
         foreach($d as $k=>$v)if($k!=='definition_reference')check(array_key_exists($k,$rows[0])&&($k==='definition_sha256'?strtolower($rows[0][$k])===$v:$rows[0][$k]===$v),'seed_definition');}
@@ -84,6 +85,7 @@ function proofRun(string $privateRoot,string $password,array $config,array $mani
             $indexes=[];foreach($p->query('SHOW INDEX FROM m2_asset_source_routes')->fetchAll() as $index)if((int)$index['Non_unique']===0)$indexes[$index['Key_name']][]=$index['Column_name'];
             check(in_array(['source_id','route_type','external_key','route_revision'],$indexes,true)&&in_array(['asset_id','source_id','route_type','route_revision'],$indexes,true),'route_unique_contracts');
         }finally{if($p->inTransaction())$p->rollBack();}
+        \Mosa2\CollectorSchema5\acquisitionAllowed($config['state_contract']??[]);
         $r['stage']='provider';$acquired=bridge($config,['action'=>'fetch','private_root'=>$privateRoot,'php_cli'=>$config['php']]);$r['provider_requests']=1;
         $r['stage']='transaction';$p->beginTransaction();
         try {

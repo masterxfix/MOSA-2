@@ -10,7 +10,7 @@ on:
       verification_scope:
         description: Release packaging or pure simulated cycle and collector regressions
         type: choice
-        options: [release, cycle, persistence, migration5]
+        options: [release, cycle, persistence, migration5, schema5]
         default: release
       read_preflight:
         description: Exactly one PREPARE-only read of existing Dogado schema4, on main after isolated tests
@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5'
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
@@ -66,7 +66,7 @@ jobs:
           cat "$RUNNER_TEMP/mosa2-release/$GITHUB_SHA.manifest.json"
 
   persistence:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && (inputs.verification_scope == 'persistence' || inputs.verification_scope == 'migration5')
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && (inputs.verification_scope == 'persistence' || inputs.verification_scope == 'migration5' || inputs.verification_scope == 'schema5')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -93,6 +93,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
         with:
           php-version: '8.4'
@@ -110,11 +111,31 @@ jobs:
           MOSA2_ISOLATED_MYSQL: '1'
         run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_collector_persistence test_collector_persistence_mysql'
       - name: Unchanged 0005 migration, exact schema5, every interrupted step and independent synthetic readbacks
-        if: inputs.verification_scope == 'migration5'
+        if: inputs.verification_scope == 'migration5' || inputs.verification_scope == 'schema5'
         timeout-minutes: 5
         env:
           MOSA2_ISOLATED_MYSQL: '1'
         run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_migration5 test_migration5_mysql test_check_expression'
+      - name: Explicit schema4 and schema5 compatibility, Current atomic readback and replay
+        if: inputs.verification_scope == 'schema5'
+        timeout-minutes: 5
+        env:
+          MOSA2_ISOLATED_MYSQL: '1'
+        run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_schema5_compat_mysql test_schema5_release'
+      - name: Unchanged historical 33-file release regressions at its qualified commit
+        if: inputs.verification_scope == 'schema5'
+        timeout-minutes: 3
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/historical-release" 6fa0655088f5ae2b37b7043b10a568d4aa2f14fb
+          cd "$RUNNER_TEMP/historical-release"
+          "$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_collector_release
+          "$RUNNER_TEMP/collector-db-venv/bin/python" -B scripts/collector_release.py build --commit 6fa0655088f5ae2b37b7043b10a568d4aa2f14fb --output "$RUNNER_TEMP/historical-artifact"
+      - name: Separate reproducible schema5 candidate, hashes and closed dependency manifest
+        if: inputs.verification_scope == 'schema5'
+        run: |
+          python3 -B scripts/collector_release.py build --profile schema5 --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema5-candidate"
+          python3 -B scripts/collector_release.py verify --profile schema5 --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema5-candidate"
+          cat "$RUNNER_TEMP/schema5-candidate/$GITHUB_SHA.manifest.json"
       - name: Collector and budget regressions
         timeout-minutes: 4
         run: python3 -B -m unittest -v test_collector_cycle test_collector_operation_plan test_provider_budget_plan test_market_collector_v1 test_market_live_batch test_market_runtime

@@ -1,9 +1,11 @@
 <?php
 declare(strict_types=1);
 namespace Mosa2\CollectorRelease;
+require_once __DIR__.'/../market_collector/schema_contract.php';
 
 /** Library-only binding for a future reviewed launcher; no batch is started. */
-function configuration(string $project): array {
+function configuration(string $project,int $schemaVersion=4): array {
+    $state=\Mosa2\CollectorSchema5\selected(['state_contract'=>['schema_version'=>$schemaVersion]]);
     if(PHP_SAPI!=='cli'||PHP_VERSION!=='8.4.12'
         ||realpath(PHP_BINARY)!==realpath('/opt/plesk/php/8.4/bin/php'))
         throw new \RuntimeException('pinned_php_required');
@@ -31,7 +33,7 @@ function configuration(string $project): array {
     }
     if($exit!==0||trim($out)!=='3.11.17'||$err!=='')
         throw new \RuntimeException('pinned_python_required');
-    return ['python'=>$python,'php'=>'/opt/plesk/php/8.4/bin/php','project'=>$project,
+    return ['python'=>$python,'php'=>'/opt/plesk/php/8.4/bin/php','project'=>$project,'state_contract'=>$state,
         'runtime_path'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin',
         'request_script'=>$project.'/scripts/market_collector/frankfurt_request.php'];
 }

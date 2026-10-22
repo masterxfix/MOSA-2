@@ -46,6 +46,7 @@ function runtimeContract(PDO $p,array $contract,?callable $metadataReader=null):
     $ledger=boundedRows($p,'SELECT *,HEX(checksum) AS checksum FROM m2_schema_migrations ORDER BY version LIMIT '.($version===5?6:5),[],$version===5?5:4);
     same(array_column($ledger,'version'),$envelope['versions'],'ledger_versions');$digests=$envelope['digests'];
     foreach($ledger as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
+    if($version===5){\Mosa2\CollectorSchema5\ledger5($ledger);\Mosa2\CollectorSchema5\lockedDatabase($p);}
     $units=boundedRows($p,'SELECT *,HEX(definition_sha256) AS definition_sha256 FROM m2_units ORDER BY unit_key,unit_version LIMIT 5',[],4);
     same(count($units),4,'four_units');
     $seed=json_decode(file_get_contents(dirname(__DIR__,2).'/docs/database/seeds/0001_market_units_v1.json'),true,32,JSON_THROW_ON_ERROR);
@@ -94,6 +95,7 @@ function exactObservation(PDO $p,string $id,array $expected): array {
 }
 /** Callable dependencies are explicit test seams; the public entry point fixes connection and bridge. */
 function runtimeRun(string $privateRoot,array $config,array $manifest,callable $connect,callable $invoke,?callable $stateReader=null): array {
+    require_once __DIR__.'/schema_contract.php';
     $r=['ok'=>false,'verification_mode'=>'runtime','stage'=>'preflight','provider_requests'=>0,'database_connections'=>0,'committed'=>false,'rollback'=>null];
     $p=null;$locked=false;$baseline=null;$expected=null;$facts=null;$plan=null;$lockKey=null;
     $contract=$config['state_contract']??['schema_version'=>4];
@@ -105,6 +107,7 @@ function runtimeRun(string $privateRoot,array $config,array $manifest,callable $
         $p->exec('SET TRANSACTION READ ONLY');$p->beginTransaction();
         try{$baseline=$stateReader($p,$manifest,$contract);$plan=completePlan($baseline,$manifest);}
         finally{if($p->inTransaction())$p->rollBack();}
+        \Mosa2\CollectorSchema5\acquisitionAllowed($contract);
         $r['stage']='provider';$r['provider_requests']=1;
         $acquired=$invoke($config,['action'=>'fetch','private_root'=>$privateRoot,'php_cli'=>$config['php']]);
         $r['provider_duration_ms']=$acquired['provider_duration_ms']??null;

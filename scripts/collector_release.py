@@ -15,6 +15,7 @@ import tarfile
 CONTRACT = "docs/database/collector_release_contract.json"
 LIMIT = 4 * 1024 * 1024
 FORMAT = "mosa2-collector-release-v1"
+SCHEMA5_CONTRACT = "docs/database/collector_release_contract_schema5_v1.json"
 
 
 def require(ok, reason):
@@ -115,11 +116,16 @@ def python_dependencies(path, source, known):
     return found
 
 
-def payload(root, commit):
+def payload(root, commit, profile="historical"):
+    require(profile in ("historical", "schema5"), "release profile")
     objects, read = repository(root, commit)
-    contract_raw = read(CONTRACT)
+    contract_raw = read(CONTRACT if profile == "historical" else SCHEMA5_CONTRACT)
     contract = decode(contract_raw)
     require(contract["format"] == "mosa2-collector-release-contract-v1", "contract version")
+    if profile == "schema5":
+        require(contract["candidate"] == {"schema_versions": [4, 5], "default_schema": 4,
+                "execution_enabled": False, "upload_enabled": False}, "candidate activation forbidden")
+        require(contract["entrypoints"] == decode(read(CONTRACT))["entrypoints"], "new entrypoint")
     rows = contract["files"]
     paths = [relative(r["path"]) for r in rows]
     require(paths == sorted(set(paths)), "duplicate/unsorted paths")
@@ -147,12 +153,13 @@ def payload(root, commit):
                     "unrecorded static import")
         if path.endswith(".php"):
             # Includes reachable at file load: both __DIR__ forms used by this release.
-            includes = re.findall(r"require_once\s+(__DIR__|dirname\(__DIR__\))\s*\.\s*'([^']+)'\s*;", raw.decode())
-            for base, tail in includes:
+            includes = re.findall(r"require(?:_once)?\s+(__DIR__|dirname\(__DIR__(?:,\s*(\d+))?\))\s*\.\s*'([^']+)'\s*;", raw.decode())
+            for base, levels, tail in includes:
                 directory = PurePosixPath(path).parent
                 if base != "__DIR__":
-                    directory = directory.parent
-                candidate = os.path.normpath(str(directory) + "/" + tail.lstrip("/")).replace("\\", "/")
+                    for _ in range(int(levels or 1)):
+                        directory = directory.parent
+                candidate = os.path.normpath(os.path.join(str(directory), tail.lstrip("/"))).replace("\\", "/")
                 require(candidate in row["requires"], "unrecorded PHP include")
         files[path] = raw
     require(sum(map(len, files.values())) <= LIMIT, "release size cap")
@@ -163,8 +170,8 @@ def payload(root, commit):
     return contract, contract_raw, files
 
 
-def build(root, commit):
-    contract, contract_raw, files = payload(root, commit)
+def build(root, commit, profile="historical"):
+    contract, contract_raw, files = payload(root, commit, profile)
     entries = [dict(path=p, sha256=hashlib.sha256(raw).hexdigest(), size=len(raw), mode="0600")
                for p, raw in sorted(files.items())]
     manifest = dict(format=FORMAT, commit=commit, contract_sha256=hashlib.sha256(contract_raw).hexdigest(),
@@ -181,9 +188,9 @@ def build(root, commit):
     return output.getvalue(), canonical(manifest)
 
 
-def verify(root, commit, archive, manifest):
+def verify(root, commit, archive, manifest, profile="historical"):
     require(len(archive) <= 2 * LIMIT and len(manifest) <= LIMIT, "artifact size cap")
-    expected_archive, expected_manifest = build(root, commit)
+    expected_archive, expected_manifest = build(root, commit, profile)
     supplied = decode(manifest)
     require(manifest == canonical(supplied) and manifest == expected_manifest, "manifest/commit mismatch")
     rows = {r["path"]: r for r in supplied["files"]}
@@ -236,11 +243,12 @@ def main():
     parser.add_argument("--commit", required=True)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--profile", choices=("historical", "schema5"), default="historical")
     args = parser.parse_args()
     args.output = no_links(args.output)
     stem = args.output / args.commit
     if args.operation == "build":
-        archive, manifest = build(args.root, args.commit)
+        archive, manifest = build(args.root, args.commit, args.profile)
         require(not args.output.exists(), "output must be new local directory")
         args.output.mkdir(mode=0o700, parents=False)
         for suffix, raw in ((".tar", archive), (".manifest.json", manifest)):
@@ -249,7 +257,7 @@ def main():
                 f.write(raw)
     archive_path = no_links(str(stem) + ".tar")
     manifest_path = no_links(str(stem) + ".manifest.json")
-    result = verify(args.root, args.commit, archive_path.read_bytes(), manifest_path.read_bytes())
+    result = verify(args.root, args.commit, archive_path.read_bytes(), manifest_path.read_bytes(), args.profile)
     print(json.dumps(dict(status="PASS", commit=args.commit, file_count=len(result["files"]),
                          payload_bytes=result["payload_bytes"],
                          archive_sha256=hashlib.sha256(Path(str(stem) + ".tar").read_bytes()).hexdigest(),

@@ -9,6 +9,11 @@ require_once __DIR__.'/outcome.php';
 require_once __DIR__.'/bounded_process.php';
 
 const CONTRACT=['schema_version'=>4,'allow_current'=>true];
+/** Shared explicit opt-in; no change to approvals or the stored-fact planner. */
+function stateContract(array $config): array {
+    require_once __DIR__.'/../market_collector/schema_contract.php';
+    return array_replace(\Mosa2\CollectorSchema5\selected($config),['allow_current'=>true]);
+}
 
 /** Compare physical route IDs returned by the existing onboarding planner. */
 function approvalScope(array $state,array $prepared,array $approvals): void {
@@ -95,8 +100,9 @@ function verifyReadback(array $result,array $actual,?array $replay=null,?Outcome
 function refresh(string $password,array $config,array $approvals,?array $takeover=null,?Outcome $outcome=null): array {
     $outcome??=new Outcome();
     $connect=static fn()=>connection($password,'127.0.0.1',(int)($config['db_port']??3307));
-    $capture=static function(PDO $db)use($takeover){
-        $state=\Mosa2\MarketLive\snapshot($db,CONTRACT);
+    $contract=stateContract($config);
+    $capture=static function(PDO $db)use($takeover,$contract){
+        $state=\Mosa2\MarketLive\snapshot($db,$contract);
         if($takeover!==null)\Mosa2\CurrentTakeover\atomicContract($db);
         return $state;
     };
@@ -133,12 +139,12 @@ function refresh(string $password,array $config,array $approvals,?array $takeove
 }
 /** Existing sequential collector first; Current projection only after COMPLETE. */
 function run(string $root,string $password,array $config,array $entries,array $approvals): array {
-    $config['state_contract']=CONTRACT;$config['allow_duplicate']=true;
+    $config['state_contract']=stateContract($config);$config['allow_duplicate']=true;
     $pre=null;$attempts=0;
     try{
         $prepared=\Mosa2\MarketBatch\prepare($root,$config['public_root'],$entries);
         $attempts++;$pre=connection($password);$pre->exec('SET TRANSACTION READ ONLY');$pre->beginTransaction();
-        $state=\Mosa2\MarketLive\snapshot($pre,CONTRACT);approvalScope($state,$prepared,$approvals);
+        $state=\Mosa2\MarketLive\snapshot($pre,$config['state_contract']);approvalScope($state,$prepared,$approvals);
         plans($config,inputs($pre,$approvals,(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u')));
     }catch(Throwable $error){return ['overall_status'=>'FAILED_BEFORE_FIRST_ITEM','provider_requests'=>0,'database_connections'=>$attempts,'failure'=>'current_preflight','ok'=>false];}
     finally{if($pre!==null&&$pre->inTransaction())$pre->rollBack();$pre=null;}
