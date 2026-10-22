@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 20.10.2026, 22:45:06 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 22.10.2026, 12:40:56 Uhr — Europe/Berlin (MESZ, UTC+02:00).
 
 ## Geltungsbereich
 
@@ -135,6 +135,18 @@ Diese Grenze ist verbindlich und hat Vorrang vor Komfort, Toolwahl oder Automati
 - Relevante Tests weiterhin vollständig ausführen; Tokensparen darf nicht zu schlechter Qualität, fehlender Sicherheit oder ausgelassenen Akzeptanzkriterien führen.
 - Bei mehreren gleichwertigen Wegen den mit geringerem Kontext-, Tool- und Tokenaufwand bevorzugen.
 
+## Verbindliche Testökonomie, Auftragsfokus und Kostenkontrolle
+
+Die Kosten für Codex-Aufrufe, Tokenverbrauch und Testwiederholungen trägt der Nutzer. **Ein belegbares fachliches Ergebnis bei minimal notwendigen Prüfungen hat Vorrang vor zusätzlicher Analyse, immer neuen Testkatalogen oder Ausweitung der Architektur.** Diese Regeln gelten für ChatGPT bereits bei der Auftragsformulierung und für Codex während der Ausführung.
+
+- **Vor dem Auftrag klären:** Den vorhandenen erfolgreichen Stand, das konkrete offene Akzeptanzkriterium, bekannte Fehler aus bestehenden Logs und bereits vorhandene passende Tests identifizieren. ChatGPT definiert im Codex-Auftrag einen **minimalen Prüfplan mit festem Testbudget und Abbruchbedingungen**. Keine pauschalen Großaufträge, neuen Nebenbaustellen oder eigenen Frameworks, wenn ein geprüfter vorhandener Weg ausreicht.
+- **Fehler zuerst eingrenzen:** Zuerst vorhandene Logs, Testberichte und betroffene Codepfade lesen. Ein einzelner nachweisbarer Erstfehler ist vor der Erweiterung des Testumfangs zu verstehen. Folgefehler wie mehrfach belegte Testdatenbank-Ziele nicht als unabhängige Probleme zählen; Testfälle müssen isoliert sein, ohne reale Schutzsperren zu umgehen.
+- **Verbindliche Testreihenfolge:** (1) vorhandene Belege ohne erneuten Lauf auswerten, (2) nur falls wirklich nötig **ein gezielter Diagnosetest**, (3) **ein fokussierter Nachweis** der korrigierten Funktion, (4) **einmalig die tatsächlich relevanten Regressionen**, erst nachdem der fokussierte Nachweis bestanden wurde. Bereits bestandene unveränderte Prüfungen nicht ohne konkreten Anlass wiederholen. Eine Dokumentations- oder Regeländerung benötigt keine GitHub-Testpipeline, solange keine ausführbare Logik verändert wird.
+- **GitHub-Actions-Limit:** Pro Codex-Auftrag grundsätzlich **höchstens drei Actions-Läufe insgesamt**: optional ein Diagnoselauf, ein gezielter Korrekturlauf und ein finaler Regressionslauf. Bereits in demselben Auftrag gestartete Läufe werden mitgezählt. **Drei sind die Obergrenze, kein Sollwert.** Kein erneutes Dispatch, keine versteckte Schleife und keine erneute Komplettsuite nach ausreichendem Beleg. Mehr Läufe nur nach **vorheriger ausdrücklicher Zustimmung des Nutzers** mit konkretem Grund und zusätzlichem Kosten-/Prüfumfang.
+- **Harter Stopp statt Schleife:** Scheitert der fokussierte Korrektur-Nachweis weiter oder kann die Ursache im vorgesehenen Budget nicht belastbar bestimmt werden, **sofort stoppen**, den ersten verbleibenden Fehler und die bisherigen Laufzahlen melden und **keinen weiteren Test starten**, bis ein neuer Auftrag vorliegt. Keine automatische „noch ein Versuch“-Strategie. Ein nicht bestandenes Akzeptanzkriterium bleibt offen; keinen Teilerfolg als Gesamterfolg darstellen und keine unfertige Änderung nach `main` übernehmen.
+- **Scope und Wirtschaftlichkeit:** Zusätzliche Features, neue Testfamilien, breite Sicherheitsinventare oder Architekturumbauten nur, wenn für das konkrete Ziel zwingend notwendig; sonst gesondert planen und vorher freigeben lassen. Bei gleich sicheren Wegen die vorhandene einfachere Lösung bevorzugen. Erfolg wird am funktionierenden Ergebnis samt angemessenem Nachweis gemessen, nicht an der Zahl der Dateien, Tests oder Commits.
+- **Kompakter Abschluss:** Fachliches Ergebnis, exakt belegte Tests, Zahl der tatsächlich gestarteten Actions-Läufe, Commit/Status und noch offene Risiken kurz nennen. Keine langen Rohlogs und keine Wiederholung früherer Diagnosen.
+
 ## Verständliche Einordnung nach Tests
 
 - Nach jedem Testblock gibt ChatGPT von sich aus eine kurze, verständliche Einordnung: **fachlich erfolgreich / teilweise / fehlgeschlagen**, mit dem konkret nachgewiesenen Ergebnis und seiner Bedeutung für MOSA 2.
@@ -161,6 +173,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 22.10.2026 | 12:40:56 Uhr (MESZ, UTC+02:00) | Verbindliche Auftrags- und Testökonomie ergänzt: vorhandene Belege zuerst, minimaler Testplan, stufenweise Nachweise, höchstens drei GitHub-Actions-Läufe ohne erneute Freigabe sowie sofortiger Stopp statt Testschleifen. |
 | 20.10.2026 | 22:45:06 Uhr (MESZ, UTC+02:00) | Globale Passwort-/Secret-Regel ergänzt: keine erneuten Passwortabfragen als Fallback; Fachaufträge erst starten, wenn der benötigte nicht-interaktive Zugang eingerichtet ist. |
 | 20.10.2026 | 21:05:00 Uhr (MESZ, UTC+02:00) | Verbindlichen Dogado-/SFTP-Testsite-Zugang für Codex festgehalten: GitHub-Actions-Workflow, web213, harter Test-Webroot, Secret-/Variablennamen und klare Trennung vom älteren Produktionsziel. |
 | 20.10.2026 | 19:06:31 Uhr (MESZ, UTC+02:00) | Beim Diff-Check erkannte unbeabsichtigte Wortänderung im Abschnitt „Verständliche Einordnung nach Tests“ zurückgenommen; Browserkorrektur unverändert. |
