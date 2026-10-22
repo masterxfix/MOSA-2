@@ -157,3 +157,55 @@ Dies ist weder ein Dogado-Migrations- noch ein Wiederherstellungsnachweis.
 
 Die tatsaechlichen Actions-Ergebnisse und die einmalige private Bestandspruefung
 werden im Abschlussbericht mit den exakten Lauf-/Commitlinks ausgewiesen.
+
+## Backup-Berechtigungsnachweis (22.10.2026)
+
+Eigenstaendiger Pruefmodus `backup-permissions` im vorhandenen manuellen
+Actions-Workflow. Bestehender gepinnter SSH-Tunnel und unveraenderte
+`Phase2\connection` pruefen das bestehende DB-Konto, Testschema, Port und
+MySQL-Version. Eine nachgewiesene READ-ONLY-Transaktion liest ausschliesslich
+Grants und begrenzte Trigger-/Routine-/Event-Metadaten samt SHOW CREATE.
+Keine Geschaeftsdaten, Sperren, Rechteaenderungen, Sicherung oder Migration.
+Roh-Grants, Objektidentitaeten und Definitionen werden nicht protokolliert.
+
+Null sichtbare Objekte gelten nur zusammen mit schemaweiten Enumerationsrechten
+als vollstaendig; vorhandene Definitionen muessen zusaetzlich lesbar sein.
+Unaufgeloeste Rollen oder unerkannte Grants brechen den Nachweis ab.
+Das vorhandene Backup-Verfahren haelt einen globalen Read-Lock und prueft
+globale RELOAD- und SELECT-Rechte; schemaweites LOCK TABLES ersetzt RELOAD nicht.
+Routine-Enumerationsrechte allein garantieren keine fremden Definitionen.
+Referenzen: [MySQL Routine-Rechte](https://dev.mysql.com/doc/refman/8.0/en/stored-routines-privileges.html),
+[MySQL FLUSH](https://dev.mysql.com/doc/refman/8.0/en/flush.html).
+
+Ergebnis des exakt einmaligen Live-Prueflaufs:
+[Actions 39767648960](https://github.com/masterxfix/MOSA-2/actions/runs/39767648960),
+Quellcommit `34b4fa2ffbf4b91d1a19079230704c9a022def31`, PASS.
+DB-/Konto-/Portidentitaet bestaetigt; MySQL `8.0.26-16`; READ ONLY bestaetigt.
+
+- **A: Vollstaendige aktuelle Objektsichtbarkeit JA.** Alle drei begrenzten
+  Metadatenabfragen erfolgreich, jeweils null Objekte. Schemaweite TRIGGER-,
+  EVENT- sowie CREATE ROUTINE-/ALTER ROUTINE-/EXECUTE-Rechte beweisen die
+  vollstaendige Enumeration; es handelt sich nicht um eine Annahme aus null
+  sichtbaren Zeilen. Mangels Objekten wurde kein SHOW CREATE ausgefuehrt.
+  Fuer zukuenftige fremde Routinen sind Definitionen erneut zu pruefen;
+  SHOW_ROUTINE und globales SELECT fehlen aktuell.
+- Vorhanden: schemaweite SELECT, SHOW VIEW, TRIGGER, EVENT, CREATE ROUTINE,
+  ALTER ROUTINE, EXECUTE und LOCK TABLES.
+- **B: Rechte fuer die bestehende Backup-Methode NEIN.** Globales RELOAD und
+  FLUSH_TABLES fehlen. Schemaweites LOCK TABLES berechtigt nicht zum globalen
+  Read-Lock. Zusaetzlich verlangt die unveraenderte Backup-Sichtbarkeitssperre
+  globales SELECT; auch dieses Recht fehlt. Keine Sperre wurde ausprobiert.
+- **C: Konkrete Blocker:** globales RELOAD (bestehender Guard) bzw. serverseitig
+  RELOAD oder FLUSH_TABLES fuer den globalen Read-Lock; globales SELECT fuer
+  den bestehenden konservativen Routine-Definitions-Guard.
+- **D: Unveraenderter Backup-Weg mit bestehenden Rechten NEIN.** Kein Bedarf
+  fuer neue Zugangsdaten wird daraus abgeleitet; keinerlei Rechteaenderung oder
+  Alternativverfahren ist beauftragt. Der implementierte Executor bleibt zudem
+  auf den synthetischen CI-Dienst beschraenkt. Keine Live-Backup-Freigabe.
+
+Genau ein manueller Actions-Lauf, keine Wiederholung/Regression. Lokal nur PHP-/
+Python-Syntax und erlaubte SQL-Kommandos geprueft. Datenbank-Schreiboperationen,
+FLUSH-/LOCK-Ausfuehrungen, Kursabfragen, Backup und Restore: jeweils null.
+Andere Jobs einschliesslich Migration und synthetischem MySQL-Dienst uebersprungen.
+Collector-Schalter und Zugangsdaten unveraendert. Weitere Backup-Voraussetzungen
+wie Speicherplatz und Laufzeitwerkzeuge waren nicht Bestandteil dieser Pruefung.
