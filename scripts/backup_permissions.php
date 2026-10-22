@@ -28,7 +28,7 @@ try {
     $has=static fn(string $right,bool $globalOnly=false):bool=>in_array($right,$global,true)||in_array('ALL PRIVILEGES',$global,true)
         ||(!$globalOnly&&(in_array($right,$schema,true)||in_array('ALL PRIVILEGES',$schema,true)));
     $rights=[];foreach(['SELECT','SHOW VIEW','TRIGGER','EVENT','CREATE ROUTINE','ALTER ROUTINE','EXECUTE','LOCK TABLES'] as $right)$rights[$right]=$has($right);
-    foreach(['RELOAD','FLUSH_TABLES','SHOW_ROUTINE'] as $right)$rights[$right]=$has($right,true);
+    foreach(['RELOAD','FLUSH_TABLES','SHOW_ROUTINE','PROCESS'] as $right)$rights[$right]=$has($right,true);
     $rights['GLOBAL SELECT']=$has('SELECT',true);
     $enumeration=['TRIGGER'=>$rights['TRIGGER'],'EVENT'=>$rights['EVENT'],
         'ROUTINE'=>$rights['SHOW_ROUTINE']||$rights['GLOBAL SELECT']||$rights['CREATE ROUTINE']||$rights['ALTER ROUTINE']||$rights['EXECUTE']];
