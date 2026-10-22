@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 22.10.2026, 12:40:56 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 22.10.2026, 14:44:52 Uhr — Europe/Berlin (MESZ, UTC+02:00).
 
 ## Geltungsbereich
 
@@ -21,6 +21,14 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Keine produktiven Zugangsdaten, Secrets oder Datenbankzugänge hinzufügen oder verändern, sofern dies nicht ausdrücklich beauftragt wurde.
 - Keine Änderungen außerhalb dieses Repositories vornehmen.
 - Keine Änderungen an `masterxfix/fixlab`.
+
+## Designbestandsschutz und ausdrückliche Nutzerfreigabe
+
+- **Verbindlich für ChatGPT und Codex:** Die bestehende visuelle Identität von MOSA 2 bleibt unangetastet, solange der Nutzer nicht die **konkret betroffene Designänderung ausdrücklich genehmigt**. Das betrifft insbesondere Farben und Farbvariablen, Schriftfamilien und Schriftschnitte, Typografie, Logo/Branding, Symbole, Dark-/Light-Theme, Akzente und die vorhandene Gestaltungsgrundlage. Eine Genehmigung für ein Layout, eine Funktion oder einen Deploy gilt **nicht** automatisch als Genehmigung dieser weiteren Bereiche.
+- Offene Formulierungen wie „modernisieren“, „hochwertiger“, „einheitlich“, „Dark-Design“ oder „weiter“ erteilen **keine Freigabe zum Austausch der bestehenden Farben, Schriften oder Markenmerkmale**. Bereits bestehende Gestaltungsentscheidungen müssen vor der Umsetzung aus dem aktuellen Repository beziehungsweise aus ausdrücklich bestätigten Vorgaben ermittelt und erhalten werden.
+- Vor einer beabsichtigten Abweichung die **konkreten Alt-/Neuwerten, betroffenen Dateien und sichtbaren Auswirkungen** benennen und die ausdrückliche Zustimmung des Nutzers **vor Implementierung, Commit oder Deployment** einholen. Fehlt die Zustimmung: unverändert lassen; keinen stillen visuellen Ersatz oder kreative Standardannahmen vornehmen.
+- Jeder ausdrücklich auf andere Bereiche begrenzte Webauftrag muss die **nicht freigegebenen** Farb-/Schrift-/Branding-Werte nachher unverändert nachweisen. Bei einer ausdrücklich verlangten Wiederherstellung nur den letzten belegten, zuvor akzeptierten Gestaltungsstand zurücksetzen; keine weiteren Designänderungen ergänzen.
+- Diese Regel ist keine allgemeine Sperre für ausdrücklich beauftragte Korrekturen, sondern eine **strikte Scope-Grenze**: Nur die konkret vom Nutzer freigegebenen Eigenschaften dürfen verändert werden. Ein technisch erfolgreicher Test oder Deployment ersetzt keine Designfreigabe.
 
 ## Vorabinformation bei notwendigen Nutzeraktionen
 
@@ -173,6 +181,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 22.10.2026 | 14:44:52 Uhr (MESZ, UTC+02:00) | Verbindlichen Designbestandsschutz ergänzt: keine stillschweigenden Farb-, Schrift-, Branding- und Theme-Änderungen bei Layout-/Funktionsaufträgen; genaue Designänderungen erfordern vorherige ausdrückliche Nutzerfreigabe. |
 | 22.10.2026 | 12:40:56 Uhr (MESZ, UTC+02:00) | Verbindliche Auftrags- und Testökonomie ergänzt: vorhandene Belege zuerst, minimaler Testplan, stufenweise Nachweise, höchstens drei GitHub-Actions-Läufe ohne erneute Freigabe sowie sofortiger Stopp statt Testschleifen. |
 | 20.10.2026 | 22:45:06 Uhr (MESZ, UTC+02:00) | Globale Passwort-/Secret-Regel ergänzt: keine erneuten Passwortabfragen als Fallback; Fachaufträge erst starten, wenn der benötigte nicht-interaktive Zugang eingerichtet ist. |
 | 20.10.2026 | 21:05:00 Uhr (MESZ, UTC+02:00) | Verbindlichen Dogado-/SFTP-Testsite-Zugang für Codex festgehalten: GitHub-Actions-Workflow, web213, harter Test-Webroot, Secret-/Variablennamen und klare Trennung vom älteren Produktionsziel. |
