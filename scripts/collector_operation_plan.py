@@ -3,12 +3,14 @@
 RUN_ELIGIBLE is a simulation result, never an execution authorization.
 Qualification and lock/budget evidence must come from existing guarded components.
 """
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 import math
 import re
 from zoneinfo import ZoneInfo
 
 FORMAT = "mosa2-collector-operation-plan-v1"
+FORMAT_V2 = "mosa2-collector-operation-plan-v2"
+SCHEDULE = "BERLIN_60_900_V1"
 ZONE = ZoneInfo("Europe/Berlin")
 TERMINAL = {"COMPLETE", "FAILED", "PARTIAL_FAILED", "OUTCOME_UNKNOWN"}
 FAILED = {"FAILED", "PARTIAL_FAILED", "OUTCOME_UNKNOWN"}
@@ -44,13 +46,19 @@ def selection(values):
 
 
 def _configuration(c):
-    if set(c) != {
+    expected = {
         "format", "execution_enabled", "selection", "max_batch_size", "venue",
         "timezone", "weekdays", "windows", "calendar", "interval_seconds",
         "provider_budget", "max_duration_seconds", "evidence_max_age_seconds",
         "freshness_seconds", "error_policy",
-    } or c["format"] != FORMAT or type(c["execution_enabled"]) is not bool:
+    }
+    modern = c.get("format") == FORMAT_V2
+    if modern:
+        expected = expected - {"weekdays", "windows", "interval_seconds"} | {"schedule_policy"}
+    if set(c) != expected or c["format"] not in (FORMAT, FORMAT_V2) or type(c["execution_enabled"]) is not bool:
         raise ValueError("config")
+    if modern and c["schedule_policy"] != SCHEDULE:
+        raise ValueError("schedule")
     if c["max_batch_size"] != 10 or type(c["max_batch_size"]) is not int:
         raise ValueError("batch")
     assets = selection(c["selection"])
@@ -58,7 +66,8 @@ def _configuration(c):
         raise ValueError("policy")
     if not isinstance(c["venue"], str) or not re.fullmatch(r"[A-Z0-9]{4}", c["venue"]):
         raise ValueError("venue")
-    for name in ("interval_seconds", "max_duration_seconds", "evidence_max_age_seconds", "freshness_seconds"):
+    for name in (("max_duration_seconds", "evidence_max_age_seconds", "freshness_seconds") if modern else
+                 ("interval_seconds", "max_duration_seconds", "evidence_max_age_seconds", "freshness_seconds")):
         if not positive(c[name]):
             raise ValueError("limits")
     budget = c["provider_budget"]
@@ -66,23 +75,25 @@ def _configuration(c):
         raise ValueError("budget")
     if len(assets) > budget["per_run"] or len(assets) > budget["per_day"]:
         raise ValueError("budget")
-    weekdays = c["weekdays"]
-    if (not isinstance(weekdays, list) or not weekdays or
-            any(type(v) is not int or v not in range(5) for v in weekdays) or len(set(weekdays)) != len(weekdays)):
-        raise ValueError("weekdays")
-    windows = c["windows"]
-    if not isinstance(windows, list) or not windows or len(windows) > 10:
-        raise ValueError("windows")
     parsed = []
-    for w in windows:
-        if set(w) != {"start", "end"} or any(not isinstance(v, str) or not re.fullmatch(r"\d{2}:\d{2}", v) for v in w.values()):
-            raise ValueError("window")
-        start, end = time.fromisoformat(w["start"]), time.fromisoformat(w["end"])
-        if start >= end:
-            raise ValueError("overnight_not_supported")
-        parsed.append((start, end))
-    if any(a[1] > b[0] for a, b in zip(sorted(parsed), sorted(parsed)[1:])):
-        raise ValueError("overlap")
+    if not modern:
+        weekdays = c["weekdays"]
+        if (not isinstance(weekdays, list) or not weekdays or
+                any(type(v) is not int or v not in range(5) for v in weekdays) or len(set(weekdays)) != len(weekdays)):
+            raise ValueError("weekdays")
+        windows = c["windows"]
+        if not isinstance(windows, list) or not windows or len(windows) > 10:
+            raise ValueError("windows")
+        parsed = []
+        for w in windows:
+            if set(w) != {"start", "end"} or any(not isinstance(v, str) or not re.fullmatch(r"\d{2}:\d{2}", v) for v in w.values()):
+                raise ValueError("window")
+            start, end = time.fromisoformat(w["start"]), time.fromisoformat(w["end"])
+            if start >= end:
+                raise ValueError("overnight_not_supported")
+            parsed.append((start, end))
+        if any(a[1] > b[0] for a, b in zip(sorted(parsed), sorted(parsed)[1:])):
+            raise ValueError("overlap")
     cal = c["calendar"]
     if set(cal) != {"approved", "source", "version", "valid_from", "valid_until", "open_dates", "closed_dates"} or cal["approved"] is not True:
         raise ValueError("calendar")
@@ -105,12 +116,53 @@ def _configuration(c):
     return assets, parsed, lo, hi, dates
 
 
-def decide(config, state, qualification, now, candidate_id):
+def cadence_seconds(now, *, holiday):
+    """Common proposed Berlin cadence; never an execution authorization."""
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None or type(holiday) is not bool:
+        return None
+    local = now.astimezone(ZONE)
+    return 60 if local.weekday() < 5 and not holiday and local.hour >= 6 else 900
+
+
+def is_slot(now, *, holiday):
+    interval = cadence_seconds(now, holiday=holiday)
+    return interval is not None and now.microsecond == 0 and int(now.timestamp()) % interval == 0
+
+
+def calendar_holiday(config, now):
+    """Explicit local-day knowledge, including weekends; unknown is never False."""
+    try:
+        _, _, lo, hi, dates = _configuration(config)
+        day = now.astimezone(ZONE).date()
+        if lo <= day <= hi and day in dates[0] | dates[1]:
+            return day in dates[1]
+    except (KeyError, ValueError, TypeError, AttributeError, OverflowError):
+        pass
+    return None
+
+
+def next_slot(config, now):
+    """Strictly future theoretical UTC tick; stop at missing calendar coverage."""
+    cursor = now.astimezone(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    for _ in range(16):
+        holiday = calendar_holiday(config, cursor)
+        if holiday is None:
+            return None
+        if is_slot(cursor, holiday=holiday):
+            return cursor
+        cursor += timedelta(minutes=1)
+    return None
+
+
+def decide(config, state, qualification, now, candidate_id, *, simulation=False):
     """Return only RUN_ELIGIBLE, SKIP or BLOCKED; never create a job or retry."""
     try:
-        if not isinstance(config, dict) or config.get("format") != FORMAT:
+        if not isinstance(config, dict) or config.get("format") not in (FORMAT, FORMAT_V2):
             return "BLOCKED"
-        if config.get("execution_enabled") is False:
+        modern = config["format"] == FORMAT_V2
+        if type(simulation) is not bool:
+            return "BLOCKED"
+        if config.get("execution_enabled") is False and not (modern and simulation):
             return "SKIP"
         assets, windows, lo, hi, dates = _configuration(config)
         if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
@@ -154,6 +206,21 @@ def decide(config, state, qualification, now, candidate_id):
         day = local.date()
         if not lo <= day <= hi:
             return "BLOCKED"
+        if modern:
+            if day not in dates[0] | dates[1]:
+                return "BLOCKED"
+            if not is_slot(utc, holiday=day in dates[1]):
+                return "SKIP"  # UTC slot only: never catch up a missed tick
+            if last is not None:
+                end = instant(state["last_completed_at"])
+                start = instant(last)
+                if not start <= end <= utc or (end-start).total_seconds() > config["max_duration_seconds"]:
+                    return "BLOCKED"
+                if start >= utc:
+                    return "SKIP"
+            elif state["last_completed_at"] is not None:
+                return "BLOCKED"
+            return "RUN_ELIGIBLE"
         if day.weekday() not in config["weekdays"] or day in dates[1]:
             return "SKIP"
         if day not in dates[0]:

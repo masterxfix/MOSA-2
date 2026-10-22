@@ -184,12 +184,13 @@ pro normalem Werktag sind daher rechnerisch möglich. Dedupe spart keine
 Netzwerkanfragen. MOSAs inkrementellen Quellzeit-/Content-Filter nicht ohne
 eigene fachliche Freigabe in den MOSA-2-Writer kopieren; Kern bleibt unverändert.
 
-Die bisherige Betriebsplanung überspringt geschlossene Handelstage.
-Der hier gewünschte 24/7-Low-Cadence-Entwurf ist eine andere Sammlungspolitik,
-keine stillschweigende Änderung dieser Planung. Vor einer Umsetzung
-Kalender, Feiertagsdefinition und Low-Cadence-Freigabe explizit festlegen;
-Feiertage bedeuten niedrigeren Takt statt Beobachtungsverbot. Neue gültige
-Marktbeobachtungen bleiben unabhängig von Preisänderungen verarbeitbar.
+Der historische Betriebsplan-v1 überspringt weiterhin geschlossene Handelstage.
+Der gemeinsame Offline-Zyklus verwendet ausdrücklich Betriebsplan-v2 mit
+BERLIN_60_900_V1 und denselben zentralen Taktfunktionen wie das Lastmodell.
+Feiertage bedeuten darin 900 Sekunden statt Ausfall. Alte Verträge und Tests
+werden nicht stillschweigend geändert; die deaktivierten Konfigurationen bleiben
+unverändert. Vertrag, lokale Simulation, strenge Monitoringintegration und noch
+fehlende Live-Voraussetzungen: [COLLECTOR_CYCLE.md](COLLECTOR_CYCLE.md).
 
 ## Später separat freizugebende Teststufen
 

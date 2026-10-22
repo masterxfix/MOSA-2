@@ -5,17 +5,14 @@ no live reservation is acquired, and no MOSA state is mutated by this module.
 """
 from datetime import datetime, time, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from scripts.collector_operation_plan import ZONE, instant, natural, positive, number
+from scripts.collector_operation_plan import ZONE, instant, natural, positive, number, cadence_seconds as _cadence_seconds, is_slot as _is_slot
 
 FORMAT = "mosa2-provider-budget-plan-v1"
 
 
 def cadence_seconds(now, *, holiday):
     """Proposed cadence, NOT an authorization; unknown calendar blocks modelling."""
-    if not isinstance(now, datetime) or now.tzinfo is None or type(holiday) is not bool:
-        return None
-    local = now.astimezone(ZONE)
-    return 60 if local.weekday() < 5 and not holiday and local.hour >= 6 else 900
+    return _cadence_seconds(now, holiday=holiday)
 
 
 def day_load(day, *, holiday, assets=5):
@@ -30,15 +27,13 @@ def day_load(day, *, holiday, assets=5):
     cursor = start
     runs = 0
     while cursor < end:
-        local = cursor.astimezone(ZONE)
-        interval = cadence_seconds(cursor, holiday=holiday)
-        if interval == 60 or local.minute % 15 == 0:
+        if _is_slot(cursor, holiday=holiday):
             runs += 1
         cursor += timedelta(minutes=1)
     return {"runs": runs, "requests": runs * assets, "per_provider": {"boerse_frankfurt_api_v1": runs * assets}}
 
 
-def admission(config, provider, state, baseline, *, planned_requests, now):
+def admission(config, provider, state, baseline, *, planned_requests, now, simulation=False):
     """Pure simulation; future adapter must reserve atomically under existing lock."""
     def result(decision, reason):
         return {"decision": decision, "reason": reason, "scope": "MOSA2",
@@ -46,9 +41,11 @@ def admission(config, provider, state, baseline, *, planned_requests, now):
     try:
         if config["format"] != FORMAT:
             return result("BLOCKED", "INVALID_CONTRACT")
-        if config["execution_enabled"] is False:
+        if type(simulation) is not bool:
+            return result("BLOCKED", "INVALID_CONTRACT")
+        if config["execution_enabled"] is False and not simulation:
             return result("SKIP", "DISABLED")
-        if config["execution_enabled"] is not True:
+        if type(config["execution_enabled"]) is not bool:
             return result("BLOCKED", "INVALID_CONTRACT")
         p = config["providers"][provider]
         if p["rights_confirmed"] is not True:
@@ -111,7 +108,7 @@ def retry_after(value, now):
         return None
 
 
-def observe(policy, previous, event, *, now):
+def observe(policy, previous, event, *, now, strict=False):
     """Bounded synthetic monitoring projection, sticky stop, closed output fields.
 
     Caller must supply a fresh per-provider window; no response bodies, URLs,
@@ -148,6 +145,8 @@ def observe(policy, previous, event, *, now):
         duplicate = event.get("dedupe_decision")
         if duplicate not in (None, "INSERT", "DUPLICATE_UNCHANGED", "CONFLICT", "REJECT"):
             return safe
+        if strict and (latency is None or age is None or type(strict) is not bool):
+            return safe
         reason = "HEALTHY"
         until = None
         if previous["stop_latched"]:
@@ -163,14 +162,18 @@ def observe(policy, previous, event, *, now):
             reason = "ACCESS_BLOCKED"
         elif event["mosa_impact"]:
             reason = "MOSA_IMPACT"
-        elif duplicate in ("CONFLICT", "REJECT"):
+        elif duplicate in ("CONFLICT", "REJECT") or (strict and not event["valid_payload"]):
             reason = "DATA_INTEGRITY"
         elif latency is not None and latency > policy["latency_ms_stop"]:
             reason = "LATENCY"
+        elif strict and event["timeout"]:
+            reason = "PROVIDER_TIMEOUT"
         elif consecutive >= policy["consecutive_error_stop"]:
             reason = "ERROR_TREND"
         elif len(samples) >= policy["min_samples"] and sum(samples) / len(samples) >= ratio:
             reason = "ERROR_TREND"
+        elif strict and error:
+            reason = "PROVIDER_ERROR"
         stopped = reason != "HEALTHY"
         return {
             "scope": "MOSA2", "stop_latched": stopped, "reason": reason,
@@ -183,3 +186,35 @@ def observe(policy, previous, event, *, now):
         }
     except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
         return safe
+
+
+def simulate_attempts(state, assets, outcomes, *, cycle_id):
+    """Account supplied synthetic attempts, including failures; never send/reserve.
+
+    Sequential prefix only, stop on first failure, no second attempt for an asset
+    in a cycle. Returned counters are a model, not durable/atomic quota evidence.
+    """
+    try:
+        if (not isinstance(outcomes, list) or len(outcomes) > len(assets) or
+                len(set(assets)) != len(assets) or not 1 <= len(assets) <= 5):
+            raise ValueError("scope")
+        seen = list(state["simulated_attempt_ids"])
+        if len(seen) > 10000 or len(set(seen)) != len(seen):
+            raise ValueError("history")
+        used = {k: state[k] for k in ("used_60s", "used_day")}
+        if not all(natural(v) for v in used.values()):
+            raise ValueError("usage")
+        for index, attempt in enumerate(outcomes):
+            key = cycle_id + ":" + assets[index]
+            if (set(attempt) != {"asset", "outcome"} or attempt["asset"] != assets[index] or
+                    attempt["outcome"] not in {"SUCCESS", "FAILED", "TIMEOUT"} or key in seen or
+                    (attempt["outcome"] != "SUCCESS" and index != len(outcomes)-1)):
+                raise ValueError("attempt")
+            seen.append(key)
+            for counter in used:
+                used[counter] += 1
+        return {"decision": "SIMULATED", **used, "simulated_attempt_ids": seen,
+                "attempts": len(outcomes), "atomic_reservation": False, "execution_authorized": False}
+    except (KeyError, ValueError, TypeError, IndexError):
+        return {"decision": "BLOCKED", "reason": "INVALID_OR_REPEATED_ATTEMPT",
+                "atomic_reservation": False, "execution_authorized": False}
