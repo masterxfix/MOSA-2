@@ -2,6 +2,10 @@
 
 MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des MOSA-Dashboards.
 
+## Aktueller Stand und nächster Abschlussabschnitt
+
+**Übergabe 22.10.2026:** [Bestätigter Projektstand, offene Blocker und konkreter Abschlussfahrplan](docs/MOSA2_UEBERGABE_ABSCHLUSSFAHRPLAN_2026-10-22.md). Bei Fortsetzung zuerst diese Übergabe und `AGENTS.md` lesen; bereits abgeschlossene Tests nicht wiederholen.
+
 ## Zielbild
 
 MOSA 2 soll langfristig eine **persönliche, finanzorientierte KI-Plattform** werden.
