@@ -209,3 +209,49 @@ FLUSH-/LOCK-Ausfuehrungen, Kursabfragen, Backup und Restore: jeweils null.
 Andere Jobs einschliesslich Migration und synthetischem MySQL-Dienst uebersprungen.
 Collector-Schalter und Zugangsdaten unveraendert. Weitere Backup-Voraussetzungen
 wie Speicherplatz und Laufzeitwerkzeuge waren nicht Bestandteil dieser Pruefung.
+
+## Backup ohne globale Rechte: Entscheidung (22.10.2026)
+
+[Offizielle Plesk-Anleitung](https://docs.plesk.com/de-DE/obsidian/administrator-guide/websiteverwaltung/websitedatenbanken/exportieren-und-importieren-von-datenbankabbildern.69538/):
+Export einer einzelnen ausgewaehlten Datenbank als SQL/ZIP ist vorgesehen.
+ZIP ist kein Verschluesselungsnachweis. Die Anleitung belegt weder den
+konkreten Accountumfang noch einen vollstaendigen, konsistenten Restore hier.
+Verbundenes Chrome gelesen: angemeldetes oneHome, kein vorhandener Plesk-Tab;
+der Datenbanken-Link endet in einem Fehlerdialog. Keine Anmeldung, kein SSO,
+kein Export ausgeloest. Export von nur `h29077_mosa2_test`: NICHT BESTAETIGT.
+
+[Offizielle MySQL-8-Anleitung](https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html):
+Schemaweites SELECT/SHOW VIEW/TRIGGER/EVENT deckt Tabellen/Views/Trigger/Events ab.
+`--no-tablespaces` vermeidet PROCESS; `--set-gtid-purged=OFF` vermeidet GTID-
+Serverzustand und dessen bedingte RELOAD-/FLUSH_TABLES-Anforderung ab 8.0.32.
+`--routines` verlangt laut Anleitung globales SELECT. Daher ist die komplette
+vorgeschlagene Optionsliste mit diesem Konto nicht allgemein freigegeben.
+Nur fuer den nachgewiesenen Bestand ohne Routinen wird `--skip-routines` verwendet;
+bei neu auftauchenden Routinen stoppen, keinen unvollstaendigen Export akzeptieren.
+
+Vorgesehene Optionen fuer genau eine Datenbank (kein Live-Befehl ausgefuehrt):
+```
+mysqldump --single-transaction --quick --skip-lock-tables --no-tablespaces   --set-gtid-purged=OFF --hex-blob --tz-utc --skip-routines --events --triggers   --default-character-set=utf8mb4 --column-statistics=0 --skip-add-locks   h29077_mosa2_test
+```
+`--single-transaction` sichert den InnoDB-Datenstand; keine gleichzeitigen
+ALTER/CREATE/DROP/RENAME/TRUNCATE. Fuer exakten Struktur-/AUTO_INCREMENT-Abgleich
+muss darueber hinaus die gesamte Quelle vom Vorvergleich bis Nachvergleich
+schreibruhig sein. Auch abgebrochene Schreibversuche koennen Zaehler beeinflussen.
+Keine globale FLUSH-Sperre und keine Garantie bei unkontrollierten Schreibern.
+Optionen/Clientversion und InnoDB-Eigenschaft unmittelbar vor einem spaeteren
+Export pruefen; keine Replikations-/Flush-/All-Databases-Optionen hinzufuegen.
+
+| Kriterium | Plesk-Export | Schema-mysqldump |
+|---|---|---|
+| Konkrete Berechtigung | Exportaktion nicht bestaetigt | Vorhandene Schema-Rechte; zero-routine-Bedingung |
+| Vollstaendigkeit | Hier ungeprueft | Alle 17 Tabellen/Spalten, Struktur und Fakten zu vergleichen |
+| Konsistenz/Schreibruhe | Internes Verfahren ungeklaert | InnoDB-Snapshot plus nachgewiesene DDL-/Schreibruhe |
+| Restore | Hier ungeprueft | Bestehender unabhaengiger Vollvergleich |
+| Aufbewahrung | SQL/ZIP; separate Verschluesselung noetig | Bestehende AES-GCM/Signatur/Hashes wiederverwenden |
+| Bedienung | Panelzugang nicht bestaetigt | Bestehender SSH-/Tunnelweg; Dump-Client noch live zu pruefen |
+
+Einmaliger synthetischer Export-/Restore-Nachweis: ausstehend.
+Keine Aenderung am bisherigen global sperrenden Backup-Executor; dessen CI- und
+Rechtesperren bleiben bestehen. Der neue Nachweis ist ausschliesslich eine
+gezielte Methode in der vorhandenen Testfixture, keine operative Backup-Software.
+Die 335 Regressionen werden nicht erneut gestartet. Keine Dogado-Verbindung.

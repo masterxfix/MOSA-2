@@ -15,7 +15,7 @@ on:
       backup_stage:
         description: Bounded backup diagnosis, focused correction, or final regression
         type: choice
-        options: [full, diagnosis, focused]
+        options: [full, diagnosis, focused, schema-export]
         default: full
       read_preflight:
         description: Exactly one PREPARE-only read of existing Dogado schema4, on main after isolated tests
@@ -169,6 +169,7 @@ jobs:
               "$py" -B -m unittest -v test_database_backup_mysql.BackupMySQLTests.test_complete_backup_restore_migrate5_then_fresh_schema4_restore
               "$py" -B -c 'import sys,unittest,test_database_backup as p,test_database_backup_mysql as m; c=m.BackupMySQLTests; names=[n for n in unittest.defaultTestLoader.getTestCaseNames(c) if n not in ("test_basis_restore","test_complete_backup_restore_migrate5_then_fresh_schema4_restore")]; s=unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromModule(p),unittest.TestSuite(c(n) for n in names)]); sys.exit(not unittest.TextTestRunner(verbosity=2).run(s).wasSuccessful())'
               ;;
+            schema-export) "$py" -B -m unittest -v test_database_backup_mysql.BackupMySQLTests.prove_schema_scoped_export ;;
             full) "$py" -B -m unittest -v test_database_backup test_database_backup_mysql ;;
             *) exit 1 ;;
           esac

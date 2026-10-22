@@ -86,6 +86,61 @@ class BackupMySQLTests(unittest.TestCase):
         m['dump_sha256']=b.sha(dump);raw=b.state_bytes(state);m['state_sha256']=b.sha(raw)
         m['table_sha256']={t:b.sha(b.canonical(rows)) for t,rows in state['rows'].items()}
         b.seal(self.root,m,dump,raw,self.password,self.key)
+    def prove_schema_scoped_export(self):
+        # Match the qualified hosting state: zero stored objects, no other
+        # writers/DDL in this isolated one-test fixture. No global read lock.
+        for sql in ('DROP TRIGGER backup_fixture_trigger','DROP PROCEDURE backup_fixture_procedure',
+                    'DROP FUNCTION backup_fixture_function','DROP EVENT backup_fixture_event'):
+            self.sql(sql)
+        account='mosa2_schema_export_fixture'
+        with connect() as c:
+            self.engine.guard(c)
+            with c.cursor() as q:
+                q.execute("CREATE USER 'mosa2_schema_export_fixture'@'localhost'")
+                q.execute("GRANT SELECT,SHOW VIEW,TRIGGER,EVENT,CREATE ROUTINE,ALTER ROUTINE,EXECUTE,LOCK TABLES ON `h29077\\_mosa2\\_test`.* TO 'mosa2_schema_export_fixture'@'localhost'")
+            c.commit()
+        try:
+            with self.engine.database(b.SOURCE) as c:before=self.engine.snapshot(c,4)
+            self.assertEqual(before['objects'],{})
+            self.assertEqual(len(before['rows']),17)
+            self.assertTrue(all(before['rows'].values()))
+            for name in ('current','observations'):
+                self.assertEqual(before['evidence'][name]['status'],'ok')
+                self.assertEqual(len(before['evidence'][name]['items']),5)
+            client=['docker','exec',self.engine.container,'mysql','--no-defaults','--protocol=socket','--user='+account,
+                    '--batch','--skip-column-names','-e','SHOW GRANTS']
+            grants=b.command(client).decode().splitlines()
+            self.assertEqual(len(grants),2)
+            self.assertEqual(sum(' ON *.* ' in g and g.startswith('GRANT USAGE ') for g in grants),1)
+            self.assertEqual(sum(' ON `h29077' in g and ' TO ' in g for g in grants),1)
+            # --routines is unnecessary only because complete visibility proves
+            # zero routines. Never silently omit existing routine definitions.
+            args=['--single-transaction','--quick','--skip-lock-tables','--no-tablespaces','--set-gtid-purged=OFF',
+                  '--hex-blob','--tz-utc','--skip-routines','--events','--triggers','--default-character-set=utf8mb4',
+                  '--column-statistics=0','--skip-comments','--skip-dump-date','--skip-add-locks',
+                  '--skip-add-drop-table','--complete-insert','--order-by-primary',b.SOURCE]
+            command=self.engine.sql_client('mysqldump',*args)
+            command[command.index('--user=root')]='--user='+account
+            dump=b.command(command)
+            with self.engine.database(b.SOURCE) as c:self.assertEqual(self.engine.snapshot(c,4),before)
+            identity='backup-'+__import__('uuid').uuid4().hex
+            dump+=('-- MOSA2_BACKUP_COMPLETE:'+identity+'\n').encode();state=b.state_bytes(before)
+            manifest=dict(format=b.FORMAT,backup_id=identity,database=b.SOURCE,schema_version=4,
+                mysql_version=before['evidence']['properties']['version'],server_uuid=self.engine.uuid,commit=self.commit,
+                dump_sha256=b.sha(dump),state_sha256=b.sha(state),migrations=before['evidence']['ledger'],
+                table_sha256={t:b.sha(b.canonical(rows)) for t,rows in before['rows'].items()},
+                consistency='CONTROLLED_SYNTHETIC_QUIESCENCE_NO_DDL_OR_WRITERS')
+            b.seal(self.root,manifest,dump,state,self.password,self.key)
+            self.assertEqual(self.unpack()[2],before)
+            self.assertEqual(self.restore()['status'],'RESTORE_READBACK_PASS')
+            with self.engine.database(b.SOURCE) as c:self.assertEqual(self.engine.snapshot(c,4),before)
+            print('SCHEMA_ONLY_EXPORT_FULL_RESTORE_PASS_NO_GLOBAL_EXPORT_PRIVILEGES')
+        finally:
+            with connect() as c:
+                self.engine.guard(c)
+                with c.cursor() as q:q.execute("DROP USER 'mosa2_schema_export_fixture'@'localhost'")
+                c.commit()
+
     def diagnose_restore_evidence(self):
         self.backup();expected=self.unpack()[2]['evidence']
         self.restore()
