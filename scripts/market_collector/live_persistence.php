@@ -10,7 +10,8 @@ require_once __DIR__.'/../phase3o/live_writer.php';
 
 function strings(array $row): array {foreach($row as &$v)if($v!==null)$v=(string)$v;unset($v);return $row;}
 function snapshot(PDO $p,array $contract=[]): array {
-    $tables=array_merge(\Mosa2\Phase2\TABLES,\Mosa2\Phase3B\MARKET,['m2_units']);sort($tables);
+    require_once __DIR__.'/schema_contract.php';
+    $envelope=\Mosa2\CollectorSchema5\envelope($contract['schema_version']??3);$tables=$envelope['tables'];
     same(\Mosa2\Phase2\tables($p),$tables,'table_set');$out=[];
     foreach($tables as $t){
         $cols=$p->query('SHOW COLUMNS FROM '.qi($t))->fetchAll();$select=[];
@@ -19,12 +20,8 @@ function snapshot(PDO $p,array $contract=[]): array {
         $out[$t]=array_map(__NAMESPACE__.'\\strings',$p->query('SELECT '.implode(',',$select).' FROM '.qi($t).' ORDER BY '.implode(',',array_map(static fn($k)=>qi($k['Column_name']),$keys)))->fetchAll());
     }
     if(($contract['allow_current']??false)!==true)same($out['m2_market_current'],[],'current_nonempty');same($out['m2_market_bars'],[],'bars_nonempty');
-    $versions=['1','2','3'];
-    if(($contract['schema_version']??3)===4)$versions[]='4';
-    else same($contract['schema_version']??3,3,'schema_contract');
-    same(count($out['m2_units']),4,'four_units');same(array_column($out['m2_schema_migrations'],'version'),$versions,'ledger_versions');
-    $digests=[\Mosa2\Phase2\DIGEST,\Mosa2\Phase3B\DIGEST,\Mosa2\Phase3K\DIGEST];
-    if(count($versions)===4)$digests[]=hash_file('sha256',dirname(__DIR__,2).'/docs/database/migrations/0004_current_observation_provenance.sql');
+    same(count($out['m2_units']),4,'four_units');same(array_column($out['m2_schema_migrations'],'version'),$envelope['versions'],'ledger_versions');
+    $digests=$envelope['digests'];
     foreach($out['m2_schema_migrations'] as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
     $seed=json_decode(file_get_contents(dirname(__DIR__,2).'/docs/database/seeds/0001_market_units_v1.json'),true,32,JSON_THROW_ON_ERROR);
     foreach($seed['definitions'] as $d){$rows=array_values(array_filter($out['m2_units'],static fn($r)=>$r['unit_key']===$d['unit_key']&&$r['unit_version']===$d['unit_version']));same(count($rows),1,'seed_binding');

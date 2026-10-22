@@ -39,14 +39,12 @@ function runtimeMetadata(PDO $p): array {
 }
 /** Fixed-size migration/seed contracts, plus the uniqueness relied on by bounded reads. */
 function runtimeContract(PDO $p,array $contract,?callable $metadataReader=null): array {
-    $version=$contract['schema_version']??4;check(in_array($version,[3,4],true),'schema_contract');
-    $tables=array_merge(\Mosa2\Phase2\TABLES,\Mosa2\Phase3B\MARKET,['m2_units']);sort($tables);
+    require_once __DIR__.'/schema_contract.php';
+    $version=$contract['schema_version']??4;$envelope=\Mosa2\CollectorSchema5\envelope($version);
     $metadata=($metadataReader??__NAMESPACE__.'\\runtimeMetadata')($p);
-    same($metadata['tables'],$tables,'table_set');
-    $ledger=boundedRows($p,'SELECT *,HEX(checksum) AS checksum FROM m2_schema_migrations ORDER BY version LIMIT 5',[],4);
-    same(array_column($ledger,'version'),array_map('strval',range(1,$version)),'ledger_versions');
-    $digests=[\Mosa2\Phase2\DIGEST,\Mosa2\Phase3B\DIGEST,\Mosa2\Phase3K\DIGEST];
-    if($version===4)$digests[]=hash_file('sha256',dirname(__DIR__,2).'/docs/database/migrations/0004_current_observation_provenance.sql');
+    same($metadata['tables'],$envelope['tables'],'table_set');
+    $ledger=boundedRows($p,'SELECT *,HEX(checksum) AS checksum FROM m2_schema_migrations ORDER BY version LIMIT '.($version===5?6:5),[],$version===5?5:4);
+    same(array_column($ledger,'version'),$envelope['versions'],'ledger_versions');$digests=$envelope['digests'];
     foreach($ledger as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
     $units=boundedRows($p,'SELECT *,HEX(definition_sha256) AS definition_sha256 FROM m2_units ORDER BY unit_key,unit_version LIMIT 5',[],4);
     same(count($units),4,'four_units');

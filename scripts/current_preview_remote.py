@@ -18,19 +18,19 @@ READ_FAILURES = {'READ_CONFIG_UNAVAILABLE','READ_CONFIG_UNSAFE','READ_CONFIG_REJ
     'READ_CONNECTION_UNAVAILABLE','READ_IDENTITY_REJECTED','READ_DATABASE_PROPERTIES_REJECTED',
     'READ_TRANSACTION_VARIABLE_UNSUPPORTED','READ_PRIVILEGES_REJECTED','READ_SESSION_SETUP_REJECTED',
     'READ_SESSION_STATE_REJECTED','READ_TRANSACTION_START_REJECTED','READ_TRANSACTION_STATE_REJECTED',
-    'READ_SNAPSHOT_DATA_REJECTED','READ_ROLLBACK_REJECTED'}
+    'READ_SNAPSHOT_DATA_REJECTED','READ_MIGRATION_METADATA_REJECTED','READ_ROLLBACK_REJECTED'}
 DIAGNOSTICS = {'MYSQL_80_PROPERTIES_CONFIRMED','TRANSACTION_READ_ONLY_VARIABLE_SUPPORTED',
                'LEGACY_SESSION_DEFAULT_READ_WRITE'}
 
 
-def execute(env, paramiko, private_consumer=None):
+def execute(env, paramiko, private_consumer=None, *, bundle_script=None):
     if env.get('GITHUB_RUN_ATTEMPT') != '1':
         return dict(real_data_checked=False, failure='FIRST_ATTEMPT_ONLY', business_writes=0, provider_requests=0)
     phase = 'EXISTING_SSH_ACCESS_UNAVAILABLE'
     try:
         config = profile.configuration(env)  # Only the existing SSH secrets, no writer DB secret.
         logging.getLogger('paramiko').disabled = True
-        p = subprocess.run(['php', str(ROOT/'scripts/market_current/read_bundle.php')],
+        p = subprocess.run(['php', str(bundle_script or ROOT/'scripts/market_current/read_bundle.php')],
                            capture_output=True, text=True, check=True, timeout=10)
         if p.stderr:raise ValueError('bundle')
         wire = json.dumps(dict(source=p.stdout)).encode()

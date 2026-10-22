@@ -140,7 +140,7 @@ function structure(PDO $p,array $schema,?string $diagnosticsPath=null): array {
         $actual=[];foreach($fk as $v) {
             $key=$v['CONSTRAINT_NAME'];check(isset($t['fks'][$key]),'unexpected_unit_fk');$expected=$t['fks'][$key];
             same($v['REFERENCED_TABLE_SCHEMA'],'h29077_mosa2_test','unit_foreign_schema');
-            same($v['DELETE_RULE'],'RESTRICT','unit_delete_rule');check(in_array($v['UPDATE_RULE'],['NO ACTION','RESTRICT'],true),'unit_update_rule');
+            same($v['DELETE_RULE'],$expected['delete'],'unit_delete_rule');check(in_array($v['UPDATE_RULE'],['NO ACTION','RESTRICT'],true),'unit_update_rule');
             $target=$expected['targets']??[$expected['target']];$parentKeys=$schema[$expected['table']]['indexes'];
             check(isset($parentKeys[$v['UNIQUE_CONSTRAINT_NAME']])&&$parentKeys[$v['UNIQUE_CONSTRAINT_NAME']]['unique']&&$parentKeys[$v['UNIQUE_CONSTRAINT_NAME']]['columns']===$target,'unit_parent_key');
             $actual[$key]['columns'][]=$v['COLUMN_NAME'];$actual[$key]['table']=$v['REFERENCED_TABLE_NAME'];

@@ -40,7 +40,7 @@ function qualify(array $entry): array {
  * SET TRANSACTION alone changes the next transaction, not @@session.transaction_read_only.
  * https://dev.mysql.com/doc/refman/8.0/en/set-transaction.html
  */
-function readSnapshot(PDO $p): array {
+function readSnapshot(PDO $p,?callable $extra=null): array {
     $stage='READ_IDENTITY_REJECTED';$diagnostics=[];$result=[];
     try{
         check(!$p->inTransaction(),'read_existing_transaction');
@@ -74,7 +74,11 @@ function readSnapshot(PDO $p): array {
         check($p->inTransaction(),'read_transaction_active');
         $stage='READ_SNAPSHOT_DATA_REJECTED';
         $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
+        if($extra!==null)$stage='READ_MIGRATION_METADATA_REJECTED';
+        $metadata=$extra===null?null:$extra($p);
+        $stage='READ_SNAPSHOT_DATA_REJECTED';
         $snapshot=gather($p,$now);
+        if($extra!==null)$snapshot['migration5']=$metadata;
         check($p->inTransaction(),'read_snapshot_transaction_lost');
         $result=['ok'=>true,'read_only_confirmed'=>true,'snapshot'=>$snapshot];
     }catch(\Throwable){$result=['ok'=>false,'failure'=>$stage];}
@@ -85,7 +89,7 @@ function readSnapshot(PDO $p): array {
     return $result+['diagnostics'=>$diagnostics];
 }
 /** Exactly one existing SELECT-only account; no fallback to a writer credential. */
-function liveRead(): array {
+function liveRead(?callable $extra=null): array {
     $path='/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
     if(!is_file($path))return ['ok'=>false,'failure'=>'READ_CONFIG_UNAVAILABLE','database_connections'=>0];
     if(is_link($path)||is_link(dirname($path))||(fileperms($path)&0077)!==0||(fileperms(dirname($path))&0077)!==0)
@@ -98,7 +102,7 @@ function liveRead(): array {
         $stage='READ_CONNECTION_UNAVAILABLE';$attempts++;
         $p=new PDO($c['dsn'],$c['user'],$c['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_STRINGIFY_FETCHES=>true,PDO::ATTR_TIMEOUT=>3]);
         unset($c);
-        return readSnapshot($p)+['database_connections'=>1];
+        return readSnapshot($p,$extra)+['database_connections'=>1];
     }catch(\Throwable){return ['ok'=>false,'failure'=>$stage,'database_connections'=>$attempts];}
     finally{$p=null;}
 }

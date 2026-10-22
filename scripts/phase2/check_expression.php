@@ -17,7 +17,7 @@ final class CheckExpression
         while ($offset < strlen($expression)) {
             // Observed on the qualified 8.0.26 server: INFORMATION_SCHEMA escapes
             // the delimiter quotes; SHOW CREATE does not. Decode only complete
-            // _utf8mb4 ASCII-lowercase literals (including empty), never content.
+            // _utf8mb4 ASCII name/status literals (including empty), never content.
             // Caller must cross-check SHOW CREATE and the qualified UTF8 session.
             $delimiter = $informationSchema ? chr(92)."'" : "'";
             $prefix = '_utf8mb4'.$delimiter;
@@ -26,7 +26,7 @@ final class CheckExpression
                 $end = strpos($expression, $delimiter, $start);
                 if ($end === false) throw new \RuntimeException('unterminated_introducer');
                 $value = substr($expression, $start, $end-$start);
-                if (!preg_match('/\A(?:[a-z]*|1m|5m|1h|1d|mosa2-market-unit-v1)\z/', $value)) throw new \RuntimeException('unsupported_introduced_literal');
+                if (!preg_match('/\A(?:[a-zA-Z_]*|1m|5m|1h|1d|mosa2-market-unit-v1)\z/', $value)) throw new \RuntimeException('unsupported_introduced_literal');
                 $this->tokens[] = "'".$value."'";
                 $offset = $end + strlen($delimiter);
                 continue;
@@ -83,6 +83,11 @@ final class CheckExpression
             throw new \RuntimeException('unsupported_is');
         }
         $negated = $this->accept('NOT');
+        if ($this->accept('BETWEEN')) {
+            $lower = $this->atom();
+            $this->expect('AND');
+            return [$negated ? 'NOT BETWEEN' : 'BETWEEN', $left, $lower, $this->atom()];
+        }
         if ($this->accept('IN')) {
             $this->expect('(');
             $values = [$this->atom()];
@@ -111,7 +116,7 @@ final class CheckExpression
         if (!preg_match('/\A[a-zA-Z_][a-zA-Z_0-9]*\z/', $token)) throw new \RuntimeException('unsupported_atom');
         if ($this->accept('(')) {
             $function = strtoupper($token);
-            if (!in_array($function, ['TRIM', 'CHAR_LENGTH'], true)) throw new \RuntimeException('unsupported_function');
+            if (!in_array($function, ['TRIM', 'CHAR_LENGTH', 'JSON_TYPE', 'JSON_LENGTH'], true)) throw new \RuntimeException('unsupported_function');
             $argument = $this->orExpression();
             $this->expect(')');
             return ['function', $function, $argument];
