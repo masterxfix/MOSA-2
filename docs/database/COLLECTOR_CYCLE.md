@@ -1,5 +1,9 @@
 # Gemeinsamer Collector-Zyklus: ausschließlich Simulation
 
+Ergänzung: Der getrennte, ausschließlich synthetisch angebundene
+[Persistenz- und Reservierungsadapter](COLLECTOR_PERSISTENCE.md) verändert weder
+diese reine Funktion noch den datenbankfreien Dry-Run und erteilt keine Freigabe.
+
 Stand 22.10.2026, Ausgangsrevision `665738a`. Kein Scheduler und keine Live-Anbindung.
 
 | Stand | Aussagegrenze |

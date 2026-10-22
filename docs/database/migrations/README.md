@@ -1,5 +1,13 @@
 # Versionierte Migrationen
 
+## Version 0005 – Collector-Reservierungen, nur vorbereitet
+
+`0005_collector_reservations.sql` ergänzt isolierte Zustands-/Reservierungstabellen
+und gesperrte Job-/Modulanker. 0001–0004 bleiben unverändert. Ausschließlich der
+temporäre MySQL-8-Dienst des Offline-Workflows darf diese Migration für synthetische
+Tests anwenden; keine Anwendung auf Dogado oder Produktion. Vertrag und offene
+Live-Blocker: [COLLECTOR_PERSISTENCE.md](../COLLECTOR_PERSISTENCE.md).
+
 ## Version 0004 – Current-Provenienz (Issue 41)
 
 `0004_current_observation_provenance.sql` ist der versionierte Anzeigepfad:

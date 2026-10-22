@@ -10,7 +10,7 @@ on:
       verification_scope:
         description: Release packaging or pure simulated cycle and collector regressions
         type: choice
-        options: [release, cycle]
+        options: [release, cycle, persistence]
         default: release
 
 permissions:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
@@ -60,3 +60,55 @@ jobs:
           python3 -B scripts/collector_release.py build --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/mosa2-release"
           python3 -B scripts/collector_release.py verify --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/mosa2-release"
           cat "$RUNNER_TEMP/mosa2-release/$GITHUB_SHA.manifest.json"
+
+  persistence:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope == 'persistence'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: mosa2_collector_isolated
+        ports:
+          - 127.0.0.1:3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: .:tests
+    steps:
+      - name: Require exact reviewed revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Isolated MySQL client dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/collector-db-venv"
+          "$RUNNER_TEMP/collector-db-venv/bin/python" -m pip install --disable-pip-version-check PyMySQL==1.1.2
+      - name: Persistent state and real MySQL8 transaction and locking tests
+        timeout-minutes: 3
+        env:
+          MOSA2_ISOLATED_MYSQL: '1'
+        run: '"$RUNNER_TEMP/collector-db-venv/bin/python" -B -m unittest -v test_collector_persistence test_collector_persistence_mysql'
+      - name: Collector and budget regressions
+        timeout-minutes: 4
+        run: python3 -B -m unittest -v test_collector_cycle test_collector_operation_plan test_provider_budget_plan test_market_collector_v1 test_market_live_batch test_market_runtime
+      - name: Current and quote selection regressions offline only
+        timeout-minutes: 6
+        run: |
+          python3 -B -m unittest -v test_market_current test_current_takeover test_current_outcome test_current_reconcile test_current_preview test_current_web test_quote_selection test_observation_read
+          git diff --exit-code
