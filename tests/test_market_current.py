@@ -95,7 +95,13 @@ class CurrentTests(unittest.TestCase):
         self.assertIn('$p->rollBack()',scope);self.assertIn('LIMIT 1',reader)
         code+=reader+scope
         for verb in ('INSERT ','UPDATE ','DELETE ','REPLACE ','ALTER ','TRUNCATE '):self.assertNotIn(verb,code+endpoint)
-        self.assertNotIn('market_collector',code+endpoint);self.assertNotIn('m2_market_observations',code)
+        self.assertNotIn('market_collector',code+endpoint)
+        # Current may read the stored observation only to validate its provenance.
+        # The web endpoint itself remains free of SQL and provider execution.
+        self.assertIn(
+            'FROM m2_market_observations WHERE id=? AND asset_id=? AND source_id=? AND route_id=? LIMIT 1',
+            reader)
+        self.assertNotIn('m2_market_observations',endpoint)
         self.assertIn("dirname(__DIR__,2).'/mosa2-market-read-private/access.php'",endpoint)
 
     def test_existing_bridge_duplicate_is_opt_in_and_uses_same_writer(self):
