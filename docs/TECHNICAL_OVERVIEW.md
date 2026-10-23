@@ -73,18 +73,18 @@ Schema-5-Verträge, Migration 0005 und isolierte Tests bleiben als gesperrte
 Vorbereitung erhalten. Sie werden weder installiert noch als aktive
 Schema-4-Betriebsfähigkeit dargestellt. Alte APPLY-Freigaben bleiben verbraucht.
 
-## Vorbereiteter Plesk-Minutenstart (nicht installiert oder aktiviert)
+## Manueller Scheduler-Start; Plesk-Zugang noch nicht bereit
 
 Einziger Einstieg: `/opt/plesk/php/8.4/bin/php <privates-release>/scripts/collector_scheduler.php <freigegebene-private-konfiguration.json>`.
-Plesk kann diesen kurzen Tick jede Minute aufrufen; der gemeinsame Python-
-Zyklusvertrag entscheidet über 60/900 Sekunden in Europe/Berlin. Python bleibt
+Nur ein ausdrücklich autorisierter manueller Aufruf mit geschützter STDIN-Pipe
+ist vorbereitet. Der gemeinsame Python-Zyklusvertrag entscheidet über 60/900 Sekunden in Europe/Berlin. Python bleibt
 `/opt/alt/python311/bin/python3.11`. Der CLI-Start benötigt keine neue Installation.
 Cron-Jitter innerhalb derselben Minute wird dem aktuellen UTC-Slot zugeordnet;
 verpasste Slots werden nicht nachgeholt. Kalenderlücken blockieren.
 
 Beide Repository-`execution_enabled`-Schalter bleiben false. Ohne diese beiden
-ausdrücklichen Betriebsfreigaben beendet sich der Einstieg vor privater Datei,
-DB-Verbindung und Provideraufruf mit DISABLED. Die bestehenden Providerrechte,
+ausdrücklichen Betriebsfreigaben beendet sich der Einstieg vor STDIN-Lesen,
+privater Konfiguration, DB-Verbindung und Provideraufruf mit DISABLED. Die bestehenden Providerrechte,
 dokumentierten Limits, MOSA-Priorität, frischen Baseline-/Monitoringnachweise,
 Kalenderfreigaben und exakten Current-Routenfreigaben werden zusätzlich geprüft.
 Die Modellansicht von `collector_cycle.py` erteilt selbst keine Ausführungsfreigabe.
@@ -92,13 +92,18 @@ Die Modellansicht von `collector_cycle.py` erteilt selbst keine Ausführungsfrei
 Für eine spätere Aktivierung sind extern erforderlich, hier **nicht** eingerichtet:
 - Freigegebener privater Release-/Arbeits-/Konfigurationspfad außerhalb des Webroots;
   vorhandene Dateien mit 0600, Arbeitsverzeichnis 0700, keine Symlinks.
-- Vorhandene Zugangsdaten als bestehende private Passwortdatei; der gemeinsame
-  DB-Connector prüft unverändert Konto, Datenbank, Version und Serverport.
+- Für einen ausdrücklich autorisierten manuellen Start: geschützte, nicht-interaktive
+  STDIN-Pipe aus dem bereits freigegebenen Zugang. Ein JSON-Objekt mit genau dem
+  Feld `password`, maximal 4096 Bytes insgesamt, Passwort 1–1024 UTF-8-Bytes ohne
+  Steuerzeichen und nicht ausschließlich Leerraum; EOF innerhalb von zwei Sekunden.
+  Terminal und reguläre Datei als STDIN werden abgewiesen. Keine Übergabe über
+  Argumente, Umgebung oder Dateien; keine Dialoge, Protokollierung oder Ausgabe
+  des Secrets. Der gemeinsame DB-Connector bleibt unverändert.
 - Ein ausdrücklich provisionierter Job in den bestehenden Schema-4-Tabellen:
   `job_key=market_collector_scheduler_v1`, `module_key=market_collector`,
   `handler_key=collector_scheduler_v1`, enabled=1. Kein automatisches Anlegen,
   Aktivieren oder Zurücksetzen eines Jobs durch den Scheduler.
-- Private JSON-Konfiguration mit `private_root`, `password_file`, `provider`,
+- Private JSON-Konfiguration mit `private_root`, `provider`,
   `manifests`, `current_approvals`, `evidence_file`. Manifeste und Freigaben sind
   bestehende qualifizierte Verträge, keine erzeugten Provider- oder Routenrechte.
   Die Auswahl stammt aus der Operation-Konfiguration und wird vollständig über
@@ -125,3 +130,15 @@ Andere Geschäftstabellen, Routen und Freigaben werden nicht vom Scheduler geän
 Die neue isolierte Schedulerprüfung ersetzt keinen Live-Nachweis von Plesk,
 MySQL-Sperren oder Providerbetrieb. Schema, Migrationen, Webdateien und Design
 bleiben unverändert; kein Cronjob, Deployment oder Live-DB-Schritt gehört dazu.
+
+### Offene Zugangsvoraussetzung für unbeaufsichtigtes Plesk-Cron
+
+**Automatischer Plesk-Betrieb ist nicht bereit.** Ein Plesk-Cronjob erhält keine
+GitHub-Actions-Secrets. Die bestehende manuelle geschützte STDIN-Übergabe ist
+allein kein Bereitstellungsweg für einen unbeaufsichtigten Minutentakt.
+Es fehlt ein bereits vorhandener, ausdrücklich autorisierter und nachweislich
+sicherer Weg, der dem Plesk-Prozess das DB-Secret nicht-interaktiv und ausschließlich
+im Arbeitsspeicher/über eine geschützte Pipe bereitstellt. Ein solcher Weg ist
+hier nicht nachgewiesen. Es wird weder eine Ersatzdatei noch eine Umgebungsvariable
+oder neue Credential-Infrastruktur angelegt. Bis zu diesem Nachweis bleibt die
+automatische Aktivierung gesperrt; alle übrigen Betriebsfreigaben bleiben erforderlich.

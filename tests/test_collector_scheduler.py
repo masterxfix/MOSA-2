@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 
 from scripts import collector_scheduler_decision as scheduler
@@ -159,6 +160,74 @@ class SchedulerControllerTests(unittest.TestCase):
                            capture_output=True, text=True, timeout=10, check=True)
         self.assertEqual(json.loads(p.stdout), {"status": "SKIP", "reason": "DISABLED"})
         self.assertEqual(p.stderr, "")
+
+
+    def test_stdin_password_reaches_only_in_memory_consumer(self):
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        token = "synthetic-stdin-only"
+        p = subprocess.run([php, str(ROOT/"tests/collector_scheduler_fixture.php"), "stdin-secret"],
+                           input=json.dumps({"password": token}), capture_output=True, text=True,
+                           timeout=5, check=True)
+        self.assertEqual(json.loads(p.stdout), {"status": "PASS"})
+        self.assertEqual(p.stderr, "")
+        self.assertNotIn(token, p.stdout+p.stderr)
+
+    def test_missing_empty_invalid_and_oversized_stdin_are_safe(self):
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        bad = ["", "synthetic-stdin-only invalid", "{}", "null", "[]",
+               '{"password":null}', '{"password":23}', '{"password":""}',
+               '{"password":"   "}', json.dumps({"password": "x\n"}),
+               json.dumps({"password": "x\u0000"}), json.dumps({"password": "x"*1025}),
+               json.dumps({"password": "synthetic-stdin-only", "extra": True}), "x"*4097]
+        for index, wire in enumerate(bad):
+            with self.subTest(case=index):
+                p = subprocess.run([php, str(ROOT/"tests/collector_scheduler_fixture.php"), "stdin-secret"],
+                                   input=wire, capture_output=True, text=True, timeout=5, check=True)
+                self.assertEqual(json.loads(p.stdout), {"status": "BLOCKED"})
+                self.assertEqual(p.stderr, "")
+                self.assertNotIn("synthetic-stdin-only", p.stdout+p.stderr)
+
+    def test_regular_stdin_file_is_rejected_and_open_pipe_times_out(self):
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        command = [php, str(ROOT/"tests/collector_scheduler_fixture.php"), "stdin-secret"]
+        with tempfile.TemporaryFile() as regular:
+            p = subprocess.run(command, stdin=regular, capture_output=True, text=True, timeout=5, check=True)
+        self.assertEqual(json.loads(p.stdout), {"status": "BLOCKED"})
+        self.assertEqual(p.stderr, "")
+        p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(p.wait(timeout=5), 0)
+            self.assertEqual(json.loads(p.stdout.read()), {"status": "BLOCKED"})
+            self.assertEqual(p.stderr.read(), "")
+        finally:
+            if p.poll() is None:
+                p.kill()
+                p.wait()
+            p.stdin.close()
+            p.stdout.close()
+            p.stderr.close()
+
+    def test_disabled_cli_does_not_wait_for_stdin_or_require_arguments(self):
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        command = [php, str(ROOT/"scripts/collector_scheduler.php")]
+        p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(p.wait(timeout=2), 0)
+            self.assertEqual(json.loads(p.stdout.read()), {"status": "SKIP", "reason": "DISABLED"})
+            self.assertEqual(p.stderr.read(), "")
+        finally:
+            if p.poll() is None:
+                p.kill()
+                p.wait()
+            p.stdin.close()
+            p.stdout.close()
+            p.stderr.close()
 
 
 if __name__ == "__main__":

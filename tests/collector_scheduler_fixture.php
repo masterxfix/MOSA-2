@@ -17,6 +17,16 @@ final class MemoryRuns implements RunStore {
         $this->rows[(int)$id-1]=['status'=>$success?'completed':'failed','summary'=>$summary];
     }
 }
+if(($argv[1]??null)==='stdin-secret'){
+    ini_set('display_errors','0');ini_set('log_errors','0');
+    try{
+        $password=\Mosa2\Scheduler\stdinPassword(STDIN);
+        // A synthetic consumer proves exact in-memory delivery without emitting the value or a digest.
+        $ok=hash_equals('synthetic-stdin-only',$password);
+        unset($password);echo json_encode(['status'=>$ok?'PASS':'BLOCKED']);
+    }catch(Throwable){echo json_encode(['status'=>'BLOCKED']);}
+    exit;
+}
 $scenario=$argv[1];$store=new MemoryRuns();$calls=0;$reservations=[];
 $now=new DateTimeImmutable('2026-10-21T10:00:07Z');
 $operation=['execution_enabled'=>true];$budget=['execution_enabled'=>true];

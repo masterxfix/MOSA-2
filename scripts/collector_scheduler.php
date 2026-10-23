@@ -128,14 +128,45 @@ function privateFile(string $file,string $publicRoot): string {
     check(!\Mosa2\MarketBatch\inside($file,$publicRoot)&&(fileperms($file)&0077)===0,'scheduler_private_file');
     check(filesize($file)<=1048576,'scheduler_private_size');return file_get_contents($file);
 }
+/** One bounded JSON envelope over a pipe/socket; never a terminal, file or environment. */
+function stdinPassword($input): string {
+    check(is_resource($input)&&get_resource_type($input)==='stream','scheduler_secret');
+    $stat=fstat($input);$kind=($stat['mode']??0)&0170000;
+    check(in_array($kind,[0010000,0140000],true)&&!stream_isatty($input),'scheduler_secret');
+    $meta=stream_get_meta_data($input);check(stream_set_blocking($input,false),'scheduler_secret');
+    $wire='';$payload=null;$deadline=hrtime(true)/1e9+2;
+    try{
+        while(!feof($input)){
+            $remaining=$deadline-hrtime(true)/1e9;check($remaining>0,'scheduler_secret');
+            $read=[$input];$write=[];$except=[];
+            $micros=max(1,(int)min(2000000,$remaining*1000000));
+            $ready=stream_select($read,$write,$except,intdiv($micros,1000000),$micros%1000000);
+            check($ready!==false,'scheduler_secret');if($ready===0)continue;
+            $chunk=fread($input,4097-strlen($wire));check(is_string($chunk),'scheduler_secret');
+            $wire.=$chunk;check(strlen($wire)<=4096,'scheduler_secret');
+        }
+        $payload=json_decode($wire,true,4,JSON_THROW_ON_ERROR);
+        check(is_array($payload)&&array_keys($payload)===['password'],'scheduler_secret');
+        $password=$payload['password'];
+        check(is_string($password)&&strlen($password)>=1&&strlen($password)<=1024
+            &&trim($password)!==''&&preg_match('/[\x00-\x1F\x7F]/',$password)===0,'scheduler_secret');
+        return $password;
+    }finally{
+        unset($wire,$payload,$password);
+        stream_set_blocking($input,(bool)($meta['blocked']??true));
+    }
+}
+
 /** CLI only; no web include executes a scheduler, creates a directory or opens a DB. */
 function main(array $args): array {
-    check(PHP_SAPI==='cli'&&count($args)===2,'scheduler_cli');
+    check(PHP_SAPI==='cli','scheduler_cli');
     $project=dirname(__DIR__);
     $operation=json_decode(file_get_contents($project.'/config/collector-operation.json'),true,64,JSON_THROW_ON_ERROR);
     $budget=json_decode(file_get_contents($project.'/config/collector-provider-budget.json'),true,64,JSON_THROW_ON_ERROR);
     if(($operation['execution_enabled']??false)!==true||($budget['execution_enabled']??false)!==true)
         return ['status'=>'SKIP','reason'=>'DISABLED'];
+    check(count($args)===2,'scheduler_cli');
+    $password=stdinPassword(STDIN);
     require_once __DIR__.'/collector_release/runtime.php';
     $runtime=\Mosa2\CollectorRelease\configuration($project,4);
     // Explicitly approved existing private configuration; never search, provision or create paths here.
@@ -144,7 +175,6 @@ function main(array $args): array {
     $spec=json_decode(privateFile($args[1],$public),true,64,JSON_THROW_ON_ERROR);
     $root=\Mosa2\MarketBatch\path($spec['private_root']);
     check(!\Mosa2\MarketBatch\inside($root,$public)&&(fileperms($root)&0077)===0,'scheduler_private_root');
-    $password=rtrim(privateFile($spec['password_file'],$public),"\r\n");
     $runtime['public_root']=$public;$runtime['state_contract']=['schema_version'=>4,'allow_current'=>true];
     $clock=static fn()=>new \DateTimeImmutable('now',new \DateTimeZone('UTC'));
     $p=connection($password);$store=new PdoRuns($p);
