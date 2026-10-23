@@ -37,10 +37,25 @@ function completePlan(array $state,array $m): array {
     $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']===$key));same(count($sources),1,'qualified_source');
     check(matchFields($sources[0],['source_type'=>'market_data','enabled'=>1]),'source_semantics');
     same($m['identity']['normalized_value'],$m['route_evidence']['row']['isin'],'asset_route_identity');
-    // The request identifier is part of the qualified route hash (ISIN or adapter symbol).
-    $requestField=$m['request_identity_field']??'isin';
-    check(is_string($requestField)&&preg_match('/^[a-z_]{1,32}$/D',$requestField)===1,'request_identity_field');
-    same($m['instrument'],$m['route_evidence']['proof']['external_identity'][$requestField]??null,'request_identity');
+    // Preserve the historical ISIN contract; symbols require explicit qualified binding.
+    if(!array_key_exists('request_identity_field',$m)){
+        same($m['instrument'],$m['identity']['normalized_value'],'request_identity');
+    }else{
+        $requestField=$m['request_identity_field'];
+        check(in_array($requestField,['isin','symbol'],true),'request_identity_field');
+        check(is_string($m['instrument'])&&strlen($m['instrument'])>=1&&strlen($m['instrument'])<=128,'request_identity');
+        same($m['instrument'],$m['route_evidence']['proof']['external_identity'][$requestField]??null,'request_identity');
+        if($requestField==='isin')same($m['instrument'],$m['identity']['normalized_value'],'request_identity');
+        else{
+            $ids=array_values(array_filter($state['m2_asset_identifiers'],static fn($r)=>
+                in_array($r['identifier_type'],['ticker','symbol'],true)
+                &&$r['normalized_value']===$m['instrument']&&$r['identifier_value']===$m['instrument']
+                &&$r['scope_key']===$sources[0]['source_key']&&$r['source_id']===$sources[0]['id']
+                &&$r['valid_to']===null));
+            same(count($ids),1,'request_identity_ambiguous_or_missing');
+            same($ids[0]['asset_id'],$asset['asset_id'],'request_identity_asset');
+        }
+    }
     $unit=$m['unit_binding'];$unitRows=array_values(array_filter($state['m2_units'],static fn($r)=>matchFields($r,['unit_key'=>$unit['quote_unit_key'],'unit_version'=>$unit['quote_unit_version'],'unit_contract_version'=>$unit['unit_contract_version']])));same(count($unitRows),1,'quote_unit_exists');
     same($unitRows[0]['monetary_currency_code'],$m['route_evidence']['row']['currency'],'quote_currency');
     $qualified=['asset_id'=>$asset['asset_id'],'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>0,'evidence'=>$m['route_evidence']];

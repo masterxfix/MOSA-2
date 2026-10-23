@@ -87,7 +87,13 @@ class CurrentTests(unittest.TestCase):
 
     def test_public_path_has_no_provider_or_mutation_capability(self):
         code=(ROOT/'api/read_model.php').read_text();endpoint=(ROOT/'api/market.php').read_text()
-        reader=(ROOT/'api/current_read.php').read_text();self.assertIn('SET SESSION TRANSACTION READ ONLY',reader);self.assertIn('LIMIT 1',reader);self.assertIn('$p->rollBack()',reader)
+        reader=(ROOT/'api/current_read.php').read_text()
+        scope=(ROOT/'api/qualified_scope.php').read_text()
+        self.assertIn('readTransaction($p,',reader)
+        self.assertIn('SET SESSION TRANSACTION READ ONLY',scope)
+        self.assertIn('SELECT @@session.transaction_read_only',scope)
+        self.assertIn('$p->rollBack()',scope);self.assertIn('LIMIT 1',reader)
+        code+=reader+scope
         for verb in ('INSERT ','UPDATE ','DELETE ','REPLACE ','ALTER ','TRUNCATE '):self.assertNotIn(verb,code+endpoint)
         self.assertNotIn('market_collector',code+endpoint);self.assertNotIn('m2_market_observations',code)
         self.assertIn("dirname(__DIR__,2).'/mosa2-market-read-private/access.php'",endpoint)

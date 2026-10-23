@@ -119,6 +119,36 @@ class MarketOnboardingTests(unittest.TestCase):
                  adapter_module='synthetic.adapter', adapter_class='SyntheticAdapter')
         return s, m
 
+    def test_historical_isin_request_binding_remains_exact(self):
+        s, m = self.existing_live()
+        self.assertTrue(call(action='complete_plan', state=s, manifest=m)['ok'])
+        m['instrument'] = 'UNBOUND-SYMBOL'
+        self.assertFalse(call(action='complete_plan', state=s, manifest=m)['ok'])
+
+    def test_explicit_symbol_requires_unique_source_scoped_registry_binding(self):
+        s, m = self.existing_live()
+        m = copy.deepcopy(m)
+        m.update(request_identity_field='symbol', instrument='SYNTH.A')
+        m['route_evidence']['proof']['external_identity'] = dict(symbol=m['instrument'])
+        q = route_input();q['evidence'] = m['route_evidence']
+        s['m2_asset_source_routes'] = [dict(self.route(qualified=q)['row'], id='11',
+            created_at='2026-01-01 00:00:00.000000', updated_at='2026-01-01 00:00:00.000000')]
+        symbol = dict(id='10', asset_id='7', identifier_type='ticker',
+            identifier_value=m['instrument'], normalized_value=m['instrument'],
+            scope_key=s['m2_sources'][0]['source_key'], source_id=s['m2_sources'][0]['id'],
+            is_primary='0', valid_from=None, valid_to=None)
+        self.assertFalse(call(action='complete_plan', state=s, manifest=m)['ok'])
+        s['m2_asset_identifiers'].append(symbol)
+        self.assertTrue(call(action='complete_plan', state=s, manifest=m)['ok'])
+        for field, value in [('asset_id','other'), ('source_id','other'), ('scope_key',''),
+                             ('valid_to','2026-01-01 00:00:00.000000')]:
+            bad = copy.deepcopy(s);bad['m2_asset_identifiers'][-1][field] = value
+            self.assertFalse(call(action='complete_plan', state=bad, manifest=m)['ok'])
+        bad = copy.deepcopy(s);bad['m2_asset_identifiers'].append(dict(symbol,id='11'))
+        self.assertFalse(call(action='complete_plan', state=bad, manifest=m)['ok'])
+        bad = copy.deepcopy(m);bad['route_evidence']['proof']['external_identity']['symbol']='OTHER'
+        self.assertFalse(call(action='complete_plan', state=s, manifest=bad)['ok'])
+
     def test_reuse_materializes_exact_row_without_writes(self):
         s, _ = self.existing_live();plan = self.route(s['m2_asset_source_routes'])
         r = call(action='materialize', state=s, plan=plan, asset_id='7')['result']

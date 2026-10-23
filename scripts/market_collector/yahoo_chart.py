@@ -4,7 +4,6 @@ from decimal import Decimal
 import json
 import re
 import subprocess
-from urllib.parse import urlsplit, parse_qs, quote
 
 from .contracts import ObservationCandidate, require, validate_payload
 
@@ -34,11 +33,11 @@ class YahooChartSnapshotV1:
             dict(symbol=instrument, instant=instant+' UTC')).encode(), capture_output=True, timeout=10)
         require(reply.returncode == 0 and not reply.stderr, 'provider request descriptor')
         endpoint = json.loads(reply.stdout)
-        url = urlsplit(endpoint['url'])
-        require(url.scheme == 'https' and url.netloc == 'query1.finance.yahoo.com'
-                and url.path == '/v8/finance/chart/'+quote(instrument, safe='')
-                and not url.fragment and parse_qs(url.query, strict_parsing=True) ==
-                    {'interval':['1d'], 'range':['1d']}
+        # The accepted ASCII symbol grammar has only two URL-reserved characters.
+        # Validate the entire descriptor without importing network-capable packages.
+        path = instrument.replace('^', '%5E').replace('=', '%3D')
+        base = 'https://query1.finance.yahoo.com/v8/finance/chart/'+path
+        require(endpoint['url'] in (base+'?interval=1d&range=1d', base+'?range=1d&interval=1d')
                 and endpoint['series'] == 'snapshot' and endpoint['role'] == 'chart_snapshot',
                 'qualified snapshot request')
         require(type(endpoint['headers']) is list and type(endpoint['request_key']) is str,

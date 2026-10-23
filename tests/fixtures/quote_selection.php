@@ -1,9 +1,13 @@
 <?php
 declare(strict_types=1);
 require $argv[1].'/api/observations_read.php';
+require_once $argv[1].'/scripts/market_current/historical_scope.php';
 try {
     $input=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);
     $route=$input['route'];$route['route_id']=$route['id'];$route['source_name']='Synthetic source';
+    if(!isset(\Mosa2\ObservationRead\SCOPE[$input['isin']]))throw new RuntimeException('synthetic_scope');
+    $route['display_name']=\Mosa2\ObservationRead\SCOPE[$input['isin']];
+    $route['source_key']='provider:synthetic_provider';
     $rows=array_map(static fn($f)=>$f+['dedupe_hex'=>$f['dedupe_key']],$input['facts']);
     $result=\Mosa2\QuoteSelection\select($input['facts'],$input['route'],$input['now'],$input['previous']??null);
     $item=\Mosa2\ObservationRead\latest($rows,$route,$input['isin'],$input['now'],1800);
