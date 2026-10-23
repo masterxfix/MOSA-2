@@ -10,7 +10,7 @@ on:
       verification_scope:
         description: Release packaging or pure simulated cycle and collector regressions
         type: choice
-        options: [release, cycle, consolidation, persistence, migration5, schema5, backup-restore, backup-permissions]
+        options: [release, cycle, consolidation, scheduler, persistence, migration5, schema5, backup-restore, backup-permissions]
         default: release
       backup_stage:
         description: Bounded backup diagnosis, focused correction, or final regression
@@ -54,7 +54,7 @@ jobs:
           coverage: none
           tools: none
       - name: Offline regression and adversarial package checks
-        if: inputs.verification_scope != 'cycle' && inputs.verification_scope != 'consolidation'
+        if: inputs.verification_scope != 'cycle' && inputs.verification_scope != 'consolidation' && inputs.verification_scope != 'scheduler'
         run: |
           php -l scripts/collector_release/runtime.php
           python3 -B -m unittest -v test_collector_release test_market_collector_v1 test_market_live_batch test_market_runtime test_runtime_optimization test_deploy_testsite test_deployment
@@ -73,8 +73,15 @@ jobs:
           python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
           python3 -B -m unittest -v test_market_live_batch test_market_onboarding test_collector_actions test_collector_cycle test_collector_operation_plan test_market_collector_v1 test_market_current test_quote_selection test_current_web test_current_preview test_current_takeover test_current_reconcile test_current_outcome test_observation_read test_market_view test_deploy_testsite test_deployment test_collector_performance test_db_locality
           git diff --exit-code
+      - name: Focused schema4 scheduler proof only
+        if: inputs.verification_scope == 'scheduler'
+        run: |
+          php -l scripts/collector_scheduler.php
+          php -l tests/collector_scheduler_fixture.php
+          python3 -B -m unittest -v test_collector_scheduler
+          git diff --exit-code
       - name: Reproducible release and full manifest
-        if: inputs.verification_scope != 'cycle' && inputs.verification_scope != 'consolidation'
+        if: inputs.verification_scope != 'cycle' && inputs.verification_scope != 'consolidation' && inputs.verification_scope != 'scheduler'
         run: |
           python3 -B scripts/collector_release.py build --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/mosa2-release"
           python3 -B scripts/collector_release.py verify --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/mosa2-release"
