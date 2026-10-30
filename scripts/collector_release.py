@@ -16,6 +16,7 @@ CONTRACT = "docs/database/collector_release_contract.json"
 LIMIT = 4 * 1024 * 1024
 FORMAT = "mosa2-collector-release-v1"
 SCHEMA5_CONTRACT = "docs/database/collector_release_contract_schema5_v1.json"
+SCHEMA4_ONCE_CONTRACT = "docs/database/collector_release_contract_schema4_once_v1.json"
 
 
 def require(ok, reason):
@@ -117,16 +118,24 @@ def python_dependencies(path, source, known):
 
 
 def payload(root, commit, profile="historical"):
-    require(profile in ("historical", "schema5"), "release profile")
+    require(profile in ("historical", "schema5", "schema4-once"), "release profile")
     objects, read = repository(root, commit)
-    contract_raw = read(CONTRACT if profile == "historical" else SCHEMA5_CONTRACT)
+    contract_raw = read({"historical": CONTRACT, "schema5": SCHEMA5_CONTRACT,
+                         "schema4-once": SCHEMA4_ONCE_CONTRACT}[profile])
     contract = decode(contract_raw)
     require(contract["format"] == "mosa2-collector-release-contract-v1", "contract version")
+    if profile == "schema4-once":
+        require(contract["candidate"] == {"schema_versions": [4], "default_schema": 4,
+                "execution_enabled": False, "upload_enabled": False}, "schema4 one-shot contract")
+        require("scripts/collector_schema4_once.php" in contract["entrypoints"], "manual entrypoint")
     if profile == "schema5":
         require(contract["candidate"] == {"schema_versions": [4, 5], "default_schema": 4,
                 "execution_enabled": False, "upload_enabled": False}, "candidate activation forbidden")
         require(contract["entrypoints"] == decode(read(CONTRACT))["entrypoints"], "new entrypoint")
     rows = contract["files"]
+    if profile == "schema4-once":
+        require(all(type(row.get("source_blob")) is str and re.fullmatch(r"[a-f0-9]{40}", row["source_blob"])
+                    for row in rows), "fully pinned schema4 sources required")
     paths = [relative(r["path"]) for r in rows]
     require(paths == sorted(set(paths)), "duplicate/unsorted paths")
     known = set(paths)
@@ -243,7 +252,7 @@ def main():
     parser.add_argument("--commit", required=True)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--profile", choices=("historical", "schema5"), default="historical")
+    parser.add_argument("--profile", choices=("historical", "schema5", "schema4-once"), default="historical")
     args = parser.parse_args()
     args.output = no_links(args.output)
     stem = args.output / args.commit

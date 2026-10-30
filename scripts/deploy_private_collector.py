@@ -39,6 +39,7 @@ def verify_host_key_material(key_bytes, expected):
 
 
 TOKEN = "MOSA2-PRIVATE-UPLOAD-20261021-A15AEE:"
+SCHEMA4_TOKEN = "MOSA2-SCHEMA4-ONE-SHOT-20261030:"
 ONCE = "upload-20261021-a15aee"
 ARCHIVE_SHA256 = "73e34c8d8e13ce37265ef5dded1ceae162140eee5b17341b23ee7dae3e3a68f7"
 
@@ -56,38 +57,53 @@ def modules():
     return collector_actions,collector_db_locality,collector_private_directories,collector_release
 
 
-def authorization(root,env):
+def authorization(root,env,profile="historical"):
     import re
+    if profile not in ("historical", "schema4-once"):
+        raise PermissionError("UNAPPROVED_RELEASE_PROFILE")
+    token = TOKEN if profile == "historical" else SCHEMA4_TOKEN
     commit=env.get("MOSA_PRIVATE_EXPECTED_COMMIT","")
     if (root!=PROPOSED_ROOT or not re.fullmatch(r"[0-9a-f]{40}",commit)
-        or env.get("MOSA_PRIVATE_UPLOAD_AUTHORIZATION")!=TOKEN+commit
+        or env.get("MOSA_PRIVATE_UPLOAD_AUTHORIZATION")!=token+commit
         or env.get("GITHUB_ACTIONS")!="true" or env.get("GITHUB_RUN_ATTEMPT")!="1"
         or not re.fullmatch(r"[1-9][0-9]{0,19}",env.get("GITHUB_RUN_ID",""))):
         raise PermissionError("EXPLICIT_COMMIT_BOUND_UPLOAD_AUTHORIZATION_REQUIRED")
     event,ref=env.get("GITHUB_EVENT_NAME"),env.get("GITHUB_REF")
+    if profile=="schema4-once" and (event!="workflow_dispatch" or ref!="refs/heads/main"):
+        raise PermissionError("UNAPPROVED_UPLOAD_TRIGGER")
     if not ((event=="workflow_dispatch" and ref=="refs/heads/main") or
             (event=="push" and ref=="refs/heads/codex/private-upload-live-a15aee")):
         raise PermissionError("UNAPPROVED_UPLOAD_TRIGGER")
     return commit
 
 
-def artifact(project,commit):
+def artifact(project,commit,profile="historical"):
     import hashlib
     unused,unused2,unused3,release=modules()
-    archive,manifest=release.build(project,commit)
-    meta=release.verify(project,commit,archive,manifest)
-    if (len(meta["files"])!=33 or meta["payload_bytes"]!=248105 or
+    archive,manifest=release.build(project,commit,profile)
+    meta=release.verify(project,commit,archive,manifest,profile)
+    if profile == "historical" and (len(meta["files"])!=33 or meta["payload_bytes"]!=248105 or
         hashlib.sha256(archive).hexdigest()!=ARCHIVE_SHA256):
         raise ValueError("QUALIFIED_PAYLOAD_CHANGED")
-    contract,raw,files=release.payload(project,commit)
+    contract,raw,files=release.payload(project,commit,profile)
     return meta,manifest,files
 
 
-def remote_source():
+def remote_source(profile="historical",expected=None):
     from pathlib import Path
     unused,unused2,directories,unused3=modules()
     common=directories.REMOTE_SOURCE.split('if __name__=="__main__":')[0]
     extension=(Path(__file__).resolve().parent/"collector_private_upload_remote.py").read_text()
+    if profile == "schema4-once":
+        if not isinstance(expected,dict) or not re.fullmatch(r"[a-f0-9]{40}",expected.get("commit","")):
+            raise ValueError("EXACT_SCHEMA4_MANIFEST_REQUIRED")
+        body,entry=extension.split('if __name__=="__main__":',1)
+        binding=("\nSCHEMA4_MANIFEST="+repr(expected)+"\nTOKEN="+repr(SCHEMA4_TOKEN)+
+                 "\nONCE="+repr("upload-schema4-"+expected["commit"])+
+                 "\nPAYLOAD_PATHS="+repr([r["path"] for r in expected["files"]])+"\n")
+        extension=body+binding+'\nif __name__=="__main__":'+entry
+    elif profile != "historical":
+        raise ValueError("UNAPPROVED_RELEASE_PROFILE")
     return common+"\n"+extension
 
 
@@ -97,11 +113,11 @@ class RemoteRejected(ValueError):
         self.receipt={k:result[k] for k in ("failure","failure_type","errno") if k in result}
 
 
-def call(transport,action,data):
+def call(transport,action,data,profile="historical",expected=None):
     import shlex
     unused,remote,unused2,unused3=modules()
     wire=dict(data,action=action)
-    cmd=shlex.join(["/opt/alt/python311/bin/python3.11","-I","-B","-c",remote_source()])
+    cmd=shlex.join(["/opt/alt/python311/bin/python3.11","-I","-B","-c",remote_source(profile,expected)])
     code,out,errors,elapsed=remote.remote_call(transport,cmd,
         json.dumps(wire,separators=(",",":")).encode(),timeout=75)
     if code or errors:
@@ -190,11 +206,11 @@ def readback(sftp,path,manifest):
                 sha256="PASS",file_set="PASS",uid=10317,gid=1003,directories_mode="0700",files_mode="0600")
 
 
-def upload(root=None,*,env=None,paramiko=None,**unexpected):
+def upload(root=None,*,env=None,paramiko=None,profile="historical",**unexpected):
     import os
     if unexpected or root!=PROPOSED_ROOT or env is None:
         raise PermissionError("EXPLICIT_COMMIT_BOUND_UPLOAD_AUTHORIZATION_REQUIRED")
-    commit=authorization(root,env)  # Before loading configuration, clients or reading files.
+    commit=authorization(root,env,profile)  # Before loading configuration, clients or reading files.
     from pathlib import Path
     import base64
     import hashlib
@@ -207,29 +223,32 @@ def upload(root=None,*,env=None,paramiko=None,**unexpected):
     current=release.git(project,"ls-remote","origin","refs/heads/main").decode().split()[0]
     if current!=commit:
         raise PermissionError("MAIN_COMMIT_MISMATCH")
-    meta,manifest,files=artifact(project,commit)
+    meta,manifest,files=artifact(project,commit,profile)
+    options={} if profile=="historical" else dict(profile=profile,expected=meta)
     import deploy_test_sftp as profile
     config=profile.configuration(env)
     if paramiko is None:
         import paramiko
     logging.getLogger("paramiko").disabled=True
-    data=dict(commit=commit,run_id=env["GITHUB_RUN_ID"],authorization=TOKEN+commit,manifest=meta,
+    token=TOKEN if profile=="historical" else SCHEMA4_TOKEN
+    data=dict(commit=commit,run_id=env["GITHUB_RUN_ID"],authorization=token+commit,manifest=meta,
               manifest_sha256=hashlib.sha256(manifest).hexdigest())
     report=dict(ok=False,commit=commit,release=root+"/releases/"+commit,collector_inactive=True,
                 provider_requests=0,database_connections=0,automatic_retries=0,
-                archive_sha256=ARCHIVE_SHA256,manifest_sha256=data["manifest_sha256"],
+                archive_sha256=(ARCHIVE_SHA256 if profile=="historical" else
+                    hashlib.sha256(release.build(project,commit,profile)[0]).hexdigest()),manifest_sha256=data["manifest_sha256"],
                 manifest=meta,stage="prepare")
     try:
         status={}
         with ssh.ssh_client(config,status,paramiko) as transport:
             report["prepare_ssh"]=status
-            prepared=call(transport,"prepare",dict(data,files={p:base64.b64encode(b).decode() for p,b in files.items()}))
+            prepared=call(transport,"prepare",dict(data,files={p:base64.b64encode(b).decode() for p,b in files.items()}),**options)
             report["prepared"]=prepared
         report["stage"]="independent_staging_readback"
         status={}
         with ssh.ssh_client(config,status,paramiko) as transport:
             report["staging_ssh"]=status
-            call(transport,"inspect",data)
+            call(transport,"inspect",data,**options)
             with paramiko.SFTPClient.from_transport(transport) as sftp:
                 sftp.get_channel().settimeout(12)
                 report["staging_readback"]=readback(sftp,prepared["staging"],meta)
@@ -239,12 +258,12 @@ def upload(root=None,*,env=None,paramiko=None,**unexpected):
             report["publish_ssh"]=status
             report["published"]=call(transport,"publish",dict(data,
                 stage_inode=prepared["stage_inode"],lock_inode=prepared["lock_inode"],
-                independent_staging_readback=True))
+                independent_staging_readback=True),**options)
         report["stage"]="independent_release_readback"
         status={}
         with ssh.ssh_client(config,status,paramiko) as transport:
             report["release_ssh"]=status
-            call(transport,"inspect",data)
+            call(transport,"inspect",data,**options)
             with paramiko.SFTPClient.from_transport(transport) as sftp:
                 sftp.get_channel().settimeout(12)
                 report["release_readback"]=readback(sftp,report["release"],meta)

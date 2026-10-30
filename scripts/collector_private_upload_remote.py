@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 ROOT = BASE+"/private/mosa2-collector"
 ONCE = "upload-20261021-a15aee"
 TOKEN = "MOSA2-PRIVATE-UPLOAD-20261021-A15AEE:"
+SCHEMA4_MANIFEST = None
 PRIVATE_INODES = (97002064,97002065,97002066,97002067,97002068,97002069)
 PAYLOAD_PATHS = ["config/collector-private.example.json","docs/database/migrations/0004_current_observation_provenance.sql","docs/database/seeds/0001_market_units_v1.json","scripts/collector_release/runtime.php","scripts/market_collector/boerse_frankfurt.py","scripts/market_collector/collector.py","scripts/market_collector/contracts.py","scripts/market_collector/frankfurt_request.php","scripts/market_collector/http_transport.py","scripts/market_collector/live_batch.php","scripts/market_collector/live_bridge.py","scripts/market_collector/live_persistence.php","scripts/market_collector/normalizer.py","scripts/market_collector/onboarding.php","scripts/market_collector/runtime_persistence.php","scripts/market_collector/yahoo_chart.py","scripts/phase2/check_expression.php","scripts/phase2/postcheck.php","scripts/phase3b/postcheck.php","scripts/phase3c/market_flow.php","scripts/phase3d/dry_run.php","scripts/phase3k/live_apply.php","scripts/phase3k/unit_schema.php","scripts/phase3l/unit_seed.py","scripts/phase3m/live_seed.php","scripts/phase3m/state_integrity.php","scripts/phase3n/observation_v2.py","scripts/phase3n/unit_catalog_adapter.py","scripts/phase3n/value_adapter.php","scripts/phase3n/writer_plan.py","scripts/phase3o/live_plan.py","scripts/phase3o/live_writer.php","scripts/phase3o/state_integrity.php"]
 PUBLIC = tuple(BASE+"/"+p for p in ("httpdocs","mosa.scharwerk.de","mosa2-test.scharwerk.de"))
@@ -37,13 +38,18 @@ def plan(data):
     need(manifest["format"]=="mosa2-collector-release-v1" and manifest["commit"]==commit,"MANIFEST_COMMIT")
     need(hashlib.sha256(compact(manifest)).hexdigest()==data["manifest_sha256"],"MANIFEST_DIGEST")
     rows=manifest["files"]
-    need([r["path"] for r in rows]==PAYLOAD_PATHS and len(rows)==33,"EXACT_FILE_SET")
-    need(manifest["payload_bytes"]==sum(r["size"] for r in rows)==248105,"PAYLOAD_SIZE")
+    if SCHEMA4_MANIFEST is None:
+        need([r["path"] for r in rows]==PAYLOAD_PATHS and len(rows)==33,"EXACT_FILE_SET")
+        need(manifest["payload_bytes"]==sum(r["size"] for r in rows)==248105,"PAYLOAD_SIZE")
+    else:
+        need(manifest==SCHEMA4_MANIFEST,"EXACT_SCHEMA4_MANIFEST")
+        need([r["path"] for r in rows]==PAYLOAD_PATHS,"EXACT_FILE_SET")
+        need(manifest["payload_bytes"]==sum(r["size"] for r in rows)<=4*1024*1024,"PAYLOAD_SIZE")
     for row in rows:
         p=PurePosixPath(row["path"])
         need(not p.is_absolute() and str(p)==row["path"] and ".." not in p.parts
              and "\\" not in row["path"] and row["mode"]=="0600"
-             and type(row["size"]) is int and 0<=row["size"]<=32768
+             and type(row["size"]) is int and 0<=row["size"]<=(32768 if SCHEMA4_MANIFEST is None else 4*1024*1024)
              and re.fullmatch(r"[0-9a-f]{64}",row["sha256"]) is not None,"FILE_CONTRACT")
     dirs=sorted({str(parent) for row in rows for parent in PurePosixPath(row["path"]).parents
                  if str(parent)!="."},key=lambda p:(p.count("/"),p))

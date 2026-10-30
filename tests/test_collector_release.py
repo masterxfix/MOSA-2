@@ -250,5 +250,196 @@ class PrivateDeploymentTests(unittest.TestCase):
                              expected_blobs[path])
 
 
+class Schema4OnceTests(unittest.TestCase):
+    """Bounded new-profile proof; existing Current/batch fixtures supply business contracts."""
+    @classmethod
+    def setUpClass(cls):
+        from scripts import collector_schema4_once as once
+        cls.once = once
+        from historical_release_fixture import candidate_checkout
+        paths = [".github/workflows/collector-schema4-once.yml", release.SCHEMA4_ONCE_CONTRACT,
+                 "scripts/collector_private_upload_remote.py", "scripts/collector_release.py",
+                 "scripts/deploy_private_collector.py", "scripts/collector_schema4_once.php",
+                 "scripts/collector_schema4_once.py", "scripts/collector_schema4_once_remote.py",
+                 "tests/test_collector_release.py", "tests/historical_release_fixture.py"]
+        base = release.git(ROOT, "rev-parse", "HEAD").decode().strip()
+        context = candidate_checkout(ROOT, base, paths)
+        cls.candidate, cls.commit = context.__enter__()
+        cls.addClassCleanup(context.__exit__, None, None, None)
+        cls.archive, cls.manifest = release.build(cls.candidate, cls.commit, "schema4-once")
+        cls.meta = release.verify(cls.candidate, cls.commit, cls.archive, cls.manifest, "schema4-once")
+
+    def env(self, run="123"):
+        return dict(MOSA_SCHEMA4_EXPECTED_COMMIT=self.commit,
+                    MOSA_SCHEMA4_AUTHORIZATION=self.once.TOKEN+self.commit,
+                    GITHUB_SHA=self.commit, GITHUB_RUN_ID=run, GITHUB_ACTIONS="true",
+                    GITHUB_RUN_ATTEMPT="1", GITHUB_EVENT_NAME="workflow_dispatch",
+                    GITHUB_REF="refs/heads/main", GITHUB_REPOSITORY="masterxfix/MOSA-2")
+
+    def test_exact_package_dependency_closure_and_forgery_rejection(self):
+        names = {r["path"] for r in self.meta["files"]}
+        self.assertTrue({"scripts/collector_schema4_once.php", "scripts/market_current/refresh.php",
+                         "scripts/market_current/planner.py", "scripts/market_current/selection.php",
+                         "scripts/market_collector/schema_contract.php", "api/current_read.php"} <= names)
+        self.assertFalse(any("remote" in p or "deploy" in p or p.startswith("tests/") for p in names))
+        self.assertEqual((self.archive, self.manifest), release.build(self.candidate, self.commit, "schema4-once"))
+        for key, value in (("commit", "b"*40), ("payload_bytes", 1), ("unknown", True)):
+            m = copy.deepcopy(self.meta);m[key] = value
+            with self.assertRaises(ValueError):
+                release.verify(self.candidate, self.commit, self.archive, release.canonical(m), "schema4-once")
+        with self.assertRaises(ValueError):
+            release.verify(self.candidate, self.commit, self.archive[:-1], self.manifest, "schema4-once")
+        # Existing fault-injection method: keep wrong source pins and missing includes fatal.
+        objects, read = release.repository(self.candidate, self.commit)
+        for defect in ("source", "edge"):
+            contract = json.loads(read(release.SCHEMA4_ONCE_CONTRACT))
+            if defect == "source":
+                contract["files"][0]["source_blob"] = "0"*40
+            else:
+                row = next(r for r in contract["files"] if r["path"] == "api/observations_read.php")
+                row["requires"].remove("api/current_read.php")
+            def altered(path):
+                return release.canonical(contract) if path == release.SCHEMA4_ONCE_CONTRACT else read(path)
+            with patch.object(release, "repository", return_value=(objects, altered)), self.assertRaises(ValueError):
+                release.build(self.candidate, self.commit, "schema4-once")
+        historical = json.loads((ROOT/release.CONTRACT).read_text())
+        self.assertEqual(len(historical["files"]), 33)
+        self.assertEqual(private.ARCHIVE_SHA256, "73e34c8d8e13ce37265ef5dded1ceae162140eee5b17341b23ee7dae3e3a68f7")
+
+    def test_commit_attempt_ref_and_manifest_are_bound_before_remote_effects(self):
+        self.assertEqual(self.once.authorize(self.env()), (self.commit, "schema4-"+self.commit+"-123"))
+        for key, value in (("GITHUB_RUN_ATTEMPT", "2"), ("GITHUB_REF", "refs/heads/other"),
+                           ("GITHUB_EVENT_NAME", "schedule"), ("GITHUB_SHA", "b"*40),
+                           ("MOSA_SCHEMA4_AUTHORIZATION", private.TOKEN+self.commit)):
+            env = self.env();env[key] = value
+            with self.subTest(key=key), self.assertRaises(PermissionError):
+                self.once.authorize(env)
+        scope = {"__name__": "fixture"}
+        exec(compile(private.remote_source("schema4-once", self.meta), "<schema4-upload>", "exec"), scope)
+        d = dict(commit=self.commit, authorization=self.once.TOKEN+self.commit, run_id="123",
+                 manifest=self.meta, manifest_sha256=hashlib.sha256(self.manifest).hexdigest())
+        self.assertEqual(scope["plan"](d)[0], self.commit)
+        m = copy.deepcopy(self.meta);m["files"][0]["sha256"] = "0"*64
+        d.update(manifest=m, manifest_sha256=hashlib.sha256(release.canonical(m)).hexdigest())
+        with self.assertRaisesRegex(Exception, "EXACT_SCHEMA4_MANIFEST"):
+            scope["plan"](d)
+
+    def supervisor(self, ambiguous=False):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        scope = {"__name__": "fixture"}
+        # The existing child supervisor is Linux-only. This test injects the OS
+        # and child results below; importing its two POSIX modules is doubled on Windows.
+        platform_modules = {name: Mock() for name in ("fcntl", "resource")} if os.name == "nt" else {}
+        with patch.dict(sys.modules, platform_modules):
+            exec(compile(self.once.remote_source(self.meta), "<schema4-once>", "exec"), scope)
+        created = set();saved = {}
+        def mkdir(name, mode, dir_fd):
+            key = (dir_fd, name)
+            if key in created:
+                raise FileExistsError()
+            created.add(key)
+        scope["os"] = SimpleNamespace(mkdir=mkdir, fsync=lambda fd: None, close=lambda fd: None,
+                                       umask=lambda mode: None, lstat=lambda path: object())
+        scope["guard"] = lambda: None
+        scope["audit"] = lambda *args: None
+        scope["folder"] = lambda path: 1 if path.endswith("/locks") else 2 if path.endswith("/runs") else 3
+        scope["new_metadata"] = lambda *args: None
+        scope["file_once"] = lambda fd, name, raw: saved.setdefault(name, raw)
+        answer = dict(ok=True, status="COMPLETE", provider_requests=1,
+                      display=dict(name="Synthetic", price="123.4500000000", unit="EUR", unit_version="1",
+                                   source="Synthetic Frankfurt", venue="XFRA", market_at="2026-10-30T10:00:00Z",
+                                   observed_at="2026-10-30T10:01:00Z"))
+        scope["child"] = Mock(side_effect=RuntimeError("synthetic lost result")) if ambiguous else Mock(
+            side_effect=[answer, dict(status="ok", items=[answer["display"]])])
+        return scope, saved
+
+    def test_order_reservation_blocks_another_workflow_id_and_unknown_outcome_has_no_retry(self):
+        for ambiguous in (False, True):
+            with self.subTest(ambiguous=ambiguous):
+                scope, saved = self.supervisor(ambiguous)
+                d = dict(commit=self.commit, authorization=self.once.TOKEN+self.commit, run_id="123",
+                         run="schema4-"+self.commit+"-123", manifest=self.meta,
+                         manifest_sha256=hashlib.sha256(self.manifest).hexdigest(), password="SYNTHETIC-SECRET")
+                result = scope["schema4_once"](d)
+                self.assertEqual(result["status"], "OUTCOME_UNKNOWN" if ambiguous else "COMPLETE")
+                self.assertEqual(result["provider_requests"], None if ambiguous else 1)
+                self.assertIn("started.json", saved);self.assertIn("result.json", saved)
+                self.assertNotIn(d["password"], saved["result.json"].decode())
+                calls = scope["child"].call_count
+                d.update(run_id="124", run="schema4-"+self.commit+"-124")
+                result = scope["schema4_once"](d)
+                self.assertEqual(result["failure"], "ORDER_OR_RUN_ALREADY_RESERVED")
+                self.assertEqual(scope["child"].call_count, calls)
+
+    def test_packaged_starter_selection_approval_and_shared_current_planner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)/"release";root.mkdir()
+            with tarfile.open(fileobj=io.BytesIO(self.archive), mode="r:") as bundle:
+                for member in bundle:
+                    dest = root/member.name;dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(bundle.extractfile(member).read())
+            # -I discards inherited project imports/PYTHONPATH. Set both sources
+            # before importing the reused fixture; production always comes first.
+            program = r'''
+import hashlib, json, subprocess, sys
+from pathlib import Path
+root, candidate = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
+sys.path[0:0] = [str(root), str(candidate/"tests")]
+import test_market_current as fixtures
+from test_market_live_batch import manifest
+current = fixtures.current
+catalog = current.writer.observation.catalog_module
+sources = dict(current=Path(current.__file__).resolve(), writer=Path(current.writer.__file__).resolve(),
+               catalog=Path(catalog.__file__).resolve(), manifest=catalog.units.DEFAULT.resolve())
+assert all(path.is_relative_to(root) for path in sources.values()), sources
+relative = "docs/database/seeds/0001_market_units_v1.json"
+assert sources["manifest"] == root/relative, sources
+raw = sources["manifest"].read_bytes()
+digest = hashlib.sha256(raw).hexdigest()
+assert raw == (candidate/relative).read_bytes(), sources
+assert digest == sys.argv[3] == catalog.MANIFEST_BYTES == "0d9f196e4ccbd5e687292fa3d7a1a087b343ec81fb609b8b64b6454713246bbf", (sources, digest)
+catalog.normative_catalog()
+f = fixtures.CurrentTests(); f.setUp(); f.previous()
+source = ('require $argv[1]; $d=json_decode(stream_get_contents(STDIN),true);'
+          '$r=\\Mosa2\\Schema4Once\\choose($d["entries"]);'
+          'echo json_encode(["selected"=>$r["route"]["isin"],'
+          '"approval"=>\\Mosa2\\Schema4Once\\approval($d["route"],$d["now"])]);')
+selected = [manifest(i)["identity"]["normalized_value"] for i in (2, 1)]
+entries = [dict(route=dict(isin=v, asset_class="equity", source_key="provider:boerse_frankfurt_api",
+                          quote_unit_key="EUR", quote_unit_version="1")) for v in selected]
+p = subprocess.run(["php", "-r", source, str(root/"scripts/collector_schema4_once.php")],
+                   input=json.dumps(dict(entries=entries, route=f.route, now=f.data["now"])),
+                   text=True, capture_output=True, check=True)
+assert p.stderr == "", p.stderr
+answer = json.loads(p.stdout)
+assert answer["selected"] == min(selected), answer
+assert answer["approval"]["route_sha256"] == current.route_hash(f.route), answer
+f.data["approval"] = answer["approval"]
+p = subprocess.run([sys.executable, "-I", "-B", str(root/"scripts/market_current/planner.py")],
+                   input=json.dumps(dict(items=[f.data])), text=True, capture_output=True, check=True)
+assert p.stderr == "", p.stderr
+assert json.loads(p.stdout)["plans"][0]["decision"] == "UNCHANGED", p.stdout
+print(json.dumps(dict(sources={k:str(v) for k,v in sources.items()}, manifest_sha256=digest, decision="UNCHANGED")))
+'''
+            digest = next(r["sha256"] for r in self.meta["files"]
+                          if r["path"] == "docs/database/seeds/0001_market_units_v1.json")
+            p = subprocess.run([sys.executable, "-I", "-B", "-c", program,
+                                str(root), str(self.candidate), digest], cwd=root,
+                               text=True, capture_output=True, timeout=30)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(p.stderr, "")
+            evidence = json.loads(p.stdout)
+            self.assertEqual(evidence["decision"], "UNCHANGED")
+            self.assertEqual(evidence["manifest_sha256"], digest)
+            print("Packaged Current provenance: " + json.dumps(evidence, sort_keys=True))
+        starter = (ROOT/"scripts/collector_schema4_once.php").read_text()
+        self.assertIn("\\Mosa2\\MarketCurrent\\run(", starter)
+        self.assertNotIn("INSERT INTO", starter)
+        self.assertNotIn("UPDATE m2_", starter)
+        for path in ("config/collector-operation.json", "config/collector-provider-budget.json"):
+            self.assertFalse(json.loads((ROOT/path).read_text())["execution_enabled"])
+
+
 if __name__ == "__main__":
     unittest.main()

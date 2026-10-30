@@ -1,0 +1,61 @@
+name: Manual MOSA 2 schema4 one-shot quote to Current
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full reviewed main commit
+        type: string
+        required: true
+      authorization:
+        description: Explicit MOSA2-SCHEMA4-ONE-SHOT-20261030 token plus colon and full commit
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: mosa-2-schema4-one-shot-20261030
+  cancel-in-progress: false
+jobs:
+  once:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Require reviewed commit, explicit order and all existing secrets
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$AUTHORIZATION" = "MOSA2-SCHEMA4-ONE-SHOT-20261030:$EXPECTED_COMMIT"
+          for name in MOSA_TEST_SFTP_PASSWORD MOSA_TEST_SFTP_HOST_KEY_SHA256 MOSA_TEST_DB_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "MISSING_SECRET: $name"; exit 1; fi
+          done
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Existing pinned SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Verify exact commit-bound package before remote writes
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -B scripts/collector_release.py build --profile schema4-once --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema4-once"
+          python3 -B scripts/collector_release.py verify --profile schema4-once --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema4-once"
+      - name: Measure runtime, install privately and perform the single reserved request
+        env:
+          MOSA_SCHEMA4_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_SCHEMA4_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m scripts.collector_schema4_once
