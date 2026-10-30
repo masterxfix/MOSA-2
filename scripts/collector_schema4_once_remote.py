@@ -3,6 +3,13 @@ TOKEN = "MOSA2-SCHEMA4-ONE-SHOT-20261030:"
 ORDER_ONCE = "schema4-live-20261030"
 
 
+def complete(report):
+    return (isinstance(report, dict) and report.get("ok") is True
+            and report.get("status") == "COMPLETE"
+            and all(report.get(key) == "PASS" for key in
+                    ("readback", "web_readback", "release_readback")))
+
+
 def schema4_once(data):
     global RELEASE, RUN
     commit, stage, rows, dirs = plan(data)
@@ -52,9 +59,9 @@ def schema4_once(data):
         audit(RELEASE, rows, dirs)
         report["release_readback"] = "PASS"
     except FileExistsError:
-        report.update(status="BLOCKED", failure="ORDER_OR_RUN_ALREADY_RESERVED")
+        report.update(ok=False, status="BLOCKED", failure="ORDER_OR_RUN_ALREADY_RESERVED")
     except Exception as error:
-        report.update(status="OUTCOME_UNKNOWN" if begun else "NOT_STARTED", failure_type=type(error).__name__)
+        report.update(ok=False, status="OUTCOME_UNKNOWN" if begun else "NOT_STARTED", failure_type=type(error).__name__)
     finally:
         if fd is not None:
             marker = RUN + "/asset-01/provider-consumed.lock"
@@ -68,8 +75,13 @@ def schema4_once(data):
             except FileNotFoundError:
                 report["provider_requests"] = 0
                 report["provider_budget_consumed"] = False
+                if report.get("status") == "COMPLETE":
+                    report.update(ok=False, status="OUTCOME_UNKNOWN")
             except Exception:
                 report.update(ok=False, status="OUTCOME_UNKNOWN", provider_requests=None)
+            if report.get("status") == "COMPLETE" and not complete(report):
+                report.update(ok=False, status="OUTCOME_UNKNOWN")
+            report["ok"] = complete(report)
             text = json.dumps(report, sort_keys=True)
             password = data["password"]
             if password in text or json.dumps(password)[1:-1] in text:

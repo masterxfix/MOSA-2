@@ -2,14 +2,14 @@
   "format": "mosa2-collector-release-contract-v1",
   "runtime": {
     "python": "/opt/alt/python311/bin/python3.11",
-    "python_version": "3.11.17",
+    "python_version": "3.11.18",
     "php": "/opt/plesk/php/8.4/bin/php",
     "php_version": "8.4.12",
     "runtime_path": "/opt/plesk/php/8.4/bin:/usr/bin:/bin"
   },
   "roots": [
     "scripts/collector_schema4_once.php",
-    "config/collector-private.example.json"
+    "config/collector-private-schema4-once.example.json"
   ],
   "entrypoints": [
     "scripts/market_collector/live_bridge.py",
@@ -96,10 +96,10 @@
       "source_blob": "66d0dcce086764b45f37c163fef235470069407f"
     },
     {
-      "path": "config/collector-private.example.json",
+      "path": "config/collector-private-schema4-once.example.json",
       "mode": "0600",
       "role": "disabled-template",
-      "source_blob": "6dfc2849e92273830d0c9d58f744863e114a98a6",
+      "source_blob": "3c5c5a4bf5a4e85ef0339cc12e9d73463c79d446",
       "requires": []
     },
     {
@@ -127,7 +127,7 @@
       "path": "scripts/collector_release/runtime.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "0bab704f684a86f9aaefeb7809537eeb9d3c0323",
+      "source_blob": "aebe5e5257c3a03be48592a3f9dfc1410e5164fd",
       "requires": [
         "scripts/market_collector/schema_contract.php"
       ]
@@ -142,7 +142,7 @@
         "scripts/market_collector/actions_acceptance.php",
         "scripts/market_current/refresh.php"
       ],
-      "source_blob": "023b2d7c1ccc3e8205c24577370c3b4234ba9350"
+      "source_blob": "d68c3e99a9b53b6bf5e47553b7504e7737919660"
     },
     {
       "path": "scripts/market_collector/actions_acceptance.php",

@@ -4,7 +4,9 @@ namespace Mosa2\CollectorRelease;
 require_once __DIR__.'/../market_collector/schema_contract.php';
 
 /** Library-only binding for a future reviewed launcher; no batch is started. */
-function configuration(string $project,int $schemaVersion=4): array {
+function configuration(string $project,int $schemaVersion=4,string $pythonVersion='3.11.17'): array {
+    if(!in_array($pythonVersion,['3.11.17','3.11.18'],true))
+        throw new \RuntimeException('unqualified_python_selection');
     $state=\Mosa2\CollectorSchema5\selected(['state_contract'=>['schema_version'=>$schemaVersion]]);
     if(PHP_SAPI!=='cli'||PHP_VERSION!=='8.4.12'
         ||realpath(PHP_BINARY)!==realpath('/opt/plesk/php/8.4/bin/php'))
@@ -31,7 +33,7 @@ function configuration(string $project,int $schemaVersion=4): array {
         if(proc_get_status($process)['running'])proc_terminate($process,9);
         fclose($pipes[1]);fclose($pipes[2]);proc_close($process);
     }
-    if($exit!==0||trim($out)!=='3.11.17'||$err!=='')
+    if($exit!==0||trim($out)!==$pythonVersion||$err!=='')
         throw new \RuntimeException('pinned_python_required');
     return ['python'=>$python,'php'=>'/opt/plesk/php/8.4/bin/php','project'=>$project,'state_contract'=>$state,
         'runtime_path'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin',

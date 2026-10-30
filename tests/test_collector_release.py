@@ -255,7 +255,8 @@ class RuntimeCorrectionTests(unittest.TestCase):
         from scripts import collector_schema4_once as once
         self.once = once
         self.php = dict(version="8.4.12",binary=once.PHP,sapi="cli",pdo_mysql=True)
-        self.python = dict(version="3.11.17",executable=once.PYTHON,resolved_executable=once.PYTHON,
+        self.expected = json.loads((ROOT/release.SCHEMA4_ONCE_CONTRACT).read_text())["runtime"]
+        self.python = dict(version="3.11.18",executable=once.PYTHON,resolved_executable=once.PYTHON,
             berlin=True,loaded_ca=0,loaded_x509=0,verify_mode="CERT_REQUIRED",check_hostname=True,
             ca_source_verified=True,ca_source_kind="DEFAULT_CAPATH_HASH_ENTRY_PARSED",
             ca_file=None,ca_path="/configured/ca",ca_path_entry="0123abcd.0",ca_entries_examined=1,
@@ -267,7 +268,7 @@ class RuntimeCorrectionTests(unittest.TestCase):
         replies = [(0,json.dumps(self.php if php is None else php).encode(),False,1),
                    (0,json.dumps(self.python if python is None else python).encode(),False,1)]
         with patch.object(self.once.remote,"remote_call",side_effect=replies):
-            return self.once.runtime(object(),result)
+            return self.once.runtime(object(),self.expected,result)
 
     def test_lazy_ca_with_zero_loaded_count_passes_without_weakening_tls(self):
         result = self.measure()
@@ -291,14 +292,14 @@ class RuntimeCorrectionTests(unittest.TestCase):
         env = dict(MOSA_SCHEMA4_EXPECTED_COMMIT=commit,MOSA_SCHEMA4_AUTHORIZATION=once.TOKEN+commit,
             GITHUB_SHA=commit,GITHUB_RUN_ID="123",GITHUB_ACTIONS="true",GITHUB_RUN_ATTEMPT="1",
             GITHUB_EVENT_NAME="workflow_dispatch",GITHUB_REF="refs/heads/main",GITHUB_REPOSITORY="masterxfix/MOSA-2")
-        data = copy.deepcopy(self.python);data.update(version="3.11.18",secret="SYNTHETIC-DO-NOT-PRINT")
+        data = copy.deepcopy(self.python);data.update(version="3.11.17",secret="SYNTHETIC-DO-NOT-PRINT")
         @contextmanager
         def ssh(*args):
             yield object()
         replies = [(0,json.dumps(self.php).encode(),False,1),(0,json.dumps(data).encode(),False,1)]
         with patch.object(once.shared,"configuration",return_value={}), \
              patch.object(once.release,"git",return_value=(commit+"\n").encode()), \
-             patch.object(once.upload,"artifact",return_value=({},b"{}",{})), \
+             patch.object(once.upload,"artifact",return_value=({"runtime":self.expected},b"{}",{})), \
              patch.object(once.shared,"ssh_client",side_effect=ssh), \
              patch.object(once.remote,"remote_call",side_effect=replies), \
              patch.object(once.upload,"upload") as install:
@@ -307,8 +308,8 @@ class RuntimeCorrectionTests(unittest.TestCase):
         self.assertEqual(report["stage"],"runtime")
         self.assertEqual(report["provider_requests"],0)
         self.assertEqual(report["failure"],"RUNTIME_PYTHON_VERSION_MISMATCH")
-        self.assertEqual(report["runtime"]["python"]["version"],"3.11.18")
-        self.assertEqual(report["runtime"]["python"]["expected_version"],"3.11.17")
+        self.assertEqual(report["runtime"]["python"]["version"],"3.11.17")
+        self.assertEqual(report["runtime"]["python"]["expected_version"],"3.11.18")
         self.assertEqual(report["runtime"]["php"]["version"],"8.4.12")
         self.assertNotIn("SYNTHETIC-DO-NOT-PRINT",json.dumps(report))
 
@@ -316,7 +317,7 @@ class RuntimeCorrectionTests(unittest.TestCase):
         measured = {}
         with patch.object(self.once.remote,"remote_call",return_value=(127,b"",True,1)), \
              self.assertRaisesRegex(self.once.RuntimeRejected,"PHP_PROBE_FAILED"):
-            self.once.runtime(object(),measured)
+            self.once.runtime(object(),self.expected,measured)
         self.assertIsNone(measured["python"]["version"])
         self.assertIsNone(measured["php"]["version"])
         self.assertEqual(measured["null_means"],"NOT_MEASURED")
@@ -326,7 +327,7 @@ class RuntimeCorrectionTests(unittest.TestCase):
         import ast,shlex
         replies = [(0,json.dumps(self.php).encode(),False,1),(0,json.dumps(self.python).encode(),False,1)]
         with patch.object(self.once.remote,"remote_call",side_effect=replies) as remote:
-            self.once.runtime(object())
+            self.once.runtime(object(),self.expected)
         for call in remote.call_args_list:
             args = shlex.split(call.args[1])
             self.assertEqual(args[:4],["/usr/bin/env","-i","PATH="+self.once.CLEAN_ENV["PATH"],"PYTHONDONTWRITEBYTECODE=1"])
@@ -384,6 +385,7 @@ class Schema4OnceTests(unittest.TestCase):
                  "scripts/collector_private_upload_remote.py", "scripts/collector_release.py",
                  "scripts/deploy_private_collector.py", "scripts/collector_schema4_once.php",
                  "scripts/collector_schema4_once.py", "scripts/collector_schema4_once_remote.py",
+                 "scripts/collector_release/runtime.php", "config/collector-private-schema4-once.example.json",
                  "tests/test_collector_release.py", "tests/historical_release_fixture.py"]
         base = release.git(ROOT, "rev-parse", "HEAD").decode().strip()
         context = candidate_checkout(ROOT, base, paths)
@@ -447,7 +449,7 @@ class Schema4OnceTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "EXACT_SCHEMA4_MANIFEST"):
             scope["plan"](d)
 
-    def supervisor(self, ambiguous=False):
+    def supervisor(self, ambiguous=False, answer_override=None):
         from types import SimpleNamespace
         from unittest.mock import Mock
         scope = {"__name__": "fixture"}
@@ -469,13 +471,146 @@ class Schema4OnceTests(unittest.TestCase):
         scope["folder"] = lambda path: 1 if path.endswith("/locks") else 2 if path.endswith("/runs") else 3
         scope["new_metadata"] = lambda *args: None
         scope["file_once"] = lambda fd, name, raw: saved.setdefault(name, raw)
-        answer = dict(ok=True, status="COMPLETE", provider_requests=1,
+        answer = dict(ok=True, status="COMPLETE", provider_requests=1, readback="PASS",
                       display=dict(name="Synthetic", price="123.4500000000", unit="EUR", unit_version="1",
                                    source="Synthetic Frankfurt", venue="XFRA", market_at="2026-10-30T10:00:00Z",
                                    observed_at="2026-10-30T10:01:00Z"))
+        answer.update(answer_override or {})
         scope["child"] = Mock(side_effect=RuntimeError("synthetic lost result")) if ambiguous else Mock(
             side_effect=[answer, dict(status="ok", items=[answer["display"]])])
         return scope, saved
+
+    def test_active_manifest_outer_and_shared_php_version_selection_agree(self):
+        expected = self.meta["runtime"]
+        self.assertEqual(expected["python_version"], "3.11.18")
+        template_path = "config/collector-private-schema4-once.example.json"
+        template = json.loads((self.candidate/template_path).read_text())
+        self.assertEqual(template["runtime"], expected)
+        self.assertIsNone(template["approved_root"])
+        self.assertFalse(template["execution_enabled"])
+        self.assertFalse(template["upload_enabled"])
+        self.assertIn(template_path, {r["path"] for r in self.meta["files"]})
+        for path in (release.CONTRACT, release.SCHEMA5_CONTRACT, "config/collector-private.example.json"):
+            self.assertEqual(json.loads((self.candidate/path).read_text())["runtime"]["python_version"], "3.11.17")
+        starter = (self.candidate/"scripts/collector_schema4_once.php").read_text()
+        self.assertIn("configuration($project,4,'"+expected["python_version"]+"')", starter)
+        fixture = RuntimeCorrectionTests();fixture.setUp()
+        for version in ("3.11.17", "3.11.18", "3.11.19"):
+            measured = {};data = dict(fixture.python,version=version)
+            with self.subTest(outer_version=version):
+                if version == expected["python_version"]:
+                    fixture.measure(data,result=measured)
+                    self.assertEqual(set(measured["checks"].values()), {"PASS"})
+                else:
+                    with self.assertRaisesRegex(self.once.RuntimeRejected,"PYTHON_VERSION_MISMATCH"):
+                        fixture.measure(data,result=measured)
+                self.assertEqual(measured["python"]["expected_version"], expected["python_version"])
+        # Execute the actual shared PHP decision with synthetic process output.
+        # Namespaced test doubles replace host constants/processes, not its source.
+        program = r'''
+namespace Mosa2\CollectorRelease;
+const PHP_VERSION='8.4.12'; const PHP_SAPI='cli'; const PHP_BINARY='/opt/plesk/php/8.4/bin/php';
+function realpath($path){if($path!==PHP_BINARY)throw new \Exception('binary_changed');return $path;}
+function proc_open($command,$descriptors,&$pipes,$cwd,$env){
+    if(array_slice($command,0,4)!==['/opt/alt/python311/bin/python3.11','-I','-B','-c']
+        ||$env!==['PATH'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin','PYTHONDONTWRITEBYTECODE'=>'1'])
+        throw new \Exception('process_contract_changed');
+    $GLOBALS['calls']++;
+    $pipes=[fopen('php://temp','w+'),fopen('php://temp','w+'),fopen('php://temp','w+')];
+    fwrite($pipes[1],$GLOBALS['measured']."\n");rewind($pipes[1]);
+    return fopen('php://temp','w+');
+}
+function proc_get_status($p){return ['running'=>false,'exitcode'=>0];}
+function proc_close($p){fclose($p);return 0;}
+require $argv[1];$results=[];
+foreach([null,'3.11.17','3.11.18','3.11','3.11.19'] as $expected){
+    foreach(['3.11.17','3.11.18','3.11.19'] as $actual){
+        $GLOBALS['measured']=$actual;$GLOBALS['calls']=0;$error=null;
+        try{if($expected===null)configuration('/synthetic',4);else configuration('/synthetic',4,$expected);}
+        catch(\RuntimeException $e){$error=$e->getMessage();}
+        $results[]=['selected'=>$expected,'measured'=>$actual,'error'=>$error,'calls'=>$GLOBALS['calls']];
+    }
+}
+echo json_encode($results);
+'''
+        p = subprocess.run(["php","-r",program,str(self.candidate/"scripts/collector_release/runtime.php")],
+                           capture_output=True,text=True,timeout=10)
+        self.assertEqual(p.returncode,0,p.stderr)
+        self.assertEqual(p.stderr,"")
+        for row in json.loads(p.stdout):
+            selected = row["selected"] or "3.11.17"
+            error = ("unqualified_python_selection" if selected not in ("3.11.17","3.11.18") else
+                     None if selected == row["measured"] else "pinned_python_required")
+            self.assertEqual(row["error"],error,row)
+            self.assertEqual(row["calls"],0 if error == "unqualified_python_selection" else 1,row)
+
+    def test_post_php_failures_and_incomplete_readbacks_cannot_report_success(self):
+        from unittest.mock import Mock
+        for defect in ("audit", "receipt", "readback", "web", "incomplete", "marker"):
+            with self.subTest(defect=defect):
+                override = ({"readback":"FAILED"} if defect == "readback" else
+                            {"status":"PARTIAL"} if defect == "incomplete" else {})
+                scope,saved = self.supervisor(answer_override=override)
+                if defect == "audit":
+                    scope["audit"] = Mock(side_effect=[None,RuntimeError("synthetic audit error")])
+                if defect == "marker":
+                    scope["os"].lstat = Mock(side_effect=FileNotFoundError())
+                if defect == "receipt":
+                    def save(fd,name,raw):
+                        if name == "result.json":raise OSError("synthetic receipt error")
+                        saved[name] = raw
+                    scope["file_once"] = save
+                if defect == "web":
+                    answer = dict(ok=True,status="COMPLETE",readback="PASS",provider_requests=1,display={})
+                    scope["child"] = Mock(side_effect=[answer,RuntimeError("synthetic web error")])
+                d = dict(commit=self.commit,authorization=self.once.TOKEN+self.commit,run_id="123",
+                         run="schema4-"+self.commit+"-123",manifest=self.meta,
+                         manifest_sha256=hashlib.sha256(self.manifest).hexdigest(),password="SYNTHETIC-SECRET")
+                result = scope["schema4_once"](d)
+                self.assertIs(result["ok"],False)
+                self.assertFalse(self.once.complete(result))
+                if defect in ("audit","receipt","readback","marker"):
+                    self.assertEqual(result["status"],"OUTCOME_UNKNOWN")
+                if defect == "receipt":self.assertEqual(result["receipt_persistence"],"FAIL")
+                else:self.assertFalse(json.loads(saved["result.json"])["ok"])
+                self.assertEqual(scope["child"].call_count,2)
+
+    def test_outer_runner_and_exit_reject_contradictory_or_incomplete_success(self):
+        from contextlib import contextmanager
+        from unittest.mock import Mock
+        @contextmanager
+        def ssh(*args):
+            yield object()
+        valid = dict(ok=True,status="COMPLETE",provider_requests=1,
+                     readback="PASS",web_readback="PASS",release_readback="PASS")
+        for defect in (None,"unknown","readback","web","release"):
+            answer = dict(valid)
+            if defect == "unknown":answer["status"] = "OUTCOME_UNKNOWN"
+            elif defect:answer.pop({"readback":"readback","web":"web_readback","release":"release_readback"}[defect])
+            with self.subTest(defect=defect), \
+                 patch.object(self.once.shared,"configuration",return_value={}), \
+                 patch.object(self.once.release,"git",return_value=(self.commit+"\n").encode()), \
+                 patch.object(self.once.upload,"artifact",return_value=(self.meta,self.manifest,{})), \
+                 patch.object(self.once.shared,"ssh_client",side_effect=ssh), \
+                 patch.object(self.once,"runtime") as measured, \
+                 patch.object(self.once.upload,"upload",return_value={"ok":True}), \
+                 patch.object(self.once.remote,"remote_call",return_value=(0,json.dumps(answer).encode(),False,1)):
+                env = dict(self.env(),MOSA_TEST_DB_PASSWORD="SYNTHETIC-SECRET")
+                report = self.once.execute(env,paramiko=Mock())
+                self.assertEqual(measured.call_args.args[1],self.meta["runtime"])
+                self.assertIs(report["ok"],defect is None)
+                if defect:
+                    self.assertEqual(report["status"],"OUTCOME_UNKNOWN")
+                    self.assertTrue(report["read_only_reconciliation_required"])
+                with patch.object(self.once,"execute",return_value=report), \
+                     patch.dict(os.environ,{},clear=True), patch("builtins.print"):
+                    self.assertEqual(self.once.main(),0 if defect is None else 1)
+                # Even a forged top-level ok flag must not yield a successful exit.
+                if defect:
+                    report.update(ok=True,status="COMPLETE")
+                    with patch.object(self.once,"execute",return_value=report), \
+                         patch.dict(os.environ,{},clear=True), patch("builtins.print"):
+                        self.assertEqual(self.once.main(),1)
 
     def test_order_reservation_blocks_another_workflow_id_and_unknown_outcome_has_no_retry(self):
         for ambiguous in (False, True):

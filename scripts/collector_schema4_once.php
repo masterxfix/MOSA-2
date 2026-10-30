@@ -61,7 +61,7 @@ function run(array $in,string $project): array {
     $root=ROOT.'/runs/'.$run;same(realpath($root),$root,'once_run_path');
     check(!is_link($root)&&fileowner($root)===10317&&filegroup($root)===1003&&(fileperms($root)&0777)===0700,'once_run_metadata');
     $password=$in['password'];check(is_string($password)&&$password!=='','once_secret');
-    $config=\Mosa2\CollectorRelease\configuration($project,4);
+    $config=\Mosa2\CollectorRelease\configuration($project,4,'3.11.18');
     $config['state_contract']=['schema_version'=>4,'allow_current'=>true];$config['public_root']=WEB;
     $p=connection($password);$p->exec('SET SESSION max_execution_time=10000');
     $p->exec('SET TRANSACTION READ ONLY');check($p->beginTransaction(),'once_preflight');

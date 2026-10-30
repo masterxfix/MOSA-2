@@ -11,6 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from scripts import collector_release as release, deploy_private_collector as upload
+from scripts.collector_schema4_once_remote import complete
 import collector_actions as shared
 import collector_db_locality as remote
 
@@ -138,18 +139,18 @@ def clean_command(args):
 def runtime_decision(result):
     p, q = result["php"], result["python"]
     rules = [
-        ("PHP_VERSION_MISMATCH", p["version"], "8.4.12"),
+        ("PHP_VERSION_MISMATCH", p["version"], p["expected_version"]),
         ("PHP_CLI_REQUIRED", p["sapi"], "cli"),
         ("PHP_PDO_MYSQL_REQUIRED", p["pdo_mysql"], True),
         ("PHP_BINARY_MISMATCH", p["binary"], PHP),
-        ("PYTHON_VERSION_MISMATCH", q["version"], "3.11.17"),
+        ("PYTHON_VERSION_MISMATCH", q["version"], q["expected_version"]),
         ("PYTHON_BINARY_MISMATCH", q["executable"], PYTHON),
         ("BERLIN_TIMEZONE_UNAVAILABLE", q["berlin"], True),
         ("TLS_CERT_REQUIRED", q["verify_mode"], "CERT_REQUIRED"),
         ("TLS_HOSTNAME_REQUIRED", q["check_hostname"], True),
         ("DEFAULT_CA_SOURCE_UNAVAILABLE", q["ca_source_verified"], True),
         ("SSL_ENVIRONMENT_NOT_CLEAN", q["ssl_environment_overrides_absent"], True),
-        ("PHP_CHILD_VERSION_MISMATCH", q["php_child"]["version"], "8.4.12"),
+        ("PHP_CHILD_VERSION_MISMATCH", q["php_child"]["version"], p["expected_version"]),
         ("PHP_CHILD_BINARY_MISMATCH", q["php_child"]["binary"], PHP),
     ]
     result["checks"] = {name: "NOT_MEASURED" if actual is None else
@@ -173,13 +174,13 @@ def authorize(env):
     return commit, "schema4-" + commit + "-" + env["GITHUB_RUN_ID"]
 
 
-def runtime(transport, result=None):
+def runtime(transport, expected, result=None):
     """Retain allowlisted measurements before any decision, including a rejection."""
     result = {} if result is None else result
     result.clear()
     result.update(null_means="NOT_MEASURED", requested_environment=dict(CLEAN_ENV), provider_requests=0,
-        php=dict(expected_version="8.4.12", intended_binary=PHP, version=None, binary=None, sapi=None, pdo_mysql=None),
-        python=dict(expected_version="3.11.17", intended_binary=PYTHON, version=None, executable=None,
+        php=dict(expected_version=expected["php_version"], intended_binary=PHP, version=None, binary=None, sapi=None, pdo_mysql=None),
+        python=dict(expected_version=expected["python_version"], intended_binary=PYTHON, version=None, executable=None,
             resolved_executable=None, berlin=None, loaded_ca=None, loaded_x509=None,
             verify_mode=None, check_hostname=None, ca_source_verified=None, ca_source_kind=None,
             ca_file=None, ca_path=None, ca_path_entry=None, ca_entries_examined=None,
@@ -286,7 +287,7 @@ def execute(env, paramiko=None):
         status = {}
         with shared.ssh_client(config, status, paramiko) as transport:
             report["ssh"] = status
-            runtime(transport, report["runtime"])
+            runtime(transport, manifest["runtime"], report["runtime"])
         report["stage"] = "private_installation"
         upload_env = dict(env, MOSA_PRIVATE_EXPECTED_COMMIT=commit,
                           MOSA_PRIVATE_UPLOAD_AUTHORIZATION=TOKEN + commit)
@@ -307,11 +308,16 @@ def execute(env, paramiko=None):
                 raise ValueError("ONE_SHOT_RESULT_UNKNOWN_NO_RETRY")
             result = json.loads(out)
             report["result"] = result
+            if result.get("ok") is True and not complete(result):
+                raise ValueError("ONE_SHOT_RESULT_UNKNOWN_NO_RETRY")
             report["status"] = result["status"]
             report["provider_requests"] = result.get("provider_requests")
-            report["ok"] = result.get("ok") is True
+            report["ok"] = complete(result)
+            if report["status"] == "OUTCOME_UNKNOWN":
+                report["read_only_reconciliation_required"] = True
         report["stage"] = "finished"
     except Exception as error:
+        report["ok"] = False
         report["failure_type"] = type(error).__name__
         if isinstance(error, RuntimeRejected):
             report["failure"] = "RUNTIME_" + report["runtime"]["failure_code"]
@@ -334,7 +340,8 @@ def main():
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
             stream.write("Schema-4 one-shot receipt; automatic operation remains disabled\n\n~~~json\n" + text + "\n~~~\n")
-    return 0 if report["ok"] and json.loads(text).get("ok") else 1
+    return 0 if (report["ok"] and report["status"] == "COMPLETE"
+                 and complete(report.get("result")) and json.loads(text).get("ok")) else 1
 
 
 if __name__ == "__main__":

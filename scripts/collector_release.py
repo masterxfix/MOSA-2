@@ -172,7 +172,9 @@ def payload(root, commit, profile="historical"):
                 require(candidate in row["requires"], "unrecorded PHP include")
         files[path] = raw
     require(sum(map(len, files.values())) <= LIMIT, "release size cap")
-    template = decode(files["config/collector-private.example.json"])
+    template_path = ("config/collector-private-schema4-once.example.json" if profile == "schema4-once"
+                     else "config/collector-private.example.json")
+    template = decode(files[template_path])
     require(template["execution_enabled"] is False and template["upload_enabled"] is False
             and template["approved_root"] is None, "enabled/secret-bearing template")
     require(template["runtime"] == contract["runtime"], "runtime contract drift")
