@@ -290,7 +290,8 @@ def project_receipt(envelope, now, freshness_seconds):
                 age = (now - instant(market)).total_seconds()
                 freshness = "UNKNOWN" if age < 0 else ("STALE" if age > freshness_seconds else "FRESH")
             observation = item.get("observation_id")
-            if observation is not None and not positive(observation):
+            if observation is not None and not (positive(observation) or
+                    isinstance(observation, str) and re.fullmatch(r"[1-9][0-9]*", observation)):
                 return invalid.copy()
             projected.append({
                 "isin": identity, "status": item_status, "writer": writer,

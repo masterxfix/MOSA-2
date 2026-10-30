@@ -8,13 +8,15 @@ final class MemoryRuns implements RunStore {
     public function unlock():void {$this->locked=false;}
     public function history():array {foreach($this->rows as $r)if($r['status']!=='completed')throw new RuntimeException('unresolved');return $this->rows;}
     public function claim(string $slot,int $requests,string $started):string {
-        $this->history();$this->rows[]=['status'=>'running','slot'=>$slot,'requests'=>$requests];
+        $this->history();$this->rows[]=['status'=>'running','slot'=>$slot,'requests'=>$requests,
+            'attempt_no'=>1,'started_at'=>\Mosa2\Scheduler\iso($started),'finished_at'=>null];
         if($this->failClaim)throw new RuntimeException('lost commit acknowledgement');
         return (string)count($this->rows);
     }
     public function finish(string $id,array $summary,string $finished,bool $success):void {
         if($this->failFinish)throw new RuntimeException('lost finish acknowledgement');
-        $this->rows[(int)$id-1]=['status'=>$success?'completed':'failed','summary'=>$summary];
+        $this->rows[(int)$id-1]=array_replace($this->rows[(int)$id-1],
+            ['status'=>$success?'completed':'failed','summary'=>$summary,'finished_at'=>\Mosa2\Scheduler\iso($finished)]);
     }
 }
 if(($argv[1]??null)==='stdin-secret'){
@@ -28,16 +30,22 @@ if(($argv[1]??null)==='stdin-secret'){
     exit;
 }
 $scenario=$argv[1];$store=new MemoryRuns();$calls=0;$reservations=[];
+$input=$scenario==='batch-receipt'?json_decode(stream_get_contents(STDIN),true,64,JSON_THROW_ON_ERROR):null;
 $now=new DateTimeImmutable('2026-10-21T10:00:07Z');
 $operation=['execution_enabled'=>true];$budget=['execution_enabled'=>true];
 $qualify=static fn()=>['prepared'=>[['manifest'=>[]]]];
+if($scenario==='batch-receipt'){
+    $now=new DateTimeImmutable($input['started_at']);
+    $qualify=static fn()=>['prepared'=>array_fill(0,count($input['batch']['item_results']),['manifest'=>[]])];
+}
 $decision=static function($rows,$q,$t)use($scenario){
     if($scenario==='missing-calendar')return ['decision'=>'BLOCKED','reason'=>'CONFIGURATION_OR_CALENDAR_UNKNOWN'];
     if($rows!==[])return ['decision'=>'SKIP','reason'=>'SLOT_SKIPPED'];
     return ['decision'=>'RUN_ELIGIBLE','scheduled_at'=>'2026-10-21T10:00:00Z','cycle_id'=>'cycle-20261021t100000z'];
 };
-$pipeline=static function($q,$cycle)use(&$calls,$store,$scenario,&$reservations){
+$pipeline=static function($q,$cycle)use(&$calls,$store,$scenario,&$reservations,$input){
     $calls++;$reservations[]=$store->rows[0]['status'];
+    if($scenario==='batch-receipt')return $input['batch']+['ok'=>true,'current'=>['committed'=>true,'readback'=>'PASS']];
     if($scenario==='crash')throw new RuntimeException('SECRET must never reach output');
     if($scenario==='parallel'){
         $nested=\Mosa2\Scheduler\tick($store,['execution_enabled'=>true],['execution_enabled'=>true],

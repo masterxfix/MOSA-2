@@ -13,6 +13,7 @@ from scripts import collector_scheduler_decision as scheduler
 from scripts import collector_operation_plan as op
 from test_collector_cycle import fixture, NOW
 from test_collector_operation_plan import receipt
+from test_market_live_batch import call as batch_call, manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -111,6 +112,91 @@ class SchedulerDecisionTests(unittest.TestCase):
         self.assertEqual(p.stderr, "")
         self.assertEqual(json.loads(p.stdout)["decision"], "BLOCKED")
         self.assertNotIn("SECRET", p.stdout)
+
+
+class SchedulerReceiptIntegrationTests(unittest.TestCase):
+    def integration_data(self, now=NOW):
+        d = data(now)
+        manifests = [manifest(index) for index in range(d["budget_config"]["proposal"]["assets"])]
+        selected = [item["identity"]["normalized_value"] for item in manifests]
+        d["operation_config"]["selection"] = selected.copy()
+        d["qualification"]["selection"] = selected.copy()
+        d["evidence"]["qualification"]["selection"] = selected.copy()
+        return d, manifests
+
+    def controller_receipt(self, observation_id):
+        # Reuse the real batch fixture with injected collector results, not a Python receipt.
+        d, manifests = self.integration_data()
+        result = batch_call(manifests, [{"observation_id": observation_id} for _ in manifests])
+        self.assertTrue(result["ok"], result)
+        batch = result["batch"]
+        self.assertEqual(batch["overall_status"], "COMPLETE")
+        self.assertEqual(result["calls"], d["operation_config"]["selection"])
+        for key in ("started_count", "completed_count", "committed_count", "provider_requests"):
+            self.assertEqual(batch[key], len(manifests))
+        php = shutil.which("php")
+        self.assertIsNotNone(php, "PHP is required for scheduler receipt integration")
+        p = subprocess.run([php, str(ROOT/"tests/collector_scheduler_fixture.php"), "batch-receipt"],
+                           input=json.dumps(dict(batch=batch, started_at=NOW.isoformat())),
+                           capture_output=True, text=True, timeout=15, check=True)
+        self.assertEqual(p.stderr, "")
+        controller = json.loads(p.stdout)
+        self.assertEqual(controller["first"]["status"], "COMPLETE")
+        self.assertEqual(controller["second"]["status"], "SKIP")
+        self.assertEqual(controller["calls"], 1)
+        self.assertEqual(controller["reservations"], ["running"])
+        self.assertEqual(len(controller["rows"]), 1)
+        row = controller["rows"][0]
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["attempt_no"], 1)
+        self.assertEqual(row["summary"]["contract"], "mosa2-scheduler-v1")
+        self.assertEqual(row["summary"]["reserved_requests"], len(manifests))
+        self.assertEqual(op.instant(row["summary"]["slot"]), NOW)
+        envelope = row["summary"]["envelope"]
+        self.assertEqual(envelope["started_at"], row["started_at"])
+        self.assertEqual(envelope["completed_at"], row["finished_at"])
+        self.assertLessEqual(op.instant(row["started_at"]), op.instant(row["finished_at"]))
+        # The controller's persisted JSON envelope must retain the batch items exactly.
+        self.assertEqual(row["summary"]["envelope"]["receipt"]["batch"]["item_results"], batch["item_results"])
+        return row
+
+    def decision_cli(self, row, now):
+        d, _ = self.integration_data(now)
+        d["records"] = [row]
+        before = deepcopy(d)
+        p = subprocess.run([sys.executable, "-B", str(ROOT/"scripts/collector_scheduler_decision.py")],
+                           input=json.dumps(d), text=True, capture_output=True, timeout=15, check=True)
+        self.assertEqual(p.stderr, "")
+        self.assertEqual(d, before)
+        return json.loads(p.stdout)
+
+    def test_php_batch_receipt_accepts_next_tick_preserves_ids_and_rejects_same_slot(self):
+        for value in (4908, "4908", "9007199254740993", "9223372036854775807", "18446744073709551615", None):
+            with self.subTest(observation_id=value):
+                row = self.controller_receipt(value)
+                envelope = row["summary"]["envelope"]
+                next_tick = NOW+timedelta(minutes=1, seconds=7)
+                before = deepcopy(envelope)
+                projected = op.project_receipt(envelope, next_tick, 900)
+                self.assertEqual(projected["status"], "COMPLETE", projected)
+                for item in projected["assets"]:
+                    self.assertEqual(item["observation_id"], value)
+                    self.assertIs(type(item["observation_id"]), type(value))
+                self.assertEqual(envelope, before)
+                result = self.decision_cli(row, next_tick)
+                self.assertEqual(result["decision"], "RUN_ELIGIBLE", result)
+                self.assertEqual(op.instant(result["scheduled_at"]), NOW+timedelta(minutes=1))
+                self.assertNotEqual(self.decision_cli(row, NOW+timedelta(seconds=30))["decision"], "RUN_ELIGIBLE")
+
+    def test_php_batch_receipts_with_invalid_ids_block_the_next_tick(self):
+        for value in (True, False, 0, -1, 1.5, "0", "01", "", " 1", "1 ", "+1", "-1", "1e3", "1\n"):
+            with self.subTest(observation_id=value):
+                row = self.controller_receipt(value)
+                next_tick = NOW+timedelta(minutes=1, seconds=7)
+                self.assertEqual(op.project_receipt(row["summary"]["envelope"], next_tick, 900),
+                                 {"status": "OUTCOME_UNKNOWN", "last_error_code": "INVALID_RECEIPT"})
+                self.assertEqual(self.decision_cli(row, next_tick),
+                                 {"decision": "BLOCKED", "reason": "INVALID_EVIDENCE"})
 
 
 class SchedulerControllerTests(unittest.TestCase):

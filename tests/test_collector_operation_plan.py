@@ -174,6 +174,36 @@ class PlanningTests(unittest.TestCase):
 
 
 class MonitoringTests(unittest.TestCase):
+    def test_observation_ids_preserve_integer_string_and_null_contract(self):
+        for value in (1, 4908, 18446744073709551615, "1", "4908", "9007199254740993",
+                      "9223372036854775807", "18446744073709551615", None):
+            with self.subTest(value=value):
+                e = receipt()
+                e["receipt"]["batch"]["item_results"][0]["observation_id"] = value
+                before = deepcopy(e)
+                result = plan.project_receipt(e, NOW, 900)
+                self.assertEqual(result["status"], "COMPLETE")
+                actual = result["assets"][0]["observation_id"]
+                self.assertEqual(actual, value)
+                self.assertIs(type(actual), type(value))
+                self.assertEqual(e, before)
+        e = receipt()
+        del e["receipt"]["batch"]["item_results"][0]["observation_id"]
+        self.assertIsNone(plan.project_receipt(e, NOW, 900)["assets"][0]["observation_id"])
+
+    def test_invalid_observation_ids_fail_closed_without_relaxing_positive(self):
+        for value in (True, False, 0, -1, 1.0, 4908.0, "", "0", "00", "01", "04908",
+                      "-1", "+1", " 1", "1 ", "1\n", "1\r\n", "1\t", "1.0", "1e3",
+                      "1E3", "null", "１", "١", "1١", [], {}):
+            with self.subTest(value=value):
+                e = receipt()
+                e["receipt"]["batch"]["item_results"][0]["observation_id"] = value
+                self.assertEqual(plan.project_receipt(e, NOW, 900),
+                                 {"status": "OUTCOME_UNKNOWN", "last_error_code": "INVALID_RECEIPT"})
+                self.assertFalse(plan.positive(value))
+        self.assertFalse(plan.positive("4908"))
+        self.assertTrue(plan.positive(4908))
+
     def test_existing_batch_receipt_shape_and_last_success(self):
         good = receipt()
         failed = receipt("test-two", "PARTIAL_FAILED", "provider")
