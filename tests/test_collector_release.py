@@ -250,6 +250,129 @@ class PrivateDeploymentTests(unittest.TestCase):
                              expected_blobs[path])
 
 
+class RuntimeCorrectionTests(unittest.TestCase):
+    def setUp(self):
+        from scripts import collector_schema4_once as once
+        self.once = once
+        self.php = dict(version="8.4.12",binary=once.PHP,sapi="cli",pdo_mysql=True)
+        self.python = dict(version="3.11.17",executable=once.PYTHON,resolved_executable=once.PYTHON,
+            berlin=True,loaded_ca=0,loaded_x509=0,verify_mode="CERT_REQUIRED",check_hostname=True,
+            ca_source_verified=True,ca_source_kind="DEFAULT_CAPATH_HASH_ENTRY_PARSED",
+            ca_file=None,ca_path="/configured/ca",ca_path_entry="0123abcd.0",ca_entries_examined=1,
+            ca_candidates_checked=1,ca_failure_code=None,ssl_environment_overrides_absent=True,
+            php_child=dict(version="8.4.12",binary=once.PHP))
+
+    def measure(self, python=None, php=None, result=None):
+        result = {} if result is None else result
+        replies = [(0,json.dumps(self.php if php is None else php).encode(),False,1),
+                   (0,json.dumps(self.python if python is None else python).encode(),False,1)]
+        with patch.object(self.once.remote,"remote_call",side_effect=replies):
+            return self.once.runtime(object(),result)
+
+    def test_lazy_ca_with_zero_loaded_count_passes_without_weakening_tls(self):
+        result = self.measure()
+        self.assertEqual(result["python"]["loaded_ca"],0)
+        self.assertEqual(set(result["checks"].values()),{"PASS"})
+        self.assertEqual(result["python"]["provider_tls"],"NOT_CHECKED")
+        self.assertEqual(result["python"]["ca_source_scope"],"LOCAL_SOURCE_ONLY_NOT_PROVIDER_TLS")
+        for field,value,code in (("ca_source_verified",False,"DEFAULT_CA_SOURCE_UNAVAILABLE"),
+                                 ("verify_mode","OTHER","TLS_CERT_REQUIRED"),
+                                 ("check_hostname",False,"TLS_HOSTNAME_REQUIRED")):
+            measured = {};data = copy.deepcopy(self.python);data[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(self.once.RuntimeRejected,code):
+                self.measure(data,result=measured)
+            self.assertEqual(measured["failure_code"],code)
+            self.assertEqual(measured["checks"][code],"FAIL")
+
+    def test_execute_retains_version_mismatch_and_blocks_before_installation(self):
+        from contextlib import contextmanager
+        from unittest.mock import Mock
+        once = self.once;commit = "a"*40
+        env = dict(MOSA_SCHEMA4_EXPECTED_COMMIT=commit,MOSA_SCHEMA4_AUTHORIZATION=once.TOKEN+commit,
+            GITHUB_SHA=commit,GITHUB_RUN_ID="123",GITHUB_ACTIONS="true",GITHUB_RUN_ATTEMPT="1",
+            GITHUB_EVENT_NAME="workflow_dispatch",GITHUB_REF="refs/heads/main",GITHUB_REPOSITORY="masterxfix/MOSA-2")
+        data = copy.deepcopy(self.python);data.update(version="3.11.18",secret="SYNTHETIC-DO-NOT-PRINT")
+        @contextmanager
+        def ssh(*args):
+            yield object()
+        replies = [(0,json.dumps(self.php).encode(),False,1),(0,json.dumps(data).encode(),False,1)]
+        with patch.object(once.shared,"configuration",return_value={}), \
+             patch.object(once.release,"git",return_value=(commit+"\n").encode()), \
+             patch.object(once.upload,"artifact",return_value=({},b"{}",{})), \
+             patch.object(once.shared,"ssh_client",side_effect=ssh), \
+             patch.object(once.remote,"remote_call",side_effect=replies), \
+             patch.object(once.upload,"upload") as install:
+            report = once.execute(env,paramiko=Mock())
+        install.assert_not_called()
+        self.assertEqual(report["stage"],"runtime")
+        self.assertEqual(report["provider_requests"],0)
+        self.assertEqual(report["failure"],"RUNTIME_PYTHON_VERSION_MISMATCH")
+        self.assertEqual(report["runtime"]["python"]["version"],"3.11.18")
+        self.assertEqual(report["runtime"]["python"]["expected_version"],"3.11.17")
+        self.assertEqual(report["runtime"]["php"]["version"],"8.4.12")
+        self.assertNotIn("SYNTHETIC-DO-NOT-PRINT",json.dumps(report))
+
+    def test_failed_probe_marks_missing_measurements_and_suppresses_stderr(self):
+        measured = {}
+        with patch.object(self.once.remote,"remote_call",return_value=(127,b"",True,1)), \
+             self.assertRaisesRegex(self.once.RuntimeRejected,"PHP_PROBE_FAILED"):
+            self.once.runtime(object(),measured)
+        self.assertIsNone(measured["python"]["version"])
+        self.assertIsNone(measured["php"]["version"])
+        self.assertEqual(measured["null_means"],"NOT_MEASURED")
+        self.assertEqual(measured["checks"]["PYTHON_VERSION_MISMATCH"],"NOT_MEASURED")
+
+    def test_real_probe_and_supervisor_request_the_same_clean_environment(self):
+        import ast,shlex
+        replies = [(0,json.dumps(self.php).encode(),False,1),(0,json.dumps(self.python).encode(),False,1)]
+        with patch.object(self.once.remote,"remote_call",side_effect=replies) as remote:
+            self.once.runtime(object())
+        for call in remote.call_args_list:
+            args = shlex.split(call.args[1])
+            self.assertEqual(args[:4],["/usr/bin/env","-i","PATH="+self.once.CLEAN_ENV["PATH"],"PYTHONDONTWRITEBYTECODE=1"])
+        args = shlex.split(remote.call_args_list[1].args[1])
+        self.assertEqual(args[4:8],[self.once.PYTHON,"-I","-B","-c"])
+        self.assertEqual(args[8],self.once.RUNTIME_PROBE)
+        tree = ast.parse((ROOT/"scripts/collector_dogado_pne_remote.py").read_text())
+        child = next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="child")
+        popen = next(n for n in ast.walk(child) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=="Popen")
+        env = next(k.value for k in popen.keywords if k.arg=="env")
+        self.assertEqual({k.arg:ast.literal_eval(k.value) for k in env.keywords},self.once.CLEAN_ENV)
+
+    def test_capath_requires_a_parsed_ca_and_matching_openssl_lookup_hash(self):
+        from contextlib import contextmanager
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        import ssl
+        scope = {"__name__":"fixture"}
+        exec(compile(self.once.RUNTIME_PROBE,"<local-ca-probe>","exec"),scope)
+        entry = SimpleNamespace(name="0123abcd.0",path="/configured/ca/0123abcd.0")
+        @contextmanager
+        def entries(path):
+            self.assertEqual(path,"/configured/ca")
+            yield iter([entry])
+        context = Mock();context.cert_store_stats.return_value = {"x509_ca":0}
+        paths = SimpleNamespace(cafile=None,capath="/configured/ca")
+        scope["os"] = SimpleNamespace(stat=Mock(return_value=SimpleNamespace(st_mode=stat.S_IFREG|0o644,st_size=1024)),scandir=entries)
+        for ca_count, subject_hash, expected in ((1,b"0123abcd\n",True),(1,b"ffffffff\n",False),(0,b"0123abcd\n",False)):
+            with self.subTest(ca_count=ca_count,subject_hash=subject_hash):
+                diagnostic = Mock();diagnostic.cert_store_stats.return_value = {"x509_ca":ca_count}
+                scope["ssl"] = SimpleNamespace(SSLContext=Mock(return_value=diagnostic),PROTOCOL_TLS_CLIENT=ssl.PROTOCOL_TLS_CLIENT,SSLError=ssl.SSLError)
+                run = Mock(return_value=SimpleNamespace(returncode=0,stdout=subject_hash,stderr=b""))
+                scope["subprocess"] = SimpleNamespace(run=run,DEVNULL=subprocess.DEVNULL,TimeoutExpired=subprocess.TimeoutExpired)
+                result = scope["ca_source"](context,paths)
+                self.assertIs(result["ca_source_verified"],expected)
+                diagnostic.load_verify_locations.assert_called_once_with(cafile=entry.path)
+                if expected:
+                    self.assertEqual(result["ca_source_kind"],"DEFAULT_CAPATH_HASH_ENTRY_PARSED")
+                    run.assert_called_once()
+                    self.assertEqual(run.call_args.kwargs["env"],self.once.CLEAN_ENV)
+                    self.assertEqual(result["ca_candidates_checked"],1)
+        result = scope["ca_source"](context,SimpleNamespace(cafile=None,capath=None))
+        self.assertFalse(result["ca_source_verified"])
+        self.assertEqual(result["ca_failure_code"],"NO_USABLE_DEFAULT_CA_SOURCE")
+
+
 class Schema4OnceTests(unittest.TestCase):
     """Bounded new-profile proof; existing Current/batch fixtures supply business contracts."""
     @classmethod

@@ -225,8 +225,8 @@ def upload(root=None,*,env=None,paramiko=None,profile="historical",**unexpected)
         raise PermissionError("MAIN_COMMIT_MISMATCH")
     meta,manifest,files=artifact(project,commit,profile)
     options={} if profile=="historical" else dict(profile=profile,expected=meta)
-    import deploy_test_sftp as profile
-    config=profile.configuration(env)
+    import deploy_test_sftp as testsite_profile
+    config=testsite_profile.configuration(env)
     if paramiko is None:
         import paramiko
     logging.getLogger("paramiko").disabled=True

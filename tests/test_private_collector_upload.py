@@ -22,6 +22,62 @@ sys.path.insert(0,str(ROOT/"scripts"))
 from scripts import deploy_private_collector as deploy
 
 
+class UploadProfileCorrectionTests(unittest.TestCase):
+    def test_upload_itself_keeps_both_profile_strings_tokens_and_artifact_bindings(self):
+        commit = "a"*40
+        archive = b"synthetic-schema4-archive"
+        files = {"scripts/synthetic.php": b"<?php // synthetic offline bytes\n"}
+        meta = dict(format="mosa2-collector-release-v1", commit=commit, files=[dict(
+            path=p, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(), mode="0600") for p,raw in files.items()])
+        manifest = (json.dumps(meta,sort_keys=True,separators=(",",":"))+"\n").encode()
+        modules = deploy.modules()
+        @contextmanager
+        def ssh(config,status,paramiko):
+            yield Mock()
+        for profile, token in (("historical",deploy.TOKEN),("schema4-once",deploy.SCHEMA4_TOKEN)):
+            with self.subTest(profile=profile):
+                env = dict(MOSA_PRIVATE_EXPECTED_COMMIT=commit,MOSA_PRIVATE_UPLOAD_AUTHORIZATION=token+commit,
+                    GITHUB_ACTIONS="true",GITHUB_RUN_ATTEMPT="1",GITHUB_RUN_ID="123",
+                    GITHUB_EVENT_NAME="workflow_dispatch",GITHUB_REF="refs/heads/main")
+                captured = []
+                def call(transport, action, data, **options):
+                    captured.append((action,data,options))
+                    raise RuntimeError("SYNTHETIC_STOP_AFTER_PREPARE")
+                def build(project, identity, selected):
+                    self.assertIs(type(selected),str)
+                    self.assertEqual((identity,selected),(commit,profile))
+                    return archive,manifest
+                paramiko = MagicMock()
+                with patch.object(modules[3],"git",side_effect=lambda root,*args:
+                        (commit+"\trefs/heads/main\n").encode() if args[0]=="ls-remote" else (commit+"\n").encode()), \
+                     patch.object(deploy,"artifact",return_value=(meta,manifest,files)) as artifact, \
+                     patch("deploy_test_sftp.configuration",return_value={}), \
+                     patch.object(modules[0],"ssh_client",side_effect=ssh), \
+                     patch.object(deploy,"call",side_effect=call), \
+                     patch.object(modules[3],"build",side_effect=build) as builder:
+                    report = deploy.upload(deploy.PROPOSED_ROOT,env=env,paramiko=paramiko,profile=profile)
+                project = Path(deploy.__file__).resolve().parents[1]
+                artifact.assert_called_once_with(project,commit,profile)
+                self.assertEqual(len(captured),1)
+                action,data,options = captured[0]
+                self.assertEqual(action,"prepare")
+                self.assertEqual(data["authorization"],token+commit)
+                self.assertEqual(data["manifest"],meta)
+                self.assertEqual(data["manifest_sha256"],hashlib.sha256(manifest).hexdigest())
+                self.assertEqual({p:base64.b64decode(raw) for p,raw in data["files"].items()},files)
+                self.assertFalse(report["ok"])
+                self.assertTrue(report["no_retry_or_cleanup"])
+                paramiko.SFTPClient.from_transport.assert_not_called()
+                if profile == "historical":
+                    self.assertEqual(options,{})
+                    self.assertEqual(report["archive_sha256"],deploy.ARCHIVE_SHA256)
+                    builder.assert_not_called()
+                else:
+                    self.assertEqual(options,dict(profile="schema4-once",expected=meta))
+                    self.assertEqual(report["archive_sha256"],hashlib.sha256(archive).hexdigest())
+                    builder.assert_called_once_with(project,commit,"schema4-once")
+
+
 class UploadTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
