@@ -107,3 +107,51 @@ Versuch beauftragt; daraus wird keine pauschale Dauerfreigabe abgeleitet.
 Eine Installation und sichtbare Kursabnahme sind weiterhin offen. Der bereits
 verwendete native Codex-/GitHub-CLI-Zugang kann den nächsten freigegebenen
 Start ausführen; eine erneute Einrichtung des GitHub-Zugangs ist nicht nötig.
+
+## Expliziter Fünferlauf (31.10.2026)
+
+Der neue Workflow-Modus `scope=five` verwendet ausschließlich die zentrale
+Namensliste BYD, DroneShield, Ubtech Robotics, PNE AG und Carl Zeiss Meditec.
+ISINs und physische Beziehungen stammen aus vollständig validierten,
+bereits veröffentlichten Current-Datensätzen. Keine numerischen IDs sind
+fest codiert. Bestehende Tradegate-Quelle und -Routen werden wiederverwendet;
+fehlende Routen erzeugt ausschließlich der gemeinsame Planer.
+
+Eigene exakte Autorisierung: `MOSA2-SCHEMA4-FIVE-20261031:<Vollcommit>`.
+Der dauerhafte Marker `schema4-five-20261031` reserviert diesen Auftrag
+genau einmal. `schema4-live-20261030` bleibt unverändert und verbraucht.
+Maximal fünf sequenzielle Provideranfragen, eine je qualifizierter ISIN;
+keine Wiederholung. Das unveränderte Installationsprotokoll erhält seine
+paketgebundene Installationsautorisierung separat; diese erteilt keine
+weitere Abrufberechtigung.
+
+Die bestehenden gemeinsamen Batch-, Observation-, Current- und
+Quellenwechselprüfungen bleiben maßgeblich. Danach unabhängige
+Observation-/Current-Prüfung, Replay, unveränderte übrige Bestände,
+installierte Current- und Observation-Weblesewege sowie Release-Readback.
+Die sichtbare Browserabnahme ist ein eigener Nachweis. Python 3.11.18,
+PHP 8.4.12; automatische Betriebsfreigaben bleiben deaktiviert.
+
+Fokussierter Offline-Nachweis: drei Tests bestanden, einschließlich der
+Mischlage mit vorhandener DroneShield-Tradegate-Route und vier bisherigen
+Frankfurt-Zuordnungen. Der gemeinsame In-Memory-Store vergibt auch über
+mehrere Materialisierungen eindeutige synthetische Route-IDs.
+
+Der erste Offline-Lauf
+[41197292532](https://github.com/masterxfix/MOSA-2/actions/runs/41197292532)
+bestätigte die PHP-Schemafixture unter Linux. Die Paketklasse stoppte in ihrer
+Checkout-Testhilfe: Auf einem sauberen Checkout versuchte sie einen Commit
+ohne Änderungen anzulegen. Es fand kein Livezugriff statt.
+
+Die korrigierte Testhilfe verwendet bei identischen Dateien den bestehenden
+Commit und erzeugt nur bei tatsächlichen Änderungen einen isolierten
+Kandidatencommit. Beide Fälle wurden lokal mit echten Git-Checkouts bestätigt.
+Danach bestanden alle acht zuvor blockierten `Schema4OnceTests` aus einem
+sauberen Linux-Checkout, einschließlich Fünfer-Supervisor, Paket-Build/Verify,
+Commitbindung und beider Web-Readbacks. Die bereits gemeldeten drei fokussierten
+Tests und 103 lokalen Regressionen wurden dafür nicht erneut ausgeführt.
+
+Stand nach der Korrektur: Actions **1/2**, Provideranfragen **0/5**;
+Installation, fünf gespeicherte Kurse und Sichtabnahme sind noch offen.
+Der verbleibende Actions-Lauf ist für `scope=five` am vollständigen korrigierten
+Main-Commit vorgesehen. Der historische Einmalmarker bleibt unverändert.

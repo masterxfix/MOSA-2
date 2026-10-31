@@ -33,8 +33,12 @@ def candidate_checkout(repository, commit, paths):
             # Match Git's canonical text bytes, not a Windows CRLF worktree.
             target.write_bytes((Path(repository)/path).read_bytes().replace(b"\r\n", b"\n"))
         subprocess.run(["git", "-C", str(checkout), "-c", "core.autocrlf=false", "add", "--", *paths], check=True)
-        subprocess.run(["git", "-C", str(checkout), "-c", "user.name=MOSA offline fixture",
-                        "-c", "user.email=offline@example.invalid", "-c", "commit.gpgsign=false",
-                        "commit", "--quiet", "-m", "Synthetic offline candidate"], check=True)
+        pending = subprocess.run(["git", "-C", str(checkout), "diff", "--cached", "--quiet"])
+        if pending.returncode not in (0, 1):
+            pending.check_returncode()
+        if pending.returncode == 1:
+            subprocess.run(["git", "-C", str(checkout), "-c", "user.name=MOSA offline fixture",
+                            "-c", "user.email=offline@example.invalid", "-c", "commit.gpgsign=false",
+                            "commit", "--quiet", "-m", "Synthetic offline candidate"], check=True)
         identity = subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip()
         yield checkout, identity

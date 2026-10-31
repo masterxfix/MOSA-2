@@ -6,6 +6,12 @@ on:
         description: Full reviewed main commit
         type: string
         required: true
+      scope:
+        description: Explicit one-shot scope
+        type: choice
+        options: [one, five]
+        default: one
+        required: true
       authorization:
         description: Explicit MOSA2-SCHEMA4-ONE-SHOT-20261030 token plus colon and full commit
         type: string
@@ -25,12 +31,18 @@ jobs:
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           AUTHORIZATION: ${{ inputs.authorization }}
+          REQUEST_SCOPE: ${{ inputs.scope }}
           MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
           MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
           MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
         run: |
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
-          test "$AUTHORIZATION" = "MOSA2-SCHEMA4-ONE-SHOT-20261030:$EXPECTED_COMMIT"
+          case "$REQUEST_SCOPE" in
+            one) PREFIX=MOSA2-SCHEMA4-ONE-SHOT-20261030 ;;
+            five) PREFIX=MOSA2-SCHEMA4-FIVE-20261031 ;;
+            *) exit 1 ;;
+          esac
+          test "$AUTHORIZATION" = "$PREFIX:$EXPECTED_COMMIT"
           for name in MOSA_TEST_SFTP_PASSWORD MOSA_TEST_SFTP_HOST_KEY_SHA256 MOSA_TEST_DB_PASSWORD; do
             if [ -z "${!name}" ]; then echo "MISSING_SECRET: $name"; exit 1; fi
           done
@@ -48,6 +60,7 @@ jobs:
           python3 -B scripts/collector_release.py verify --profile schema4-once --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/schema4-once"
       - name: Measure runtime, install privately and perform the single reserved request
         env:
+          MOSA_SCHEMA4_SCOPE: ${{ inputs.scope }}
           MOSA_SCHEMA4_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           MOSA_SCHEMA4_AUTHORIZATION: ${{ inputs.authorization }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}

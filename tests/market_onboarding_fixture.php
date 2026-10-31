@@ -6,7 +6,7 @@ final class IdentityMemoryStore implements \Mosa2\MarketIdentity\Store {
     public array $writes=[];
     public function __construct(public array $state){}
     public function find(string $t,array $w): array {return array_values(array_filter($this->state[$t]??[],static fn($r)=>\Mosa2\MarketIdentity\matchFields($r,$w)));}
-    public function insert(string $t,array $row): string {$id=(string)(100+count($this->writes));$this->writes[]=['table'=>$t,'row'=>$row];$this->state[$t][]=$t==='m2_assets'?$row:['id'=>$id]+$row;return $id;}
+    public function insert(string $t,array $row): string {$ids=array_column($this->state[$t]??[],'id');$id=(string)max(100+count($this->writes),1+(int)max([0,...array_map('intval',$ids)]));$this->writes[]=['table'=>$t,'row'=>$row];$this->state[$t][]=$t==='m2_assets'?$row:['id'=>$id]+$row;return $id;}
 }
 $in=json_decode(stream_get_contents(STDIN),true,64,JSON_THROW_ON_ERROR);
 try{
