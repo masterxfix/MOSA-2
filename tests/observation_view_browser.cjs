@@ -28,9 +28,9 @@ const assert=require('node:assert/strict');
   await page.clock.runFor(250);
   await page.locator('[data-observation-rows] tr[data-observation-id]').first().waitFor();
   assert.equal(requests,1);
-  assert.equal(currentRequests,1);
+  assert.equal(currentRequests,0);
   assert.equal(await page.locator('[data-observation-rows] tr').count(),5);
-  assert.equal(await page.locator('[data-market-view] table').count(),1);
+  assert.equal(await page.locator('[data-market-view] table').count(),0);
   const dims=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,
      navTop:document.querySelector('nav').getBoundingClientRect().top,
      headerBottom:document.querySelector('header').getBoundingClientRect().bottom}));
@@ -69,8 +69,8 @@ const assert=require('node:assert/strict');
   await page.waitForFunction(()=>!document.querySelector('[data-observation-refresh]').disabled);
   assert.equal(requests,6);
   assert((await page.locator('[data-observation-rows]').innerText()).includes('Keine Observation'));
-  assert.equal(currentRequests,1);
-  console.log(width+'px: observations/current, timing, visibility, serialization, retained data, no retry PASS');
+  assert.equal(currentRequests,0);
+  console.log(width+'px: observations only, timing, visibility, serialization, retained data, no retry PASS');
   await page.screenshot({path:process.env.RUNNER_TEMP+'/observations-'+width+'.png',fullPage:true});
   await page.close();
  }

@@ -26,22 +26,8 @@
       <p class="intro">Fünf Aktien. Klare Quellen. Ein nachvollziehbarer Datenstand. Die Anzeige liest vorhandene Kurse und startet keinen Kursabruf.</p>
     </section>
 
-    <section class="market-section" aria-labelledby="kurse-titel" data-market-view>
-      <div class="section-heading"><div><p class="eyebrow">01 / Current</p><h2 id="kurse-titel">Letzter gespeicherter Stand</h2></div><span class="snapshot" data-market-summary role="status">Marktdaten werden geladen …</span></div>
-      <p class="section-description">Der bestätigte Current-Bestand. Veraltete Kurse sind gekennzeichnet und keine Live-Kurse. Markt- und Erfassungszeit werden getrennt in UTC angezeigt.</p>
-      <div class="market-table-wrap" aria-busy="true" data-market-region>
-        <table class="market-table">
-          <caption class="visually-hidden">Gespeicherte Kurse mit Einheit, Quelle, Markt- und Erfassungszeit</caption>
-          <thead><tr><th scope="col">Asset</th><th scope="col">Kurs</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Zeitpunkt</th><th scope="col">Datenstatus</th></tr></thead>
-          <tbody data-market-rows><tr class="market-placeholder"><td colspan="5">Gespeicherte Marktdaten werden geladen …</td></tr></tbody>
-        </table>
-      </div>
-      <noscript><p>Für die Marktdatenanzeige bitte JavaScript aktivieren.</p></noscript>
-    </section>
-
-
     <section class="market-section observation-section" aria-labelledby="observations-titel" data-observation-view>
-      <div class="section-heading"><div><p class="eyebrow">02 / Observations</p><h2 id="observations-titel">Neueste Collector-Beobachtungen</h2></div>
+      <div class="section-heading"><div><p class="eyebrow">01 / Observations</p><h2 id="observations-titel">Neueste Collector-Beobachtungen</h2></div>
         <span class="snapshot" data-observation-summary role="status">Observations werden geladen …</span></div>
       <p class="context-note">Nur gespeicherte Beobachtungen. Das Datenalter bezieht sich auf den Marktzeitpunkt. Die Anzeige aktualisiert alle 120 Sekunden, solange der Tab sichtbar ist; sie startet keinen Collector.</p>
       <p><button class="observation-refresh" type="button" data-observation-refresh>Anzeige aktualisieren</button></p>
@@ -57,7 +43,7 @@
 
     <section class="market-section" aria-labelledby="messungen-titel">
       <div class="section-heading"><div><p class="eyebrow">Zur Einordnung</p><h2 id="messungen-titel">Messungen der Anzeige</h2></div></div>
-      <p class="intro">Die Seitenladezeit und die Zeit bis zur Darstellung der Daten stehen im Fußbereich. Sie werden bei jedem Seitenaufruf im Browser gemessen und sind keine Collector-Laufzeiten.</p>
+      <p class="intro">Die Seitenladezeit steht im Fußbereich. Sie wird bei jedem Seitenaufruf im Browser gemessen und ist keine Collector-Laufzeit.</p>
     </section>
 
     <section class="next-step" aria-labelledby="naechstes-ziel">
@@ -66,14 +52,14 @@
         <p>Schema-Version 4 ist geprüft. Der PNE-Einzeltest und der Drei-Aktien-Test auf Dogado mit PNE, Carl Zeiss Meditec und DroneShield waren erfolgreich. Die Observations 4909, 4910 und 4911 sowie Readback, Dedupe und Replay sind bestätigt. Durchschnittliche Collector-Laufzeit im Drei-Aktien-Test: rund 4,43 Sekunden je Aktie. Automatischer Regelbetrieb bleibt gesperrt.</p>
       </div>
       <dl class="market-types">
-        <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Fünf bestätigte Current-Datensätze; die Anzeige oben zeigt ausschließlich den gespeicherten Stand. Veraltete Kurse sind ausdrücklich gekennzeichnet.</dd></div>
+        <div><dt><span aria-hidden="true">01</span> Current</dt><dd>Current hält den bestätigten Stand je Aktie und verknüpft ihn mit der zugehörigen Observation.</dd></div>
         <div><dt><span aria-hidden="true">02</span> History</dt><dd>Importierte Beobachtungen und kontrolliert gespeicherte Live-Snapshots bilden die Historie; bestätigte Übernahmen werden unabhängig nachgeprüft.</dd></div>
       </dl>
     </section>
   </main>
   <footer class="wrap footer">
     <span>MOSA 2 · Auf verlässlichen Grundlagen aufgebaut.</span>
-    <span class="footer-latency">Seitenladezeit · <span data-page-load-time aria-label="Seitenladezeit wird gemessen">— ms</span><br>Mit Daten · <span data-data-ready-time aria-label="Datenladezeit wird gemessen">— ms</span></span>
+    <span class="footer-latency">Seitenladezeit · <span data-page-load-time aria-label="Seitenladezeit wird gemessen">— ms</span></span>
     <span class="footer-release">Entwicklung · Keine Produktivfreigabe</span>
   </footer>
 </body>
