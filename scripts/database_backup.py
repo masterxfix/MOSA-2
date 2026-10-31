@@ -71,7 +71,7 @@ def private(path,directory=False):
         s=path.stat();require(s.st_uid==os.getuid() and stat.S_IMODE(s.st_mode)==(0o700 if directory else 0o600),'BACKUP_MODE_REJECTED')
     return path
 
-def command(argv,*,input_bytes=b'',limit=DUMP_LIMIT,seconds=SECONDS):
+def command(argv,*,input_bytes=b'',limit=DUMP_LIMIT,seconds=SECONDS,environment=None):
     """Anonymous private files, bounded output/time; SQL/client diagnostics never escape."""
     with tempfile.TemporaryFile() as inp,tempfile.TemporaryFile() as out,tempfile.TemporaryFile() as err:
         inp.write(input_bytes);inp.seek(0);p=None;deadline=time.monotonic()+seconds
@@ -80,7 +80,7 @@ def command(argv,*,input_bytes=b'',limit=DUMP_LIMIT,seconds=SECONDS):
                 import resource
                 maximum=max(limit,65536);resource.setrlimit(resource.RLIMIT_FSIZE,(maximum,maximum))
             p=subprocess.Popen(argv,stdin=inp,stdout=out,stderr=err,preexec_fn=file_limit if os.name=='posix' else None,
-                env={k:v for k,v in os.environ.items() if k not in ('MYSQL_PWD','MYSQL_TEST_LOGIN_FILE')})
+                env=environment if environment is not None else {k:v for k,v in os.environ.items() if k not in ('MYSQL_PWD','MYSQL_TEST_LOGIN_FILE')})
             while p.poll() is None:
                 require(time.monotonic()<deadline,'PROCESS_TIMEOUT')
                 require(os.fstat(out.fileno()).st_size<=limit and os.fstat(err.fileno()).st_size<=65536,'PROCESS_SIZE_LIMIT')
@@ -166,6 +166,92 @@ def unseal(root,password,public_key,*,commit,server_uuid):
     except Rejected:raise
     except Exception:raise Rejected(stage) from None
 
+def capture_snapshot(c,version,visibility,evidence_reader,object_reader):
+    from pymysql.cursors import SSDictCursor
+    deadline=time.monotonic()+SECONDS
+    visibility(c)
+    c.rollback()
+    with c.cursor() as q:
+        q.execute('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+        q.execute('SET SESSION TRANSACTION READ ONLY')
+        q.execute('START TRANSACTION WITH CONSISTENT SNAPSHOT')
+        q.execute('SELECT @@session.transaction_read_only AS ro');require(q.fetchone()['ro']==1,'BACKUP_READ_ONLY_REQUIRED')
+        q.execute("SELECT @@session.time_zone AS tz");require(q.fetchone()['tz']=='+00:00','BACKUP_UTC_REQUIRED')
+        q.execute('SELECT TABLE_NAME,ENGINE,AUTO_INCREMENT,TABLE_COLLATION,ROW_FORMAT,CREATE_OPTIONS FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME')
+        metadata=q.fetchall()
+        require([r['TABLE_NAME'] for r in metadata]==migration.contract()[f'envelope{version}']['tables'],'BACKUP_TABLE_SET_REJECTED')
+        require(all(r['ENGINE']=='InnoDB' for r in metadata),'BACKUP_ENGINE_REJECTED')
+    rows={};budget=0
+    for table in metadata:
+        name=table['TABLE_NAME']
+        with c.cursor() as q:
+            q.execute('SHOW COLUMNS FROM '+qi(name));columns=[r['Field'] for r in q.fetchall()]
+            q.execute('SHOW KEYS FROM '+qi(name)+" WHERE Key_name='PRIMARY'");pk=sorted(q.fetchall(),key=lambda x:x['Seq_in_index'])
+            require(pk,'BACKUP_PRIMARY_KEY_REQUIRED')
+            q.execute('SELECT 1 FROM '+qi(name)+' WHERE '+' OR '.join('OCTET_LENGTH('+qi(col)+')>'+str(CELL_LIMIT) for col in columns)+' LIMIT 1')
+            require(q.fetchone() is None,'BACKUP_CELL_LIMIT')
+        data=[]
+        with c.cursor(SSDictCursor) as q:
+            q.execute('SELECT * FROM '+qi(name)+' ORDER BY '+','.join(qi(r['Column_name']) for r in pk)+' LIMIT '+str(ROW_LIMIT+1))
+            try:
+                for row in q:
+                    require(time.monotonic()<deadline,'BACKUP_TIMEOUT')
+                    item={k:value(v) for k,v in row.items()};budget+=len(canonical(item))
+                    require(len(data)<ROW_LIMIT and budget<STATE_LIMIT,'BACKUP_SIZE_LIMIT');data.append(item)
+            except Exception:
+                # Do not drain an oversized server-side result in cursor.close().
+                c.close();raise
+        rows[name]=data
+    evidence=evidence_reader(database_name(c),version)
+    # Existing exact schema parser and runtime ledger/unit contracts; no new schema checker.
+    inventory=json.loads(json.dumps(evidence['inventory']))
+    for entry in inventory:
+        # This existing CHECK query has no ORDER BY. MySQL may enumerate the
+        # same constraints differently after SHOW CREATE/dump recreation.
+        if entry['sql'].startswith('SELECT c.CONSTRAINT_NAME,c.CHECK_CLAUSE FROM information_schema.check_constraints c '):
+            entry['rows'].sort(key=lambda row:row['CONSTRAINT_NAME'])
+        for row in entry['rows']:
+            if entry['sql']=='SELECT DATABASE() AS db,VERSION() AS version,@@port AS port,@@foreign_key_checks AS fk_checks':
+                require(row['db']==database_name(c),'DATABASE_SCOPE_REJECTED');row['db']=SOURCE
+            if 'REFERENCED_TABLE_SCHEMA' in row:
+                require(row['REFERENCED_TABLE_SCHEMA']==database_name(c),'FOREIGN_SCHEMA_REJECTED');row['REFERENCED_TABLE_SCHEMA']=SOURCE
+    migration.php(dict(operation='audit',inventory=inventory,version=version))
+    evidence['inventory']=inventory;evidence['properties']['db']=SOURCE
+    objects=object_reader(c)
+    return dict(schema_version=version,rows=rows,metadata=[{k:value(v) for k,v in t.items()} for t in metadata],evidence=evidence,objects=objects)
+
+
+def capture_objects(c):
+    out={}
+    for kind,namecol,table in [('TRIGGER','TRIGGER_NAME','triggers'),('PROCEDURE','ROUTINE_NAME','routines'),('FUNCTION','ROUTINE_NAME','routines'),('EVENT','EVENT_NAME','events')]:
+        schema={'triggers':'TRIGGER_SCHEMA','routines':'ROUTINE_SCHEMA','events':'EVENT_SCHEMA'}[table]
+        with c.cursor() as q:
+            q.execute('SELECT '+namecol+' FROM information_schema.'+table+' WHERE '+schema+'=DATABASE()'+(" AND ROUTINE_TYPE=%s" if table=='routines' else '')+' ORDER BY '+namecol, (kind,) if table=='routines' else ())
+            names=[r[namecol] for r in q.fetchall()];require(len(names)<=32,'BACKUP_OBJECT_LIMIT')
+            for name in names:
+                q.execute('SHOW CREATE '+kind+' '+qi(name));row=q.fetchone()
+                for v in row.values():
+                    if isinstance(v,str):require(not re.search(r'`?'+re.escape(database_name(c))+r'`?\s*\.',v),'OBJECT_QUALIFIED_REFERENCE_UNSUPPORTED')
+                # MySQL regenerates object creation time; it is not user DATETIME data.
+                out[kind+':'+name]={k:value(v) for k,v in row.items() if k!='Created'}
+    return out
+
+
+def external_comparison(actual,expected,target_version):
+    """Explicit server identity mapping only; never drop schema/data evidence fields."""
+    import copy
+    out=copy.deepcopy(actual)
+    a=out['evidence'];e=expected['evidence']
+    require(a['properties']['version']==target_version and target_version.startswith('8.0.'),'RESTORE_TARGET_VERSION_REJECTED')
+    require(e['properties']['version'].startswith('8.0.'),'RESTORE_SOURCE_VERSION_REJECTED')
+    a['properties']['version']=e['properties']['version'];a['properties']['port']=e['properties']['port']
+    sql='SELECT DATABASE() AS db,VERSION() AS version,@@port AS port,@@foreign_key_checks AS fk_checks'
+    source=[r for r in e['inventory'] if r['sql']==sql];target=[r for r in a['inventory'] if r['sql']==sql]
+    require(len(source)==len(target)==1 and len(source[0]['rows'])==len(target[0]['rows'])==1,'RESTORE_IDENTITY_EVIDENCE_REJECTED')
+    require(target[0]['rows'][0]['version']==target_version,'RESTORE_TARGET_VERSION_REJECTED')
+    for k in ('version','port'):target[0]['rows'][0][k]=source[0]['rows'][0][k]
+    return out
+
 class IsolatedBackup:
     """Execution has no arbitrary server/DB/user/credential arguments or production mode."""
     def __init__(self,connect,evidence,commit):
@@ -214,73 +300,9 @@ class IsolatedBackup:
         require({'SELECT','SHOW VIEW','TRIGGER','EVENT','RELOAD'}<=grants,'FULL_OBJECT_VISIBILITY_REQUIRED')
 
     def snapshot(self,c,version):
-        from pymysql.cursors import SSDictCursor
-        deadline=time.monotonic()+SECONDS
-        self.visibility(c)
-        c.rollback()
-        with c.cursor() as q:
-            q.execute('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ')
-            q.execute('SET SESSION TRANSACTION READ ONLY')
-            q.execute('START TRANSACTION WITH CONSISTENT SNAPSHOT')
-            q.execute('SELECT @@session.transaction_read_only AS ro');require(q.fetchone()['ro']==1,'BACKUP_READ_ONLY_REQUIRED')
-            q.execute("SELECT @@session.time_zone AS tz");require(q.fetchone()['tz']=='+00:00','BACKUP_UTC_REQUIRED')
-            q.execute('SELECT TABLE_NAME,ENGINE,AUTO_INCREMENT,TABLE_COLLATION,ROW_FORMAT,CREATE_OPTIONS FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME')
-            metadata=q.fetchall()
-            require([r['TABLE_NAME'] for r in metadata]==migration.contract()[f'envelope{version}']['tables'],'BACKUP_TABLE_SET_REJECTED')
-            require(all(r['ENGINE']=='InnoDB' for r in metadata),'BACKUP_ENGINE_REJECTED')
-        rows={};budget=0
-        for table in metadata:
-            name=table['TABLE_NAME']
-            with c.cursor() as q:
-                q.execute('SHOW COLUMNS FROM '+qi(name));columns=[r['Field'] for r in q.fetchall()]
-                q.execute('SHOW KEYS FROM '+qi(name)+" WHERE Key_name='PRIMARY'");pk=sorted(q.fetchall(),key=lambda x:x['Seq_in_index'])
-                require(pk,'BACKUP_PRIMARY_KEY_REQUIRED')
-                q.execute('SELECT 1 FROM '+qi(name)+' WHERE '+' OR '.join('OCTET_LENGTH('+qi(col)+')>'+str(CELL_LIMIT) for col in columns)+' LIMIT 1')
-                require(q.fetchone() is None,'BACKUP_CELL_LIMIT')
-            data=[]
-            with c.cursor(SSDictCursor) as q:
-                q.execute('SELECT * FROM '+qi(name)+' ORDER BY '+','.join(qi(r['Column_name']) for r in pk)+' LIMIT '+str(ROW_LIMIT+1))
-                try:
-                    for row in q:
-                        require(time.monotonic()<deadline,'BACKUP_TIMEOUT')
-                        item={k:value(v) for k,v in row.items()};budget+=len(canonical(item))
-                        require(len(data)<ROW_LIMIT and budget<STATE_LIMIT,'BACKUP_SIZE_LIMIT');data.append(item)
-                except Exception:
-                    # Do not drain an oversized server-side result in cursor.close().
-                    c.close();raise
-            rows[name]=data
-        evidence=self.evidence(database_name(c),version)
-        # Existing exact schema parser and runtime ledger/unit contracts; no new schema checker.
-        inventory=json.loads(json.dumps(evidence['inventory']))
-        for entry in inventory:
-            # This existing CHECK query has no ORDER BY. MySQL may enumerate the
-            # same constraints differently after SHOW CREATE/dump recreation.
-            if entry['sql'].startswith('SELECT c.CONSTRAINT_NAME,c.CHECK_CLAUSE FROM information_schema.check_constraints c '):
-                entry['rows'].sort(key=lambda row:row['CONSTRAINT_NAME'])
-            for row in entry['rows']:
-                if entry['sql']=='SELECT DATABASE() AS db,VERSION() AS version,@@port AS port,@@foreign_key_checks AS fk_checks':
-                    require(row['db']==database_name(c),'DATABASE_SCOPE_REJECTED');row['db']=SOURCE
-                if 'REFERENCED_TABLE_SCHEMA' in row:
-                    require(row['REFERENCED_TABLE_SCHEMA']==database_name(c),'FOREIGN_SCHEMA_REJECTED');row['REFERENCED_TABLE_SCHEMA']=SOURCE
-        migration.php(dict(operation='audit',inventory=inventory,version=version))
-        evidence['inventory']=inventory;evidence['properties']['db']=SOURCE
-        objects=self.objects(c)
-        return dict(schema_version=version,rows=rows,metadata=[{k:value(v) for k,v in t.items()} for t in metadata],evidence=evidence,objects=objects)
+        return capture_snapshot(c,version,self.visibility,self.evidence,self.objects)
 
-    def objects(self,c):
-        out={}
-        for kind,namecol,table in [('TRIGGER','TRIGGER_NAME','triggers'),('PROCEDURE','ROUTINE_NAME','routines'),('FUNCTION','ROUTINE_NAME','routines'),('EVENT','EVENT_NAME','events')]:
-            schema={'triggers':'TRIGGER_SCHEMA','routines':'ROUTINE_SCHEMA','events':'EVENT_SCHEMA'}[table]
-            with c.cursor() as q:
-                q.execute('SELECT '+namecol+' FROM information_schema.'+table+' WHERE '+schema+'=DATABASE()'+(" AND ROUTINE_TYPE=%s" if table=='routines' else '')+' ORDER BY '+namecol, (kind,) if table=='routines' else ())
-                names=[r[namecol] for r in q.fetchall()];require(len(names)<=32,'BACKUP_OBJECT_LIMIT')
-                for name in names:
-                    q.execute('SHOW CREATE '+kind+' '+qi(name));row=q.fetchone()
-                    for v in row.values():
-                        if isinstance(v,str):require(not re.search(r'`?'+re.escape(database_name(c))+r'`?\s*\.',v),'OBJECT_QUALIFIED_REFERENCE_UNSUPPORTED')
-                    # MySQL regenerates object creation time; it is not user DATETIME data.
-                    out[kind+':'+name]={k:value(v) for k,v in row.items() if k!='Created'}
-        return out
+    def objects(self,c):return capture_objects(c)
 
     def backup(self,root,password,signing_key,hook=None):
         root=private(root,True);start=time.monotonic()
@@ -315,12 +337,21 @@ class IsolatedBackup:
             raise Rejected(e.args[0] if isinstance(e,Rejected) else 'BACKUP_ABORTED') from None
 
     def restore(self,root,password,public_key,target):
+        return self._restore(root,password,public_key,target)
+
+    def restore_external(self,root,password,public_key,target,source_uuid):
+        # Target still has the identical synthetic CI guards; never connects to a source.
+        require(re.fullmatch('[0-9a-f-]{36}',source_uuid),'BACKUP_IDENTITY_REJECTED')
+        return self._restore(root,password,public_key,target,source_uuid)
+
+    def _restore(self,root,password,public_key,target,source_uuid=None):
         require(target in TARGETS,'RESTORE_TARGET_REJECTED')
-        m,dump,expected=unseal(root,password,public_key,commit=self.commit,server_uuid=self.uuid)
+        m,dump,expected=unseal(root,password,public_key,commit=self.commit,server_uuid=source_uuid or self.uuid)
         # Full authentication and actual server proof BEFORE creating the fresh target/claim.
         with self.connect() as c:
             identity=self.guard(c);self.visibility(c)
-            require(identity['version']==m['mysql_version'],'RESTORE_MYSQL_VERSION_REJECTED')
+            require(identity['version']==m['mysql_version'] if source_uuid is None else
+                re.fullmatch(r'8\.0\.\d+(?:[-.][A-Za-z0-9.-]+)?',m['mysql_version']) is not None,'RESTORE_MYSQL_VERSION_REJECTED')
             with c.cursor() as q:
                 q.execute('SELECT SCHEMA_NAME FROM information_schema.schemata WHERE SCHEMA_NAME=%s',(target,))
                 require(q.fetchone() is None,'RESTORE_TARGET_EXISTS')
@@ -345,6 +376,8 @@ class IsolatedBackup:
                 try:actual=self.snapshot(read,4)
                 finally:
                     with read.cursor() as q:q.execute('UNLOCK TABLES')
+            if source_uuid is not None:
+                actual=external_comparison(actual,expected,identity['version'])
             for section in ('schema_version','rows','metadata','evidence','objects'):
                 require(actual[section]==expected[section],'RESTORE_MISMATCH_'+section.upper())
             return {'status':'RESTORE_READBACK_PASS','retry_allowed':False,'tables':len(actual['rows'])}

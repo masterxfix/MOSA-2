@@ -141,6 +141,65 @@ class BackupMySQLTests(unittest.TestCase):
                 with c.cursor() as q:q.execute("DROP USER 'mosa2_schema_export_fixture'@'localhost'")
                 c.commit()
 
+
+    def prove_scoped_recovery_path(self):
+        from scripts import database_backup_scoped as scoped
+        import time,base64
+        self.sql('DROP PROCEDURE backup_fixture_procedure')
+        self.sql('DROP FUNCTION backup_fixture_function')
+        recovery=os.urandom(32).hex();password,key=scoped.recovery(recovery)
+        at=int(time.time())
+        claim=dict(purpose='MOSA2_SCHEMA4_BACKUP',database=b.SOURCE,commit=self.commit,
+            all_test_writers_stopped=True,ddl_prohibited=True,issued_at=at,expires_at=at+900,run_id='synthetic-scoped-backup-proof')
+        document=dict(claim=claim,signature=base64.b64encode(key.sign(b.canonical(claim))).decode())
+        parent=self
+        class Source:
+            uuid=parent.engine.uuid
+            dumps=0
+            def permissions(self):
+                return dict(status='BACKUP_PERMISSIONS_INSPECTED',database_identity='PASS',read_only_confirmed=True,
+                    complete_object_visibility='JA',rights={r:True for r in ('SELECT','SHOW VIEW','TRIGGER','EVENT')},
+                    objects={'ROUTINE':{'visible_count':0}},
+                    schema6_prepare=dict(status='SCHEMA6_PREPARE_INVENTORY_PASS',schema_version=4,table_count=17,
+                        exact_structure='PASS',ledger_checksums='PASS',all_innodb=True,
+                        enabled_jobs='0',running_jobs='0',other_schema_sessions_visible=0,named_locks_in_use={}))
+            def snapshot(self):
+                with parent.engine.database(b.SOURCE) as c:return parent.engine.snapshot(c,4)
+            def dump(self):
+                self.dumps+=1
+                return b.command(['docker','exec','-i',parent.engine.container,'mysqldump','--defaults-file=/dev/stdin',*scoped.FLAGS,b.SOURCE],
+                    input_bytes=b'[client]\nuser=root\nprotocol=socket\n',environment={'PATH':os.environ['PATH'],'MYSQL_TEST_LOGIN_FILE':'/dev/null'})
+        source=Source();before=source.snapshot()
+        self.assertEqual(len(before['objects']),2);self.assertTrue(all(before['rows'].values()))
+        self.assertEqual(scoped.export(source,self.root,recovery,document,self.commit,storage_confirmed=True,retention_days=7)['status'],'BACKUP_VERIFIED')
+        self.assertEqual(source.dumps,1)
+        with self.assertRaises(b.Rejected):
+            scoped.export(source,self.root,recovery,document,self.commit,storage_confirmed=True,retention_days=7)
+        self.assertEqual(source.dumps,1)
+        m,dump,state=b.unseal(self.root,password,key.public_key(),commit=self.commit,server_uuid=self.engine.uuid)
+        self.assertEqual(state,before)
+        with self.assertRaises(b.Rejected):
+            b.unseal(self.root,os.urandom(32).hex(),key.public_key(),commit=self.commit,server_uuid=self.engine.uuid)
+        originals={n:(self.root/n).read_bytes() for n in ('backup.sealed.json','manifest.json')}
+        for name in originals:
+            (self.root/name).write_bytes(originals[name][:len(originals[name])//2])
+            with self.assertRaises(b.Rejected):
+                b.unseal(self.root,password,key.public_key(),commit=self.commit,server_uuid=self.engine.uuid)
+            (self.root/name).write_bytes(originals[name])
+        restored=scoped.restore(self.engine,self.root,recovery,self.engine.uuid,'mosa2_restore_isolated_a')
+        self.assertEqual(restored['status'],'BACKUP_RESTORE_PASS')
+        self.assertEqual(source.snapshot(),before)
+        bad=re.sub(rb'^INSERT INTO \x60m2_files\x60[^\n]*\n',b'',dump,flags=re.M);self.assertNotEqual(bad,dump)
+        self.password=password;self.key=key;self.reseal(m,bad,state)
+        failed=self.engine.restore_external(self.root,password,key.public_key(),'mosa2_restore_isolated_b',self.engine.uuid)
+        self.assertEqual(failed['status'],'RESTORE_VERIFICATION_FAILED')
+        self.assertEqual(failed['failure_code'],'RESTORE_MISMATCH_ROWS')
+        self.assertEqual(source.snapshot(),before)
+        print(json.dumps(dict(status='BACKUP_RESTORE_PASS',schema=4,tables=17,
+            complete_rows_and_metadata='PASS',current_provenance_chains=5,observations='PASS',
+            decimal_binary_time='PASS',wrong_key_tamper_incomplete='REJECTED',
+            source_export_calls=source.dumps,global_export_locks=0,live_dogado_exports=0)))
+
     def diagnose_restore_evidence(self):
         self.backup();expected=self.unpack()[2]['evidence']
         self.restore()
