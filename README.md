@@ -4,7 +4,9 @@ MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des
 
 ## Aktueller Stand und nächster Abschlussabschnitt
 
-**Übergabe 22.10.2026:** [Bestätigter Projektstand, offene Blocker und konkreter Abschlussfahrplan](docs/MOSA2_UEBERGABE_ABSCHLUSSFAHRPLAN_2026-10-22.md). Bei Fortsetzung zuerst diese Übergabe und `AGENTS.md` lesen; bereits abgeschlossene Tests nicht wiederholen.
+**31.10.2026:** [Tradegate-Kursmodul und vorbereiteter Einzelabruf](docs/database/TRADEGATE_CURRENT_PILOT.md). Der aus MOSA übernommene Abruf ist lokal integriert und geprüft; Installation und sichtbarer echter Kurs stehen noch aus. Bei Fortsetzung diesen Stand und `AGENTS.md` lesen; bereits abgeschlossene unveränderte Tests nicht wiederholen.
+
+**Historische Übergabe 22.10.2026:** [Damals bestätigter Projektstand und Abschlussfahrplan](docs/MOSA2_UEBERGABE_ABSCHLUSSFAHRPLAN_2026-10-22.md).
 
 ## Zielbild
 

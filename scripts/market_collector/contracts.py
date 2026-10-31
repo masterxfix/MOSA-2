@@ -116,11 +116,16 @@ class ProviderAdapter(Protocol):
     def normalize(self, payload: CollectedPayload, route: RouteContract) -> ObservationCandidate: ...
 
 
-def validate_payload(payload):
+def validate_payload(payload, *, content_types=('application/json',)):
     require(type(payload) is CollectedPayload, 'collected payload required')
     require(payload.contract_version == PAYLOAD_CONTRACT, 'unsupported payload contract')
     require(type(payload.payload_bytes) is bytes, 'original immutable bytes required')
     require(hashlib.sha256(payload.payload_bytes).hexdigest() == payload.payload_sha256, 'payload hash mismatch')
     require(payload.transport_status == 'OK' and payload.transport_error is None, 'transport failed')
     require(type(payload.http_status) is int and 200 <= payload.http_status < 300, 'HTTP response unsuccessful')
-    require(type(payload.content_type) is str and payload.content_type.split(';')[0].strip().lower() == 'application/json', 'JSON content type required')
+    require(type(content_types) is tuple and bool(content_types)
+            and all(type(value) is str for value in content_types), 'adapter content types required')
+    require(type(payload.content_type) is str
+            and payload.content_type.split(';')[0].strip().lower() in content_types,
+            'JSON content type required' if content_types == ('application/json',)
+            else 'adapter content type required')

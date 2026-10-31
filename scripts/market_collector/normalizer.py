@@ -5,8 +5,8 @@ from .collector import Collector
 from .contracts import identity, require, timestamp, validate_payload
 
 
-def raw_observation(candidate, payload, route, catalog):
-    validate_payload(payload)
+def raw_observation(candidate, payload, route, catalog, *, content_types=('application/json',)):
+    validate_payload(payload, content_types=content_types)
     require(type(route.format_version) is int and route.format_version == 2, 'unit-aware v2 route required')
     require(set(route.route) == {'id', 'asset_id', 'source_id', 'route_revision'} | set(writer.UNIT_FIELDS), 'route fields')
     row = dict(route.route)
@@ -46,10 +46,12 @@ def pipeline(request, route, transport, adapters, *, catalog, created_at, existi
         payload = collector.collect(request, transport)
         result.update(collector_status='COLLECTED', payload_sha256=payload.payload_sha256, collected_payload=payload)
         stage = 'adapter'
-        candidate = collector.adapter(request.provider_key).normalize(payload, route)
+        adapter = collector.adapter(request.provider_key)
+        candidate = adapter.normalize(payload, route)
         result.update(adapter_status='NORMALIZED', candidate=candidate)
         stage = 'normalizer'
-        raw = raw_observation(candidate, payload, route, catalog)
+        raw = raw_observation(candidate, payload, route, catalog,
+                              content_types=getattr(adapter, 'content_types', ('application/json',)))
         result['normalizer_status'] = 'NORMALIZED'
         stage = 'writer'
         planner = writer.WriterPlanner(catalog, [route.envelope()], existing)

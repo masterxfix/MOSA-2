@@ -71,6 +71,35 @@ def check_approval(route, approval):
     require(route['enabled']=='1' or (route['enabled']=='0' and approval.get('allow_disabled_projection') is True), 'current_route_not_approved')
 
 
+def changing_route(data):
+    previous = data.get('current')
+    return previous is not None and previous['route_id'] != data['route']['id']
+
+
+def previous_route(data):
+    """A source change never reinterprets the old fact with the new route."""
+    route = data.get('current_route')
+    require(type(route) is dict, 'current_previous_route_missing')
+    previous = data['current']
+    require(route['id'] == previous['route_id'] and route['source_id'] == previous['source_id'],
+            'current_previous_route_binding')
+    require(route['asset_id'] == previous['asset_id'] == data['route']['asset_id'],
+            'current_transition_asset')
+    require(all(route[key] == data['route'][key] for key in UNITS),
+            'current_transition_units')
+    return route
+
+
+def check_route_transition(data):
+    if not changing_route(data):
+        return
+    approval = data['approval']
+    require(approval.get('allow_route_transition') is True, 'current_transition_not_approved')
+    old_route = previous_route(data)
+    require(approval.get('previous_route_sha256') == route_hash(old_route),
+            'current_transition_approval_drift')
+
+
 def plan_facts(data, catalog=None):
     """Pure projection plan; caller must keep approval checking separate from inspection."""
     catalog = catalog or writer.observation.catalog_module.normative_catalog()
@@ -80,11 +109,27 @@ def plan_facts(data, catalog=None):
     for fact in facts:
         qualified(fact, route, catalog)
     previous = data.get('current');old = data.get('current_fact')
+    transition = changing_route(data)
     if previous is not None:
         require(old is not None and previous['observation_id']==str(old['id']), 'current_origin_missing')
-        normalized, canonical = qualified(old, route, catalog)
-        expected = projection(old, normalized, route, previous['updated_at'])
+        old_route = previous_route(data) if transition else route
+        normalized, canonical = qualified(old, old_route, catalog)
+        expected = projection(old, normalized, old_route, previous['updated_at'])
         require(previous==expected, 'current_projection_drift')
+    if transition:
+        # Validate each source independently with the unchanged PHP selection
+        # contract. Quotes from different venues may legitimately differ.
+        select([], old_route, now, old, catalog)
+        selected = select(facts, route, now, None, catalog)
+        if selected['decision'] == 'MISSING':
+            return dict(decision='UNCHANGED', values=previous)
+        fact = selected['fact']
+        new_time = (fact['market_at'], fact['observed_at'])
+        old_time = (old['market_at'], old['observed_at'])
+        if new_time <= old_time:
+            return dict(decision='UNCHANGED_OLDER' if new_time < old_time else 'UNCHANGED',
+                        values=previous)
+        return dict(decision='UPDATE', values=projection(fact, fact, route, now))
     selected = select(facts, route, now, old if previous is not None else None, catalog)
     if selected['decision'] not in ('INSERT', 'UPDATE'):
         return dict(decision=selected['decision'], values=previous)
@@ -95,6 +140,7 @@ def plan_facts(data, catalog=None):
 def plan(data, catalog=None):
     # The write path still requires exactly the original explicit approval checks.
     check_approval(data['route'], data['approval'])
+    check_route_transition(data)
     return plan_facts(data, catalog)
 
 

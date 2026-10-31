@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 22.10.2026, 14:44:52 Uhr — Europe/Berlin (MESZ, UTC+02:00).
+**Letzte Änderung:** 31.10.2026, 09:16:24 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -21,6 +21,13 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Keine produktiven Zugangsdaten, Secrets oder Datenbankzugänge hinzufügen oder verändern, sofern dies nicht ausdrücklich beauftragt wurde.
 - Keine Änderungen außerhalb dieses Repositories vornehmen.
 - Keine Änderungen an `masterxfix/fixlab`.
+
+## Nutzererfahrung und praktische Teilerfolge
+
+- Der Nutzer berichtet am 31.10.2026, dass Secure Dashboard und MOSA gleichzeitig minütlich Kurse erfolgreich abrufen. Diese Betriebserfahrung bei der Planung berücksichtigen; eine hypothetische Überlastung nicht als beobachteten Fehler darstellen.
+- Kleine beauftragte Versuche durchführen, aus dem tatsächlichen Ergebnis lernen und vorhandene erfolgreiche Funktionen wiederverwenden. Der nächste Kurs-Teilerfolg ist ein echter gespeicherter und auf der Testsite sichtbarer Wert mit Quelle und Zeitangaben.
+- Neue Bedenken, die den Auftrag stoppen, seinen Umfang verändern oder einen Anbieterwechsel auslösen würden, zuerst konkret mit dem Nutzer besprechen. Keine zusätzlichen Freigabehürden allein aus ungeprüften Vermutungen einführen.
+- Paket-, Syntax- und Offline-Erfolge als Vorbereitung bezeichnen. Die erfolgreiche Anzeige und ein automatischer Dauerbetrieb sind jeweils eigene, tatsächlich nachzuweisende Ergebnisse.
 
 ## Designbestandsschutz und ausdrückliche Nutzerfreigabe
 
@@ -181,6 +188,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 31.10.2026 | 09:16:24 Uhr (MEZ, UTC+01:00) | Nutzeranweisung festgehalten: vorhandene Betriebserfahrung berücksichtigen, begrenzt ausprobieren und lernen, neue stoppende Bedenken zuerst besprechen und sichtbare Teilerfolge nachweisen. |
 | 22.10.2026 | 14:44:52 Uhr (MESZ, UTC+02:00) | Verbindlichen Designbestandsschutz ergänzt: keine stillschweigenden Farb-, Schrift-, Branding- und Theme-Änderungen bei Layout-/Funktionsaufträgen; genaue Designänderungen erfordern vorherige ausdrückliche Nutzerfreigabe. |
 | 22.10.2026 | 12:40:56 Uhr (MESZ, UTC+02:00) | Verbindliche Auftrags- und Testökonomie ergänzt: vorhandene Belege zuerst, minimaler Testplan, stufenweise Nachweise, höchstens drei GitHub-Actions-Läufe ohne erneute Freigabe sowie sofortiger Stopp statt Testschleifen. |
 | 20.10.2026 | 22:45:06 Uhr (MESZ, UTC+02:00) | Globale Passwort-/Secret-Regel ergänzt: keine erneuten Passwortabfragen als Fallback; Fachaufträge erst starten, wenn der benötigte nicht-interaktive Zugang eingerichtet ist. |

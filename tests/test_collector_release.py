@@ -386,7 +386,12 @@ class Schema4OnceTests(unittest.TestCase):
                  "scripts/deploy_private_collector.py", "scripts/collector_schema4_once.php",
                  "scripts/collector_schema4_once.py", "scripts/collector_schema4_once_remote.py",
                  "scripts/collector_release/runtime.php", "config/collector-private-schema4-once.example.json",
-                 "tests/test_collector_release.py", "tests/historical_release_fixture.py"]
+                 "tests/test_collector_release.py", "tests/historical_release_fixture.py",
+                 "tests/test_tradegate_collector.py", "tests/fixtures/market_collector/tradegate_quote.html"]
+        # The isolated candidate must contain every exact payload byte, including
+        # newly registered adapters, rather than a hand-maintained partial overlay.
+        paths += [row["path"] for row in json.loads((ROOT/release.SCHEMA4_ONCE_CONTRACT).read_text())["files"]
+                  if row["path"] not in paths]
         base = release.git(ROOT, "rev-parse", "HEAD").decode().strip()
         context = candidate_checkout(ROOT, base, paths)
         cls.candidate, cls.commit = context.__enter__()
@@ -405,7 +410,8 @@ class Schema4OnceTests(unittest.TestCase):
         names = {r["path"] for r in self.meta["files"]}
         self.assertTrue({"scripts/collector_schema4_once.php", "scripts/market_current/refresh.php",
                          "scripts/market_current/planner.py", "scripts/market_current/selection.php",
-                         "scripts/market_collector/schema_contract.php", "api/current_read.php"} <= names)
+                         "scripts/market_collector/schema_contract.php", "api/current_read.php",
+                         "scripts/market_collector/tradegate.py", "scripts/market_collector/tradegate_manifest.php"} <= names)
         self.assertFalse(any("remote" in p or "deploy" in p or p.startswith("tests/") for p in names))
         self.assertEqual((self.archive, self.manifest), release.build(self.candidate, self.commit, "schema4-once"))
         for key, value in (("commit", "b"*40), ("payload_bytes", 1), ("unknown", True)):
@@ -678,6 +684,13 @@ p = subprocess.run([sys.executable, "-I", "-B", str(root/"scripts/market_current
                    input=json.dumps(dict(items=[f.data])), text=True, capture_output=True, check=True)
 assert p.stderr == "", p.stderr
 assert json.loads(p.stdout)["plans"][0]["decision"] == "UNCHANGED", p.stdout
+import test_tradegate_collector as tradegate_fixture
+from scripts.market_collector import tradegate
+assert Path(tradegate.__file__).resolve().is_relative_to(root), tradegate.__file__
+tradegate_fixture.ROOT = root
+case = tradegate_fixture.TradegateCollectorTests("test_existing_mosa_fixture_reaches_writer_current_and_web")
+case.setUp()
+case.test_existing_mosa_fixture_reaches_writer_current_and_web()
 print(json.dumps(dict(sources={k:str(v) for k,v in sources.items()}, manifest_sha256=digest, decision="UNCHANGED")))
 '''
             digest = next(r["sha256"] for r in self.meta["files"]
@@ -693,7 +706,8 @@ print(json.dumps(dict(sources={k:str(v) for k,v in sources.items()}, manifest_sh
             print("Packaged Current provenance: " + json.dumps(evidence, sort_keys=True))
         starter = (ROOT/"scripts/collector_schema4_once.php").read_text()
         self.assertIn("\\Mosa2\\MarketCurrent\\run(", starter)
-        self.assertNotIn("INSERT INTO", starter)
+        self.assertEqual(starter.count("INSERT INTO m2_sources"), 1)
+        self.assertNotIn("INSERT INTO m2_market_", starter)
         self.assertNotIn("UPDATE m2_", starter)
         for path in ("config/collector-operation.json", "config/collector-provider-budget.json"):
             self.assertFalse(json.loads((ROOT/path).read_text())["execution_enabled"])

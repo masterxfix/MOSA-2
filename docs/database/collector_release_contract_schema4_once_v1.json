@@ -140,9 +140,10 @@
         "api/current_read.php",
         "scripts/collector_release/runtime.php",
         "scripts/market_collector/actions_acceptance.php",
+        "scripts/market_collector/tradegate_manifest.php",
         "scripts/market_current/refresh.php"
       ],
-      "source_blob": "d68c3e99a9b53b6bf5e47553b7504e7737919660"
+      "source_blob": "64ae7a10e026f83c1fa180836d8635908a9d4e9c"
     },
     {
       "path": "scripts/market_collector/actions_acceptance.php",
@@ -177,7 +178,7 @@
       "path": "scripts/market_collector/contracts.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "416e7cb8d4c8a4b7a60295a3af94230a5eae0f42",
+      "source_blob": "2e8e70649ba62fdb78145181b625e7a96f5b74db",
       "requires": [
         "scripts/phase3n/writer_plan.py"
       ]
@@ -248,7 +249,7 @@
       "path": "scripts/market_collector/normalizer.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "e36086c7415102b9c243668c3b86014f19a8fe00",
+      "source_blob": "8f04b97a6d1660b6b57ea9b859dac44d21451e08",
       "requires": [
         "scripts/market_collector/collector.py",
         "scripts/market_collector/contracts.py",
@@ -285,6 +286,23 @@
         "docs/database/migrations/0005_collector_reservations.sql"
       ],
       "source_blob": "e2adc9308786b985f1ea76700341a854eb256a6a"
+    },
+    {
+      "path": "scripts/market_collector/tradegate.py",
+      "mode": "0600",
+      "source_blob": "c9e40e96e88b8fc20ab9ed848770c556ddbe61d5",
+      "requires": [
+        "scripts/market_collector/contracts.py"
+      ]
+    },
+    {
+      "path": "scripts/market_collector/tradegate_manifest.php",
+      "mode": "0600",
+      "source_blob": "0043e7ac716357dceb63dbdc15a1bb2590fb6a2b",
+      "requires": [
+        "scripts/market_collector/live_persistence.php",
+        "scripts/market_collector/tradegate.py"
+      ]
     },
     {
       "path": "scripts/market_collector/yahoo_chart.py",
@@ -324,7 +342,7 @@
         "scripts/market_current/selection.php",
         "scripts/phase3n/writer_plan.py"
       ],
-      "source_blob": "53f9d0464e12fd64b5d8c083cadeb9b91e70437a"
+      "source_blob": "58f1c60a2463882b19b74f35aa88b80ab6eb7874"
     },
     {
       "path": "scripts/market_current/preview.py",
@@ -370,7 +388,7 @@
         "scripts/market_current/takeover.php",
         "scripts/market_current/takeover.py"
       ],
-      "source_blob": "0881e87d004b60feeda9797d237b52c0e0e8eeaf"
+      "source_blob": "03b3289fdadffba5947fa46a0d86e72b7677088f"
     },
     {
       "path": "scripts/market_current/selection.php",

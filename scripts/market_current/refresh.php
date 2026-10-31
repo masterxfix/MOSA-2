@@ -35,7 +35,13 @@ function inputs(PDO $p,array $approvals,string $now,bool $lock=false): array {
         $q->execute([$route['asset_id'],$route['source_id'],$id]);$facts=array_map('Mosa2\\MarketLive\\strings',$q->fetchAll());
         $q=$p->prepare('SELECT *,HEX(observation_dedupe_key) AS observation_dedupe_key FROM m2_market_current WHERE asset_id=?'.$suffix);$q->execute([$route['asset_id']]);$current=$q->fetch();$old=null;
         if($current!==false){$current=\Mosa2\MarketLive\strings($current);$q=$p->prepare('SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE id=? AND asset_id=?'.$suffix);$q->execute([$current['observation_id'],$route['asset_id']]);$old=$q->fetch();check($old!==false,'current_origin_missing');$old=\Mosa2\MarketLive\strings($old);}
-        $items[]=['route'=>$route,'approval'=>$approval,'facts'=>$facts,'current'=>$current===false?null:$current,'current_fact'=>$old,'now'=>$now];
+        $item=['route'=>$route,'approval'=>$approval,'facts'=>$facts,'current'=>$current===false?null:$current,'current_fact'=>$old,'now'=>$now];
+        if($current!==false&&$current['route_id']!==$route['id']){
+            $q=$p->prepare('SELECT * FROM m2_asset_source_routes WHERE id=? AND asset_id=? AND source_id=?'.$suffix);
+            $q->execute([$current['route_id'],$route['asset_id'],$current['source_id']]);$oldRoute=$q->fetch();
+            check($oldRoute!==false,'current_previous_route_missing');$item['current_route']=\Mosa2\MarketLive\strings($oldRoute);
+        }
+        $items[]=$item;
     }return $items;
 }
 function plans(array $config,array $items,?array $takeover=null): array {

@@ -6,6 +6,7 @@ use Throwable;
 use function Mosa2\Phase2\{check,same,connection};
 require_once __DIR__.'/market_current/refresh.php';
 require_once __DIR__.'/market_collector/actions_acceptance.php';
+require_once __DIR__.'/market_collector/tradegate_manifest.php';
 require_once dirname(__DIR__).'/api/current_read.php';
 require_once __DIR__.'/collector_release/runtime.php';
 
@@ -35,6 +36,31 @@ function choose(array $published): array {
 function approval(array $route,string $now): array {
     return ['route_id'=>$route['id'],'route_sha256'=>hash('sha256',canonical($route)),
         'approved_at'=>$now,'allow_disabled_projection'=>true];
+}
+/** The one-shot may add one provider and one inactive route for the existing asset. */
+function prepareTradegate(PDO $p,array $before,array $selection,string $now): array {
+    same(\Mosa2\MarketLive\snapshot($p,['schema_version'=>4,'allow_current'=>true]),$before,'once_catalog_drift');
+    $sourcePlan=\Mosa2\TradegateQuote\sourcePlan($before['m2_sources'],$now);
+    $working=$before;$inserted=['m2_sources'=>[],'m2_asset_source_routes'=>[]];
+    if($sourcePlan['decision']==='INSERT'){
+        $values=$sourcePlan['values'];$fields=array_keys($values);
+        $q=$p->prepare('INSERT INTO m2_sources ('.implode(',',array_map('Mosa2\\Phase2\\qi',$fields)).') VALUES ('.implode(',',array_fill(0,count($fields),'?')).')');
+        $q->execute(array_values($values));same($q->rowCount(),1,'once_source_insert');$id=$p->lastInsertId();
+        $q=$p->prepare('SELECT * FROM m2_sources WHERE id=?');$q->execute([$id]);$row=$q->fetch(PDO::FETCH_ASSOC);check($row!==false,'once_source_readback');
+        $source=\Mosa2\MarketLive\strings($row);same($source,['id'=>$id]+\Mosa2\MarketLive\strings($values),'once_source_values');
+        $working['m2_sources'][]=$source;$inserted['m2_sources'][]=$source;
+    }else{same($sourcePlan['decision'],'EXISTING_MATCH','once_source_plan');$source=$sourcePlan['row'];}
+    $manifest=\Mosa2\TradegateQuote\manifest($working,$selection);
+    $plan=\Mosa2\MarketLive\completePlan($working,$manifest);
+    same($plan['asset']['decision'],'EXISTING_MATCH','once_existing_asset');
+    $route=\Mosa2\MarketLive\strings(\Mosa2\MarketIdentity\applyMarketRoutePlan(
+        new \Mosa2\MarketIdentity\PdoStore($p),$plan['route'],$plan['asset']['asset_id'],$now));
+    if($plan['route']['decision']==='CREATE_REVISION')$inserted['m2_asset_source_routes'][]=$route;
+    $after=\Mosa2\MarketLive\snapshot($p,['schema_version'=>4,'allow_current'=>true]);
+    $deltas=array_map('count',$inserted);
+    \Mosa2\MarketLive\compareDelta($before,$after,['deltas'=>$deltas],$inserted);
+    $manifest['policy']='USE_EXISTING_ROUTE';\Mosa2\MarketLive\completePlan($after,$manifest);
+    return ['state'=>$after,'manifest'=>$manifest,'route'=>$route,'source'=>$source,'deltas'=>$deltas];
 }
 /** Full before/after proof is explicit to this one-asset acceptance, not a new runtime path. */
 function unchanged(array $before,array $after,array $scope): void {
@@ -69,20 +95,26 @@ function run(array $in,string $project): array {
         $before=\Mosa2\MarketLive\snapshot($p,$config['state_contract']);
         foreach($before as $rows)check(count($rows)<=10000,'once_test_state_bound');
         $selected=choose(\Mosa2\CurrentRead\published($p,stamp(),1800));$r=$selected['route'];
-        $m=\Mosa2\MarketAcceptance\manifest($before,['isin'=>$r['isin'],'name'=>$r['display_name']]);
-        same($m['policy'],'USE_EXISTING_ROUTE','once_existing_route');$plan=\Mosa2\MarketLive\completePlan($before,$m);
-        same($plan['route']['route_id'],$r['route_id'],'once_display_route');
-        $scope=['asset_id'=>$r['asset_id'],'source_id'=>$r['source_id'],'route_id'=>$r['route_id']];
-        $route=array_values(array_filter($before['m2_asset_source_routes'],static fn($v)=>$v['id']===$r['route_id']));same(count($route),1,'once_route');
-        $approvals=[approval($route[0],stamp())+['run_id'=>$run,'commit'=>$commit]];
-        \Mosa2\MarketCurrent\plans($config,\Mosa2\MarketCurrent\inputs($p,$approvals,stamp()));
+        $old=array_values(array_filter($before['m2_asset_source_routes'],static fn($v)=>$v['id']===$r['route_id']));same(count($old),1,'once_route');
     }finally{if($p->inTransaction())$p->rollBack();$p=null;}
+    // Catalog registration does not enable unattended execution. The existing
+    // one-shot reservation still permits exactly one provider acquisition.
+    $p=connection($password);check($p->beginTransaction(),'once_catalog_transaction');
+    try{
+        $catalog=prepareTradegate($p,$before,['isin'=>$r['isin'],'name'=>$r['display_name']],stamp());
+        same($p->commit(),true,'once_catalog_commit');
+    }finally{if($p->inTransaction())$p->rollBack();$p=null;}
+    $before=$catalog['state'];$m=$catalog['manifest'];$route=$catalog['route'];
+    $scope=['asset_id'=>$route['asset_id'],'source_id'=>$route['source_id'],'route_id'=>$route['id']];
+    $approvals=[approval($route,stamp())+['run_id'=>$run,'commit'=>$commit,
+        'allow_route_transition'=>true,'previous_route_sha256'=>hash('sha256',canonical($old[0]))]];
     save($root.'/preflight.json',['commit'=>$commit,'run'=>$run,'scope'=>$scope,'isin'=>$r['isin'],
-        'approvals'=>$approvals,'before_sha256'=>hash('sha256',canonical($before))]);
+        'approvals'=>$approvals,'catalog_deltas'=>$catalog['deltas'],'before_sha256'=>hash('sha256',canonical($before))]);
     check(mkdir($root.'/asset-01',0700),'once_item');save($root.'/asset-01/live-manifest.json',$m);
     $result=\Mosa2\MarketCurrent\run($root,$password,$config,[['private_root'=>$root.'/asset-01']],$approvals);
     $report=['ok'=>false,'status'=>'OUTCOME_UNKNOWN','commit'=>$commit,'run'=>$run,'isin'=>$r['isin'],
-        'asset'=>$r['display_name'],'source'=>$r['source_name'],'scope'=>$scope,'provider_requests'=>$result['provider_requests']??null,
+        'asset'=>$r['display_name'],'source'=>$catalog['source']['display_name'],'quote_kind'=>'mid','scope'=>$scope,
+        'catalog_deltas'=>$catalog['deltas'],'provider_requests'=>$result['provider_requests']??null,
         'batch_status'=>$result['overall_status']??null,'current'=>$result['current']['decisions']??null];
     save($root.'/pipeline.json',$report+['items'=>$result['item_results']??[],
         'current_commit'=>$result['current']['committed']??null,'current_readback'=>$result['current']['readback']??null]);
@@ -95,11 +127,12 @@ function run(array $in,string $project): array {
         $after=\Mosa2\MarketLive\snapshot($p,$config['state_contract']);unchanged($before,$after,$scope);
         $inputs=\Mosa2\MarketCurrent\inputs($p,$approvals,stamp());
         same(array_column(\Mosa2\MarketCurrent\plans($config,$inputs),'decision'),['UNCHANGED'],'once_current_replay');
+        foreach(['asset_id','source_id','route_id'] as $key)same($inputs[0]['current'][$key],$scope[$key],'once_current_source');
         $published=\Mosa2\CurrentRead\published($p,stamp(),1800);
         $display=array_values(array_filter($published,static fn($v)=>$v['route']['asset_id']===$scope['asset_id']));same(count($display),1,'once_display');
         $report+=['observation_id'=>$result['item_results'][0]['observation_id'],'observation_writer'=>$result['item_results'][0]['writer'],
             'current_observation_id'=>$inputs[0]['current']['observation_id'],'display'=>$display[0]['item'],
-            'readback'=>'PASS','other_business_data'=>'UNCHANGED','route_enabled'=>$route[0]['enabled']];
+            'readback'=>'PASS','other_business_data'=>'UNCHANGED','route_enabled'=>$route['enabled']];
     }finally{if($p->inTransaction())$p->rollBack();$p=null;}
     $report['ok']=true;$report['status']='COMPLETE';return $report;
 }
