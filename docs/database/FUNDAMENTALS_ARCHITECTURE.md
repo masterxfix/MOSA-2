@@ -1,10 +1,11 @@
 # Fundamentals, Finanzdaten und Payload-Provenienz
 
-Status: **nur vorbereitet**, Migration 0006, MySQL 8. Keine Anwendung, kein
-Fundamental-Collector, Writer, Scheduler, Providerabruf oder Webdeploy.
+Status: **isoliert auf MySQL 8.0.46 technisch qualifiziert; NICHT Dogado-live**.
+Migration 0006 wurde nur im wegwerfbaren Runner-Dienst angewendet.
+Kein Fundamental-Collector, Writer, Scheduler, Providerabruf oder Webdeploy.
 Basis dieses Entwurfs: `753ddf95e3b0fe00fbb1affdb37b87ba1ccad943`.
 0001–0005 und ihre Ledger-Prüfsummen bleiben byte-identisch. Schema 4 bleibt
-der bestätigte installierte Stand; 0005 bleibt separat vorbereitete Migration.
+der bestätigte installierte Stand; 0005 und 0006 bleiben für Dogado nur vorbereitet.
 
 ## Bestehenden Core erweitern
 
@@ -273,11 +274,12 @@ sind vor einem Apply separat nachzuweisen. MySQL-DDL committet implizit;
 kein Versprechen eines atomaren Gesamt-Rollbacks. Bei Teilfehler stoppen und
 Istzustand feststellen; kein IF NOT EXISTS oder automatischer Retry.
 Units/Kennzahlen-Seeds, Privatarchivpfad/Quoten/Rechte, Writer-/Current-Validierung,
-Parser-Feldinventar, echte Constraint-/EXPLAIN-/Lasttests und Append-only-Rechte
-sind noch nicht implementiert oder aktiviert. Normale Marktseiten bleiben
-unverändert. Offline-Tests belegen nur den vorbereiteten Vertrag.
+Parser-Feldinventar und Append-only-Betriebsrechte sind weiterhin nicht
+implementiert oder aktiviert. Der erfolgreiche isolierte Constraint-/EXPLAIN-/
+Lastnachweis ist unten dokumentiert; er ersetzt keine separat freizugebende
+Prüfung des Dogado-Zielsystems. Normale Marktseiten bleiben unverändert.
 
-## Offline-Nachweis und Grenzen dieses Abschlussstands
+## Offline-Vorbereitung vor dem ersten MySQL-Lauf
 
 15 neue fokussierte Tests mit dem vorhandenen eingeschränkten DDL-Parser und
 SQL-Dreiwert-CHECK-Modell: genaue Tabellen/Spalten/Typen/NULLs, PK/UNIQUE/FK,
@@ -296,9 +298,10 @@ Das ist kein echter MySQL-Syntax-, FK-/CHECK-Ausführungs-, EXPLAIN- oder
 Performance-Nachweis. Diese Prüfungen bleiben vor einem separat autorisierten
 Apply verpflichtend. Kein unbewiesenes PASS für den Datenbankbetrieb.
 
-## Isolierter MySQL-8-Versuch vom 31.10.2026: noch nicht qualifiziert
+## Erster isolierter MySQL-8-Versuch vom 31.10.2026: historischer Fixture-Abbruch
 
-**Ergebnis: teilweise; kein erfolgreicher MySQL-Nachweis von 0006.**
+**Historisches Ergebnis des ersten Laufs: teilweise.** Der erfolgreiche,
+später ausdrücklich freigegebene Zweitlauf ist im folgenden Abschlussabschnitt dokumentiert.
 [Einziger Actions-Lauf 41204442891](https://github.com/masterxfix/MOSA-2/actions/runs/41204442891)
 auf Prüfcommit `7dbaa2405036af886159bb3ea4b7ca0a20e82743`.
 Verwendet wurde ausschließlich der bereits vorhandene wegwerfbare
@@ -326,7 +329,7 @@ jede nichtleere Tabelle wird weiterhin vor dem ersten DDL abgewiesen.
 Die MySQL-Version wird vor diesem Guard in der Evidence festgehalten.
 Der gezielte Offline-Test prüft beide leeren und beide nichtleeren Formen
 und besteht. Kein Index, FK, CHECK oder Migrationstext wurde gelockert.
-**Kein zweiter Actions-Lauf und kein Rerun.**
+**In diesem ersten Auftrag wurde kein zweiter Actions-Lauf oder Rerun gestartet.**
 
 ### Datenmengen und sieben noch offene Messwege
 
@@ -383,14 +386,166 @@ Constraintproben und sieben Lesewege bleiben reproduzierbar im Testcode.
 
 ### Nächster Nachweis und Dogado-Grenze
 
-Für den nun korrigierten Test ist eine **neue ausdrückliche Freigabe eines
-weiteren isolierten Actions-Laufs** erforderlich. Bis dieser erfolgreich
-abgeschlossen ist, bleiben Apply, SHOW-CREATE-/INFORMATION_SCHEMA-Abgleich,
-reale PK/UNIQUE/FK/CHECK-Proben, alle sieben natürlichen EXPLAINs und
-Median/p95 **offen**. Es liegt weder ein DB-Architekturfehler noch deren reale
-Betriebsfähigkeit nachgewiesen vor.
+Für den korrigierten Test wurde anschließend eine neue ausdrückliche Nutzerfreigabe
+erteilt. Ein zwischenzeitlicher UI-Startversuch erzeugte keinen bestätigten Lauf.
+Der danach erneut ausdrücklich beauftragte einzelne Lauf 41205801735 bestand
+vollständig. Die damals offenen isolierten Nachweise sind damit im unten
+festgehaltenen Umfang erfüllt; die Dogado-Grenze bleibt unverändert.
 
 Auch ein später erfolgreicher isolierter Lauf wäre keine Freigabe für
 Dogado: Backup/Restore-Nachweis, Istschema/Ledger, qualifizierter
 0005-Ausgangsstand, ausdrücklicher Applyplan, Postcheck und
 Rollforward-/Teilfehlersicherheit bleiben separat erforderlich.
+
+## Erfolgreicher isolierter MySQL-8-Nachweis vom 31.10.2026
+
+**PASS – isoliert MySQL 8 qualifiziert, weiterhin NICHT Dogado-live.**
+[Actions-Lauf 41205801735](https://github.com/masterxfix/MOSA-2/actions/runs/41205801735),
+geprüfter Vollcommit `73c8453b04de1eeceea2dae3d982559e55084f01`,
+`verification_scope=fundamentals6`, `read_preflight=false`.
+In diesem erneut ausdrücklich freigegebenen Auftrag wurde **genau ein neuer
+Actions-Lauf** gestartet; kein Rerun und keine zusätzliche Testserie.
+Die Reihe enthält damit zwei tatsächlich registrierte MySQL-Nachweise:
+41204442891 (Fixture-Abbruch vor DDL) und diesen erfolgreichen Lauf.
+
+### Umgebung, Migrationen und exakter Postcheck
+
+Tatsächlich **MySQL 8.0.46**, bestehender ephemerer GitHub-Service
+`mysql:8.0`, allein Runner-Loopback `127.0.0.1:3307`,
+Datenbank `mosa2_collector_isolated`. Ausschließlich reproduzierbare synthetische
+Daten, kein importierter MOSA-Bestand und keine echten Zugangsdaten.
+Nach Jobabschluss wurden Container und zugehöriges Netzwerk entfernt.
+
+Unverändert in Reihenfolge **0001 → 0002 → 0003 → 0004 → 0005 → 0006**
+angewendet; alle DDLs erfolgreich. 0005 blieb gesperrt: Job disabled,
+stop_latched=1, unresolved=0. Der synthetische Ledger blieb leer; es wurde
+keine reale Migrationshistorie vorgetäuscht. Vor/nach 0006 waren die
+SHOW-CREATE-Definitionen aller 21 bestehenden Tabellen identisch;
+Endstand **26 Tabellen**, davon exakt die fünf erwarteten neuen Tabellen.
+
+SHOW CREATE TABLE und INFORMATION_SCHEMA bestätigen die vollständigen
+Spalten-/Typ-/NULL-/Default-/Kollationsverträge, InnoDB, exakte PKs,
+UNIQUEs und Indexreihenfolgen ohne unerwartete implizite Indizes,
+alle FKs mit RESTRICT sowie tatsächlich ENFORCED CHECKs. Der bestehende
+CHECK-Parser verglich die erwarteten Ausdrücke mit INFORMATION_SCHEMA und
+SHOW CREATE als identische Ausdrucksbäume; keine pauschale Normalisierung.
+
+| Tabelle | Spalten | Indizes inkl. PK | FKs | CHECKs |
+| --- | ---: | ---: | ---: | ---: |
+| m2_fundamental_current | 22 | 4 | 3 | 4 |
+| m2_fundamental_metrics | 10 | 2 | 0 | 1 |
+| m2_fundamental_observations | 26 | 10 | 6 | 4 |
+| m2_fundamental_units | 10 | 2 | 0 | 2 |
+| m2_provider_fetches | 18 | 9 | 5 | 3 |
+
+DECIMAL(38,12), DATETIME(6), DATE und BINARY(32) wurden gegen den vollständigen
+Repository-Vertrag geprüft. Keine Änderung der Fachmigration war erforderlich.
+
+### Tatsächlich geladene synthetische Daten
+
+| Bereich | Zeilen |
+| --- | ---: |
+| m2_assets | 100 |
+| m2_files | 1 |
+| m2_fundamental_current | 25.000 |
+| m2_fundamental_metrics | 52 |
+| m2_fundamental_observations | 100.288 |
+| m2_fundamental_units | 9 |
+| m2_provider_fetches | 1.200 |
+| m2_sources | 3 |
+
+50 numerische plus zwei Text-/Datums-Katalogdefinitionen; alle fünf
+Periodenarten im Lastbestand. Pro Asset liegen 250 aktuelle Slots vor.
+Die drei untersuchten Historien des Messassets liefern jeweils 100 Werte.
+Der einzelne File-Datensatz ist ein kleiner Dummy-Metadatennachweis;
+ein echtes Files-Backend, Kompression, Verschlüsselung oder Retention wurde
+hier weder implementiert noch als getestet dargestellt.
+
+### Reale Constraint-Proben
+
+**36/36 erwartete MySQL-Abweisungen bestanden** mit exakt geprüftem
+Fehlercode (FK 1452, UNIQUE 1062, CHECK 3819, NOT NULL 1048).
+Proben wurden mittels Savepoints/Transaktionsrollback isoliert und
+hinterließen keine zusätzlichen Lastzeilen.
+
+Abgedeckt: Source-/File-/Route-/Asset-/Metric-/Unit-/Fetch-FKs, Fetch-Source-
+Bindung, Fetch- und Kennzahl-Eindeutigkeit, Pflicht-Definitionshash,
+leere Kategorie/Semantik, Parserstatus/-identität, positive Routenrevision,
+Unit-Version/Währungsdimension, Fundamental-Dedupe, fehlende/mehrfache
+Wertpfade, inkonsistente Snapshot-/Quartals-/Perioden-/Forward-Felder sowie
+Current-Slot-Eindeutigkeit und falsche Observation-/Source-/Perioden-/Asset-/
+Metric-Bindungen.
+
+Zusätzlich positiv bestätigt: snapshot/FY/FQ/TTM/forward existieren
+nebeneinander, negative Finanzwerte und echte Nullwerte sind zulässig,
+typisierte Text-/Datumswerte und Unit-Version 2 sind gültig; zwei Fetches
+behalten verschiedene reale synthetische Erfassungszeiten bei gleichem
+Payloadhash, gleicher Größe und gemeinsamem File-Verweis.
+
+### Sieben natürliche EXPLAIN-Wege und gemessene Performance
+
+Keine FORCE-INDEX-Anweisung. Kein ungebundener Full-Table- oder vollständiger
+Indexscan der großen Tabellen. A/B berühren ausschließlich Fundamental-Current;
+History/Fetch/Files erscheinen nur in ihren ausdrücklich benannten Wegen.
+
+Drei Warm-ups wurden von **40 Messungen je Weg** getrennt. Median und
+p95 sind Client↔DB-Zeiten einschließlich Ergebnisübertragung; A umfasst
+beide Queries der vollständigen Asset-Lesung über 128-Zeilen-Seiten plus
+Sentinel. **Keine Aussage über Webseitenlatenz.**
+
+| Weg | Zugriff / tatsächlich gewählter Key | rows_examined_per_scan (geschätzt) | Ergebniszeilen | Median ms | p95 ms |
+| --- | --- | --- | ---: | ---: | ---: |
+| A – alle Current-Slots eines Assets, zwei begrenzte Seiten | ref / PRIMARY; nur Current | 250 je Seite | 250 | 4,0782 | 5,5263 |
+| B – einzelner Current-Slot | const / PRIMARY | 1 | 1 | 0,3692 | 0,4034 |
+| C – Snapshot-Historie, LIMIT 100 | range / ix_fund_obs_timeline | 100 | 100 | 1,3261 | 1,3815 |
+| D – FY-Serie, LIMIT 100 | range / ix_fund_obs_period | 100 | 100 | 1,2390 | 1,2703 |
+| E – FQ-Serie, LIMIT 100 | range / ix_fund_obs_period | 100 | 100 | 1,3101 | 1,3551 |
+| F – Source-Provenienz | const / PRIMARY je Observation und Source | 1 je Tabelle | 1 | 0,2852 | 0,3250 |
+| G – Payload-/Fetch-Metadaten | const / PRIMARY je Observation, Fetch und File | 1 je Tabelle | 1 | 0,3537 | 0,3814 |
+
+A verwendet auch auf der zweiten Seite PRIMARY mit asset_id-Bindung;
+der Tupel-Cursor wird innerhalb der geschätzt 250 Asset-Slots gefiltert.
+Dies wird nicht als zusätzlicher, vom Optimierer unbestätigter Rangezugriff
+ausgegeben. EXPLAIN ANALYZE bestätigte im ersten A-Statement 129
+Sentinel-/Datenzeilen, in C/D/E jeweils 100 Iteratorzeilen (loops=1);
+die vollständige A-Lesung lieferte 250 eindeutige Slots.
+B/F/G wurden als konstante PK-Punktzugriffe optimiert und lieferten je
+eine Ergebniszeile. Schätzwerte und tatsächliche Iteratorzeilen bleiben
+getrennt; rohe JSON-Pläne und ANALYZE-Ausgaben sind in der Evidence enthalten.
+
+**Performancegrenzen bestanden:** A/B p95 <20 ms; alle sieben Wege p95 <100 ms.
+Sogar alle gemessenen p95 liegen im idealen Bereich <20 ms.
+Das ist ein begrenzter synthetischer Runner-Nachweis, keine Garantie für
+Dogado-Hardware, beliebige Datenverteilungen, kalte Caches, Parallelbetrieb
+oder vollständige Webanfragen. Die bestehenden Seiten-/Gesamt-DB-Budgets
+werden dadurch weder abgeschwächt noch als gemessen ausgegeben.
+
+### Unveränderte Migrationen und Evidence
+
+Alle sechs Dateien wurden vor und nach dem Test per SHA-256 verglichen:
+`migration_hashes_unchanged=true`.
+
+| Migration | SHA-256 |
+| --- | --- |
+| 0001_core_asset_identity.sql | `9c3ac21f02fc242e9561d94aaa4a4c4fe6a430d11aa5f0681f0c9eace81446dd` |
+| 0002_market_current_history.sql | `205bea42cfc93a64f76eb61c10377e47dceae38815c4351817a17aced00a75ee` |
+| 0003_market_units.sql | `199933884802bd139b706e50e57e04687e9cbe5f8bd1366e98e302af7d47b8ee` |
+| 0004_current_observation_provenance.sql | `46238979889d2fe1bdaac4c5ba4c1ddda7f5810cd87cdf1a8b806db71f63df70` |
+| 0005_collector_reservations.sql | `2521552c548370806bc311798f12be39f16b102733aeb74ac9c01337e7e46333` |
+| 0006_fundamentals_and_payload_provenance.sql | `55457063c72d20498a097d273b5465d34cfd8aba5b2c7c229a9673bfc0c4a60c` |
+
+[Strukturierte Evidence mit Plänen, Proben und Messwerten](https://github.com/masterxfix/MOSA-2/actions/runs/41205801735/artifacts/13044062874),
+Aufbewahrung sieben Tage. ZIP-SHA-256:
+`faebe14321b045d5569cacca14974c0cc99a8d2d2fe46cc6d3a9f5bd4a6d304f`.
+Die Testergebnisdokumentation verändert weder SQL noch Testumfang.
+
+### Weiterhin keine Dogado-Apply-Freigabe
+
+**0005 und 0006 wurden NICHT auf Dogado angewendet. Keine echte MOSA-2-DB
+verändert, keine Provideranfrage, kein Deployment, keine Seeds installiert,
+kein Collector oder Scheduler aktiviert.**
+Der spätere Apply benötigt weiterhin eigene Freigabe und Backup/Restore-
+Nachweis, Istschema-/Ledgerprüfung, qualifizierten 0005-Ausgangsstand,
+Applyplan, Postcheck und Rollforward-/Teilfehlersicherheit.
+Privates Files-Backend und append-only Betriebsrechte sind ebenfalls
+keine durch diesen isolierten Schema-/DB-Lesetest erteilten Freigaben.

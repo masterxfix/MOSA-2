@@ -1,6 +1,6 @@
 # Versionierte Migrationen
 
-## Version 0006 – Fundamentals und Payload-Provenienz, isolierter Nachweis noch offen
+## Version 0006 – Fundamentals und Payload-Provenienz, isoliert MySQL 8 qualifiziert
 
 `0006_fundamentals_and_payload_provenance.sql` ergänzt fünf Tabellen: Fetch-
 Nachweise mit m2_files-Verweis, Kennzahlen, separate Fundamental-Units,
@@ -10,12 +10,20 @@ Ledger-Einträge, Runner oder Live-Anwendung. Voraussetzung ist der separat
 qualifizierte Stand 0001–0005; auf Schema 4 nicht unmittelbar anwendbar.
 [Vertrag, Index-/EXPLAIN-Plan und offene Apply-Nachweise](../FUNDAMENTALS_ARCHITECTURE.md).
 
-Der einzige isolierte MySQL-8.0.46-Lauf 41204442891 am 31.10.2026 brach
-wegen eines Tuple-/Listenvergleichs der Testhilfe vor dem ersten DDL ab.
-Die Testhilfe ist gezielt offline korrigiert; kein zweiter Lauf gestartet.
-0006 ist deshalb **noch nicht isoliert auf MySQL 8 qualifiziert** und
-**NICHT Dogado-live**. Keine Constraints, EXPLAINs oder Performancewerte als
-bestanden werten. Ein weiterer isolierter Nachweis benötigt neue Freigabe.
+Der erste isolierte Lauf 41204442891 brach vor DDL an einem korrigierten
+Fixturefehler ab. Der danach ausdrücklich freigegebene Lauf
+[41205801735](https://github.com/masterxfix/MOSA-2/actions/runs/41205801735)
+bestand am 31.10.2026 auf **MySQL 8.0.46** vollständig: 0001–0006 sequenziell
+angewendet, fünf neue Tabellen exakt geprüft, 36 erwartete Constraint-Abweisungen,
+100.288 synthetische Observations, 25.000 Current-Zeilen, sieben natürliche
+EXPLAIN-Wege und alle vereinbarten p95-Grenzen bestanden. Alle sechs
+Migrationsdateien bleiben byte-identisch. Vollständige Messwerte und Grenzen
+stehen im verlinkten Architekturvertrag.
+
+**Isoliert MySQL 8 qualifiziert; NICHT Dogado-live. KEINE Dogado-Apply-Freigabe.**
+Keine echte MOSA-2-Datenbank, Provider, Seeds, Collector oder Scheduler wurden
+berührt/aktiviert. Backup/Restore, Istschema/Ledger, 0005-Ausgangsstand,
+Applyplan, Postcheck und Teilfehlersicherheit bleiben separat freizugeben.
 
 
 ## Version 0005 – Collector-Reservierungen, nur vorbereitet
