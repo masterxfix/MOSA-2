@@ -1,5 +1,147 @@
 # Dogado Schema 4 -> 6: PREPARE, kein APPLY
 
+## Aktueller bestätigter Inventarnachweis: 31.10.2026
+
+**READ-ONLY-Inventar PASS; Backup und Migration weiterhin BLOCKIERT.**
+Genau ein neuer manueller Lauf, kein Rerun:
+[Actions 41208789503](https://github.com/masterxfix/MOSA-2/actions/runs/41208789503),
+Job [124559244122](https://github.com/masterxfix/MOSA-2/actions/runs/41208789503/job/124559244122),
+geprüfter Kandidat `24fc35885eedb2cfc9ca93da64096cc688619d13`.
+Alle anderen Workflow-Jobs wurden übersprungen. Keine Wiederholung der isolierten
+Fundamentals-Qualifikation 41205801735.
+
+### Fehlerkorrektur und Aussage zur früheren Ursache
+
+Der statisch bewiesene Parser-Pfadfehler aus dem Kandidaten wurde bereits in
+`90ae70f` korrigiert: Originalmigrationen 0001/2/3 werden byteidentisch unter den
+vom unveränderten Parser erwarteten Dateinamen in einem temporären privaten
+Runner-Verzeichnis bereitgestellt, mit Original-SHA-256 geprüft und danach
+entfernt. 0004 wird weiter über den bestehenden Originalparser eingebunden.
+Kein SQL-Artefakt wurde verändert, kein zweiter Parser gebaut.
+
+Die bislang pauschale Python-Ausnahmebehandlung verlor nachweislich Fehlerklasse
+und PHP-Abschnitt. Jetzt separate feste Codes für Timeout, SSH, Tunnel,
+Subprozess, unerwartetes Stderr und ungültiges Ergebnis; keine Roh-Exceptions.
+PHP-Stderr ist ausschließlich für die exakten `MOSA2_PHASE:`-Marker der gemeinsamen
+Whitelist erlaubt. Andere Inhalte werden vollständig verworfen und abgewiesen.
+Beim Timeout wird nur die letzte erlaubte Phase samt überschrittenem Prozesslimit
+ausgegeben; private stdout-/stderr-Werte werden nicht übernommen.
+
+Der umfangreiche Modus ist endlich auf **150 Sekunden** begrenzt; permissions-only
+behält **60 Sekunden** und keine Fortschrittsmarker. SQL-Einzellimits unverändert.
+Die umfangreiche Prüfung umfasst 17-mal SHOW CREATE und sechs Metadatenkategorien,
+zusätzlich Tabelleninventar, Ledger, Zeilenzähler und Provenance über den Tunnel.
+Das vorgelagerte Tabelleninventar und der unveränderte Parser-Tabellenabgleich sind
+die einzige erkennbare Tabellenlistenüberschneidung; die pro Tabelle notwendigen
+Metadaten werden nicht erneut vollständig abgefragt. Keine Vollständigkeitsprüfung entfernt.
+
+Im erfolgreichen Lauf: Python-Schritt 14:09:16.865 UTC bis Ergebnis 14:10:13.361 UTC,
+rund **56,5 Sekunden einschließlich Zugang und Zusatzproben**. Kein Timeout.
+Letzter begonnener Abschnitt `REPORT_REJECTED` bezeichnet hier die erreichte
+Berichtsphase; tatsächlicher Status `SCHEMA6_PREPARE_INVENTORY_PASS`, kein Fehler.
+Die alte 60-Sekunden-Timeout-Hypothese für 41208064706 bleibt **unbewiesen**:
+der frühere Catch hat die nötige Ursache verworfen; dieser neue Lauf rekonstruiert sie nicht.
+
+### Tatsächlicher Dogado-Bestand
+
+- Ausschließlich `h29077_mosa2_test`; bestehende Konto-/Portidentität PASS,
+  MySQL **8.0.26-16**, verifizierte READ-ONLY-Transaktion.
+- **Schema 4, exakt 17 InnoDB-Tabellen**, vollständiger gemeinsamer Strukturcheck PASS.
+  Ledger **1–4**, alle Migrationsschlüssel und Original-SQL-Prüfsummen PASS.
+  Keine 0005-/0006-Tabellen; Migrationen 0001–0006 im Repository unverändert.
+- Metadaten-Baseline SHA-256:
+  `167fef374c3d4b5aa2b15799cf8f407808924242bbf7f72bbf094eba9ffba614`.
+  Dies ist ein Metadaten-/Ledger-Fingerprint, kein Vollbackup aller Geschäftsdaten.
+- Allocated DATA_LENGTH + INDEX_LENGTH ca. **1097728 Bytes**,
+  keine garantierte Dump-/Verschlüsselungsgröße.
+
+| Tabelle | Exakte Zeilen |
+| --- | --- |
+| m2_asset_identifiers | 9 |
+| m2_asset_source_routes | 18 |
+| m2_assets | 9 |
+| m2_entities | 9 |
+| m2_events | 0 |
+| m2_files | 0 |
+| m2_job_runs | 0 |
+| m2_jobs | 0 |
+| m2_market_bars | 0 |
+| m2_market_current | 5 |
+| m2_market_observations | 28 |
+| m2_module_state | 0 |
+| m2_relationships | 0 |
+| m2_schema_migrations | 4 |
+| m2_sources | 5 |
+| m2_sync_checkpoints | 5 |
+| m2_units | 4 |
+
+### Fünf bestehende Tradegate-Ketten
+
+Gemeinsame Current-/Observation-/Route-/Source-/Unit-/Dedupe-/Provenance-Logik
+unverändert verwendet. Aktuell gespeicherter Current und ausgewählte Observation
+stimmen bei Preis, Währung sowie Markt-/Erfassungszeit überein; jeder Current
+ist gegen seinen gespeicherten Observation-Ursprung validiert. Keine Kurse,
+DB-IDs oder Zeitwerte werden in dieser öffentlichen Dokumentation ausgegeben.
+
+| Aktie | ISIN | Current / Observation / Provenance | Datenstatus | Route aktiviert |
+| --- | --- | --- | --- | --- |
+| BYD | CNE100000296 | VALID / VALID / PASS | stale | NEIN |
+| DroneShield | AU000000DRO2 | VALID / VALID / PASS | stale | NEIN |
+| Ubtech Robotics | CNE100006CQ4 | VALID / VALID / PASS | stale | NEIN |
+| PNE AG | DE000A0JBPG2 | VALID / VALID / PASS | stale | NEIN |
+| Carl Zeiss Meditec | DE0005313704 | VALID / VALID / PASS | stale | NEIN |
+
+Alle fünf Quellen: **Tradegate · XGAT · Mid**. Veraltetes Marktalter wird nicht
+durch die neue Bestandsprüfung oder Erfassungszeit aufgefrischt. Keine neue
+Web-/Preisaktualisierung und kein Providerabruf behauptet.
+
+### Jobs, Rechte und Backup-Voraussetzungen
+
+Keine Jobs oder Jobläufe gespeichert, enabled_jobs=0, running_jobs=0.
+`m2-current-refresh` und der tatsächlich vorhandene `m2-collector-scheduler`
+nicht belegt. Der frühere nicht vorhandene Named-Lock `m2-collector-live-batch`
+wurde schon in `90ae70f` berichtigt. Keine andere eigene Testschema-Sitzung sichtbar.
+PROCESS fehlt: dies ist nur Kontosicht, kein Nachweis der Abwesenheit fremder
+Schreiber, kein OS-Prozess-/Croninventar und keine durchgehende DDL-/Schreibruhe.
+
+Schemaweite SELECT, SHOW VIEW, TRIGGER, EVENT, CREATE ROUTINE, ALTER ROUTINE,
+EXECUTE und LOCK TABLES bestätigt. Globale RELOAD, FLUSH_TABLES, SHOW_ROUTINE,
+PROCESS und SELECT fehlen. Trigger/Routinen/Events: jeweils **0**, vollständige
+Enumeration durch vorhandene Rechte und erfolgreiche Metadatenabfragen bestätigt.
+Mangels Objekten kein SHOW CREATE eines gespeicherten Objekts notwendig.
+
+MySQL-8.0-Dumpclient im Runner erkannt, ca. 91623366656 freie Scratch-Bytes.
+Das beweist noch keine ausreichenden Export-/Verschlüsselungsressourcen.
+Global sperrender bestehender Backup-Executor bleibt mit diesen Rechten gesperrt.
+Die synthetisch qualifizierte schema-begrenzte Alternative bleibt bedingt geeignet,
+nicht als betriebsfertiger Live-Backup-Weg bestätigt.
+
+Weiter konkret offen:
+1. Kontrollierte durchgehende MOSA-2-Schreib-/DDL-Ruhe einschließlich anderer Zugänge.
+2. Geprüfter operativer, schema-begrenzter Exportweg unter Erhalt der vorhandenen
+   CI-Isolationssperren, ausreichender Ressourcen und sicherer Schlüsselverwahrung.
+3. Tatsächliches verschlüsseltes vollständiges Backup und unabhängiger isolierter Restore.
+4. Explizit qualifizierter Schema-6-Runtime-/Releasevertrag; bestehende exakte
+   Schema-4/5-Verträge nicht gegen 26 Tabellen verwenden.
+
+**Keine Backup-/Restore-Ausführung, DDL/DML, Migration, Provideranfrage, Deployment
+oder Collector-/Scheduler-Aktivierung.** Späterer Apply weiterhin nicht bereit;
+der nachstehende gesondert freizugebende Applyplan bleibt verbindlich.
+
+### Offline- und Veröffentlichungsnachweis
+
+**13/13 fokussierte Offline-Tests PASS**, beide PHP-Syntaxprüfungen PASS:
+TimeoutExpired, letzte Phase, Geheimnisschutz, Stderr-Allowlist, normaler Abschluss,
+unverändertes permissions-only-Limit, exakter 17-Tabellen-Parser und bestehende Guards.
+Keine zusätzlichen Regressionen oder neuen Actions gestartet.
+Geprüfter Kandidat wird mit der unveränderten aktuellen main-Dokumentation in
+genau einem Abschlusscommit auf main zusammengeführt; historische Fehlläufe bleiben erhalten.
+
+## Historische Vorbereitungsnotizen und fehlgeschlagener Erstlauf
+
+Die folgenden ursprünglichen Angaben bleiben als historische Befunde erhalten.
+Für den aktuellen Inventarstand gilt ausschließlich der bestätigte Abschnitt oben.
+
 ## Beleggrenzen und einmaliger Bestandslauf
 
 Quellstand: `2a5b22f547c16521cf7235b4ba82651dea815e3a`.
@@ -109,7 +251,7 @@ STOP, bekannte letzte Schritte und unklaren Zustand dokumentieren; kein Retry,
 kein automatisches DROP/Restore/Umschalten, kein behaupteter Rollback.
 Ein späterer Read-only-Abgleich und ggf. Recovery benötigen einen eigenen Auftrag.
 
-## Ergebnis des aktuellen Auftrags
+## Historisches Ergebnis des ersten Auftrags
 
 **Status: BLOCKIERT.** Genau ein manueller Actions-Lauf, kein Rerun:
 [41207129005](https://github.com/masterxfix/MOSA-2/actions/runs/41207129005),

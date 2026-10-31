@@ -3,16 +3,22 @@ declare(strict_types=1);
 /** One bounded metadata-only inspection through the existing verified connection. */
 require_once __DIR__.'/phase2/postcheck.php';
 use function Mosa2\Phase2\{check,connection};
+ini_set('display_errors','0');ini_set('log_errors','0');
 $stage='PERMISSIONS_INPUT_REJECTED';$p=null;$result=[];
 try {
     $input=json_decode(stream_get_contents(STDIN),true,32,JSON_THROW_ON_ERROR);
     check(($input['attempt']??null)==='1','first_attempt');
-    $stage='PERMISSIONS_CONNECTION_OR_IDENTITY_REJECTED';
+    $scope=$input['scope']??'permissions';check(in_array($scope,['permissions','schema6-prepare'],true),'scope');
+    $progress=null;if($scope==='schema6-prepare'){
+        require_once __DIR__.'/market_collector/schema6_prepare.php';
+        $progress='Mosa2\\Schema6Prepare\\progress';
+    }
+    $stage='PERMISSIONS_CONNECTION_OR_IDENTITY_REJECTED';if($progress!==null)$progress($stage);
     $p=connection($input['password'],'127.0.0.1',$input['port']);unset($input['password']);
     $p->exec('SET SESSION TRANSACTION READ ONLY');
     check($p->beginTransaction()&&$p->inTransaction(),'transaction');
     check((string)$p->query('SELECT @@session.transaction_read_only')->fetchColumn()==='1','readonly');
-    $stage='PERMISSIONS_GRANTS_REJECTED';
+    $stage='PERMISSIONS_GRANTS_REJECTED';if($progress!==null)$progress($stage);
     check($p->query('SELECT CURRENT_ROLE()')->fetchColumn()==='NONE','unresolved_roles');
     $literal=(string)$p->query('SELECT @@partial_revokes')->fetchColumn()==='1';
     $global=[];$schema=[];
@@ -28,11 +34,11 @@ try {
     $has=static fn(string $right,bool $globalOnly=false):bool=>in_array($right,$global,true)||in_array('ALL PRIVILEGES',$global,true)
         ||(!$globalOnly&&(in_array($right,$schema,true)||in_array('ALL PRIVILEGES',$schema,true)));
     $rights=[];foreach(['SELECT','SHOW VIEW','TRIGGER','EVENT','CREATE ROUTINE','ALTER ROUTINE','EXECUTE','LOCK TABLES'] as $right)$rights[$right]=$has($right);
-    foreach(['RELOAD','FLUSH_TABLES','SHOW_ROUTINE'] as $right)$rights[$right]=$has($right,true);
+    foreach(['RELOAD','FLUSH_TABLES','SHOW_ROUTINE','PROCESS'] as $right)$rights[$right]=$has($right,true);
     $rights['GLOBAL SELECT']=$has('SELECT',true);
     $enumeration=['TRIGGER'=>$rights['TRIGGER'],'EVENT'=>$rights['EVENT'],
         'ROUTINE'=>$rights['SHOW_ROUTINE']||$rights['GLOBAL SELECT']||$rights['CREATE ROUTINE']||$rights['ALTER ROUTINE']||$rights['EXECUTE']];
-    $stage='PERMISSIONS_OBJECT_METADATA_REJECTED';$objects=[];
+    $stage='PERMISSIONS_OBJECT_METADATA_REJECTED';if($progress!==null)$progress($stage);$objects=[];
     $queries=[
         'TRIGGER'=>'SELECT TRIGGER_NAME AS name FROM information_schema.triggers WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME LIMIT 33',
         'ROUTINE'=>'SELECT ROUTINE_NAME AS name,ROUTINE_TYPE AS kind FROM information_schema.routines WHERE ROUTINE_SCHEMA=DATABASE() ORDER BY ROUTINE_TYPE,ROUTINE_NAME LIMIT 33',
@@ -61,8 +67,16 @@ try {
         'existing_backup_rights'=>count($missing)>0?'NEIN':($complete?'JA':'NICHT NACHWEISBAR'),'missing'=>$missing,
         'global_lock_requires'=>'Global RELOAD or FLUSH_TABLES; existing backup guard requires RELOAD; schema LOCK TABLES is insufficient',
         'business_writes'=>0,'lock_operations'=>0,'backup_operations'=>0];
+    if($scope==='schema6-prepare'){
+        $stage='SCHEMA6_PREPARE_INVENTORY_REJECTED';if($progress!==null)$progress($stage);
+        require_once __DIR__.'/market_collector/schema6_prepare.php';
+        $result['schema6_prepare']=\Mosa2\Schema6Prepare\inspect($p,dirname(__DIR__),$result,$progress);
+    }
     check($p->inTransaction(),'transaction_lost');$p->rollBack();
-}catch(Throwable){$result=['status'=>$stage,'business_writes'=>0,'lock_operations'=>0,'backup_operations'=>0];}
+}catch(Throwable $error){
+    $result['status']=$stage;$result['business_writes']=0;$result['lock_operations']=0;$result['backup_operations']=0;
+    if($error instanceof \Mosa2\Schema6Prepare\InspectionRejected)$result['section']=$error->section;
+}
 finally{if($p!==null&&$p->inTransaction()){try{$p->rollBack();}catch(Throwable){$result=['status'=>'PERMISSIONS_ROLLBACK_REJECTED'];}}$p=null;}
 echo json_encode($result,JSON_THROW_ON_ERROR);
 exit(($result['status']??null)==='BACKUP_PERMISSIONS_INSPECTED'?0:1);
