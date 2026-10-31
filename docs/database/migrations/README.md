@@ -1,5 +1,16 @@
 # Versionierte Migrationen
 
+## Version 0006 – Fundamentals und Payload-Provenienz, nur vorbereitet
+
+`0006_fundamentals_and_payload_provenance.sql` ergänzt fünf Tabellen: Fetch-
+Nachweise mit m2_files-Verweis, Kennzahlen, separate Fundamental-Units,
+append-only Observation-Historie und Current je Asset/Kennzahl/Periodenart.
+Keine bestehende Tabelle oder Migration 0001–0005 wird geändert. Keine Seeds,
+Ledger-Einträge, Runner oder Live-Anwendung. Voraussetzung ist der separat
+qualifizierte Stand 0001–0005; auf Schema 4 nicht unmittelbar anwendbar.
+[Vertrag, Index-/EXPLAIN-Plan und offene Apply-Nachweise](../FUNDAMENTALS_ARCHITECTURE.md).
+
+
 ## Version 0005 – Collector-Reservierungen, nur vorbereitet
 
 `0005_collector_reservations.sql` ergänzt isolierte Zustands-/Reservierungstabellen

@@ -9,7 +9,8 @@ from test_core_schema_phase2 import ROOT, MIGRATIONS, split_sql
 from market_units_schema_fixture import CheckExpression, foreign_keys_accept, parse_schema
 
 FILES = ['0001_core_asset_identity.sql', '0002_market_current_history.sql', '0003_market_units.sql',
-         '0004_current_observation_provenance.sql']
+         '0004_current_observation_provenance.sql', '0005_collector_reservations.sql',
+         '0006_fundamentals_and_payload_provenance.sql']
 BASE = ''.join((MIGRATIONS / name).read_text(encoding='utf-8') for name in FILES[:2])
 SQL = (MIGRATIONS / FILES[2]).read_text(encoding='utf-8')
 BEFORE, AFTER = parse_schema(BASE), parse_schema(BASE + SQL)

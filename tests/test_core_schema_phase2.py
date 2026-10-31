@@ -327,7 +327,8 @@ class CoreSchemaTests(unittest.TestCase):
         self.assertEqual(order, list(reversed(self.tables)))
         self.assertEqual(sorted(p.name for p in MIGRATIONS.glob('*.sql')),
                          ['0001_core_asset_identity.sql', '0002_market_current_history.sql',
-                          '0003_market_units.sql', '0004_current_observation_provenance.sql'])
+                          '0003_market_units.sql', '0004_current_observation_provenance.sql',
+                          '0005_collector_reservations.sql', '0006_fundamentals_and_payload_provenance.sql'])
 
 
 if __name__ == '__main__':

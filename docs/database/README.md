@@ -145,3 +145,12 @@ Dieses Dokument ist der Ausgangspunkt. Detailtabellen, Keys, Indizes, KI-Rechte 
 
 Der explizit freizugebende Current-/Nur-Lese-Anzeigepfad einschließlich
 Migration 4 ist in [CURRENT_DISPLAY.md](CURRENT_DISPLAY.md) beschrieben.
+
+## Vorbereitete Fundamental-Erweiterung
+
+[Fundamentals-Architektur](FUNDAMENTALS_ARCHITECTURE.md) und Migration 0006
+bereiten vollständige Provider-Evidenz über m2_files, einen offenen Kennzahlen-
+und Unit-Katalog, append-only History und kleine getrennte Current-Slots vor.
+0001–0005 und vorhandene Marktpfade bleiben unverändert. Nur Offline-Vorbereitung,
+kein Apply/Collector/Deployment; echte MySQL-/EXPLAIN-/Performance-Nachweise
+und alle Betriebsfreigaben folgen separat.
