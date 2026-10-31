@@ -10,7 +10,7 @@ on:
       verification_scope:
         description: Release packaging or pure simulated cycle and collector regressions
         type: choice
-        options: [release, cycle, consolidation, scheduler, tradegate-five, fundamentals6, persistence, migration5, schema5, backup-restore, backup-permissions]
+        options: [release, cycle, consolidation, scheduler, tradegate-five, fundamentals6, persistence, migration5, schema5, backup-restore, backup-permissions, schema6-prepare]
         default: release
       backup_stage:
         description: Bounded backup diagnosis, focused correction, or final regression
@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   offline:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5' && inputs.verification_scope != 'backup-restore' && inputs.verification_scope != 'backup-permissions' && inputs.verification_scope != 'fundamentals6'
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope != 'persistence' && inputs.verification_scope != 'migration5' && inputs.verification_scope != 'schema5' && inputs.verification_scope != 'backup-restore' && inputs.verification_scope != 'backup-permissions' && inputs.verification_scope != 'fundamentals6' && inputs.verification_scope != 'schema6-prepare'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
@@ -227,7 +227,7 @@ jobs:
           git diff --exit-code
 
   backup-permissions:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.verification_scope == 'backup-permissions'
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && (inputs.verification_scope == 'backup-permissions' || inputs.verification_scope == 'schema6-prepare')
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     steps:
@@ -249,6 +249,7 @@ jobs:
       - name: One read-only permission and object metadata inspection, no locks or business data
         env:
           PYTHONDONTWRITEBYTECODE: '1'
+          BACKUP_INSPECTION_SCOPE: ${{ inputs.verification_scope == 'schema6-prepare' && 'schema6-prepare' || 'permissions' }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
           MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}

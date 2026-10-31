@@ -3,10 +3,12 @@ declare(strict_types=1);
 /** One bounded metadata-only inspection through the existing verified connection. */
 require_once __DIR__.'/phase2/postcheck.php';
 use function Mosa2\Phase2\{check,connection};
+ini_set('display_errors','0');ini_set('log_errors','0');
 $stage='PERMISSIONS_INPUT_REJECTED';$p=null;$result=[];
 try {
     $input=json_decode(stream_get_contents(STDIN),true,32,JSON_THROW_ON_ERROR);
     check(($input['attempt']??null)==='1','first_attempt');
+    $scope=$input['scope']??'permissions';check(in_array($scope,['permissions','schema6-prepare'],true),'scope');
     $stage='PERMISSIONS_CONNECTION_OR_IDENTITY_REJECTED';
     $p=connection($input['password'],'127.0.0.1',$input['port']);unset($input['password']);
     $p->exec('SET SESSION TRANSACTION READ ONLY');
@@ -28,7 +30,7 @@ try {
     $has=static fn(string $right,bool $globalOnly=false):bool=>in_array($right,$global,true)||in_array('ALL PRIVILEGES',$global,true)
         ||(!$globalOnly&&(in_array($right,$schema,true)||in_array('ALL PRIVILEGES',$schema,true)));
     $rights=[];foreach(['SELECT','SHOW VIEW','TRIGGER','EVENT','CREATE ROUTINE','ALTER ROUTINE','EXECUTE','LOCK TABLES'] as $right)$rights[$right]=$has($right);
-    foreach(['RELOAD','FLUSH_TABLES','SHOW_ROUTINE'] as $right)$rights[$right]=$has($right,true);
+    foreach(['RELOAD','FLUSH_TABLES','SHOW_ROUTINE','PROCESS'] as $right)$rights[$right]=$has($right,true);
     $rights['GLOBAL SELECT']=$has('SELECT',true);
     $enumeration=['TRIGGER'=>$rights['TRIGGER'],'EVENT'=>$rights['EVENT'],
         'ROUTINE'=>$rights['SHOW_ROUTINE']||$rights['GLOBAL SELECT']||$rights['CREATE ROUTINE']||$rights['ALTER ROUTINE']||$rights['EXECUTE']];
@@ -61,6 +63,11 @@ try {
         'existing_backup_rights'=>count($missing)>0?'NEIN':($complete?'JA':'NICHT NACHWEISBAR'),'missing'=>$missing,
         'global_lock_requires'=>'Global RELOAD or FLUSH_TABLES; existing backup guard requires RELOAD; schema LOCK TABLES is insufficient',
         'business_writes'=>0,'lock_operations'=>0,'backup_operations'=>0];
+    if($scope==='schema6-prepare'){
+        $stage='SCHEMA6_PREPARE_INVENTORY_REJECTED';
+        require_once __DIR__.'/market_collector/schema6_prepare.php';
+        $result['schema6_prepare']=\Mosa2\Schema6Prepare\inspect($p,dirname(__DIR__),$result);
+    }
     check($p->inTransaction(),'transaction_lost');$p->rollBack();
 }catch(Throwable){$result=['status'=>$stage,'business_writes'=>0,'lock_operations'=>0,'backup_operations'=>0];}
 finally{if($p!==null&&$p->inTransaction()){try{$p->rollBack();}catch(Throwable){$result=['status'=>'PERMISSIONS_ROLLBACK_REJECTED'];}}$p=null;}
