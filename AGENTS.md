@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 31.10.2026, 09:16:24 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 31.10.2026, 13:27:11 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -22,10 +22,21 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Keine Änderungen außerhalb dieses Repositories vornehmen.
 - Keine Änderungen an `masterxfix/fixlab`.
 
+## Verbindliche MOSA-2-Oberziele
+
+- **Datenvollständigkeit ist ein oberstes Ziel:** Möglichst alle kostenlos verfügbaren, relevanten Informationen aus den tatsächlich genutzten Quellen erfassen und dauerhaft erhalten. „Heute nicht benötigt“ oder „noch nicht angezeigt“ ist kein ausreichender Grund, verfügbare relevante Daten zu verwerfen.
+- **Bekannte Werte strukturiert, unbekannte Werte erhalten:** Fachlich bekannte Felder werden normalisiert gespeichert. Noch nicht modellierte, aber relevante Anbieterinformationen müssen mit Quelle und Zeitbezug in einer geeigneten Rohdaten-/Payload-/Evidenzschicht erhalten bleiben, bis eine saubere Fachzuordnung existiert.
+- **Performance ist gleichrangig und verbindlich:** normale DB-Abfrage ideal < 20 ms, gesamte DB-Zeit einer normalen Seite < 200 ms, normaler Seitenaufruf < 1,0 s, p95 < 1,5 s, harte Obergrenze 2,0 s. Current, History und Rohdaten/Evidenz getrennt halten; Indizes mit den kritischen Queries planen.
+- **Teilscope ändert nicht das Gesamtziel:** Ein kleiner beauftragter Funktionsschritt darf das langfristige Daten- oder Produktziel nicht stillschweigend enger definieren. Bewusste vorläufige Einschränkungen als offen/temporär dokumentieren und nicht als endgültigen Datenumfang behandeln.
+- **MOSA-Wissen wiederverwenden:** Bereits in MOSA erprobte Datenfelder, Anbieterinformationen und funktionierende allgemeine Logik vor einer Neuentwicklung prüfen und, sofern fachlich bestätigt, in die MOSA-2-Zielarchitektur übernehmen.
+- **Keine Sonderlocken:** Anbieter- und Assetfunktionen allgemein und wiederverwendbar bauen.
+- **KI auf verlässlichen Daten:** KI darf interpretieren, verbinden und erklären; Fakten, Berechnungen, Herkunft und Zeitbezüge bleiben deterministisch und nachvollziehbar.
+- **Produktdesign:** MOSA 2 soll klar, smart und stilvoll wirken, mit wenigen Kacheln und langfristig einem einheitlichen Stylesheet. Die bestehende Designfreigaberegel bleibt davon unberührt.
+
 ## Nutzererfahrung und praktische Teilerfolge
 
 - Der Nutzer berichtet am 31.10.2026, dass Secure Dashboard und MOSA gleichzeitig minütlich Kurse erfolgreich abrufen. Diese Betriebserfahrung bei der Planung berücksichtigen; eine hypothetische Überlastung nicht als beobachteten Fehler darstellen.
-- Kleine beauftragte Versuche durchführen, aus dem tatsächlichen Ergebnis lernen und vorhandene erfolgreiche Funktionen wiederverwenden. Der nächste Kurs-Teilerfolg ist ein echter gespeicherter und auf der Testsite sichtbarer Wert mit Quelle und Zeitangaben.
+- Kleine beauftragte Versuche durchführen, aus dem tatsächlichen Ergebnis lernen und vorhandene erfolgreiche Funktionen wiederverwenden. Der Fünferlauf vom 31.10.2026 (Actions-Lauf 41198494118) hat BYD, DroneShield, Ubtech Robotics, PNE AG und Carl Zeiss Meditec über Tradegate gespeichert, Current aktualisiert und sichtbar nachgewiesen; dieser Erfolg ist Grundlage, aber nicht der endgültige Marktdatenumfang.
 - Neue Bedenken, die den Auftrag stoppen, seinen Umfang verändern oder einen Anbieterwechsel auslösen würden, zuerst konkret mit dem Nutzer besprechen. Keine zusätzlichen Freigabehürden allein aus ungeprüften Vermutungen einführen.
 - Paket-, Syntax- und Offline-Erfolge als Vorbereitung bezeichnen. Die erfolgreiche Anzeige und ein automatischer Dauerbetrieb sind jeweils eigene, tatsächlich nachzuweisende Ergebnisse.
 
@@ -188,6 +199,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 31.10.2026 | 13:27:11 Uhr (MEZ, UTC+01:00) | Verbindliche MOSA-2-Oberziele ergänzt: Datenvollständigkeit und Performance gleichrangig, relevante kostenlose Anbieterinformationen erhalten, unbekannte Felder nicht still verwerfen, Teilscope nicht zum Endumfang machen sowie MOSA-Wissen und Produktdesign als Leitplanken festgehalten. |
 | 31.10.2026 | 09:16:24 Uhr (MEZ, UTC+01:00) | Nutzeranweisung festgehalten: vorhandene Betriebserfahrung berücksichtigen, begrenzt ausprobieren und lernen, neue stoppende Bedenken zuerst besprechen und sichtbare Teilerfolge nachweisen. |
 | 22.10.2026 | 14:44:52 Uhr (MESZ, UTC+02:00) | Verbindlichen Designbestandsschutz ergänzt: keine stillschweigenden Farb-, Schrift-, Branding- und Theme-Änderungen bei Layout-/Funktionsaufträgen; genaue Designänderungen erfordern vorherige ausdrückliche Nutzerfreigabe. |
 | 22.10.2026 | 12:40:56 Uhr (MESZ, UTC+02:00) | Verbindliche Auftrags- und Testökonomie ergänzt: vorhandene Belege zuerst, minimaler Testplan, stufenweise Nachweise, höchstens drei GitHub-Actions-Läufe ohne erneute Freigabe sowie sofortiger Stopp statt Testschleifen. |

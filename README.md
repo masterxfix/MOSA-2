@@ -4,7 +4,7 @@ MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des
 
 ## Aktueller Stand und nächster Abschlussabschnitt
 
-**31.10.2026:** [Tradegate-Kursmodul und Stand der Installation](docs/database/TRADEGATE_CURRENT_PILOT.md). Der Einzelversuch bestand Paket- und Runtimeprüfung, stoppte jedoch vor dem Abruf an historischen Verzeichniskennungen (`BASE_IDENTITY_CHANGED`). Die Installationskorrektur ist offline geprüft; ein neuer gespeicherter und sichtbarer Kurs steht weiterhin aus. Vier Actions sind verbraucht. Bei Fortsetzung diesen Stand und `AGENTS.md` lesen; bereits abgeschlossene unveränderte Tests nicht wiederholen.
+**31.10.2026:** [Tradegate-Kursmodul](docs/database/TRADEGATE_CURRENT_PILOT.md) erfolgreich bis zur sichtbaren Fünferabnahme geführt. Der Lauf [41198494118](https://github.com/masterxfix/MOSA-2/actions/runs/41198494118) auf Commit `87ed391d67f315a9a884556ab1363e7cd3809dcb` endete mit **COMPLETE**: BYD, DroneShield, Ubtech Robotics, PNE AG und Carl Zeiss Meditec wurden über `Tradegate · XGAT · Mid` gespeichert, Current aktualisiert und im Browser sichtbar geprüft. Observation-, Current-, Web- und Release-Readbacks bestanden; 5/5 Provideranfragen wurden genau einmal verbraucht. Der automatische Dauerbetrieb bleibt deaktiviert. Nächste fachliche Priorität ist die vollständige Übernahme der kostenlos verfügbaren relevanten Marktdaten ohne Verlust bekannter oder später nutzbarer Anbieterinformationen, bei unverändertem Performance-Budget.
 
 **Historische Übergabe 22.10.2026:** [Damals bestätigter Projektstand und Abschlussfahrplan](docs/MOSA2_UEBERGABE_ABSCHLUSSFAHRPLAN_2026-10-22.md).
 
@@ -24,6 +24,16 @@ Die bevorzugte Bedienung soll langfristig über die KI erfolgen: Der Nutzer stel
 Die KI darf interpretieren, Zusammenhänge erkennen, erklären und Empfehlungen geben. **Fakten, Berechnungen und finanzielle Werte müssen jedoch deterministisch und nachvollziehbar aus der Datenbasis stammen.**
 
 Autonomie wird später schrittweise und kontrolliert erweitert. Mehr Freiheiten werden nur innerhalb klarer Berechtigungen und mit vollständigem Aktionsprotokoll vergeben.
+
+## Verbindliche Leitziele
+
+- **Datenvollständigkeit:** MOSA 2 soll möglichst alle kostenlos verfügbaren, relevanten Informationen aus den tatsächlich genutzten Quellen erfassen und dauerhaft erhalten. Eine Information darf nicht allein deshalb verworfen werden, weil sie heute noch nicht angezeigt oder ausgewertet wird.
+- **Rohdaten und Fachwerte:** Bekannte fachliche Werte werden strukturiert gespeichert. Noch nicht modellierte, aber relevante Anbieterinformationen bleiben mit Quelle und Zeitbezug in einer Rohdaten-/Evidenzschicht erhalten, damit sie später ohne erneuten historischen Abruf erschlossen werden können.
+- **Geschwindigkeit:** Vollständigkeit darf nicht zu langsamen Seiten führen. Die verbindlichen Performance-Budgets stehen in `docs/database/README.md`; Current, History und Rohdaten bleiben deshalb getrennte Lese- und Speicherschichten.
+- **Nachvollziehbarkeit und Historie:** Werte bleiben mit Asset, Quelle, Marktzeit, Erfassungszeit und Herkunft rückverfolgbar. MOSA 2 baut eine langfristig nutzbare eigene Datenhistorie auf.
+- **Gemeinsame Module statt Sonderlocken:** Anbieter-, Asset-, Termin-, Logo-, Transaktions- und Analysefunktionen werden allgemein und wiederverwendbar gebaut.
+- **KI auf verlässlichen Daten:** Die KI interpretiert, verbindet und erklärt gespeicherte Daten; Fakten und Berechnungen bleiben deterministisch und prüfbar.
+- **Produktdesign:** MOSA 2 soll klar, smart und stilvoll wirken, mit wenigen Kacheln und langfristig einem einheitlichen Stylesheet. Konkrete Designänderungen bleiben an die Freigaberegeln in `AGENTS.md` gebunden.
 
 ## Arbeitsmodell
 

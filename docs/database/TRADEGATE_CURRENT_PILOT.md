@@ -82,31 +82,23 @@ seine historische Prüffunktion darf sie nicht überschreiben.
 - Bei dieser Korrektur: 0 Actions, 0 Provideranfragen, keine Serverinstallation
   und keine Datenbankänderung.
 
-## Konkreter nächster Schritt
+## Erfolgreicher Abschluss des Live-Nachweises
 
-Bereits verbrauchte Actions: **4**; Provideranfragen dieses fortgesetzten
-Einmalauftrags: **0**. Das zuletzt freigegebene Laufbudget ist ausgeschöpft.
-Ein fünfter Lauf ist noch nicht freigegeben. Für den Live-Nachweis wird genau
-ein weiterer manueller Lauf von `.github/workflows/collector-schema4-once.yml`
-vorgeschlagen, gebunden an den vollständigen Commit des korrigierten Stands.
-Er benötigt die ausdrückliche Erweiterung des Laufbudgets gemäß `AGENTS.md`.
-Höchstens eine Provideranfrage, keine Wiederholungsabrufe. Der vorhandene
-Marker `schema4-live-20261030` wird weder gelöscht noch umbenannt.
+Der abschließende Fünferlauf [41198494118](https://github.com/masterxfix/MOSA-2/actions/runs/41198494118) auf Commit `87ed391d67f315a9a884556ab1363e7cd3809dcb` endete am 31.10.2026 mit **COMPLETE**. Das 59-Dateien-Paket bestand Build/Verify, Runtime und private Installation. Genau fünf Provideranfragen wurden ausgeführt, ohne Wiederholung.
 
-Vorhandene GitHub-Secrets verwenden. Der Lauf installiert das private Paket,
-führt den Einzelabruf aus und prüft gespeicherte Observation, Current und
-installierten Web-Leseweg. Danach ist die tatsächliche Darstellung im bestehenden
-Chrome separat zu prüfen. Erfolg erfordert einen konkreten Kurs mit ISIN, Quelle,
-Marktzeit und Erfassungszeit; ein Paket-PASS allein reicht nicht.
+Gespeichert und über Current sowie den Web-Leseweg bestätigt wurden:
 
-Die automatische Ausführung bleibt deaktiviert. Die historischen Frankfurt-
-Nachweise und `rights_confirmed=false` werden nicht in eine behauptete
-Anbieterbestätigung umgeschrieben. Der Nutzer hat einen begrenzten praktischen
-Versuch beauftragt; daraus wird keine pauschale Dauerfreigabe abgeleitet.
+| Aktie | ISIN | EUR-Mid | Observation |
+| --- | --- | ---: | ---: |
+| BYD | CNE100000296 | 7,8300 | 4913 |
+| DroneShield | AU000000DRO2 | 0,8649 | 4914 |
+| Ubtech Robotics | CNE100006CQ4 | 7,2720 | 4915 |
+| PNE AG | DE000A0JBPG2 | 5,4900 | 4916 |
+| Carl Zeiss Meditec | DE0005313704 | 34,8900 | 4917 |
 
-Eine Installation und sichtbare Kursabnahme sind weiterhin offen. Der bereits
-verwendete native Codex-/GitHub-CLI-Zugang kann den nächsten freigegebenen
-Start ausführen; eine erneute Einrichtung des GitHub-Zugangs ist nicht nötig.
+Quelle jeweils `Tradegate · XGAT · Mid`. Marktzeit jeweils 30.10.2026 21:00 UTC; die Anzeige kennzeichnet diese Werte korrekt als veraltet. Die Erfassungszeiten liegen am 31.10.2026 zwischen 11:52:59 und 11:53:16 UTC. Fünf Current-Updates wurden geschrieben; Observation-, Current-, Web- und Release-Readbacks bestanden. Übrige Geschäftsdaten blieben unverändert. Die sichtbare Browserabnahme der fünf Werte wurde bestätigt.
+
+Der Einmalauftrag ist damit vollständig verbraucht: **2/2 Actions, 5/5 Provideranfragen**. Der automatische Dauerbetrieb bleibt deaktiviert. Der nächste fachliche Marktdaten-Schritt ist nicht ein weiterer Einmalabruf, sondern die Vervollständigung des Datenumfangs: kostenlos verfügbare relevante Anbieterinformationen sollen erhalten und bekannte Fachwerte strukturiert gespeichert werden, ohne die verbindlichen Performance-Budgets zu verletzen.
 
 ## Expliziter Fünferlauf (31.10.2026)
 
@@ -151,7 +143,4 @@ sauberen Linux-Checkout, einschließlich Fünfer-Supervisor, Paket-Build/Verify,
 Commitbindung und beider Web-Readbacks. Die bereits gemeldeten drei fokussierten
 Tests und 103 lokalen Regressionen wurden dafür nicht erneut ausgeführt.
 
-Stand nach der Korrektur: Actions **1/2**, Provideranfragen **0/5**;
-Installation, fünf gespeicherte Kurse und Sichtabnahme sind noch offen.
-Der verbleibende Actions-Lauf ist für `scope=five` am vollständigen korrigierten
-Main-Commit vorgesehen. Der historische Einmalmarker bleibt unverändert.
+Abschlussstand: Der verbleibende Fünferlauf wurde als Actions-Lauf **41198494118** auf dem vollständigen Main-Commit `87ed391d67f315a9a884556ab1363e7cd3809dcb` erfolgreich ausgeführt. Ergebnis **COMPLETE**, Actions **2/2**, Provideranfragen **5/5**, fünf neue Observations **4913–4917**, fünf Current-Updates und alle vorgesehenen Readbacks **PASS**. Der historische Einmalmarker bleibt unverändert; automatischer Dauerbetrieb ist weiterhin deaktiviert.

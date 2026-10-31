@@ -2,6 +2,15 @@
 
 Dieser Bereich beschreibt die geplante Datenbank für MOSA 2. Die neue Struktur wird **parallel zu MOSA** aufgebaut. MOSA wird nicht abgeschaltet, sondern bleibt weiterhin nutzbar und dient als Spielwiese/Labor für neue Ideen und Funktionen.
 
+## Oberste Architekturziele
+
+1. **Vollständigkeit:** Möglichst alle kostenlos verfügbaren, relevanten Informationen aus den tatsächlich genutzten Quellen werden erfasst und dauerhaft erhalten. Ein Feld darf nicht nur deshalb verworfen werden, weil es heute noch nicht angezeigt oder ausgewertet wird.
+2. **Geschwindigkeit:** Die Datenmenge darf die normalen Lesewege nicht ausbremsen. Current, History und Rohdaten/Evidenz bleiben getrennt; die unten festgelegten Performance-Budgets gelten auch nach Schemaerweiterungen.
+3. **Nachvollziehbarkeit:** Jeder fachliche Wert bleibt zu Asset, Quelle, Marktzeit, Erfassungszeit und Herkunft rückverfolgbar. Historische Daten werden nicht durch spätere Zustände überschrieben.
+4. **Erweiterbarkeit:** Bekannte Fachwerte werden normalisiert gespeichert. Noch nicht modellierte, aber relevante Anbieterinformationen müssen in einer Rohdaten-/Payload-/Evidenzschicht erhalten bleiben, bis eine saubere Fachzuordnung existiert.
+
+**Vollständigkeit und Performance sind gleichzeitige Anforderungen.** Mehr Daten dürfen nicht durch breite, ungezielte Abfragen auf normalen Seiten erkauft werden; Performance darf umgekehrt nicht durch stilles Wegwerfen verfügbarer Informationen erreicht werden.
+
 ## Priorität 1: saubere Datenmigration
 
 Die bereits in MOSA vorhandenen, wertvollen Daten müssen kontrolliert nach MOSA 2 übernommen werden. Dabei gilt:
@@ -44,6 +53,7 @@ Fachmodule wie Finanzen, Markt, Netzwerk/Smart Home, Mediathek oder Immobilien b
 ## Ziele
 
 - **Finanzen bleiben der wichtigste fachliche Schwerpunkt.**
+- **Datenvollständigkeit:** kostenlos verfügbare relevante Anbieterinformationen werden nicht still verworfen; bekannte Werte werden strukturiert, noch nicht modellierte Informationen roh/evidenzbasiert erhalten.
 - **Sehr schnelle Seiten:** normal unter 1 Sekunde, p95 unter 1,5 Sekunden, harte Grenze 2 Sekunden.
 - **Geringe Latenz:** normale Seiten sollen nur kleine, gezielte DB-Abfragen benötigen.
 - **Keine Sonderlocken:** gleiche fachliche Aufgaben nutzen dieselbe gemeinsame Logik.
@@ -92,15 +102,17 @@ Die Namen sind zunächst Arbeitsnamen.
 
 ## Wichtige Regeln
 
-1. **Current und History bleiben getrennt.** History ist für Charts, Analyse und Nachvollziehbarkeit; normale Seiten lesen Current-Daten.
-2. **Keine externen APIs oder KI im normalen Seitenaufbau.** Diese Arbeit erfolgt vorher oder in eigenen Prozessen; die Oberfläche liest gespeicherte Ergebnisse.
-3. **Fakten und Finanzberechnungen bleiben deterministisch.** Die KI interpretiert und erklärt, sie ersetzt nicht die verlässliche Berechnungslogik.
-4. **Keine Fach-Sonderlogik, wenn eine gemeinsame Logik möglich ist.**
-5. **Indizes werden mit dem Query geplant.** Kritische Abfragen erhalten von Anfang an einen Index passend zu Filter und Sortierung.
-6. **History-Abfragen sind begrenzt.** Immer fachlicher Schlüssel/Zeitraum/LIMIT statt ungebundener Vollsuche.
-7. **MOSA und MOSA 2 bleiben getrennt.** Kein Trigger- oder Dual-Write-Zwang. Daten werden kontrolliert und mit Checkpoints übernommen.
-8. **DB-Änderungen sind eigene, kontrollierte Schritte.** Preview → Check → ausdrückliche Freigabe → Apply → Postcheck.
-9. **KI-Autonomie wird stufenweise vergeben.** Jede erlaubte Aktion besitzt einen klaren Scope und wird protokolliert.
+1. **Current, History und Rohdaten/Evidenz bleiben getrennt.** History ist für Charts, Analyse und Nachvollziehbarkeit; normale Seiten lesen Current-Daten; vollständige Anbieterantworten oder relevante Rohinformationen belasten den normalen Leseweg nicht.
+2. **Keine relevante Anbieterinformation still verwerfen.** Bekannte Felder werden strukturiert normalisiert. Noch nicht modellierte, aber relevante Felder bleiben mit Quelle und Zeitbezug im Rohdaten-/Payload-/Evidenzpfad erhalten und können später in das Fachmodell übernommen werden.
+3. **Keine externen APIs oder KI im normalen Seitenaufbau.** Diese Arbeit erfolgt vorher oder in eigenen Prozessen; die Oberfläche liest gespeicherte Ergebnisse.
+4. **Fakten und Finanzberechnungen bleiben deterministisch.** Die KI interpretiert und erklärt, sie ersetzt nicht die verlässliche Berechnungslogik.
+5. **Keine Fach-Sonderlogik, wenn eine gemeinsame Logik möglich ist.**
+6. **Indizes werden mit dem Query geplant.** Kritische Abfragen erhalten von Anfang an einen Index passend zu Filter und Sortierung.
+7. **History-Abfragen sind begrenzt.** Immer fachlicher Schlüssel/Zeitraum/LIMIT statt ungebundener Vollsuche.
+8. **Schemaerweiterungen müssen das Performance-Budget nachweisen.** Mehr Felder, Historie oder Rohdaten sind kein Grund, die normalen Current-Lesewege zu verlangsamen.
+9. **MOSA und MOSA 2 bleiben getrennt.** Kein Trigger- oder Dual-Write-Zwang. Daten werden kontrolliert und mit Checkpoints übernommen.
+10. **DB-Änderungen sind eigene, kontrollierte Schritte.** Preview → Check → ausdrückliche Freigabe → Apply → Postcheck.
+11. **KI-Autonomie wird stufenweise vergeben.** Jede erlaubte Aktion besitzt einen klaren Scope und wird protokolliert.
 
 ## Phase 0: Hosting-Plattform qualifizieren
 
