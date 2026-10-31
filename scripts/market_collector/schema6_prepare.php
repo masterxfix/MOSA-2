@@ -8,6 +8,42 @@ require_once __DIR__.'/tradegate_manifest.php';
 require_once dirname(__DIR__,2).'/api/current_read.php';
 require_once dirname(__DIR__,2).'/api/observations_read.php';
 
+
+/** Fixed public sections only; never retain driver messages or private values. */
+final class InspectionRejected extends \RuntimeException {
+    public function __construct(public readonly string $section) {
+        check(in_array($section,['READ_ONLY_REJECTED','ARTIFACT_LOAD_REJECTED','TABLE_SET_REJECTED',
+            'STRUCTURE_REJECTED','LEDGER_REJECTED','COUNTS_REJECTED','PROVENANCE_REJECTED',
+            'JOB_STATUS_REJECTED','REPORT_REJECTED'],true),'prepare_section');
+        parent::__construct($section);
+    }
+}
+/** Stage byte-identical originals for the unchanged parser's 0001/2/3.sql contract. */
+function schema4(string $root): array {
+    $digests=\Mosa2\CollectorSchema5\envelope(4)['digests'];
+    $files=glob($root.'/docs/database/migrations/000[1-4]_*.sql');sort($files);
+    same(count($files),4,'prepare_artifacts');
+    foreach($files as $i=>$file)same(hash_file('sha256',$file),$digests[$i],'prepare_artifact_checksum');
+    $work=tempnam(sys_get_temp_dir(),'mosa2-schema4-');check($work!==false,'prepare_temp');
+    check(unlink($work)&&mkdir($work,0700),'prepare_workdir');
+    try {
+        foreach(array_slice($files,0,3) as $i=>$file){
+            $target=$work.'/'.sprintf('%04d',$i+1).'.sql';
+            $out=fopen($target,'x');check($out!==false,'prepare_stage_open');
+            try{$bytes=file_get_contents($file);check($bytes!==false&&fwrite($out,$bytes)===strlen($bytes),'prepare_stage_write');}
+            finally{fclose($out);}
+            same(hash_file('sha256',$target),$digests[$i],'prepare_staged_checksum');
+        }
+        $schema=\Mosa2\CollectorSchema5\schemas($work,4);
+        $names=array_keys($schema);sort($names);
+        same($names,\Mosa2\CollectorSchema5\envelope(4)['tables'],'prepare_built_schema4');
+        return $schema;
+    }finally{
+        for($i=1;$i<=3;$i++){$file=$work.'/'.sprintf('%04d',$i).'.sql';if(is_file($file))unlink($file);}
+        rmdir($work);
+    }
+}
+
 /** Preserve exact historical envelopes; this is not a schema6 runtime opt-in. */
 function ledger(array $rows,string $root): void {
     $contract=\Mosa2\CollectorSchema5\envelope(4);
@@ -51,32 +87,42 @@ function publications(array $published,array $observations): array {
 }
 /** Called only inside the already authenticated, verified READ ONLY transaction. */
 function inspect(PDO $p,string $root,array $permissions): array {
+    $stage='READ_ONLY_REJECTED';
+    try {
     check($p->inTransaction()&&(string)$p->query('SELECT @@session.transaction_read_only')->fetchColumn()==='1','prepare_readonly');
     $p->exec('SET SESSION MAX_EXECUTION_TIME=3000');
+    $stage='ARTIFACT_LOAD_REJECTED';$expected=schema4($root);
+    $stage='TABLE_SET_REJECTED';
     $tables=$p->query('SELECT TABLE_NAME,ENGINE,DATA_LENGTH,INDEX_LENGTH,AUTO_INCREMENT FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME LIMIT 28')->fetchAll(PDO::FETCH_ASSOC);
     same(array_column($tables,'TABLE_NAME'),\Mosa2\CollectorSchema5\envelope(4)['tables'],'prepare_exact_schema4');
-    $schema=\Mosa2\Phase3K\structure($p,\Mosa2\CollectorSchema5\schemas($root,4));
+    $stage='STRUCTURE_REJECTED';
+    $schema=\Mosa2\Phase3K\structure($p,$expected);
+    $stage='LEDGER_REJECTED';
     $rows=$p->query('SELECT version,migration_key,HEX(checksum) AS checksum,applied_at FROM m2_schema_migrations ORDER BY version LIMIT 7')->fetchAll(PDO::FETCH_ASSOC);
     ledger($rows,$root);
+    $stage='COUNTS_REJECTED';
     $counts=[];$bytes=0;
     foreach($tables as $table){
         same($table['ENGINE'],'InnoDB','prepare_innodb');
         $counts[$table['TABLE_NAME']]=(string)$p->query('SELECT /*+ MAX_EXECUTION_TIME(3000) */ COUNT(*) FROM '.qi($table['TABLE_NAME']))->fetchColumn();
         $bytes+=(int)$table['DATA_LENGTH']+(int)$table['INDEX_LENGTH'];
     }
+    $stage='PROVENANCE_REJECTED';
     $now=gmdate('Y-m-d H:i:s').'.000000';
     $published=\Mosa2\CurrentRead\published($p,$now,900);$observations=[];
     $q=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',\Mosa2\ObservationRead\FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
     foreach($published as $entry){$r=$entry['route'];$q->execute([$r['asset_id'],$r['source_id']]);
         $observations[]=\Mosa2\ObservationRead\latest($q->fetchAll(PDO::FETCH_ASSOC),$r,$r['isin'],$now,900);}
     $public=publications($published,$observations);
+    $stage='JOB_STATUS_REJECTED';
     $processes=$p->query('SELECT COMMAND,STATE FROM information_schema.processlist WHERE DB=DATABASE() AND ID<>CONNECTION_ID() LIMIT 33')->fetchAll(PDO::FETCH_ASSOC);
     check(count($processes)<=32,'prepare_process_bound');
     $jobs=$p->query("SELECT COUNT(*) FROM m2_jobs WHERE enabled=1")->fetchColumn();
     $runs=$p->query("SELECT COUNT(*) FROM m2_job_runs WHERE status='running'")->fetchColumn();
-    $locks=[];foreach(['m2-current-refresh','m2-collector-live-batch'] as $name){
+    $locks=[];foreach(['m2-current-refresh','m2-collector-scheduler'] as $name){
         $q=$p->prepare('SELECT IS_USED_LOCK(?) IS NOT NULL');$q->execute([$name]);$locks[$name]=(bool)$q->fetchColumn();}
     check($p->inTransaction(),'prepare_transaction_lost');
+    $stage='REPORT_REJECTED';
     return ['status'=>'SCHEMA6_PREPARE_INVENTORY_PASS','schema_version'=>4,'table_count'=>count($tables),
         'exact_structure'=>'PASS','ledger_checksums'=>'PASS','migration5_6_objects'=>'ABSENT',
         'table_rows'=>$counts,'allocated_table_bytes_estimate'=>$bytes,'all_innodb'=>true,
@@ -87,4 +133,5 @@ function inspect(PDO $p,string $root,array $permissions): array {
         'backup'=>exportGate($permissions,$permissions['rights'],$processes),
         'runtime_schema6'=>'NOT_COMPATIBLE_EXACT_SCHEMA4_5_CONTRACTS',
         'db_mutations'=>0,'provider_requests'=>0,'deployments'=>0];
+    }catch(\Throwable){throw new InspectionRejected($stage);}
 }

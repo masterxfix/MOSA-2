@@ -1,17 +1,18 @@
 # Dogado Schema 4 -> 6: PREPARE, kein APPLY
 
-## Beleggrenzen und geplanter einmaliger Bestandslauf
+## Beleggrenzen und einmaliger Bestandslauf
 
 Quellstand: `2a5b22f547c16521cf7235b4ba82651dea815e3a`.
 Migrationen 0001-0006 bleiben unverändert. Der isolierte MySQL-8.0.46-Nachweis
 [41205801735](https://github.com/masterxfix/MOSA-2/actions/runs/41205801735)
 wird wiederverwendet, nicht erneut ausgeführt. Das ist keine Dogado-Apply-Freigabe.
 
-Scope `schema6-prepare` im vorhandenen manuellen Workflow benutzt dieselbe
+Der nur im Kandidatenbranch `codex/schema6-dogado-prepare` vorbereitete Scope
+`schema6-prepare` im vorhandenen manuellen Workflow benutzt dieselbe
 `backup_permissions_remote.py`-, SSH-Tunnel- und `Phase2\\connection`-Identitätsprüfung.
 Genau ein Versuch, READ ONLY vor Bestandsabfragen, keine Installation oder Serverdateien.
 Der historische Scope `backup-permissions` bleibt verfügbar.
-Der neue Modus prüft den exakten Schema-4-Vertrag mit dem gemeinsamen Metadatenprüfer,
+Der Kandidat soll den exakten Schema-4-Vertrag mit dem gemeinsamen Metadatenprüfer prüfen,
 Ledger 1-4 samt SQL-Hashes, alle 17 InnoDB-Tabellen und exakte Zeilenzähler.
 Er benutzt dieselben Current-/Observation-/Route-/Unit-/Dedupe-/Provenanceprüfungen
 wie die Website. Ausgegeben werden Identitäten, Status und einseitige Baseline-Hashes,
@@ -110,5 +111,55 @@ Ein späterer Read-only-Abgleich und ggf. Recovery benötigen einen eigenen Auft
 
 ## Ergebnis des aktuellen Auftrags
 
-Wird nach dem einzigen freigegebenen Bestandslauf mit den tatsächlich belegten
-Ergebnissen ergänzt. Bis dahin: Backup/Restore NICHT erstellt, Apply BLOCKIERT.
+**Status: BLOCKIERT.** Genau ein manueller Actions-Lauf, kein Rerun:
+[41207129005](https://github.com/masterxfix/MOSA-2/actions/runs/41207129005),
+Job [124554397679](https://github.com/masterxfix/MOSA-2/actions/runs/41207129005/job/124554397679),
+Kandidat `0a24d5c466b05cf799a5058a819e6cb718b7bcb1`, Ergebnis failure.
+
+Der einzige ausgeführte Job war `backup-permissions`; Offline-, Persistenz- und
+Migrationsjobs wurden übersprungen. Er lief mit `schema6-prepare`, nicht mit
+APPLY. Das bestätigte erste Fehlersignal am 31.10.2026, 13:47:29 UTC lautet
+`SCHEMA6_PREPARE_INVENTORY_REJECTED`; Exitcode 1. Es liegt nach Verbindung,
+Identitätsprüfung, READ-ONLY-Nachweis und Grant-/Objektabfragen, innerhalb
+der neuen Bestandsprüfung. Diese Position beweist die vorhandene sichere
+Verbindung zur erlaubten Testdatenbank und deren fest geprüfte MySQL-Version
+`8.0.26-16`. Sie beweist NICHT das erfolgreiche Inventar.
+
+Der Catch-Pfad gibt absichtlich keine SQL-Fehler oder privaten Daten aus, bewahrt
+aber auch keinen genaueren Unterabschnitt dieser Bestandsprüfung. Die konkrete
+innere Ursache lässt sich daher aus diesem Lauf nicht bestimmen. Weder
+Schemaabweichung, Rechteproblem noch Timeout werden ohne Beleg behauptet.
+Keine weitere Diagnose-Action, kein anderer DB-Zugriff und kein Export wurden gestartet.
+
+| Nachweis | Tatsächlich erreicht |
+| --- | --- |
+| Sichere Dogado-Identität / MySQL | Verbindung und fest geprüfte Version 8.0.26-16; READ ONLY vor Inventar erreicht |
+| Aktuelle Dogado-Schemaversion / Ledger / Zeilenzähler | NICHT erneut bestätigt; letzter erfolgreicher Betriebsnachweis Schema 4 bleibt historisch |
+| Aktuelle vollständige Objektsichtbarkeit / Rechte | Kein vollständiger neuer Ergebnisbericht; früherer Berechtigungsnachweis 39767648960 bleibt historisch |
+| Fünf aktuelle Current-/Observation-Ketten | In diesem Lauf NICHT bestätigt; historischer Fünfernachweis 41198494118 wird nicht ersetzt |
+| Durchgehende Schreib-/DDL-Ruhe | NICHT nachgewiesen |
+| Exportclient / ausreichende Ressourcen / Schlüsselverwahrung | In diesem Lauf NICHT bestätigt |
+| Live-Backup technisch freigegeben | NEIN; Voraussetzungen unvollständig |
+| Tatsächlicher Export / verschlüsseltes Backup / Artefakt | NEIN; jeweils 0 |
+| Unabhängiger Restore des echten Bestands | NEIN; 0 Versuche |
+| Schema-6-Runtime | NICHT kompatibel qualifiziert; genaue notwendige Erweiterung oben bestimmt |
+| Dogado-Apply 0005 + 0006 | BLOCKIERT; im nächsten Auftrag noch nicht sicher ausführbar |
+
+Neue Offline-Guards: **6/6 PASS**, PHP-Syntax beider betroffener Dateien PASS.
+Der erste lokale Testversuch hatte nur im eigenen isolierten Testcheckout
+fehlende aktuelle Tradegate-Abhängigkeiten; nach Übernahme der unveränderten
+main-Dateien bestand derselbe fokussierte Block. Keine Schema-/Performance-
+Regression aus 41205801735 wiederholt.
+
+Der nicht live bestätigte Prüfcode verbleibt ausschließlich im Kandidatenbranch.
+Nach main gelangt für diesen Auftrag nur diese Dokumentation mit einem
+Abschluss-Commit. Die bisherigen Runtime-/Release-/Backup-Sperren bleiben
+unverändert. Keine Dogado-DDL/DML, keine Provideranfrage, kein Deployment,
+kein Collector-/Schedulerstart, keine Seeds und keine Migration ausgeführt.
+
+Vor einem neuen freigegebenen Versuch: den konkreten Inventar-Unterabschnitt
+durch sichere feste Diagnosecodes und belastbaren Offline-Nachweis eingrenzen.
+Danach weiter erforderlich: frischer vollständiger Bestand, kontrollierte Ruhe,
+geprüfter Live-Backup-Weg mit Schlüsselverwahrung und unabhängigem Restore sowie
+explizit qualifizierte Schema-6-Runtime. Eine spätere Apply-Freigabe allein ersetzt
+diese fehlenden technischen Nachweise nicht.

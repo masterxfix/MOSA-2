@@ -69,7 +69,10 @@ try {
         $result['schema6_prepare']=\Mosa2\Schema6Prepare\inspect($p,dirname(__DIR__),$result);
     }
     check($p->inTransaction(),'transaction_lost');$p->rollBack();
-}catch(Throwable){$result=['status'=>$stage,'business_writes'=>0,'lock_operations'=>0,'backup_operations'=>0];}
+}catch(Throwable $error){
+    $result['status']=$stage;$result['business_writes']=0;$result['lock_operations']=0;$result['backup_operations']=0;
+    if($error instanceof \Mosa2\Schema6Prepare\InspectionRejected)$result['section']=$error->section;
+}
 finally{if($p!==null&&$p->inTransaction()){try{$p->rollBack();}catch(Throwable){$result=['status'=>'PERMISSIONS_ROLLBACK_REJECTED'];}}$p=null;}
 echo json_encode($result,JSON_THROW_ON_ERROR);
 exit(($result['status']??null)==='BACKUP_PERMISSIONS_INSPECTED'?0:1);
