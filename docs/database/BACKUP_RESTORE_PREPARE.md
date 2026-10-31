@@ -1,5 +1,17 @@
 # Schema4 backup/restore protocol — synthetic CI only
 
+## Zusatz vom 31.10.2026: separater schema-begrenzter Recovery-Weg
+
+[SCOPED_BACKUP_PREPARE.md](SCOPED_BACKUP_PREPARE.md) dokumentiert den zusätzlich
+vorbereiteten engen Exportadapter und [Actions 41211740525](https://github.com/masterxfix/MOSA-2/actions/runs/41211740525):
+synthetischer Export, vorhandene Verschlüsselung/Signatur und vollständiger
+unabhängiger Restore PASS. Die unten beschriebenen Isolationssperren des
+historischen Executors und dessen bisheriger Standardmodus bleiben erhalten.
+Gemeinsame begrenzte Aufnahme/Evidenz wird wiederverwendet.
+Kein Dogado-Export, kein reales Backup/Restore, kein Recovery-Key eingerichtet.
+Der separate manuelle Live-Weg bleibt an unabhängigen Recovery-Key, kontrollierte
+Schreib-/DDL-Ruhe, Ressourcen, Aufbewahrung und ausdrücklichen Folgeauftrag gebunden.
+
 This is preparation and an isolated MySQL8 recovery test, not a Dogado backup,
 restore, migration authorization or operational readiness statement. Migration SQL
 0001–0005, both execution switches, provider rights, the historical33 contract,

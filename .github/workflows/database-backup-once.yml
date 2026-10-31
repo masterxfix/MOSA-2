@@ -1,0 +1,98 @@
+name: Manual MOSA2 bounded database backup and isolated restore
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact separately authorized full commit
+        required: true
+        type: string
+      authorization:
+        description: MOSA2-DB-BACKUP-ONCE followed by colon and exact commit
+        required: true
+        type: string
+      quiescence_json:
+        description: Independently signed short lived MOSA2 writer and DDL quiescence assertion
+        required: true
+        type: string
+      private_artifact_storage_confirmed:
+        description: Encrypted retention and independent recovery-key custody explicitly approved
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: mosa2-test-db-backup-once
+  cancel-in-progress: false
+jobs:
+  once:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: mosa2_collector_isolated
+        ports: [127.0.0.1:3307:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    steps:
+      - name: Require exact explicitly authorized revision
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          BACKUP_AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$BACKUP_AUTHORIZATION" = "MOSA2-DB-BACKUP-ONCE:$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Existing pinned client dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/db-backup-venv"
+          "$RUNNER_TEMP/db-backup-venv/bin/python" -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt PyMySQL==1.1.2
+      - name: Bind isolated restore service identity
+        env:
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+        run: |
+          printf 'MOSA2_MYSQL_CONTAINER=%s\n' "$MYSQL_CONTAINER" >> "$GITHUB_ENV"
+          printf 'MOSA2_ISOLATED_SERVER_HOSTNAME=%s\n' "$(docker inspect --format '{{.Config.Hostname}}' "$MYSQL_CONTAINER")" >> "$GITHUB_ENV"
+          printf 'MOSA2_ISOLATED_SERVER_UUID=%s\n' "$(docker exec "$MYSQL_CONTAINER" mysql --no-defaults --user=root --batch --skip-column-names -e 'SET GLOBAL event_scheduler=OFF; SET GLOBAL log_bin_trust_function_creators=ON; SELECT @@server_uuid;')" >> "$GITHUB_ENV"
+      - name: One authorized export, encryption and independent full isolated restore
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          PYTHONPATH: .:tests
+          MOSA2_ISOLATED_MYSQL: '1'
+          MOSA2_BACKUP_RESTORE_ISOLATED: '1'
+          BACKUP_AUTHORIZATION: ${{ inputs.authorization }}
+          QUIESCENCE_JSON: ${{ inputs.quiescence_json }}
+          STORAGE_CONFIRMED: ${{ inputs.private_artifact_storage_confirmed }}
+          MOSA_TEST_DB_BACKUP_RECOVERY_KEY: ${{ secrets.MOSA_TEST_DB_BACKUP_RECOVERY_KEY }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: |
+          py="$RUNNER_TEMP/db-backup-venv/bin/python"
+          "$py" -B -c 'import json,os; print(json.dumps(dict(authorization=os.environ["BACKUP_AUTHORIZATION"],quiescence=json.loads(os.environ["QUIESCENCE_JSON"]),private_artifact_storage_confirmed=os.environ["STORAGE_CONFIRMED"]=="true",retention_days=7)))' | "$py" -B -m scripts.database_backup_once
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mosa2-db-backup-encrypted-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/mosa2-db-backup-private/backup.sealed.json
+            ${{ runner.temp }}/mosa2-db-backup-private/manifest.json
+          if-no-files-found: error
+          retention-days: 7
