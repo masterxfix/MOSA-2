@@ -385,6 +385,7 @@ class Schema4OnceTests(unittest.TestCase):
                  "scripts/collector_private_upload_remote.py", "scripts/collector_release.py",
                  "scripts/deploy_private_collector.py", "scripts/collector_schema4_once.php",
                  "scripts/collector_schema4_once.py", "scripts/collector_schema4_once_remote.py",
+                 "scripts/collector_private_directories.py", "scripts/collector_schema4_private_paths.py",
                  "scripts/collector_release/runtime.php", "config/collector-private-schema4-once.example.json",
                  "tests/test_collector_release.py", "tests/historical_release_fixture.py",
                  "tests/test_tradegate_collector.py", "tests/fixtures/market_collector/tradegate_quote.html"]
@@ -473,6 +474,9 @@ class Schema4OnceTests(unittest.TestCase):
         scope["os"] = SimpleNamespace(mkdir=mkdir, fsync=lambda fd: None, close=lambda fd: None,
                                        umask=lambda mode: None, lstat=lambda path: object())
         scope["guard"] = lambda: None
+        # This fixture isolates completion/readback behavior. Actual composed
+        # path checks are exercised in test_schema4_private_identity.py.
+        scope["bind_private_paths"] = lambda data: {}
         scope["audit"] = lambda *args: None
         scope["folder"] = lambda path: 1 if path.endswith("/locks") else 2 if path.endswith("/runs") else 3
         scope["new_metadata"] = lambda *args: None
@@ -599,7 +603,7 @@ echo json_encode($results);
                  patch.object(self.once.upload,"artifact",return_value=(self.meta,self.manifest,{})), \
                  patch.object(self.once.shared,"ssh_client",side_effect=ssh), \
                  patch.object(self.once,"runtime") as measured, \
-                 patch.object(self.once.upload,"upload",return_value={"ok":True}), \
+                 patch.object(self.once.upload,"upload",return_value={"ok":True,"private_path_identity":{}}), \
                  patch.object(self.once.remote,"remote_call",return_value=(0,json.dumps(answer).encode(),False,1)):
                 env = dict(self.env(),MOSA_TEST_DB_PASSWORD="SYNTHETIC-SECRET")
                 report = self.once.execute(env,paramiko=Mock())

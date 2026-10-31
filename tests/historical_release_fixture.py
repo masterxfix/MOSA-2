@@ -13,6 +13,10 @@ def historical_checkout(repository, commit):
         assert checkout.resolve().parent == parent
         subprocess.run(["git", "clone", "--quiet", "--local", "--no-hardlinks",
                         "--no-checkout", str(Path(repository).resolve()), str(checkout)], check=True)
+        # A shallow source may contain the requested historical object only in
+        # FETCH_HEAD. Fetch it explicitly from that LOCAL source; no network.
+        subprocess.run(["git", "-C", str(checkout), "fetch", "--quiet", "--no-tags", "--update-shallow",
+                        str(Path(repository).resolve()), commit], check=True)
         subprocess.run(["git", "-C", str(checkout), "-c", "core.autocrlf=false",
                         "checkout", "--quiet", "--detach", commit], check=True)
         yield checkout

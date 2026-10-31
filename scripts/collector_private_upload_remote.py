@@ -166,11 +166,14 @@ def upload_operation(data):
     action=data.get("action")
     need(action in ("prepare","inspect","publish"),"UPLOAD_ACTION")
     commit,stage,rows,dirs=plan(data)
+    path_receipt = {}
+    if SCHEMA4_MANIFEST is not None:
+        path_receipt["private_path_identity"] = bind_private_paths(data, capture=action=="prepare")
     guard()
     staging=ROOT+"/staging/"+stage
     release=ROOT+"/releases/"+commit
     if action=="inspect":
-        return dict(ok=True,action=action,root=ROOT)
+        return dict(ok=True,action=action,root=ROOT,**path_receipt)
     if action=="prepare":
         blobs=data["files"]
         need(set(blobs)==set(PAYLOAD_PATHS),"BLOB_SET")
@@ -207,7 +210,7 @@ def upload_operation(data):
             finally:os.close(fd)
         summary=audit(staging,rows,dirs)
         return dict(ok=True,action=action,staging=staging,release=release,lock_inode=lock_inode,
-                    stage_inode=stage_inode,audit=summary)
+                    stage_inode=stage_inode,audit=summary,**path_receipt)
     # Publication is admitted only after the independent SFTP staging readback.
     need(data.get("independent_staging_readback") is True,"STAGING_READBACK_REQUIRED")
     lock=folder(ROOT+"/locks/"+ONCE)
@@ -229,7 +232,7 @@ def upload_operation(data):
         os.fsync(src);os.fsync(dst)
     finally:
         os.close(src);os.close(dst)
-    return dict(ok=True,action=action,release=release,audit=summary,atomic_noreplace=True)
+    return dict(ok=True,action=action,release=release,audit=summary,atomic_noreplace=True,**path_receipt)
 
 if __name__=="__main__":
     result=dict(ok=False,collector_started=False,database_connections=0,provider_requests=0)

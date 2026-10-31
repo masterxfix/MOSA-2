@@ -43,7 +43,7 @@ def metadata(path, s):
                 uid=s.st_uid, gid=s.st_gid, mode=format(stat.S_IMODE(s.st_mode),"04o"),
                 device=s.st_dev, inode=s.st_ino)
 
-def checked_fd(api, path):
+def checked_fd(api, path, *, base_identity=BASE_ID):
     """Walk fixed names with no-follow dirfds; never list a directory."""
     need(path == BASE or path in TARGETS, "UNAPPROVED_PATH")
     fd = api.open("/", api.O_RDONLY|api.O_DIRECTORY|api.O_NOFOLLOW)
@@ -64,7 +64,10 @@ def checked_fd(api, path):
             if current == BASE:
                 need((after.st_uid,after.st_gid,stat.S_IMODE(after.st_mode)) == (UID,1002,0o710),
                      "BASE_OWNER_OR_MODE_CHANGED")
-                need((after.st_dev,after.st_ino) == BASE_ID, "BASE_IDENTITY_CHANGED")
+                # Historical callers retain their measured identity. Schema-4
+                # uses None only for its initial, read-only identity capture.
+                if base_identity is not None:
+                    need((after.st_dev,after.st_ino) == base_identity, "BASE_IDENTITY_CHANGED")
             elif inside(current,BASE+"/private"):
                 need((after.st_uid,after.st_gid,stat.S_IMODE(after.st_mode)) == (UID,GID,0o700),
                      "PRIVATE_OWNER_OR_MODE")

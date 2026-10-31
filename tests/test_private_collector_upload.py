@@ -81,8 +81,14 @@ class UploadProfileCorrectionTests(unittest.TestCase):
 class UploadTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
-        cls.meta,cls.manifest,cls.files=deploy.artifact(ROOT,cls.commit)
+        from historical_release_fixture import historical_checkout
+        # These regressions exercise the original qualified uploader payload.
+        # Later active profiles deliberately change its pinned source bytes.
+        cls.commit="92274a79550b8acd719434459022da6de5261d2e"
+        context=historical_checkout(ROOT,cls.commit)
+        cls.project=context.__enter__()
+        cls.addClassCleanup(context.__exit__,None,None,None)
+        cls.meta,cls.manifest,cls.files=deploy.artifact(cls.project,cls.commit)
 
     def env(self):
         return dict(MOSA_PRIVATE_EXPECTED_COMMIT=self.commit,
@@ -136,7 +142,7 @@ class UploadTests(unittest.TestCase):
     def test_qualified_package_reproducible_and_credentials_never_enter_artifact(self):
         sentinel="SYNTHETIC-CREDENTIAL-CANARY-NEVER-TRANSFER"
         with patch.dict(os.environ,{"MOSA_TEST_SFTP_PASSWORD":sentinel}):
-            meta,manifest,files=deploy.artifact(ROOT,self.commit)
+            meta,manifest,files=deploy.artifact(self.project,self.commit)
         self.assertEqual(manifest,self.manifest)
         self.assertEqual((len(files),sum(map(len,files.values()))),(33,248105))
         self.assertNotIn(sentinel.encode(),manifest+b"".join(files.values()))
@@ -368,7 +374,7 @@ class UploadTests(unittest.TestCase):
               "scripts/deploy_test_sftp.py":"cf4f5cce8225168d3783139bd740ca420ac79233",
               ".github/workflows/deploy-testsite.yml":"1d06c152acd88a74e775c8c96caa0a82d525d8d1"}
         for path,pin in pins.items():
-            self.assertEqual(release.git(ROOT,"rev-parse","HEAD:"+path).decode().strip(),pin)
+            self.assertEqual(release.git(self.project,"rev-parse",self.commit+":"+path).decode().strip(),pin)
         encoded=deploy.modules()[0].public_text(dict(ok=True,value="SYNTHETIC-SECRET"),
                     {"MOSA_TEST_SFTP_PASSWORD":"SYNTHETIC-SECRET"})
         self.assertFalse(json.loads(encoded)["ok"]);self.assertNotIn("SYNTHETIC-SECRET",encoded)

@@ -297,6 +297,7 @@ def execute(env, paramiko=None):
             return report
         data = dict(commit=commit, run=run, run_id=env["GITHUB_RUN_ID"], authorization=TOKEN + commit,
                     manifest=manifest, manifest_sha256=hashlib.sha256(wire).hexdigest(),
+                    private_path_identity=report["installation"]["private_path_identity"],
                     password=env["MOSA_TEST_DB_PASSWORD"])
         report["stage"] = "one_shot"
         with shared.ssh_client(config, {}, paramiko) as transport:

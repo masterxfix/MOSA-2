@@ -44,14 +44,54 @@ Route; ein älterer Marktwert verdrängt keinen neueren.
 Lokale Prüfung: Python 3.12 und PHP 8.3.6. Die Zielkonfiguration bleibt ausdrücklich
 Python 3.11.18 und PHP 8.4.12 auf Dogado; ein Fachlauf dort ist noch nicht belegt.
 
+## Ausführungsnachweis und Installationskorrektur
+
+[Lauf 41184371735](https://github.com/masterxfix/MOSA-2/actions/runs/41184371735)
+führte den Stand `3796c85a62c7f1df06476eee22081d53c9da61d6` am 31.10.2026 aus.
+Das 59-Dateien-Paket bestand die Prüfung. Alle 13 Runtime-Prüfungen bestanden,
+einschließlich Python 3.11.18 und PHP 8.4.12. Die private Vorbereitung stoppte
+vor dem ersten Schreibvorgang mit `BASE_IDENTITY_CHANGED`: 0 Provideranfragen,
+0 Datenbankverbindungen, keine neue Observation oder Current-Aktualisierung.
+
+Der wiederverwendete Verzeichnisprüfer erwartet noch die am 21.10.2026 gemessene
+Basisidentität `device=64768, inode=5248112` sowie sechs damalige private
+Verzeichniskennungen. Die Abweichung ist belegt; heutige Einzelwerte und die
+Ursache der Änderung wurden in diesem Lauf nicht ausgegeben.
+
+Schema-4 erfasst deshalb jetzt einmalig vor Installationsschreibvorgängen die
+Identitäten der sieben fest vorgegebenen Verzeichnisse. Die vorhandenen Prüfungen
+von Host-Key, Account, Pfad, Eigentümer, Rechten, Symlinks und Stat/Open-Wechseln
+bleiben wirksam. Ein vollständiger zweiter Durchgang bestätigt die Erfassung.
+Dieser Stand wird durch Vorbereitung, unabhängige Readbacks, Veröffentlichung
+und Collectorstart weitergereicht. Spätere Phasen dürfen ihn weder neu erfassen
+noch ersetzen. Auch der zusammengesetzte Supervisor verwendet diese Bindung;
+seine historische Prüffunktion darf sie nicht überschreiben.
+
+- 6 fokussierte Tests der tatsächlich zusammengesetzten Programme bestanden:
+  neue Ausgangskennungen, unveränderte Pfadprüfungen, Änderungen innerhalb und
+  zwischen SSH-Phasen, fehlende/ungültige Bindung und Controller-Weitergabe.
+- 31 unmittelbar betroffene bestehende Regressionen bestanden: 11 Verzeichnistests,
+  16 Uploadtests und 4 Schema-4-Autorisierungs-/Abschlusstests.
+- Die historischen Uploadtests wurden auf das tatsächliche Originalrelease
+  `92274a79550b8acd719434459022da6de5261d2e` ausgerichtet. Zuvor verhinderten
+  ihre HEAD-Bezüge und die unvollständige Übernahme eines historischen Objekts
+  aus dem flachen Checkout den vollständigen Nachweis. Nach Korrektur wurden
+  nur noch fehlende beziehungsweise betroffene Tests ausgeführt.
+- Historische Profile behalten ihre bisherigen Identitätsvorgaben. Die
+  Korrektur betrifft die Installationsprogramme, nicht die 59 Payload-Dateien.
+- Bei dieser Korrektur: 0 Actions, 0 Provideranfragen, keine Serverinstallation
+  und keine Datenbankänderung.
+
 ## Konkreter nächster Schritt
 
-Nach ausdrücklichem Startauftrag genau ein zusätzlicher manueller Lauf von
-`.github/workflows/collector-schema4-once.yml`, gebunden an den vollständigen
-Commit dieses geprüften Stands. Bereits verbrauchte Actions: 3; mit diesem
-zusätzlichen Lauf höchstens 4 insgesamt. Höchstens eine Provideranfrage,
-keine Wiederholungsabrufe. Der vorhandene Marker `schema4-live-20261030`
-wird weder gelöscht noch umbenannt.
+Bereits verbrauchte Actions: **4**; Provideranfragen dieses fortgesetzten
+Einmalauftrags: **0**. Das zuletzt freigegebene Laufbudget ist ausgeschöpft.
+Ein fünfter Lauf ist noch nicht freigegeben. Für den Live-Nachweis wird genau
+ein weiterer manueller Lauf von `.github/workflows/collector-schema4-once.yml`
+vorgeschlagen, gebunden an den vollständigen Commit des korrigierten Stands.
+Er benötigt die ausdrückliche Erweiterung des Laufbudgets gemäß `AGENTS.md`.
+Höchstens eine Provideranfrage, keine Wiederholungsabrufe. Der vorhandene
+Marker `schema4-live-20261030` wird weder gelöscht noch umbenannt.
 
 Vorhandene GitHub-Secrets verwenden. Der Lauf installiert das private Paket,
 führt den Einzelabruf aus und prüft gespeicherte Observation, Current und
@@ -64,7 +104,6 @@ Nachweise und `rights_confirmed=false` werden nicht in eine behauptete
 Anbieterbestätigung umgeschrieben. Der Nutzer hat einen begrenzten praktischen
 Versuch beauftragt; daraus wird keine pauschale Dauerfreigabe abgeleitet.
 
-Aktueller Ausführungsstand: keine neue Action, kein Kursabruf und keine Installation.
-Der Browserzugriff aus dieser Chat-Sitzung meldet fehlenden Ursprungskontext;
-der GitHub-Connector besitzt keinen Workflow-Dispatch. Der vorbereitete Start
-kann über den vorhandenen nativen Codex-/GitHub-CLI-Zugang erfolgen.
+Eine Installation und sichtbare Kursabnahme sind weiterhin offen. Der bereits
+verwendete native Codex-/GitHub-CLI-Zugang kann den nächsten freigegebenen
+Start ausführen; eine erneute Einrichtung des GitHub-Zugangs ist nicht nötig.

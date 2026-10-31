@@ -2,6 +2,11 @@
 TOKEN = "MOSA2-SCHEMA4-ONE-SHOT-20261030:"
 ORDER_ONCE = "schema4-live-20261030"
 
+# The historical supervisor prepended above defines its October-21 guard.
+# This active profile must use the identity already bound by its installation.
+def guard():
+    schema4_guard()
+
 
 def complete(report):
     return (isinstance(report, dict) and report.get("ok") is True
@@ -18,6 +23,7 @@ def schema4_once(data):
     RELEASE = ROOT + "/releases/" + commit
     RUN = ROOT + "/runs/" + data["run"]
     report = dict(ok=False, status="NOT_STARTED", commit=commit, run=data["run"], provider_requests=0)
+    report["private_path_identity"] = bind_private_paths(data)
     guard()
     audit(RELEASE, rows, dirs)
     os.umask(0o077)

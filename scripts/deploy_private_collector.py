@@ -101,7 +101,8 @@ def remote_source(profile="historical",expected=None):
         binding=("\nSCHEMA4_MANIFEST="+repr(expected)+"\nTOKEN="+repr(SCHEMA4_TOKEN)+
                  "\nONCE="+repr("upload-schema4-"+expected["commit"])+
                  "\nPAYLOAD_PATHS="+repr([r["path"] for r in expected["files"]])+"\n")
-        extension=body+binding+'\nif __name__=="__main__":'+entry
+        paths=(Path(__file__).resolve().parent/"collector_schema4_private_paths.py").read_text()
+        extension=body+binding+"\n"+paths+'\nif __name__=="__main__":'+entry
     elif profile != "historical":
         raise ValueError("UNAPPROVED_RELEASE_PROFILE")
     return common+"\n"+extension
@@ -244,6 +245,11 @@ def upload(root=None,*,env=None,paramiko=None,profile="historical",**unexpected)
             report["prepare_ssh"]=status
             prepared=call(transport,"prepare",dict(data,files={p:base64.b64encode(b).decode() for p,b in files.items()}),**options)
             report["prepared"]=prepared
+            if profile=="schema4-once":
+                # Carry the initial checked identity across all later SSH
+                # sessions and into the collector; never silently recapture it.
+                data["private_path_identity"]=prepared["private_path_identity"]
+                report["private_path_identity"]=data["private_path_identity"]
         report["stage"]="independent_staging_readback"
         status={}
         with ssh.ssh_client(config,status,paramiko) as transport:
