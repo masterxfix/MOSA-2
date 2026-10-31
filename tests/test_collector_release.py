@@ -717,5 +717,33 @@ print(json.dumps(dict(sources={k:str(v) for k,v in sources.items()}, manifest_sh
             self.assertFalse(json.loads((ROOT/path).read_text())["execution_enabled"])
 
 
+
+    def test_five_supervisor_binds_new_marker_budget_and_both_web_readbacks(self):
+        from unittest.mock import Mock
+        for observation_ok in (True, False):
+            scope, saved = self.supervisor()
+            display = dict(name="Synthetic", price="1.0000000000", unit="EUR", unit_version="1",
+                           source="Tradegate · XGAT · Mid", venue="—", market_at="2026-10-30T10:00:00Z",
+                           observed_at="2026-10-31T10:00:00Z")
+            items = [dict(display=dict(display, name=str(i))) for i in range(5)]
+            answer = dict(ok=True, status="COMPLETE", request_scope="five", provider_requests=5,
+                          readback="PASS", items=items)
+            web = dict(status="ok", items=[i["display"] for i in items])
+            observations = copy.deepcopy(web)
+            if not observation_ok: observations["items"].pop()
+            scope["child"] = Mock(side_effect=[answer, web, observations])
+            data = dict(commit=self.commit, authorization=self.once.TOKEN+self.commit, scope="five",
+                execution_authorization=self.once.FIVE_TOKEN+self.commit, run_id="123",
+                run="schema4-"+self.commit+"-123",manifest=self.meta,
+                manifest_sha256=hashlib.sha256(self.manifest).hexdigest(),password="SYNTHETIC-SECRET")
+            result = scope["schema4_once"](data)
+            self.assertEqual(result["ok"], observation_ok, result)
+            self.assertEqual(result["provider_reserved_count"], 5)
+            self.assertEqual(result["observations_web_readback"], "PASS" if observation_ok else "FAILED")
+            self.assertEqual(json.loads(saved["started.json"])["provider_request_budget"], 5)
+            self.assertEqual(scope["child"].call_args_list[0].kwargs["deadline"], 300)
+            with self.assertRaisesRegex(Exception, "EXACT_FIVE_AUTHORIZATION"):
+                scope["schema4_once"](dict(data, execution_authorization=self.once.TOKEN+self.commit))
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ from scripts.collector_schema4_once_remote import complete
 import collector_actions as shared
 import collector_db_locality as remote
 
+FIVE_TOKEN = "MOSA2-SCHEMA4-FIVE-20261031:"
 TOKEN = upload.SCHEMA4_TOKEN
 ONCE = "schema4-live-20261030"
 CLEAN_ENV = dict(PATH="/opt/plesk/php/8.4/bin:/usr/bin:/bin", PYTHONDONTWRITEBYTECODE="1")
@@ -161,9 +162,13 @@ def runtime_decision(result):
 
 
 def authorize(env):
+    mode = env.get("MOSA_SCHEMA4_SCOPE", "one")
+    if mode not in ("one", "five"):
+        raise PermissionError("EXACT_SCHEMA4_SCOPE_REQUIRED")
+    token = FIVE_TOKEN if mode == "five" else TOKEN
     commit = env.get("MOSA_SCHEMA4_EXPECTED_COMMIT", "")
     if (not re.fullmatch(r"[a-f0-9]{40}", commit)
-            or env.get("MOSA_SCHEMA4_AUTHORIZATION") != TOKEN + commit
+            or env.get("MOSA_SCHEMA4_AUTHORIZATION") != token + commit
             or env.get("GITHUB_ACTIONS") != "true" or env.get("GITHUB_RUN_ATTEMPT") != "1"
             or env.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
             or env.get("GITHUB_REF") != "refs/heads/main"
@@ -269,6 +274,7 @@ def remote_source(manifest):
 
 def execute(env, paramiko=None):
     commit, run = authorize(env)
+    mode = env.get("MOSA_SCHEMA4_SCOPE", "one")
     config = shared.configuration(env)  # Names-only missing-secret checks before any remote operation.
     if release.git(ROOT, "rev-parse", "HEAD").decode().strip() != commit:
         raise PermissionError("CHECKOUT_COMMIT_MISMATCH")
@@ -296,6 +302,7 @@ def execute(env, paramiko=None):
         if not report["installation"]["ok"]:
             return report
         data = dict(commit=commit, run=run, run_id=env["GITHUB_RUN_ID"], authorization=TOKEN + commit,
+                    scope=mode, execution_authorization=env["MOSA_SCHEMA4_AUTHORIZATION"],
                     manifest=manifest, manifest_sha256=hashlib.sha256(wire).hexdigest(),
                     private_path_identity=report["installation"]["private_path_identity"],
                     password=env["MOSA_TEST_DB_PASSWORD"])
@@ -304,7 +311,7 @@ def execute(env, paramiko=None):
             command = shlex.join(["/opt/alt/python311/bin/python3.11", "-I", "-B", "-c", remote_source(manifest)])
             dispatched = True
             code, out, err, _ = remote.remote_call(transport, command,
-                json.dumps(data, separators=(",", ":")).encode(), timeout=180)
+                json.dumps(data, separators=(",", ":")).encode(), timeout=360 if mode == "five" else 180)
             if code or err:
                 raise ValueError("ONE_SHOT_RESULT_UNKNOWN_NO_RETRY")
             result = json.loads(out)

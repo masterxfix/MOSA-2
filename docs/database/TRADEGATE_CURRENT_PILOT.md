@@ -107,3 +107,39 @@ Versuch beauftragt; daraus wird keine pauschale Dauerfreigabe abgeleitet.
 Eine Installation und sichtbare Kursabnahme sind weiterhin offen. Der bereits
 verwendete native Codex-/GitHub-CLI-Zugang kann den nächsten freigegebenen
 Start ausführen; eine erneute Einrichtung des GitHub-Zugangs ist nicht nötig.
+
+## Expliziter Fünferlauf (31.10.2026)
+
+Der neue Workflow-Modus `scope=five` verwendet ausschließlich die zentrale
+Namensliste BYD, DroneShield, Ubtech Robotics, PNE AG und Carl Zeiss Meditec.
+ISINs und physische Beziehungen stammen aus vollständig validierten,
+bereits veröffentlichten Current-Datensätzen. Keine numerischen IDs sind
+fest codiert. Bestehende Tradegate-Quelle und -Routen werden wiederverwendet;
+fehlende Routen erzeugt ausschließlich der gemeinsame Planer.
+
+Eigene exakte Autorisierung: `MOSA2-SCHEMA4-FIVE-20261031:<Vollcommit>`.
+Der dauerhafte Marker `schema4-five-20261031` reserviert diesen Auftrag
+genau einmal. `schema4-live-20261030` bleibt unverändert und verbraucht.
+Maximal fünf sequenzielle Provideranfragen, eine je qualifizierter ISIN;
+keine Wiederholung. Das unveränderte Installationsprotokoll erhält seine
+paketgebundene Installationsautorisierung separat; diese erteilt keine
+weitere Abrufberechtigung.
+
+Die bestehenden gemeinsamen Batch-, Observation-, Current- und
+Quellenwechselprüfungen bleiben maßgeblich. Danach unabhängige
+Observation-/Current-Prüfung, Replay, unveränderte übrige Bestände,
+installierte Current- und Observation-Weblesewege sowie Release-Readback.
+Die sichtbare Browserabnahme ist ein eigener Nachweis. Python 3.11.18,
+PHP 8.4.12; automatische Betriebsfreigaben bleiben deaktiviert.
+
+Fokussierter Offline-Nachweis: drei Tests bestanden, einschließlich der
+Mischlage mit vorhandener DroneShield-Tradegate-Route und vier bisherigen
+Frankfurt-Zuordnungen. Der gemeinsame In-Memory-Store vergibt auch über
+mehrere Materialisierungen eindeutige synthetische Route-IDs.
+
+102 unmittelbar betroffene lokale Regressionen bestanden; zwei lokale
+Prüfpunkte (PHP-Schemafixture und historischer Git-Checkout für die Paketklasse)
+benötigen den isolierten Linux-Nachweis. Der neue Offline-Scope
+`tradegate-five` führt ausschließlich diese offenen Prüfpunkte einschließlich
+der Fünfer-Supervisorprüfung sowie Build/Verify des 59-Dateien-Pakets aus.
+Bereits bestandene lokale Regressionen werden dort nicht wiederholt.

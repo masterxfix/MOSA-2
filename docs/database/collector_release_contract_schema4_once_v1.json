@@ -143,7 +143,7 @@
         "scripts/market_collector/tradegate_manifest.php",
         "scripts/market_current/refresh.php"
       ],
-      "source_blob": "64ae7a10e026f83c1fa180836d8635908a9d4e9c"
+      "source_blob": "9c6cf43555e8beddfaa43057476a36673cac79b4"
     },
     {
       "path": "scripts/market_collector/actions_acceptance.php",
