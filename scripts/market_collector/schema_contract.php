@@ -3,12 +3,14 @@ declare(strict_types=1);
 namespace Mosa2\CollectorSchema5;
 use function Mosa2\Phase2\{check,same};
 const DIGEST='2521552c548370806bc311798f12be39f16b102733aeb74ac9c01337e7e46333';
+const DIGEST6='55457063c72d20498a097d273b5465d34cfd8aba5b2c7c229a9673bfc0c4a60c';
+const FUNDAMENTALS=['m2_provider_fetches','m2_fundamental_metrics','m2_fundamental_units','m2_fundamental_observations','m2_fundamental_current'];
 const TABLES=['m2_collector_state','m2_collector_cycles','m2_collector_days','m2_collector_requests'];
 /** No schema discovery: configuration is explicit and type-strict. */
 function selected(array $config,int $default=4): array {
     $contract=array_key_exists('state_contract',$config)?$config['state_contract']:['schema_version'=>$default];
     if(!is_array($contract)||!is_int($contract['schema_version']??null)
-        ||!in_array($contract['schema_version'],[4,5],true))throw new \RuntimeException('schema_contract');
+        ||!in_array($contract['schema_version'],[4,5,6],true))throw new \RuntimeException('schema_contract');
     return $contract;
 }
 /** Initial migration5 anchors are compatibility evidence, never an operating grant. */
@@ -34,15 +36,29 @@ function ledger5(array $ledger): void {
     same(array_column($ledger,'migration_key'),['0001_core_asset_identity','0002_market_current_history','0003_market_units',
         '0004_current_observation_provenance','0005_collector_reservations'],'schema5_ledger_keys');
 }
+function ledger6(array $ledger): void {
+    same(count($ledger),6,'schema6_ledger_keys');
+    ledger5(array_slice($ledger,0,5));
+    same($ledger[5]['migration_key'],'0006_fundamentals_and_payload_provenance','schema6_ledger_keys');
+}
 function acquisitionAllowed(array $contract): void {
-    check(($contract['schema_version']??4)!==5,'schema5_collector_locked');
+    $version=$contract['schema_version']??4;
+    check(in_array($version,[3,4,5,6],true),'schema_contract');
+    check($version<5,$version===6?'schema6_collector_locked':'schema5_collector_locked');
 }
 /** Version is explicit; historical callers keep their exact old table/ledger sets. */
 function envelope(int $version): array {
-    check(in_array($version,[3,4,5],true),'schema_contract');
-    $tables=array_merge(\Mosa2\Phase2\TABLES,\Mosa2\Phase3B\MARKET,['m2_units'],$version===5?TABLES:[]);sort($tables);
+    check(in_array($version,[3,4,5,6],true),'schema_contract');
+    $tables=array_merge(\Mosa2\Phase2\TABLES,\Mosa2\Phase3B\MARKET,['m2_units'],$version>=5?TABLES:[],$version===6?FUNDAMENTALS:[]);sort($tables);
     $digests=[\Mosa2\Phase2\DIGEST,\Mosa2\Phase3B\DIGEST,\Mosa2\Phase3K\DIGEST];
     if($version>=4)$digests[]=hash_file('sha256',dirname(__DIR__,2).'/docs/database/migrations/0004_current_observation_provenance.sql');
-    if($version===5){same(hash_file('sha256',dirname(__DIR__,2).'/docs/database/migrations/0005_collector_reservations.sql'),DIGEST,'schema5_artifact');$digests[]=DIGEST;}
+    if($version>=5){same(hash_file('sha256',dirname(__DIR__,2).'/docs/database/migrations/0005_collector_reservations.sql'),DIGEST,'schema5_artifact');$digests[]=DIGEST;}
+    if($version===6){
+        $names=['0001_core_asset_identity','0002_market_current_history','0003_market_units','0004_current_observation_provenance',
+            '0005_collector_reservations','0006_fundamentals_and_payload_provenance'];
+        $digests[]=DIGEST6;
+        same($digests[3],'46238979889d2fe1bdaac4c5ba4c1ddda7f5810cd87cdf1a8b806db71f63df70','schema6_artifact4');
+        foreach($names as $i=>$name)same(hash_file('sha256',dirname(__DIR__,2).'/docs/database/migrations/'.$name.'.sql'),$digests[$i],'schema6_artifact');
+    }
     return ['tables'=>$tables,'versions'=>array_map('strval',range(1,$version)),'digests'=>$digests];
 }

@@ -15,7 +15,7 @@ class PrepareTests(unittest.TestCase):
             try{\Mosa2\Schema6Prepare\ledger($bad,getcwd());}catch(Throwable){$rejected++;}}
         $bad=$rows;$bad[]=$rows[0];try{\Mosa2\Schema6Prepare\ledger($bad,getcwd());}catch(Throwable){$rejected++;}
         $blocked=0;foreach([4,5] as $v){if(count(\Mosa2\CollectorSchema5\envelope($v)['tables'])!==26)$blocked++;}
-        try{\Mosa2\CollectorSchema5\selected(['state_contract'=>['schema_version'=>6]]);}catch(Throwable){$blocked++;}
+        try{\Mosa2\CollectorSchema5\selected(['state_contract'=>['schema_version'=>7]]);}catch(Throwable){$blocked++;}
         echo json_encode([$rejected,$blocked]);
         """);self.assertEqual(r,[4,3])
 

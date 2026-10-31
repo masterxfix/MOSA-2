@@ -23,7 +23,11 @@ function snapshot(PDO $p,array $contract=[]): array {
     same(count($out['m2_units']),4,'four_units');same(array_column($out['m2_schema_migrations'],'version'),$envelope['versions'],'ledger_versions');
     $digests=$envelope['digests'];
     foreach($out['m2_schema_migrations'] as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
-    if(($contract['schema_version']??3)===5){\Mosa2\CollectorSchema5\ledger5($out['m2_schema_migrations']);\Mosa2\CollectorSchema5\lockedDatabase($p);}
+    if(($contract['schema_version']??3)>=5){
+        if($contract['schema_version']===6){\Mosa2\CollectorSchema5\ledger6($out['m2_schema_migrations']);require_once __DIR__.'/schema6.php';\Mosa2\CollectorSchema6\database($p);}
+        else \Mosa2\CollectorSchema5\ledger5($out['m2_schema_migrations']);
+        \Mosa2\CollectorSchema5\lockedDatabase($p);
+    }
     $seed=json_decode(file_get_contents(dirname(__DIR__,2).'/docs/database/seeds/0001_market_units_v1.json'),true,32,JSON_THROW_ON_ERROR);
     foreach($seed['definitions'] as $d){$rows=array_values(array_filter($out['m2_units'],static fn($r)=>$r['unit_key']===$d['unit_key']&&$r['unit_version']===$d['unit_version']));same(count($rows),1,'seed_binding');
         foreach($d as $k=>$v)if($k!=='definition_reference')check(array_key_exists($k,$rows[0])&&($k==='definition_sha256'?strtolower($rows[0][$k])===$v:$rows[0][$k]===$v),'seed_definition');}
