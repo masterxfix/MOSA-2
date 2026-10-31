@@ -295,3 +295,102 @@ bestehende Testverträge erhalten. `git diff --check` bestanden, 0 Actions.
 Das ist kein echter MySQL-Syntax-, FK-/CHECK-Ausführungs-, EXPLAIN- oder
 Performance-Nachweis. Diese Prüfungen bleiben vor einem separat autorisierten
 Apply verpflichtend. Kein unbewiesenes PASS für den Datenbankbetrieb.
+
+## Isolierter MySQL-8-Versuch vom 31.10.2026: noch nicht qualifiziert
+
+**Ergebnis: teilweise; kein erfolgreicher MySQL-Nachweis von 0006.**
+[Einziger Actions-Lauf 41204442891](https://github.com/masterxfix/MOSA-2/actions/runs/41204442891)
+auf Prüfcommit `7dbaa2405036af886159bb3ea4b7ca0a20e82743`.
+Verwendet wurde ausschließlich der bereits vorhandene wegwerfbare
+`mysql:8.0`-Dienst, tatsächlich **MySQL 8.0.46**, über Runner-Loopback
+127.0.0.1:3307 und die synthetische Datenbank mosa2_collector_isolated.
+Keine Dogado-/Testsite-/Produktivverbindung, keine echten Secrets,
+keine Provideranfrage, kein Deployment. Container und Netzwerk wurden nach
+dem Lauf laut Actions-Cleanup entfernt.
+
+### Erster konkreter Fehler und minimale Korrektur
+
+Der vorhandene PyMySQL-DictCursor lieferte für `SHOW TABLES` der leeren
+Service-Datenbank ein leeres Tuple `()`. Die neue Testhilfe verglich
+irrtümlich mit der leeren Liste `[]` und brach mit
+`() != [] : Service database must be initially empty` ab.
+Das ist ein **Fixturefehler vor dem ersten DDL**, kein nachgewiesener
+Fehler der Migration. Es wurde keine Migration 0001–0006 angewendet,
+keine Ledgerzeile erzeugt, keine Fachprobe ausgeführt und kein Lastdatensatz
+geladen. Die einzige fehlgeschlagene Integration ist deshalb ausdrücklich
+kein Syntax-/Schema-/Performance-PASS.
+
+Die Testhilfe verwendet jetzt `assertFalse(SHOW-TABLES-Ergebnis)`.
+Eine leere Liste und ein leeres Tuple sind damit gleichwertig akzeptiert;
+jede nichtleere Tabelle wird weiterhin vor dem ersten DDL abgewiesen.
+Die MySQL-Version wird vor diesem Guard in der Evidence festgehalten.
+Der gezielte Offline-Test prüft beide leeren und beide nichtleeren Formen
+und besteht. Kein Index, FK, CHECK oder Migrationstext wurde gelockert.
+**Kein zweiter Actions-Lauf und kein Rerun.**
+
+### Datenmengen und sieben noch offene Messwege
+
+Tatsächlich geladen: **0** synthetische Assets/Kennzahlen/Current-/History-Zeilen.
+Vorbereitet, aber noch nicht ausgeführt: 100 Assets, 3 Sources,
+52 Kennzahlen (50 numerische plus Text/Datum), 9 Units, 1 kleiner Dummy-File-
+Metadatensatz, 1.200 Fetches, **100.288 Observations** und **25.000 Current-Zeilen**.
+288 zusätzliche historische Werte verdichten die drei gemessenen Serien
+des Testassets auf jeweils 100 Treffer. Current liefert alle 250 Slots
+eines Assets über zwei begrenzte Seiten (128 + Sentinel); keine verdeckte
+Trunkierung als „alle Kennzahlen“.
+
+| Weg | Geplanter natürlicher Index | Reales EXPLAIN / Median / p95 |
+| --- | --- | --- |
+| A alle Current-Slots eines Assets (zwei Seiten) | PRIMARY | nicht ausgeführt / nicht gemessen / nicht gemessen |
+| B einzelner Current-Slot | PRIMARY | nicht ausgeführt / nicht gemessen / nicht gemessen |
+| C zeitliche Historie, LIMIT 100 | ix_fund_obs_timeline | nicht ausgeführt / nicht gemessen / nicht gemessen |
+| D FY-Serie, LIMIT 100 | ix_fund_obs_period | nicht ausgeführt / nicht gemessen / nicht gemessen |
+| E FQ-Serie, LIMIT 100 | ix_fund_obs_period | nicht ausgeführt / nicht gemessen / nicht gemessen |
+| F Source-Provenienz | PRIMARY-Punktzugriffe | nicht ausgeführt / nicht gemessen / nicht gemessen |
+| G Payload-/Fetch-Metadaten | PRIMARY / uq_fetch_source | nicht ausgeführt / nicht gemessen / nicht gemessen |
+
+Der vorbereitete Nachweis trennt drei Warm-ups von 40 Messungen pro Weg;
+p95 ist der sortierte Messwert ceil(0,95*n). Gemessen wird Client↔DB einschließlich
+Ergebnisübertragung, keine Webseite. A umfasst beide Queries der vollständigen
+Asset-Lesung. EXPLAIN FORMAT=JSON soll Zugriffstyp, Key und
+`rows_examined_per_scan` als **Schätzwerte** sichern; EXPLAIN ANALYZE ergänzt
+tatsächliche Iteratorzeilen/-schleifen. Keine Vermischung von Schätzung und
+tatsächlich untersuchten Zeilen, keine FORCE-INDEX-Anweisung.
+Current darf weder History noch Fetch/File-Tabelle berühren. Großtabellen-
+ALL-/vollständige Indexscans oder unerwartete Keys schlagen fehl.
+P95 muss für A/B <20 ms und für alle sieben Wege <100 ms liegen.
+Das ist nur ein vorbereiteter Prüfumfang, keine gemessene Performancefreigabe.
+
+### Erhaltene Artefakte und Offline-Prüfungen
+
+Migrationen 0001–0005 wurden vor und nach der lokalen Arbeit per SHA-256
+an die eingefrorenen Ausgangswerte gebunden; alle sind unverändert.
+Auch 0006 blieb fachlich und bytegenau unverändert:
+`55457063c72d20498a097d273b5465d34cfd8aba5b2c7c229a9673bfc0c4a60c`.
+
+Vor dem Lauf bestanden 15 bestehende fokussierte 0006-Schematests und
+9 neue Offline-Harnessprüfungen (einschließlich korrigierter ursprünglicher
+MySQL-Metadatenrendering-Fixture). 57 unmittelbar betroffene Schema-Regressionen
+wurden genau einmal ausgeführt und bestanden. Nach dem Actions-Fehler
+bestand ausschließlich der zusätzlich betroffene Leertabellen-Guardtest.
+`git diff --check` besteht. Es wurden keine breiten Backendregressionen wiederholt.
+
+Die strukturierte Fehler-Evidence liegt im
+[Artefakt fundamentals6-isolated-evidence](https://github.com/masterxfix/MOSA-2/actions/runs/41204442891/artifacts/13043576734),
+Aufbewahrung sieben Tage. Sie enthält keine vorgetäuschten Datenmengen,
+Constraint- oder Performanceerfolge. Die vollständigen, nicht ausgeführten
+Constraintproben und sieben Lesewege bleiben reproduzierbar im Testcode.
+
+### Nächster Nachweis und Dogado-Grenze
+
+Für den nun korrigierten Test ist eine **neue ausdrückliche Freigabe eines
+weiteren isolierten Actions-Laufs** erforderlich. Bis dieser erfolgreich
+abgeschlossen ist, bleiben Apply, SHOW-CREATE-/INFORMATION_SCHEMA-Abgleich,
+reale PK/UNIQUE/FK/CHECK-Proben, alle sieben natürlichen EXPLAINs und
+Median/p95 **offen**. Es liegt weder ein DB-Architekturfehler noch deren reale
+Betriebsfähigkeit nachgewiesen vor.
+
+Auch ein später erfolgreicher isolierter Lauf wäre keine Freigabe für
+Dogado: Backup/Restore-Nachweis, Istschema/Ledger, qualifizierter
+0005-Ausgangsstand, ausdrücklicher Applyplan, Postcheck und
+Rollforward-/Teilfehlersicherheit bleiben separat erforderlich.

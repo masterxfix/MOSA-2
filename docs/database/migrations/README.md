@@ -1,6 +1,6 @@
 # Versionierte Migrationen
 
-## Version 0006 – Fundamentals und Payload-Provenienz, nur vorbereitet
+## Version 0006 – Fundamentals und Payload-Provenienz, isolierter Nachweis noch offen
 
 `0006_fundamentals_and_payload_provenance.sql` ergänzt fünf Tabellen: Fetch-
 Nachweise mit m2_files-Verweis, Kennzahlen, separate Fundamental-Units,
@@ -9,6 +9,13 @@ Keine bestehende Tabelle oder Migration 0001–0005 wird geändert. Keine Seeds,
 Ledger-Einträge, Runner oder Live-Anwendung. Voraussetzung ist der separat
 qualifizierte Stand 0001–0005; auf Schema 4 nicht unmittelbar anwendbar.
 [Vertrag, Index-/EXPLAIN-Plan und offene Apply-Nachweise](../FUNDAMENTALS_ARCHITECTURE.md).
+
+Der einzige isolierte MySQL-8.0.46-Lauf 41204442891 am 31.10.2026 brach
+wegen eines Tuple-/Listenvergleichs der Testhilfe vor dem ersten DDL ab.
+Die Testhilfe ist gezielt offline korrigiert; kein zweiter Lauf gestartet.
+0006 ist deshalb **noch nicht isoliert auf MySQL 8 qualifiziert** und
+**NICHT Dogado-live**. Keine Constraints, EXPLAINs oder Performancewerte als
+bestanden werten. Ein weiterer isolierter Nachweis benötigt neue Freigabe.
 
 
 ## Version 0005 – Collector-Reservierungen, nur vorbereitet
