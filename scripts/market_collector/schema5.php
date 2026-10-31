@@ -25,6 +25,7 @@ function definition(array &$t,string $line): void {
     \Mosa2\Phase3K\definition($t,$line);
 }
 function schemas(string $root,int $version): array {
+    if($version===6){require_once __DIR__.'/schema6.php';return \Mosa2\CollectorSchema6\extend(schemas($root,5));}
     $all=\Mosa2\MarketCurrentMigration\schemas($root);if($version===4)return $all;same($version,5,'schema5_version');
     foreach(array_slice(statements(),0,5) as $sql){
         if(preg_match('/\ACREATE TABLE (m2_[a-z_]+) \((.*)\) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci\z/s',$sql,$m)){

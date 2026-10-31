@@ -99,8 +99,10 @@ class SelectionTests(unittest.TestCase):
     def test_default4_explicit5_and_no_fallback(self):
         self.assertEqual(json.loads(self.php({})),dict(schema_version=4,allow_current=True))
         self.assertEqual(json.loads(self.php(dict(state_contract=dict(schema_version=5)))),dict(schema_version=5,allow_current=True))
-        for value in (None,3,6,'5',True):
+        for value in (None,3,7,'5',True):
             self.assertEqual(self.php(dict(state_contract=dict(schema_version=value))),'schema_contract')
+    def test_explicit_schema6_only_when_selected(self):
+        self.assertEqual(json.loads(self.php(dict(state_contract=dict(schema_version=6)))),dict(schema_version=6,allow_current=True))
     def test_consumed_historical_authorization_is_still_permanently_blocked(self):
         from scripts.market_current.takeover import CONSUMED_RUN_IDS
         self.assertIn('current-once-39634298612',CONSUMED_RUN_IDS)

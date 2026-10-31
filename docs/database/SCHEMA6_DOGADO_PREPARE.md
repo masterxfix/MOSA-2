@@ -1,5 +1,16 @@
 # Dogado Schema 4 -> 6: PREPARE, kein APPLY
 
+## Software-Nachtrag: Schema 6 isoliert kompatibel
+
+[SCHEMA6_RUNTIME_COMPAT.md](SCHEMA6_RUNTIME_COMPAT.md) dokumentiert den erfolgreichen
+zusätzlichen Kompatibilitätsnachweis [Actions 41210299524](https://github.com/masterxfix/MOSA-2/actions/runs/41210299524):
+expliziter 26-Tabellen-/Ledger-1–6-Vertrag, gesperrter Collector, unveränderte
+fünf synthetische Current-/Observation-Ketten und separater reproduzierbarer
+61-Dateien-Releasevertrag. Die nachstehenden Aussagen zur noch fehlenden
+Softwarekompatibilität sind damit historisch überholt. Dogado-Installation und
+Dogado-Apply weiterhin NEIN; Backup-/Restore-/Ruhe-Nachweise bleiben offen.
+Die historischen Bestands-/Fehlernachweise und der Applyplan werden erhalten.
+
 ## Aktueller bestätigter Inventarnachweis: 31.10.2026
 
 **READ-ONLY-Inventar PASS; Backup und Migration weiterhin BLOCKIERT.**

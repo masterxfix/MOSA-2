@@ -43,10 +43,14 @@ function runtimeContract(PDO $p,array $contract,?callable $metadataReader=null):
     $version=$contract['schema_version']??4;$envelope=\Mosa2\CollectorSchema5\envelope($version);
     $metadata=($metadataReader??__NAMESPACE__.'\\runtimeMetadata')($p);
     same($metadata['tables'],$envelope['tables'],'table_set');
-    $ledger=boundedRows($p,'SELECT *,HEX(checksum) AS checksum FROM m2_schema_migrations ORDER BY version LIMIT '.($version===5?6:5),[],$version===5?5:4);
+    $ledger=boundedRows($p,'SELECT *,HEX(checksum) AS checksum FROM m2_schema_migrations ORDER BY version LIMIT '.($version>=5?$version+1:5),[],$version>=5?$version:4);
     same(array_column($ledger,'version'),$envelope['versions'],'ledger_versions');$digests=$envelope['digests'];
     foreach($ledger as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
-    if($version===5){\Mosa2\CollectorSchema5\ledger5($ledger);\Mosa2\CollectorSchema5\lockedDatabase($p);}
+    if($version>=5){
+        if($version===6){\Mosa2\CollectorSchema5\ledger6($ledger);require_once __DIR__.'/schema6.php';\Mosa2\CollectorSchema6\database($p);}
+        else \Mosa2\CollectorSchema5\ledger5($ledger);
+        \Mosa2\CollectorSchema5\lockedDatabase($p);
+    }
     $units=boundedRows($p,'SELECT *,HEX(definition_sha256) AS definition_sha256 FROM m2_units ORDER BY unit_key,unit_version LIMIT 5',[],4);
     same(count($units),4,'four_units');
     $seed=json_decode(file_get_contents(dirname(__DIR__,2).'/docs/database/seeds/0001_market_units_v1.json'),true,32,JSON_THROW_ON_ERROR);
