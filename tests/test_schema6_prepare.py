@@ -113,4 +113,79 @@ class PrepareTests(unittest.TestCase):
         self.assertIn('input=json.dumps(request)',source)
         self.assertNotIn("child.update",source)
         self.assertNotIn("mysqldump --",source)
+
+    def test_remote_timeout_preserves_last_phase_without_private_output(self):
+        import sys
+        from contextlib import nullcontext
+        from unittest.mock import patch
+        sys.path.insert(0,str(ROOT/'scripts'))
+        import backup_permissions_remote as r
+        env={'GITHUB_RUN_ATTEMPT':'1','BACKUP_INSPECTION_SCOPE':'schema6-prepare','MOSA_TEST_DB_PASSWORD':'PRIVATE_PASSWORD'}
+        error=subprocess.TimeoutExpired(['PRIVATE_ARG'],150,output=b'PRIVATE_PRICE',
+            stderr=b'MOSA2_PHASE:ARTIFACT_LOAD_REJECTED\nMOSA2_PHASE:STRUCTURE_REJECTED\n')
+        with patch.object(r.access,'configuration',return_value={}),patch.object(r.access,'ssh_client',return_value=nullcontext(object())),patch.object(r.access,'tunnel',return_value=nullcontext(1234)),patch.object(r.subprocess,'run',side_effect=error) as run:
+            result=r.execute(env,None)
+        self.assertEqual(result,{'status':'PERMISSIONS_SUBPROCESS_TIMEOUT','process_timeout':True,
+            'process_limit_seconds':150,'last_phase':'STRUCTURE_REJECTED'})
+        self.assertNotIn('PRIVATE',json.dumps(result));kw=run.call_args.kwargs
+        self.assertEqual(kw['timeout'],150);self.assertNotIn('PRIVATE_PASSWORD',json.dumps(run.call_args.args))
+        self.assertNotIn('PRIVATE_PASSWORD',json.dumps(kw['env']))
+    def test_unexpected_stderr_is_rejected_even_on_timeout(self):
+        import sys
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        sys.path.insert(0,str(ROOT/'scripts'));import backup_permissions_remote as r
+        env={'GITHUB_RUN_ATTEMPT':'1','BACKUP_INSPECTION_SCOPE':'schema6-prepare','MOSA_TEST_DB_PASSWORD':'PRIVATE_PASSWORD'}
+        for timeout in (False,True):
+            response=SimpleNamespace(returncode=0,stdout='{"status":"BACKUP_PERMISSIONS_INSPECTED"}',
+                stderr='MOSA2_PHASE:STRUCTURE_REJECTED\nPRIVATE_SQL_PASSWORD\n')
+            error=subprocess.TimeoutExpired(['php'],150,stderr=response.stderr.encode())
+            with patch.object(r.access,'configuration',return_value={}),patch.object(r.access,'ssh_client',return_value=nullcontext(object())),patch.object(r.access,'tunnel',return_value=nullcontext(1234)),patch.object(r.subprocess,'run',**({'side_effect':error} if timeout else {'return_value':response})):
+                result=r.execute(env,None)
+            self.assertEqual(result['status'],'PERMISSIONS_STDERR_REJECTED')
+            self.assertNotIn('PRIVATE',json.dumps(result))
+    def test_normal_results_and_permissions_only_60_seconds_unchanged(self):
+        import sys
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        sys.path.insert(0,str(ROOT/'scripts'));import backup_permissions_remote as r
+        for scope in ('permissions','schema6-prepare'):
+            report={'status':'BACKUP_PERMISSIONS_INSPECTED'} if scope=='permissions' else {
+                'status':'SCHEMA6_PREPARE_INVENTORY_REJECTED','section':'LEDGER_REJECTED'}
+            response=SimpleNamespace(returncode=0 if scope=='permissions' else 1,
+                stdout=json.dumps(report),stderr='' if scope=='permissions' else 'MOSA2_PHASE:LEDGER_REJECTED\n')
+            env={'GITHUB_RUN_ATTEMPT':'1','BACKUP_INSPECTION_SCOPE':scope,'MOSA_TEST_DB_PASSWORD':'PRIVATE_PASSWORD'}
+            with patch.object(r.access,'configuration',return_value={}),patch.object(r.access,'ssh_client',return_value=nullcontext(object())),patch.object(r.access,'tunnel',return_value=nullcontext(1234)),patch.object(r.subprocess,'run',return_value=response) as run:
+                result=r.execute(env,None)
+            if scope=='permissions':
+                self.assertEqual(result,report);self.assertEqual(run.call_args.kwargs['timeout'],60)
+            else:
+                self.assertEqual(result['last_phase'],'LEDGER_REJECTED')
+                self.assertEqual(result['section'],'LEDGER_REJECTED')
+                self.assertEqual(run.call_args.kwargs['timeout'],150)
+        with self.assertRaises(ValueError):r.phase('MOSA2_PHASE:LEDGER_REJECTED\n','permissions')
+    def test_ssh_tunnel_and_process_errors_remain_distinguishable_and_private(self):
+        import sys
+        from contextlib import nullcontext
+        from unittest.mock import patch
+        sys.path.insert(0,str(ROOT/'scripts'));import backup_permissions_remote as r
+        env={'GITHUB_RUN_ATTEMPT':'1','MOSA_TEST_DB_PASSWORD':'PRIVATE_PASSWORD'}
+        for stage in ('SSH','TUNNEL','SUBPROCESS'):
+            with patch.object(r.access,'configuration',return_value={}),patch.object(r.access,'ssh_client',**({'side_effect':RuntimeError('PRIVATE_SERVER')} if stage=='SSH' else {'return_value':nullcontext(object())})),patch.object(r.access,'tunnel',**({'side_effect':RuntimeError('PRIVATE_SERVER')} if stage=='TUNNEL' else {'return_value':nullcontext(1234)})),patch.object(r.subprocess,'run',side_effect=OSError('PRIVATE_SERVER')):
+                result=r.execute(env,None)
+            self.assertEqual(result,{'status':'PERMISSIONS_'+stage+'_REJECTED'})
+            self.assertNotIn('PRIVATE',json.dumps(result))
+    def test_php_markers_match_python_whitelist_and_are_flushed(self):
+        import sys
+        sys.path.insert(0,str(ROOT/'scripts'));import backup_permissions_remote as r
+        p=subprocess.run(['php','-r',r"""require 'scripts/market_collector/schema6_prepare.php';
+            foreach(\Mosa2\Schema6Prepare\PHASES as $code)\Mosa2\Schema6Prepare\progress($code);
+            echo json_encode(\Mosa2\Schema6Prepare\PHASES);"""],cwd=ROOT,text=True,capture_output=True)
+        self.assertEqual(p.returncode,0);self.assertEqual(set(json.loads(p.stdout)),r.PHASES)
+        self.assertEqual(r.phase(p.stderr,'schema6-prepare'),'REPORT_REJECTED')
+        for stderr in ('MOSA2_PHASE:STRUCTURE_REJECTED','MOSA2_PHASE:UNKNOWN\n','warning\n'):
+            with self.assertRaises(ValueError):r.phase(stderr,'schema6-prepare')
+
 if __name__=='__main__':unittest.main()

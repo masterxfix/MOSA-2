@@ -9,12 +9,16 @@ try {
     $input=json_decode(stream_get_contents(STDIN),true,32,JSON_THROW_ON_ERROR);
     check(($input['attempt']??null)==='1','first_attempt');
     $scope=$input['scope']??'permissions';check(in_array($scope,['permissions','schema6-prepare'],true),'scope');
-    $stage='PERMISSIONS_CONNECTION_OR_IDENTITY_REJECTED';
+    $progress=null;if($scope==='schema6-prepare'){
+        require_once __DIR__.'/market_collector/schema6_prepare.php';
+        $progress='Mosa2\\Schema6Prepare\\progress';
+    }
+    $stage='PERMISSIONS_CONNECTION_OR_IDENTITY_REJECTED';if($progress!==null)$progress($stage);
     $p=connection($input['password'],'127.0.0.1',$input['port']);unset($input['password']);
     $p->exec('SET SESSION TRANSACTION READ ONLY');
     check($p->beginTransaction()&&$p->inTransaction(),'transaction');
     check((string)$p->query('SELECT @@session.transaction_read_only')->fetchColumn()==='1','readonly');
-    $stage='PERMISSIONS_GRANTS_REJECTED';
+    $stage='PERMISSIONS_GRANTS_REJECTED';if($progress!==null)$progress($stage);
     check($p->query('SELECT CURRENT_ROLE()')->fetchColumn()==='NONE','unresolved_roles');
     $literal=(string)$p->query('SELECT @@partial_revokes')->fetchColumn()==='1';
     $global=[];$schema=[];
@@ -34,7 +38,7 @@ try {
     $rights['GLOBAL SELECT']=$has('SELECT',true);
     $enumeration=['TRIGGER'=>$rights['TRIGGER'],'EVENT'=>$rights['EVENT'],
         'ROUTINE'=>$rights['SHOW_ROUTINE']||$rights['GLOBAL SELECT']||$rights['CREATE ROUTINE']||$rights['ALTER ROUTINE']||$rights['EXECUTE']];
-    $stage='PERMISSIONS_OBJECT_METADATA_REJECTED';$objects=[];
+    $stage='PERMISSIONS_OBJECT_METADATA_REJECTED';if($progress!==null)$progress($stage);$objects=[];
     $queries=[
         'TRIGGER'=>'SELECT TRIGGER_NAME AS name FROM information_schema.triggers WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME LIMIT 33',
         'ROUTINE'=>'SELECT ROUTINE_NAME AS name,ROUTINE_TYPE AS kind FROM information_schema.routines WHERE ROUTINE_SCHEMA=DATABASE() ORDER BY ROUTINE_TYPE,ROUTINE_NAME LIMIT 33',
@@ -64,9 +68,9 @@ try {
         'global_lock_requires'=>'Global RELOAD or FLUSH_TABLES; existing backup guard requires RELOAD; schema LOCK TABLES is insufficient',
         'business_writes'=>0,'lock_operations'=>0,'backup_operations'=>0];
     if($scope==='schema6-prepare'){
-        $stage='SCHEMA6_PREPARE_INVENTORY_REJECTED';
+        $stage='SCHEMA6_PREPARE_INVENTORY_REJECTED';if($progress!==null)$progress($stage);
         require_once __DIR__.'/market_collector/schema6_prepare.php';
-        $result['schema6_prepare']=\Mosa2\Schema6Prepare\inspect($p,dirname(__DIR__),$result);
+        $result['schema6_prepare']=\Mosa2\Schema6Prepare\inspect($p,dirname(__DIR__),$result,$progress);
     }
     check($p->inTransaction(),'transaction_lost');$p->rollBack();
 }catch(Throwable $error){

@@ -9,6 +9,15 @@ require_once dirname(__DIR__,2).'/api/current_read.php';
 require_once dirname(__DIR__,2).'/api/observations_read.php';
 
 
+const PHASES=['PERMISSIONS_CONNECTION_OR_IDENTITY_REJECTED','PERMISSIONS_GRANTS_REJECTED',
+    'PERMISSIONS_OBJECT_METADATA_REJECTED','SCHEMA6_PREPARE_INVENTORY_REJECTED',
+    'READ_ONLY_REJECTED','ARTIFACT_LOAD_REJECTED','TABLE_SET_REJECTED','STRUCTURE_REJECTED',
+    'LEDGER_REJECTED','COUNTS_REJECTED','PROVENANCE_REJECTED','JOB_STATUS_REJECTED','REPORT_REJECTED'];
+function progress(string $section): void {
+    check(in_array($section,PHASES,true),'prepare_section');
+    $marker='MOSA2_PHASE:'.$section."\n";
+    check(fwrite(STDERR,$marker)===strlen($marker)&&fflush(STDERR),'prepare_progress');
+}
 /** Fixed public sections only; never retain driver messages or private values. */
 final class InspectionRejected extends \RuntimeException {
     public function __construct(public readonly string $section) {
@@ -86,35 +95,35 @@ function publications(array $published,array $observations): array {
     return $out;
 }
 /** Called only inside the already authenticated, verified READ ONLY transaction. */
-function inspect(PDO $p,string $root,array $permissions): array {
-    $stage='READ_ONLY_REJECTED';
+function inspect(PDO $p,string $root,array $permissions,?callable $progress=null): array {
+    $stage='READ_ONLY_REJECTED';if($progress!==null)$progress($stage);
     try {
     check($p->inTransaction()&&(string)$p->query('SELECT @@session.transaction_read_only')->fetchColumn()==='1','prepare_readonly');
     $p->exec('SET SESSION MAX_EXECUTION_TIME=3000');
-    $stage='ARTIFACT_LOAD_REJECTED';$expected=schema4($root);
-    $stage='TABLE_SET_REJECTED';
+    $stage='ARTIFACT_LOAD_REJECTED';if($progress!==null)$progress($stage);$expected=schema4($root);
+    $stage='TABLE_SET_REJECTED';if($progress!==null)$progress($stage);
     $tables=$p->query('SELECT TABLE_NAME,ENGINE,DATA_LENGTH,INDEX_LENGTH,AUTO_INCREMENT FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME LIMIT 28')->fetchAll(PDO::FETCH_ASSOC);
     same(array_column($tables,'TABLE_NAME'),\Mosa2\CollectorSchema5\envelope(4)['tables'],'prepare_exact_schema4');
-    $stage='STRUCTURE_REJECTED';
+    $stage='STRUCTURE_REJECTED';if($progress!==null)$progress($stage);
     $schema=\Mosa2\Phase3K\structure($p,$expected);
-    $stage='LEDGER_REJECTED';
+    $stage='LEDGER_REJECTED';if($progress!==null)$progress($stage);
     $rows=$p->query('SELECT version,migration_key,HEX(checksum) AS checksum,applied_at FROM m2_schema_migrations ORDER BY version LIMIT 7')->fetchAll(PDO::FETCH_ASSOC);
     ledger($rows,$root);
-    $stage='COUNTS_REJECTED';
+    $stage='COUNTS_REJECTED';if($progress!==null)$progress($stage);
     $counts=[];$bytes=0;
     foreach($tables as $table){
         same($table['ENGINE'],'InnoDB','prepare_innodb');
         $counts[$table['TABLE_NAME']]=(string)$p->query('SELECT /*+ MAX_EXECUTION_TIME(3000) */ COUNT(*) FROM '.qi($table['TABLE_NAME']))->fetchColumn();
         $bytes+=(int)$table['DATA_LENGTH']+(int)$table['INDEX_LENGTH'];
     }
-    $stage='PROVENANCE_REJECTED';
+    $stage='PROVENANCE_REJECTED';if($progress!==null)$progress($stage);
     $now=gmdate('Y-m-d H:i:s').'.000000';
     $published=\Mosa2\CurrentRead\published($p,$now,900);$observations=[];
     $q=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',\Mosa2\ObservationRead\FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
     foreach($published as $entry){$r=$entry['route'];$q->execute([$r['asset_id'],$r['source_id']]);
         $observations[]=\Mosa2\ObservationRead\latest($q->fetchAll(PDO::FETCH_ASSOC),$r,$r['isin'],$now,900);}
     $public=publications($published,$observations);
-    $stage='JOB_STATUS_REJECTED';
+    $stage='JOB_STATUS_REJECTED';if($progress!==null)$progress($stage);
     $processes=$p->query('SELECT COMMAND,STATE FROM information_schema.processlist WHERE DB=DATABASE() AND ID<>CONNECTION_ID() LIMIT 33')->fetchAll(PDO::FETCH_ASSOC);
     check(count($processes)<=32,'prepare_process_bound');
     $jobs=$p->query("SELECT COUNT(*) FROM m2_jobs WHERE enabled=1")->fetchColumn();
@@ -122,7 +131,7 @@ function inspect(PDO $p,string $root,array $permissions): array {
     $locks=[];foreach(['m2-current-refresh','m2-collector-scheduler'] as $name){
         $q=$p->prepare('SELECT IS_USED_LOCK(?) IS NOT NULL');$q->execute([$name]);$locks[$name]=(bool)$q->fetchColumn();}
     check($p->inTransaction(),'prepare_transaction_lost');
-    $stage='REPORT_REJECTED';
+    $stage='REPORT_REJECTED';if($progress!==null)$progress($stage);
     return ['status'=>'SCHEMA6_PREPARE_INVENTORY_PASS','schema_version'=>4,'table_count'=>count($tables),
         'exact_structure'=>'PASS','ledger_checksums'=>'PASS','migration5_6_objects'=>'ABSENT',
         'table_rows'=>$counts,'allocated_table_bytes_estimate'=>$bytes,'all_innodb'=>true,
