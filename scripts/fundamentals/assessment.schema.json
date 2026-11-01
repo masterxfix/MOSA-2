@@ -1,0 +1,172 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "enum": [
+        "mosa2-ai-assessment-v1"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ASSESSED",
+        "INSUFFICIENT_DATA"
+      ]
+    },
+    "input_contract": {
+      "type": "string",
+      "enum": [
+        "mosa2-ai-analysis-input-v1"
+      ]
+    },
+    "input_digest": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "invocation_id": {
+      "type": "string"
+    },
+    "factual_claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "observation_id": {
+            "type": "string"
+          },
+          "metric_key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "unit_key": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "rounded": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "observation_id",
+          "metric_key",
+          "value",
+          "unit_key",
+          "source_id",
+          "origin",
+          "rounded"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "calculation_claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "calculation_id": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "calculation_id",
+          "value"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "interpretations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "NUMERICAL_INCREASE",
+              "NUMERICAL_DECREASE",
+              "ADJUSTMENT_GAP",
+              "CURATED_ROUNDING",
+              "LIMITED_COVERAGE"
+            ]
+          },
+          "observation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "calculation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "observation_ids",
+          "calculation_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "CAUSES_NOT_ESTABLISHED",
+          "ADJUSTMENT_RECONCILIATION_MISSING",
+          "SUSTAINABILITY_NOT_ESTABLISHED"
+        ]
+      }
+    },
+    "missing_information": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "revenue",
+          "ebit",
+          "ebitda",
+          "profit_after_tax",
+          "operating_cashflow"
+        ]
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "status",
+    "input_contract",
+    "input_digest",
+    "model_id",
+    "generated_at",
+    "invocation_id",
+    "factual_claims",
+    "calculation_claims",
+    "interpretations",
+    "uncertainties",
+    "missing_information"
+  ],
+  "additionalProperties": false
+}
