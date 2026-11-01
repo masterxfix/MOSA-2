@@ -5,9 +5,11 @@ IMPORTANT=('revenue','ebit','ebitda','profit_after_tax','operating_cashflow')
 def build(asset,sources):
     facts=asset['facts']; byid={str(r['id']):r for r in facts}
     current=[]
-    for rows in asset['current'].values():
+    for slot,rows in asset['current'].items():
         for c in rows:
             if str(c['observation_id']) not in byid:raise ValueError('CURRENT_REFERENCE')
+            r=byid[str(c['observation_id'])]
+            if slot!=r['metric_key']+':'+r['period_type']:raise ValueError('CURRENT_REFERENCE')
             current.append(str(c['observation_id']))
     source_ids={str(r['source_id']) for r in facts}
     out=dict(contract='mosa2-ai-analysis-input-v1',identity=dict(id=asset['id'],name=asset['name'],isin=[x['normalized_value'] for x in asset['identifiers']]),
