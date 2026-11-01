@@ -5,12 +5,14 @@ CONFIG='/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/
 PHP='/opt/plesk/php/8.4/bin/php'
 
 # Identical ordered policy in Python and PHP; parity covered by offline matrix tests.
-def file_policy(m,uid,gid):
+def file_policy(m,uid,gid,path=None):
     if m['symlink']:return 'CONFIG_SYMLINK'
     if m['type']!=stat.S_IFREG:return 'CONFIG_NOT_REGULAR'
     if m['uid']!=uid:return 'CONFIG_OWNER'
     if m['nlink']!=1:return 'CONFIG_HARDLINK'
-    if m['mode'] not in (0o600,0o640):return 'CONFIG_MODE'
+    # User-authorized legacy exception for this exact existing file only.
+    legacy=(path==CONFIG and uid==10317 and gid==1003 and m['uid']==10317 and m['gid']==1003 and m['mode']==0o644)
+    if m['mode'] not in (0o600,0o640) and not legacy:return 'CONFIG_MODE'
     if m['mode']==0o640 and m['gid']!=gid:return 'CONFIG_GROUP_READ_UNTRUSTED'
     return 'PASS'
 
@@ -23,6 +25,9 @@ def parent_policy(m,uid):
 
 def metadata(s):
     return dict(type=stat.S_IFMT(s.st_mode),uid=s.st_uid,gid=s.st_gid,mode=stat.S_IMODE(s.st_mode),mode_octal=format(stat.S_IMODE(s.st_mode),'04o'),symlink=stat.S_ISLNK(s.st_mode),nlink=s.st_nlink)
+
+def identity(s):
+    return tuple(getattr(s,'st_'+k) for k in ('dev','ino','mode','uid','gid','size','mtime_ns','ctime_ns','nlink'))
 
 def protection_diagnosis(report):
     process=dict(uid=os.getuid(),euid=os.geteuid(),gid=os.getgid(),egid=os.getegid())
@@ -38,27 +43,33 @@ def protection_diagnosis(report):
             m=metadata(os.stat(part,dir_fd=fd,follow_symlinks=False));m['index']=index;m['status']=parent_policy(m,UID);diag['parents'].append(m)
             if m['status']!='PASS':diag['first_failure']=m['status'];raise RuntimeError(m['status'])
             next_fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd);os.close(fd);fd=next_fd
-        m=metadata(os.stat(parts[-1],dir_fd=fd,follow_symlinks=False));diag['file']=m
+        before=os.stat(parts[-1],dir_fd=fd,follow_symlinks=False);m=metadata(before);diag['file']=m
         diag['legacy_deviations']=[code for code,ok in [('FILE_TYPE',m['type']==stat.S_IFREG),('UID',m['uid']==UID),('GID',m['gid']==GID),('MODE',m['mode'] in (0o600,0o640))] if not ok]
         diag['readable']=os.access(CONFIG,os.R_OK,effective_ids=True)
-        code=file_policy(m,UID,GID);diag['first_failure']=code
+        code=file_policy(m,UID,GID,CONFIG);diag['first_failure']=code
         if code!='PASS':raise RuntimeError(code)
+        if m['mode']==0o644:
+            report['security_risk']='LOCAL_READ_ISOLATION_UNPROVEN'
+            # Exact-parent modes can prove world traversal, never full isolation.
+            if all(p['mode'] & 0o001 for p in diag['parents']):
+                diag['first_failure']='CONFIG_OTHER_READ_ACCESS';raise RuntimeError('CONFIG_OTHER_READ_ACCESS')
         # Metadata and access checks only; no file bytes are read here.
         if not diag['readable']:diag['first_failure']='CONFIG_NOT_READABLE';raise RuntimeError('CONFIG_NOT_READABLE')
         f=os.open(parts[-1],os.O_RDONLY|os.O_NOFOLLOW,dir_fd=fd)
         try:
-            if metadata(os.fstat(f))!=m:raise RuntimeError('CONFIG_CHANGED')
+            if identity(os.fstat(f))!=identity(before):raise RuntimeError('CONFIG_CHANGED')
         finally:os.close(f)
         report['protection_policy']='PASS'
         return diag
     finally:os.close(fd)
 
-PHP_POLICY=r'''function filePolicy($m,$uid,$gid){
+PHP_POLICY=r'''function filePolicy($m,$uid,$gid,$path=null){
 if($m['symlink'])return 'CONFIG_SYMLINK';
 if($m['type']!==0100000)return 'CONFIG_NOT_REGULAR';
 if($m['uid']!==$uid)return 'CONFIG_OWNER';
 if($m['nlink']!==1)return 'CONFIG_HARDLINK';
-if(!in_array($m['mode'],[0600,0640],true))return 'CONFIG_MODE';
+$legacy=$path==='/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/dashboard_neu/data/private/openai_config.php'&&$uid===10317&&$gid===1003&&$m['uid']===10317&&$m['gid']===1003&&$m['mode']===0644;
+if(!in_array($m['mode'],[0600,0640],true)&&!$legacy)return 'CONFIG_MODE';
 if($m['mode']===0640&&$m['gid']!==$gid)return 'CONFIG_GROUP_READ_UNTRUSTED';
 return 'PASS';}
 function parentPolicy($m,$uid){
@@ -74,11 +85,12 @@ try{
 if(realpath($p)!==$p)exit(2);
 $parents=[];$d=dirname($p);while(true){$parents[]=$d;if($d==='/')break;$d=dirname($d);}
 foreach($parents as $d){$s=lstat($d);if(!$s||parentPolicy(meta($s),10317)!=='PASS')exit(2);}
-$s=lstat($p);if(!$s||filePolicy(meta($s),10317,1003)!=='PASS')exit(2);
+$s=lstat($p);if(!$s||filePolicy(meta($s),10317,1003,$p)!=='PASS')exit(2);
 $hash=hash_file('sha256',$p);ob_start();try{$v=(static function($path){return require $path;})($p);}finally{ob_end_clean();}
 if(!is_array($v)||!isset($v['OPENAI_API_KEY'])||!is_string($v['OPENAI_API_KEY'])||trim($v['OPENAI_API_KEY'])==='')exit(3);
 clearstatcache(true,$p);$after=lstat($p);foreach(['dev','ino','mode','uid','gid','size','mtime','ctime','nlink'] as $k)if($s[$k]!==$after[$k])exit(4);if(hash_file('sha256',$p)!==$hash)exit(4);
-echo json_encode(['key'=>trim($v['OPENAI_API_KEY']),'hash'=>$hash],JSON_THROW_ON_ERROR);
+$identity=[];foreach(['dev','ino','mode','uid','gid','size','mtime','ctime','nlink'] as $k)$identity[$k]=$s[$k];
+echo json_encode(['key'=>trim($v['OPENAI_API_KEY']),'hash'=>$hash,'identity'=>$identity],JSON_THROW_ON_ERROR);
 }catch(Throwable){exit(5);}'''
 
 def existing_key(report=None):
@@ -103,7 +115,7 @@ def dogado_pilot(data):
     report=dict(ok=False,model_calls=0,key_transferred=False,db_writes=0,cost_status='NOT_CALLED');phase='BINDING';key=''
     try:
         if len(json.dumps(data).encode())>65536:raise RuntimeError('INPUT_BOUND')
-        if data['marker']['execution']!='fundamentals-ai-droneshield-protection-20261101-01':raise RuntimeError('PILOT_BINDING')
+        if data['marker']['execution']!='fundamentals-ai-droneshield-existing-mosa-20261101-01':raise RuntimeError('PILOT_BINDING')
         a,t=load_modules(data['modules']);snapshot=data['snapshot'];prepared,sha=a.prepare(snapshot)
         a.need(snapshot['identity']['isin']==['AU000000DRO2'] and len(prepared['facts'])==14 and len(snapshot['current_observation_ids'])==7,'PILOT_BINDING')
         a.need(sha==data['marker']['input_digest'],'INPUT_DIGEST')
@@ -132,11 +144,20 @@ def dogado_pilot(data):
         from datetime import datetime,timezone
         result=a.ResponsesAdapter(Observed(),max_output_tokens=4000).assess(snapshot,price=data['price'],now=datetime.now(timezone.utc),invocation_id=data['invocation_id'],authorized_digest=sha,preflight=preflight)
         phase='OUTPUT_VALIDATED';assessment=result['assessment'];a.need(bool(assessment['interpretations']),'INTERPRETATIONS_MISSING')
+        facts={f['observation_id']:f for f in prepared['facts']};calcs={c['calculation_id']:c for c in prepared['calculations']}
+        details={}
+        for item in assessment['interpretations']:
+            refs=set(item['observation_ids'])
+            for ref in item['calculation_ids']:refs.update(calcs[ref]['observation_ids'])
+            entry=details.setdefault(item['code'],dict(metrics=set(),periods=set()))
+            entry['metrics'].update(facts[r]['metric'] for r in refs);entry['periods'].update(facts[r]['end'] for r in refs)
+        # Deterministic metadata from validated codes/references, never model prose.
+        report.update(interpretation_details=[dict(code=c,metrics=sorted(v['metrics']),periods=sorted(v['periods'])) for c,v in sorted(details.items())],uncertainties=assessment['uncertainties'],missing_information=assessment['missing_information'],reasoning='medium',input_digest_verified='PASS')
         report.update(input_digest=sha,structured_output='PASS',fact_references='PASS',calculation_references='PASS',source_binding='PASS',interpretation_codes=sorted({i['code'] for i in assessment['interpretations']}),facts=len(assessment['factual_claims']),calculations=len(assessment['calculation_claims']),usage={k:result['usage'][k] for k in ('input_tokens','output_tokens','total_tokens') if k in result['usage']},actual_cost_upper_bound_usd=result['actual_cost_upper_bound_usd'],cost_status='CONSERVATIVE_ESTIMATE')
-        phase='CONFIG_READBACK';after=existing_key();a.need(after['hash']==conf['hash'] and after['key']==key,'CONFIG_CHANGED')
+        phase='CONFIG_READBACK';after=existing_key();a.need(after['hash']==conf['hash'] and after['key']==key and after['identity']==conf['identity'],'CONFIG_CHANGED')
         report.update(ok=True,stage='SUCCESS',mosa_unchanged=True)
     except Exception as error:
-        allowed={'CONFIG_PROCESS_IDENTITY','CONFIG_SYMLINK','CONFIG_NOT_REGULAR','CONFIG_OWNER','CONFIG_HARDLINK','CONFIG_MODE','CONFIG_GROUP_READ_UNTRUSTED','CONFIG_NOT_READABLE','PARENT_SYMLINK','PARENT_NOT_DIRECTORY','PARENT_OWNER','PARENT_WRITABLE_OR_SPECIAL','MARKER_ALREADY_CONSUMED','CONFIG_PATH_OR_PROTECTION','CONFIG_KEY_MISSING','CONFIG_PHP_FAILED','CONFIG_NOT_VISIBLE_OR_READABLE','CONFIG_PROTECTION','CONFIG_PHP_UNAVAILABLE','CONFIG_LOADER_FAILED','CONFIG_CHANGED','INPUT_BOUND','PILOT_BINDING','INPUT_DIGEST','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','OUTPUT_PREFLIGHT_BOUND','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET','INTERPRETATIONS_MISSING'}
+        allowed={'CONFIG_OTHER_READ_ACCESS','CONFIG_PROCESS_IDENTITY','CONFIG_SYMLINK','CONFIG_NOT_REGULAR','CONFIG_OWNER','CONFIG_HARDLINK','CONFIG_MODE','CONFIG_GROUP_READ_UNTRUSTED','CONFIG_NOT_READABLE','PARENT_SYMLINK','PARENT_NOT_DIRECTORY','PARENT_OWNER','PARENT_WRITABLE_OR_SPECIAL','MARKER_ALREADY_CONSUMED','CONFIG_PATH_OR_PROTECTION','CONFIG_KEY_MISSING','CONFIG_PHP_FAILED','CONFIG_NOT_VISIBLE_OR_READABLE','CONFIG_PROTECTION','CONFIG_PHP_UNAVAILABLE','CONFIG_LOADER_FAILED','CONFIG_CHANGED','INPUT_BOUND','PILOT_BINDING','INPUT_DIGEST','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','OUTPUT_PREFLIGHT_BOUND','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET','INTERPRETATIONS_MISSING'}
         report.update(stage=phase,error_code=str(error) if str(error) in allowed else 'DOGADO_PILOT_STOP_NO_RETRY')
     # No remote stdout/stderr, key or config text is forwarded; only this allowlisted report.
     raw=json.dumps(report,ensure_ascii=True)
