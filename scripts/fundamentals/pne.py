@@ -82,7 +82,7 @@ def parse(raw, observed_at):
                 as_of_at=None, reported_at=None, observed_at=observed_at,
                 field_path=f'html-text-v1:{start}:{end};publication-date={published};date-only;PNE-calendar-FY',
                 value_type='decimal', dimension_key='monetary', value_text=None, value_date=None))
-    return dict(publication_date=published, parser_key='pne_annual_release_de', parser_version='1', parse_status='partial',
+    return dict(fiscal_year_start_month=1, publication_date=published, parser_key='pne_annual_release_de', parser_version='1', parse_status='partial',
         source=SOURCE, metrics=[dict(metric_key=k, display_name=v[0], category='income', value_type='decimal',
             value_semantics=v[1], dimension_key='monetary', status='active') for k,v in sorted(METRICS.items())],
         units=[dict(unit_key='EUR_MILLION', unit_version='1', display_name='Millionen Euro', dimension_key='monetary',

@@ -41,11 +41,18 @@ function validate(array $plan): array {
         $m=$metrics[$r['metric_key']]??null;$u=$units[$r['unit_key']]??null;check($m!==null&&$u!==null,'catalog_binding');
         same($r['value_type'],$m['value_type'],'type');same($r['dimension_key'],$m['dimension_key'],'metric_dimension');same($r['dimension_key'],$u['dimension_key'],'unit_dimension');same($r['unit_version'],$u['unit_version'],'unit_version');
         same($r['value_text'],null,'value_text');same($r['value_date'],null,'value_date');$r['value_decimal']=decimal($r['value_decimal']);
-        // Explicitly qualified FY policy. Other period kinds remain raw until qualified.
-        same($r['period_type'],'fy','period_kind');same($r['fiscal_quarter'],null,'quarter');same($r['estimate_horizon'],null,'estimate');
+        check(in_array($r['period_type'],['fy','fq'],true),'period_kind');
+        check($r['period_type']==='fy'?$r['fiscal_quarter']===null:in_array($r['fiscal_quarter'],['1','2','3','4'],true),'quarter');
+        same($r['estimate_horizon'],null,'estimate');
         check(preg_match('/\A[1-9][0-9]{3}\z/',$r['fiscal_year'])===1,'fiscal_year');
         foreach(['period_start','period_end'] as $k){$d=\DateTimeImmutable::createFromFormat('!Y-m-d',$r[$k]);check($d!==false&&$d->format('Y-m-d')===$r[$k],'date');}
         check($r['period_start']<$r['period_end'],'period_bounds');
+        $month=$plan['fiscal_year_start_month']??null;check(is_int($month)&&$month>=1&&$month<=12,'fiscal_calendar');
+        $year=(int)$r['fiscal_year']-($month===1?0:1);
+        $start=new \DateTimeImmutable(sprintf('%04d-%02d-01',$year,$month));
+        if($r['period_type']==='fq')$start=$start->modify('+'.(3*((int)$r['fiscal_quarter']-1)).' months');
+        $end=$start->modify('+'.($r['period_type']==='fy'?12:3).' months')->modify('-1 day');
+        same($r['period_start'],$start->format('Y-m-d'),'fiscal_start');same($r['period_end'],$end->format('Y-m-d'),'fiscal_end');
         foreach(['as_of_at','reported_at','observed_at'] as $k)timestamp($r[$k]);
         same($r['observed_at'],$plan['metadata']['observed_at'],'observation_time');
         check($r['reported_at']===null||$r['reported_at']<=$r['observed_at'],'publication_time');
@@ -79,7 +86,7 @@ function original(PDO $p,?array $before=null): array {
         foreach($rows as $row){foreach($row as &$v)$v=$v===null?null:bin2hex((string)$v);unset($v);$encoded[]=canonical($row);}sort($encoded,SORT_STRING);
         $out[$t]=['count'=>count($rows),'sha256'=>hash('sha256',canonical($encoded)),'max_id'=>$max];
     }
-    same($out['m2_market_current']['count'],5,'five_current');same($out['m2_market_observations']['count'],28,'28_observations');return $out;
+    return $out;
 }
 function asset(PDO $p,array $identity): string {
     check(preg_match('/\A[A-Z]{2}[A-Z0-9]{9}[0-9]\z/',$identity['isin'])===1,'isin');
@@ -95,9 +102,24 @@ function schema(PDO $p,bool $full): void {
     \Mosa2\Schema6Apply\ledger($p,6);\Mosa2\CollectorSchema5\lockedDatabase($p);
     if($full)\Mosa2\CollectorSchema6\database($p);
 }
-function emptyFundamentals(PDO $p): void {foreach(\Mosa2\CollectorSchema5\FUNDAMENTALS as $t)same((int)$p->query('SELECT COUNT(*) FROM '.qi($t))->fetchColumn(),0,'pilot_initial_fundamentals');}
+/** Explicit bounded preservation scope supplied by the manual pilot, not issuer-specific policy. */
+function protectedAssets(PDO $p,array $identities): array {
+    $out=[];
+    foreach($identities as $identity){$id=asset($p,$identity);
+        foreach(['m2_fundamental_observations'=>'observations','m2_fundamental_current'=>'current'] as $t=>$kind){
+            $rows=query($p,'SELECT * FROM '.qi($t).' WHERE asset_id=? LIMIT 257',[$id]);check(count($rows)<=256,'preservation_bound');
+            same(count($rows),$identity[$kind],'preservation_count');$encoded=[];
+            foreach($rows as $row){foreach($row as &$v)$v=$v===null?null:bin2hex((string)$v);unset($v);$encoded[]=canonical($row);}sort($encoded,SORT_STRING);
+            $out[$id][$kind]=['count'=>count($rows),'sha256'=>hash('sha256',canonical($encoded))];
+        }
+    }return $out;
+}
+function counts(PDO $p): array {
+    $out=[];foreach(['m2_sources','m2_files',...\Mosa2\CollectorSchema5\FUNDAMENTALS] as $t)
+        $out[$t]=(int)$p->query('SELECT COUNT(*) FROM '.qi($t))->fetchColumn();return $out;
+}
 function currentFields(array $r): array {return array_diff_key($r,array_flip(['id','route_id','fetch_id','field_path','dedupe_key','created_at']));}
-/** Exact FY projection: newer period wins, equal-period contradictions stop. */
+/** Exact FY/FQ projection: newer period wins, equal-period contradictions stop. */
 function choose(array $rows): array {
     $slots=[];
     foreach($rows as $r){$key=$r['asset_id'].':'.$r['metric_key'].':'.$r['period_type'];
@@ -109,9 +131,9 @@ function choose(array $rows): array {
 }
 /** Generic insert-only catalog/facts path; no issuer-specific SQL. */
 function persist(PDO $p,array $plan,string $assetId): array {
-    $v=validate($plan);$now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');check($now>=$plan['metadata']['observed_at'],'clock');$expected=[];
-    $record=function(string $table,array $row,string $idColumn='id')use($p,&$expected):array{
-        $id=insert($p,$table,$row);if($idColumn==='id')$row=['id'=>$id]+$row;$expected[]=[$table,$row];return $row;};
+    $v=validate($plan);$now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');check($now>=$plan['metadata']['observed_at'],'clock');$expected=[];$beforeCounts=counts($p);$inserted=array_fill_keys(array_keys($beforeCounts),0);$updates=0;
+    $record=function(string $table,array $row,string $idColumn='id')use($p,&$expected,&$inserted):array{
+        $inserted[$table]++;$id=insert($p,$table,$row);if($idColumn==='id')$row=['id'=>$id]+$row;$expected[]=[$table,$row];return $row;};
     $catalog=function(string $table,array $definition,array $keys,bool $updated=false)use($p,$record,&$expected,$now):array{
         $rows=query($p,'SELECT * FROM '.qi($table).' WHERE '.implode(' AND ',array_map(fn($k)=>qi($k).'=?',$keys)).' LIMIT 2',array_map(fn($k)=>$definition[$k],$keys));
         check(count($rows)<=1,'catalog_unique');
@@ -120,14 +142,24 @@ function persist(PDO $p,array $plan,string $assetId): array {
     };
     $source=$catalog('m2_sources',$plan['source'],['source_key'],true);$sourceId=(string)$source['id'];
     $meta=$plan['metadata'];
-    $file=$record('m2_files',['entity_id'=>$assetId,'source_id'=>$sourceId,'storage_backend'=>'dogado_private_file',
+    $fileDefinition=['entity_id'=>$assetId,'source_id'=>$sourceId,'storage_backend'=>'dogado_private_file',
         'storage_key'=>$plan['archive']['storage_key'],'mime_type'=>$meta['content_type'],'byte_size'=>(string)$meta['bytes'],
-        'sha256'=>hex2bin($meta['sha256']),'observed_at'=>$meta['observed_at'],'created_at'=>$now]);
-    $fetch=$record('m2_provider_fetches',['fetch_key'=>digest(['fundamental-fetch-v1',$sourceId,$meta['url'],$meta['sha256'],$meta['observed_at']]),
+        'sha256'=>hex2bin($meta['sha256']),'observed_at'=>$meta['observed_at']];
+    $fetchDefinition=['fetch_key'=>digest(['fundamental-fetch-v1',$sourceId,$meta['url'],$meta['sha256'],$meta['observed_at']]),
         'source_id'=>$sourceId,'asset_id'=>$assetId,'route_id'=>null,'route_revision'=>null,'route_sha256'=>null,'job_run_id'=>null,
-        'file_id'=>$file['id'],'payload_sha256'=>hex2bin($meta['sha256']),'payload_bytes'=>(string)$meta['bytes'],
+        'payload_sha256'=>hex2bin($meta['sha256']),'payload_bytes'=>(string)$meta['bytes'],
         'content_type'=>$meta['content_type'],'observed_at'=>$meta['observed_at'],'http_status'=>(string)$meta['http_status'],
-        'parser_key'=>$plan['parser_key'],'parser_version'=>$plan['parser_version'],'parse_status'=>$plan['parse_status'],'created_at'=>$now]);
+        'parser_key'=>$plan['parser_key'],'parser_version'=>$plan['parser_version'],'parse_status'=>$plan['parse_status']];
+    $known=query($p,'SELECT * FROM m2_provider_fetches WHERE fetch_key=? LIMIT 2',[$fetchDefinition['fetch_key']]);
+    check(count($known)<=1,'fetch_unique');
+    if($known!==[]){
+        $fetch=$known[0];equalRow($fetch,$fetchDefinition);$expected[]=['m2_provider_fetches',$fetch];
+        $files=query($p,'SELECT * FROM m2_files WHERE id=? LIMIT 2',[$fetch['file_id']]);same(count($files),1,'fetch_file');
+        equalRow($files[0],$fileDefinition);$expected[]=['m2_files',$files[0]];
+    }else{
+        $file=$record('m2_files',$fileDefinition+['created_at'=>$now]);
+        $fetch=$record('m2_provider_fetches',$fetchDefinition+['file_id'=>$file['id'],'created_at'=>$now]);
+    }
     foreach($v['metrics'] as $m)$catalog('m2_fundamental_metrics',$m,['metric_key'],true);
     foreach($v['units'] as $u)$catalog('m2_fundamental_units',$u,['unit_key','unit_version']);
     $observations=[];
@@ -136,6 +168,8 @@ function persist(PDO $p,array $plan,string $assetId): array {
         $fact=array_diff_key($r,array_flip(['observed_at','field_path','period_key']));
         $r['dedupe_key']=digest(['fundamental-fact-v1',$assetId,$sourceId,null,bin2hex($m['definition_sha256']),bin2hex($u['definition_sha256']),bin2hex($r['period_key']),$fact]);
         $r=['asset_id'=>$assetId,'source_id'=>$sourceId,'route_id'=>null]+$r+['fetch_id'=>$fetch['id'],'created_at'=>$now];
+        $periodRows=query($p,'SELECT * FROM m2_fundamental_observations WHERE asset_id=? AND metric_key=? AND period_type=? AND fiscal_year=? AND period_end=? LIMIT 2',[$assetId,$r['metric_key'],$r['period_type'],$r['fiscal_year'],$r['period_end']]);
+        foreach($periodRows as $oldFact)same($oldFact['dedupe_key'],$r['dedupe_key'],'historical_period_conflict');
         $existing=query($p,'SELECT * FROM m2_fundamental_observations WHERE dedupe_key=? LIMIT 2',[$r['dedupe_key']]);check(count($existing)<=1,'fact_unique');
         if($existing!==[]){equalRow($existing[0],array_diff_key($r,array_flip(['observed_at','field_path','fetch_id','created_at'])));$observations[]=$existing[0];$expected[]=['m2_fundamental_observations',$existing[0]];}
         else $observations[]=$record('m2_fundamental_observations',$r);
@@ -148,10 +182,13 @@ function persist(PDO $p,array $plan,string $assetId): array {
         }
         $current=currentFields($r)+['observation_id'=>(string)$r['id'],'updated_at'=>$now];
         if($old===[])$record('m2_fundamental_current',$current,'asset_id');
-        else{$q=$p->prepare('UPDATE m2_fundamental_current SET '.implode(',',array_map(fn($k)=>qi($k).'=?',array_keys($current))).' WHERE asset_id=? AND metric_key=? AND period_type=?');
+        else{$updates++;$q=$p->prepare('UPDATE m2_fundamental_current SET '.implode(',',array_map(fn($k)=>qi($k).'=?',array_keys($current))).' WHERE asset_id=? AND metric_key=? AND period_type=?');
             check($q->execute([...array_values($current),$assetId,$r['metric_key'],$r['period_type']]),'current_update');$expected[]=['m2_fundamental_current',$current];}
     }
-    return ['expected'=>$expected,'metrics'=>count($v['metrics']),'observations'=>count($observations),'current'=>count($selected),
+    $afterCounts=[];foreach($beforeCounts as $t=>$n)$afterCounts[$t]=$n+$inserted[$t];
+    return ['expected'=>$expected,'counts'=>$afterCounts,'inserted'=>$inserted,'current_updates'=>$updates,
+        'metrics'=>$inserted['m2_fundamental_metrics'],'observations'=>$inserted['m2_fundamental_observations'],'current'=>$inserted['m2_fundamental_current'],
+        'facts_reused'=>count($observations)-$inserted['m2_fundamental_observations'],
         'source_id'=>$sourceId,'metric_keys'=>array_keys($v['metrics'])];
 }
 function readback(PDO $p,array $receipt): void {
@@ -160,9 +197,7 @@ function readback(PDO $p,array $receipt): void {
         $rows=query($p,'SELECT * FROM '.qi($table).' WHERE '.implode(' AND ',array_map(fn($k)=>qi($k).'=?',$keys)).' LIMIT 2',array_map(fn($k)=>$row[$k],$keys));
         same(count($rows),1,'readback_unique');equalRow($rows[0],$row);
     }
-    foreach(['m2_provider_fetches'=>1,'m2_fundamental_metrics'=>$receipt['metrics'],'m2_fundamental_units'=>1,
-        'm2_fundamental_observations'=>$receipt['observations'],'m2_fundamental_current'=>$receipt['current']] as $t=>$n)
-        same((int)$p->query('SELECT COUNT(*) FROM '.qi($t))->fetchColumn(),$n,'no_extra_rows');
+    same(counts($p),$receipt['counts'],'exact_row_deltas');
 }
 function transaction(PDO $p,array $plan,string $assetId,callable $committing): array {
     validate($plan);check($p->beginTransaction(),'begin');$commitStarted=false;
@@ -170,15 +205,18 @@ function transaction(PDO $p,array $plan,string $assetId,callable $committing): a
         check($p->commit(),'commit');return $receipt;
     }catch(\Throwable $e){if(!$commitStarted&&$p->inTransaction())$p->rollBack();throw $e;}
 }
-function timings(PDO $p,string $assetId,string $metric): array {
-    $queries=['current'=>'SELECT value_decimal,unit_key,unit_version,fiscal_year,period_start,period_end,source_id,observation_id FROM m2_fundamental_current WHERE asset_id=? AND metric_key=? AND period_type=\'fy\'',
-        'history'=>'SELECT id,value_decimal,unit_key,unit_version,fiscal_year,period_start,period_end,source_id FROM m2_fundamental_observations WHERE asset_id=? AND metric_key=? AND period_type=\'fy\' ORDER BY fiscal_year DESC,fiscal_quarter DESC,period_end DESC,id DESC LIMIT 20'];
+function timings(PDO $p,string $assetId,string $metric,string $period='fy'): array {
+    check(in_array($period,['fy','fq'],true),'timing_period');
+    $queries=['current'=>'SELECT value_decimal,unit_key,unit_version,fiscal_year,period_start,period_end,source_id,observation_id FROM m2_fundamental_current WHERE asset_id=? AND metric_key=? AND period_type=?',
+        'history'=>'SELECT id,value_decimal,unit_key,unit_version,fiscal_year,period_start,period_end,source_id FROM m2_fundamental_observations WHERE asset_id=? AND metric_key=? AND period_type=? ORDER BY fiscal_year DESC,fiscal_quarter DESC,period_end DESC,id DESC LIMIT 20'];
     $out=[];
-    foreach($queries as $key=>$sql){$args=[$assetId,$metric];$start=hrtime(true);$rows=query($p,$sql,$args);$client=(hrtime(true)-$start)/1e6;
+    foreach($queries as $key=>$sql){$args=[$assetId,$metric,$period];$start=hrtime(true);$rows=query($p,$sql,$args);$client=(hrtime(true)-$start)/1e6;
+        $access=query($p,'EXPLAIN '.$sql,$args);
+        check(count($access)===1,'explain_access');check($key==='current'?$access[0]['key']==='PRIMARY':$access[0]['key']==='ix_fund_obs_period','required_index');
         $explain=query($p,'EXPLAIN ANALYZE '.$sql,$args);$tree=implode("\n",array_map(fn($r)=>implode(' ',array_values($r)),$explain));
         check(preg_match('/actual time=([0-9.eE+-]+)\.\.([0-9.eE+-]+)/',$tree,$m)===1,'server_timing');
         $out[$key]=['rows'=>count($rows),'client_with_tunnel_ms'=>$client,'server_explain_actual_end_ms'=>(float)$m[2],
-            'index_access'=>stripos($tree,'index')!==false||stripos($tree,'single-row')!==false,'table_scan'=>stripos($tree,'table scan')!==false];
+            'index_access'=>$access[0]['key'],'access_type'=>$access[0]['type'],'server_timing_scope'=>'EXPLAIN iterator only; const lookup may occur before timing','table_scan'=>stripos($tree,'table scan')!==false];
     }return $out;
 }
 function main(): int {
@@ -187,22 +225,21 @@ function main(): int {
         $input=json_decode(stream_get_contents(STDIN),true,64,JSON_THROW_ON_ERROR);
         check(in_array($input['action'],['inspect','apply'],true),'action');$stage='IDENTITY';
         $p=connection($input['password'],'127.0.0.1',$input['port']);\Mosa2\Phase2\preflight($p,false);locks($p);
-        $stage='SCHEMA6';schema($p,$input['action']==='inspect');emptyFundamentals($p);
-        $assetId=asset($p,$input['identity']);$before=original($p);\Mosa2\Schema6Apply\provenance($p);
-        if($input['action']==='inspect'){$result=['ok'=>true,'asset_id'=>$assetId,'baseline'=>$before,'schema'=>6,'tables'=>26];}
+        $stage='SCHEMA6';schema($p,$input['action']==='inspect');
+        $assetId=asset($p,$input['identity']);$before=original($p);$protected=protectedAssets($p,$input['preserve_assets']??[]);
+        foreach($input['expected_baseline_counts']??[] as $t=>$n)same($before[$t]['count'],$n,'baseline_count');\Mosa2\Schema6Apply\provenance($p);
+        if($input['action']==='inspect'){$result=['ok'=>true,'asset_id'=>$assetId,'baseline'=>$before,'protected'=>$protected,'schema'=>6,'tables'=>26];}
         else{
-            $stage='PLAN';same($before,$input['baseline'],'baseline_drift');same($assetId,$input['asset_id'],'asset_drift');
+            $stage='PLAN';same($before,$input['baseline'],'baseline_drift');same($protected,$input['protected'],'protected_drift');same($assetId,$input['asset_id'],'asset_drift');
             $plan=$input['plan'];validate($plan);same($plan['archive']['sha256'],$plan['metadata']['sha256'],'archive_hash');same($plan['archive']['bytes'],$plan['metadata']['bytes'],'archive_bytes');same($plan['archive']['durable'],true,'archive_durable');
-            check(query($p,'SELECT id FROM m2_sources WHERE source_key=? LIMIT 1',[$plan['source']['source_key']])===[],'new_source_only');
             $stage='TRANSACTION';$receipt=transaction($p,$plan,$assetId,static function()use(&$stage,&$commitStarted){$stage='COMMIT';$commitStarted=true;});
             $stage='INDEPENDENT_READBACK';$read=connection($input['password'],'127.0.0.1',$input['port']);
             check($read->query('SELECT CONNECTION_ID()')->fetchColumn()!==$p->query('SELECT CONNECTION_ID()')->fetchColumn(),'independent');
             $read->exec('SET TRANSACTION READ ONLY');check($read->beginTransaction(),'readonly');
-            schema($read,false);readback($read,$receipt);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
-            foreach(['m2_sources','m2_files'] as $t)same((int)$read->query('SELECT COUNT(*) FROM '.qi($t))->fetchColumn(),$before[$t]['count']+1,'one_new_evidence_row');
+            schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');readback($read,$receipt);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
             $performance=timings($read,$assetId,$receipt['metric_keys'][0]);check($read->commit(),'read_end');
             $result=['ok'=>true,'stage'=>'SUCCESS','metrics'=>$receipt['metrics'],'observations'=>$receipt['observations'],'current'=>$receipt['current'],
-                'metric_keys'=>$receipt['metric_keys'],'market_unchanged'=>true,'collector_locked'=>true,'readback'=>'PASS','performance'=>$performance];
+                'metric_keys'=>$receipt['metric_keys'],'facts_reused'=>$receipt['facts_reused'],'current_updates'=>$receipt['current_updates'],'protected_assets_unchanged'=>true,'fiscal_periods_validated'=>true,'market_unchanged'=>true,'collector_locked'=>true,'readback'=>'PASS','performance'=>$performance];
         }
         echo json_encode($result,JSON_THROW_ON_ERROR);return 0;
     }catch(\Throwable){echo json_encode(['ok'=>false,'stage'=>$stage,'outcome'=>$commitStarted?'COMMIT_CONFIRMED_OR_UNKNOWN_NO_RETRY':'NOT_COMMITTED']);return 1;}

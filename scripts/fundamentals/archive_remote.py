@@ -4,11 +4,11 @@ import hashlib
 import json
 import re
 
-ONCE = 'fundamentals-pne2025-20261101-01'
+EXECUTIONS = {'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
 ROOT = BASE + '/private/mosa2-collector'
 
 def checked(data):
-    need(data['execution'] == ONCE and re.fullmatch('[0-9a-f]{40}', data['commit']), 'AUTHORIZATION')
+    need(data['execution'] in EXECUTIONS and re.fullmatch('[0-9a-f]{40}', data['commit']), 'AUTHORIZATION')
     need((os.getuid(), os.geteuid(), os.getgid(), os.getegid()) == (UID, UID, GID, GID), 'ACCOUNT')
     paths = (BASE, BASE+'/private', ROOT, ROOT+'/runs', ROOT+'/locks')
     measured = {}
@@ -49,6 +49,7 @@ def read_file(fd, name):
 
 def operation(data):
     measured = checked(data)
+    ONCE = data['execution']
     os.umask(0o077)
     action = data['action']
     need(action in ('reserve','archive','verify'), 'ACTION')
