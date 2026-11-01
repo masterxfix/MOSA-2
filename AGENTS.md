@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 31.10.2026, 13:27:11 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 01.11.2026, 12:50:41 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -65,6 +65,16 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Für Testsite-SFTP/SSH ist der dokumentierte GitHub-Actions-Weg mit den vorhandenen MOSA_TEST_SFTP_* Secrets/Variablen zu verwenden; lokale erneute Eingabe des web213-Passworts ist dafür nicht zulässig.
 - Für schreibende Test-DB-Läufe ist ebenfalls ein nicht-interaktiver Secret-Weg Voraussetzung. Solange dieser nicht eingerichtet ist, darf kein Auftrag gestartet werden, der absehbar eine erneute Test-DB-Passworteingabe verlangen würde.
 - Wenn trotz dieser Regel ein Tool während eines laufenden Auftrags unerwartet ein Passwort verlangt, den Vorgang an dieser Stelle stoppen und **nicht** den Nutzer zur Eingabe auffordern. Erst den fehlenden nicht-interaktiven Zugang sauber herstellen.
+
+## Verbindliche Codex-Modellwahl und Kosten-Nutzen-Abwägung
+
+- **Vor jedem neu formulierten MOSA-2-Codex-Auftrag** empfiehlt ChatGPT ausdrücklich ein konkretes **Codex-Modell und eine Denkstufe (Reasoning Effort)**. Die Empfehlung steht **außerhalb** des einzigen kopierbaren Auftragsblocks, zusammen mit der kurzen Beschreibung und dem Schwierigkeitsgrad; die gesamte Vorabinformation bleibt bei **höchstens zwei kurzen Sätzen**.
+- **Optimierungsziel ist der gesamte Kosten-Nutzen-Faktor**: voraussichtliche Ergebnisqualität, Bearbeitungsdauer, Nutzungskontingent und die Kosten zusätzlicher Fehlerdiagnosen, Korrekturen und Actions-Läufe berücksichtigen. Das billigste Modell pro Einzelaufruf ist nicht automatisch die günstigste Lösung; besonders bei einmaligen Live-Schreiboperationen und schwer reproduzierbaren Fehlern zählt die Zuverlässigkeit stärker.
+- **Aktuelle Evidenz nutzen:** [DeepSWE](https://deepswe.datacurve.ai/) als unabhängigen, zeitabhängigen Langzeit-Coding-Benchmark und [OpenAI-Modellauswahl](https://developers.openai.com/api/docs/guides/model-selection) sowie [Work-/Codex-Nutzungshinweise](https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex) für Modellstärken, Denkstufen und Nutzung. Eigene belegte MOSA-2-Codex-Ergebnisse und wiederkehrende Fehler fließen ebenfalls ein.
+- **Benchmarkwerte richtig einordnen:** DeepSWE wird mit eigener Agentenumgebung (mini-swe-agent), Aufgabenmischung und Kostenmethodik erhoben; weder Erfolgsquoten noch Dollarwerte sind eine Garantie oder direkte Abrechnung eines Codex-Auftrags. API-Tokenpreise sind nicht mit den Nutzungskontingenten in Codex gleichzusetzen. Keine unbelegten absoluten Kostenschätzungen.
+- **Leitlinie, nicht starre Modellbindung:** Für klar begrenzte einfache Änderungen ein kostengünstiges Modell mit Low/Medium; für normale Programmierung und Tests ein ausgewogenes Modell mit Medium; für komplexe Architektur, wiederholte Integrationsfehler oder risikoreiche Einmalaktionen ein leistungsstarkes Modell mit Medium/High. Extra High/Max nur empfehlen, wenn der erwartete Qualitätsgewinn den Mehraufwand plausibel rechtfertigt.
+- **Verfügbarkeit beachten:** Modelle, Modellnamen, Denkstufen, Preise und Benchmarks ändern sich. Nur tatsächlich belegte und für Codex verfügbare Optionen als sicher darstellen; sonst „sofern in Codex auswählbar“ und eine vernünftige Alternative nennen. ChatGPT kann die Codex-Modellwahl nicht stillschweigend umstellen; der Nutzer wählt das empfohlene Modell in Codex.
+- **Keine Abstriche an Qualität und Regeln:** AGENTS.md, Datensicherheit, fachliche Akzeptanzkriterien, Testbudgets und Freigaben bleiben unverändert verbindlich. Modellwahl allein rechtfertigt weder weitere Actions-Läufe noch ungefragte Zusatzarbeiten.
 
 ## MOSA-Auftragsstandard
 
@@ -199,6 +209,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 01.11.2026 | 12:50:41 Uhr (MEZ, UTC+01:00) | Verbindliche Codex-Modell-/Denkstufenempfehlung vor jedem MOSA-2-Auftrag eingeführt: aktuelles DeepSWE und OpenAI-Hinweise mit eigenen Ergebnissen abgleichen, Gesamtaufwand statt Einzelpreis bewerten, Verfügbarkeit und Benchmarkgrenzen offenlegen. |
 | 31.10.2026 | 13:27:11 Uhr (MEZ, UTC+01:00) | Verbindliche MOSA-2-Oberziele ergänzt: Datenvollständigkeit und Performance gleichrangig, relevante kostenlose Anbieterinformationen erhalten, unbekannte Felder nicht still verwerfen, Teilscope nicht zum Endumfang machen sowie MOSA-Wissen und Produktdesign als Leitplanken festgehalten. |
 | 31.10.2026 | 09:16:24 Uhr (MEZ, UTC+01:00) | Nutzeranweisung festgehalten: vorhandene Betriebserfahrung berücksichtigen, begrenzt ausprobieren und lernen, neue stoppende Bedenken zuerst besprechen und sichtbare Teilerfolge nachweisen. |
 | 22.10.2026 | 14:44:52 Uhr (MESZ, UTC+02:00) | Verbindlichen Designbestandsschutz ergänzt: keine stillschweigenden Farb-, Schrift-, Branding- und Theme-Änderungen bei Layout-/Funktionsaufträgen; genaue Designänderungen erfordern vorherige ausdrückliche Nutzerfreigabe. |
