@@ -107,7 +107,8 @@ function protectedAssets(PDO $p,array $identities): array {
     $out=[];
     foreach($identities as $identity){$id=asset($p,$identity);
         foreach(['m2_fundamental_observations'=>'observations','m2_fundamental_current'=>'current'] as $t=>$kind){
-            $rows=query($p,'SELECT * FROM '.qi($t).' WHERE asset_id=? LIMIT 257',[$id]);check(count($rows)<=256,'preservation_bound');
+            $period=$identity['period_type']??null;check($period===null||in_array($period,['fy','fq'],true),'preservation_period');
+            $rows=query($p,'SELECT * FROM '.qi($t).' WHERE asset_id=?'.($period===null?'':' AND period_type=?').' LIMIT 257',$period===null?[$id]:[$id,$period]);check(count($rows)<=256,'preservation_bound');
             same(count($rows),$identity[$kind],'preservation_count');$encoded=[];
             foreach($rows as $row){foreach($row as &$v)$v=$v===null?null:bin2hex((string)$v);unset($v);$encoded[]=canonical($row);}sort($encoded,SORT_STRING);
             $out[$id][$kind]=['count'=>count($rows),'sha256'=>hash('sha256',canonical($encoded))];
@@ -237,7 +238,7 @@ function main(): int {
             check($read->query('SELECT CONNECTION_ID()')->fetchColumn()!==$p->query('SELECT CONNECTION_ID()')->fetchColumn(),'independent');
             $read->exec('SET TRANSACTION READ ONLY');check($read->beginTransaction(),'readonly');
             schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');readback($read,$receipt);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
-            $performance=timings($read,$assetId,$receipt['metric_keys'][0]);check($read->commit(),'read_end');
+            $performance=timings($read,$assetId,$plan['observations'][0]['metric_key'],$plan['observations'][0]['period_type']);check($read->commit(),'read_end');
             $result=['ok'=>true,'stage'=>'SUCCESS','metrics'=>$receipt['metrics'],'observations'=>$receipt['observations'],'current'=>$receipt['current'],
                 'metric_keys'=>$receipt['metric_keys'],'facts_reused'=>$receipt['facts_reused'],'current_updates'=>$receipt['current_updates'],'protected_assets_unchanged'=>true,'fiscal_periods_validated'=>true,'market_unchanged'=>true,'collector_locked'=>true,'readback'=>'PASS','performance'=>$performance];
         }

@@ -1,0 +1,74 @@
+name: Manual qualified fundamentals reports
+run-name: Fundamentals ${{ inputs.reports }} ${{ inputs.expected_commit }}
+on:
+  workflow_dispatch:
+    inputs:
+      reports:
+        description: Comma-separated reviewed report keys; currently only pne-q1-2026 authorized
+        required: true
+        default: pne-q1-2026
+        type: string
+      expected_commit:
+        description: Exact reviewed main commit
+        required: true
+        type: string
+      authorization:
+        description: MOSA2-REPORTS-report-keys colon exact commit
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mosa2-test-fundamentals-reports
+  cancel-in-progress: false
+jobs:
+  pilot:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Exact commit and one-time authorization
+        env:
+          REPORT_KEYS: ${{ inputs.reports }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$AUTHORIZATION" = "MOSA2-REPORTS-$REPORT_KEYS:$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Existing pinned SSH dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fundamentals-venv"
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Focused synthetic offline tests before access
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          php -l scripts/fundamentals/core.php
+          php -l tests/fundamentals_offline.php
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_collector.py -v
+      - name: Authorized report GET, private archive, atomic facts and independent readback
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          REPORT_KEYS: ${{ inputs.reports }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+          GH_TOKEN: ${{ github.token }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: '"$RUNNER_TEMP/fundamentals-venv/bin/python" -B scripts/fundamentals_collect.py'

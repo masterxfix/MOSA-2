@@ -36,19 +36,22 @@ def profile(env):
     return PROFILES[env.get('FUNDAMENTALS_PROFILE','pne')]
 
 
-def guard(env):
+def guard(env,selected=None):
+    selected=selected or profile(env)
     required=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',
         GITHUB_EVENT_NAME='workflow_dispatch',GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='1')
+    if selected.get('reusable_manual'):required.pop('GITHUB_RUN_NUMBER')
     if any(env.get(k)!=v for k,v in required.items()):raise ValueError('RUN_GUARD')
     sha=env.get('GITHUB_SHA','')
-    if not re.fullmatch('[0-9a-f]{40}',sha) or env.get('EXPECTED_COMMIT')!=sha or env.get('AUTHORIZATION')!=profile(env)['authorization']+sha:
+    if not re.fullmatch('[0-9a-f]{40}',sha) or env.get('EXPECTED_COMMIT')!=sha or env.get('AUTHORIZATION')!=selected['authorization']+sha:
         raise ValueError('COMMIT_AUTHORIZATION')
 
-def archive(transport,action,env,identity=None,metadata=None,payload=None):
+def archive(transport,action,env,identity=None,metadata=None,payload=None,selected=None):
+    selected=selected or profile(env)
     # Load only definitions from the existing qualified no-follow directory library.
     library=directories.REMOTE_SOURCE.split('\nif __name__=="__main__":')[0]
     source=library+'\n'+(ROOT/'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
-    data=dict(action=action,execution=profile(env)['execution'],commit=env['GITHUB_SHA'],identity=identity,metadata=metadata)
+    data=dict(action=action,execution=selected['execution'],commit=env['GITHUB_SHA'],identity=identity,metadata=metadata)
     if payload is not None:data['payload']=base64.b64encode(payload).decode('ascii')
     code,out,err,_=remote.remote_call(transport,shlex.join([directories.PYTHON,'-I','-B','-c',source]),json.dumps(data).encode(),timeout=60)
     if code or err:raise ValueError('ARCHIVE_PROCESS')
@@ -56,8 +59,9 @@ def archive(transport,action,env,identity=None,metadata=None,payload=None):
     if reply.get('ok') is not True:raise ValueError('ARCHIVE_RESULT')
     return reply['result']
 
-def database(env,port,action,**extra):
-    request=dict(action=action,password=env['MOSA_TEST_DB_PASSWORD'],port=port,identity=profile(env)['identity'],preserve_assets=profile(env)['preserve_assets'],
+def database(env,port,action,selected=None,**extra):
+    selected=selected or profile(env)
+    request=dict(action=action,password=env['MOSA_TEST_DB_PASSWORD'],port=port,identity=selected['identity'],preserve_assets=selected['preserve_assets'],
         expected_baseline_counts={'m2_market_current':5,'m2_market_observations':28},**extra)
     child={k:env[k] for k in ('PATH','HOME','LANG','SYSTEMROOT','TEMP','TMP') if k in env}
     start=time.monotonic()
@@ -71,12 +75,12 @@ def database(env,port,action,**extra):
         raise RuntimeError(reply['stage'] if reply.get('stage') in allowed else 'DB_RESULT')
     return reply,(time.monotonic()-start)*1000
 
-def execute(env):
-    selected=profile(env);adapter=selected['adapter']
+def execute(env,selected=None):
+    selected=selected or profile(env);adapter=selected['adapter']
     report=dict(ok=False,execution=selected['execution'],provider_requests=0,original_responses=0,metrics=0,observations=0,current=0)
     stage='GUARDS';http=None
     try:
-        guard(env);no_other_runs(env)
+        guard(env,selected);no_other_runs(env)
         config=access.configuration(env)
         import paramiko
         logging.getLogger('paramiko').disabled=True
@@ -84,10 +88,10 @@ def execute(env):
         with access.ssh_client(config,{},paramiko) as transport:
             with access.tunnel(transport,{}) as port:
                 stage='DB_PREFLIGHT'
-                before,elapsed=database(env,port,'inspect')
+                before,elapsed=database(env,port,'inspect',selected=selected)
                 report['preflight_runner_ms']=elapsed
                 stage='PRIVATE_RESERVATION'
-                reserved=archive(transport,'reserve',env)
+                reserved=archive(transport,'reserve',env,selected=selected)
                 stage='PROVIDER_GET'
                 http=ReadOnlyHttpTransport(HttpGet(None,adapter.URL,(('Accept','text/html'),('Accept-Encoding','identity'))),timeout=30)
                 response=http.fetch(None)
@@ -96,10 +100,10 @@ def execute(env):
                 if not 0<len(raw)<=8*1024*1024:raise ValueError('PAYLOAD_BOUND')
                 metadata=dict(url=adapter.URL,request_started_at=http.request_started_at,observed_at=response.collected_at,
                     http_status=response.http_status,content_type=response.content_type,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),
-                    execution=profile(env)['execution'],commit=env['GITHUB_SHA'])
+                    execution=selected['execution'],commit=env['GITHUB_SHA'])
                 stage='RAW_ARCHIVE'
-                archive(transport,'archive',env,reserved['identity'],metadata,raw)
-                verified=archive(transport,'verify',env,reserved['identity'],metadata)
+                archive(transport,'archive',env,reserved['identity'],metadata,raw,selected=selected)
+                verified=archive(transport,'verify',env,reserved['identity'],metadata,selected=selected)
                 report['original_responses']=1
                 report['raw_sha256']=metadata['sha256']
                 stage='ADAPTER'
@@ -107,16 +111,23 @@ def execute(env):
                     raise ValueError('HTTP_RESPONSE')
                 plan=adapter.parse(raw,response.collected_at)
                 plan.update(metadata=metadata,archive=verified)
+                if selected.get('periods'):
+                    actual={(r['period_type'],r['period_start'],r['period_end']) for r in plan['observations']}
+                    if not actual or not actual.issubset(set(selected['periods'])):raise ValueError('REPORT_PERIOD')
+                report['unqualified_metrics']=plan.get('unqualified_metrics',[])
+                report['qualified_metrics']=len(plan['metrics'])
                 stage='DB_APPLY_AND_READBACK'
-                result,elapsed=database(env,port,'apply',baseline=before['baseline'],protected=before['protected'],asset_id=before['asset_id'],plan=plan)
+                result,elapsed=database(env,port,'apply',selected=selected,baseline=before['baseline'],protected=before['protected'],asset_id=before['asset_id'],plan=plan)
                 stage='FINAL_ARCHIVE_READBACK'
-                archive(transport,'verify',env,reserved['identity'],metadata)
+                archive(transport,'verify',env,reserved['identity'],metadata,selected=selected)
                 report.update(result,apply_runner_ms=elapsed,publication_date=plan['publication_date'],
                     commit=env['GITHUB_SHA'],provider_requests=http.attempt_count,original_responses=1,
                     raw_archive='DURABLE_PRIVATE_SHA256_PASS',reported_at_policy='NULL_WHEN_NO_EXACT_PUBLICATION_TIMESTAMP',
                     parser_status='partial_nonqualified_content_preserved_raw')
         report['stage']='SUCCESS'
     except Exception as error:
+        if str(error) in {'QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT'}:
+            report['error_code']=str(error)
         report['stage']=stage
         report['provider_requests']=http.attempt_count if http is not None else 0
         if type(error) is RuntimeError and str(error) in {'INPUT','IDENTITY','SCHEMA6','PLAN','TRANSACTION','COMMIT','INDEPENDENT_READBACK'}:
