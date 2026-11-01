@@ -6,6 +6,7 @@ use function Mosa2\Phase2\{check,same,qi,connection};
 require_once dirname(__DIR__).'/schema6_apply.php';
 require_once __DIR__.'/curated.php';
 require_once __DIR__.'/xbrl_evidence.php';
+require_once __DIR__.'/esef_evidence.php';
 
 function canonical(mixed $value): string {
     $sort=function(mixed $v)use(&$sort):mixed{if(is_array($v)){if(!array_is_list($v))ksort($v);foreach($v as &$x)$x=$sort($x);unset($x);}return $v;};
@@ -56,7 +57,7 @@ function validate(array $plan): array {
             $days=(int)(new \DateTimeImmutable($r['period_start']))->diff(new \DateTimeImmutable($r['period_end']))->days+1;
             check(in_array($days,[364,365,366,371],true),'annual_duration');
             check(abs((int)substr($r['period_end'],0,4)-(int)$r['fiscal_year'])<=1,'reported_year_bound');
-            same($plan['parser_key'],'sec_companyfacts_us_gaap_v1','reported_period_parser');
+            check(in_array($plan['parser_key'],['sec_companyfacts_us_gaap_v1','esef_ifrs_inline_v1'],true),'reported_period_parser');
         }else{
         $month=$plan['fiscal_year_start_month']??null;check(is_int($month)&&$month>=1&&$month<=12,'fiscal_calendar');
         $year=(int)$r['fiscal_year']-($month===1?0:1);
@@ -154,6 +155,7 @@ function storedFile(array $plan): array {
         $doc=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
         if($curated){curatedEvidence($plan,$doc);$backend='dogado_private_curated_evidence_v1';}
         elseif(($doc['evidence_type']??null)==='sec_companyfacts'){xbrlEvidence($plan,$doc);}
+        elseif(($doc['evidence_type']??null)==='esef_inline'){esefEvidence($plan,$doc);}
         else{
         same($doc['format'],'mosa2-fundamental-evidence-v1','evidence_format');same($doc['kind'],'derived_evidence','evidence_kind');
         same(canonical($doc['source_response']),canonical($meta+['retained'=>false]),'response_binding');
