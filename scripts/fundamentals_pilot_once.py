@@ -93,7 +93,7 @@ def execute(env,selected=None):
                 stage='PRIVATE_RESERVATION'
                 reserved=archive(transport,'reserve',env,selected=selected)
                 stage='PROVIDER_GET'
-                http=ReadOnlyHttpTransport(HttpGet(None,adapter.URL,(('Accept','text/html'),('Accept-Encoding','identity'))),timeout=30)
+                http=ReadOnlyHttpTransport(HttpGet(None,adapter.URL,(('Accept',getattr(adapter,'CONTENT_TYPE','text/html')),('Accept-Encoding','identity'))),timeout=30)
                 response=http.fetch(None)
                 report['provider_requests']=http.attempt_count
                 raw=response.payload_bytes
@@ -106,8 +106,10 @@ def execute(env,selected=None):
                 verified=archive(transport,'verify',env,reserved['identity'],metadata,selected=selected)
                 report['original_responses']=1
                 report['raw_sha256']=metadata['sha256']
+                report['raw_bytes']=metadata['bytes']
+                report['raw_archive']='DURABLE_PRIVATE_SHA256_PASS'
                 stage='ADAPTER'
-                if response.http_status!=200 or not response.content_type.lower().startswith('text/html'):
+                if response.http_status!=200 or response.content_type.split(';',1)[0].strip().lower()!=getattr(adapter,'CONTENT_TYPE','text/html'):
                     raise ValueError('HTTP_RESPONSE')
                 plan=adapter.parse(raw,response.collected_at)
                 plan.update(metadata=metadata,archive=verified)
@@ -116,6 +118,8 @@ def execute(env,selected=None):
                     if not actual or not actual.issubset(set(selected['periods'])):raise ValueError('REPORT_PERIOD')
                 report['unqualified_metrics']=plan.get('unqualified_metrics',[])
                 report['qualified_metrics']=len(plan['metrics'])
+                report['unit_keys']=[u['unit_key'] for u in plan['units']]
+                report['document_evidence']=plan.get('document_evidence',[])
                 stage='DB_APPLY_AND_READBACK'
                 result,elapsed=database(env,port,'apply',selected=selected,baseline=before['baseline'],protected=before['protected'],asset_id=before['asset_id'],plan=plan)
                 stage='FINAL_ARCHIVE_READBACK'
@@ -126,7 +130,7 @@ def execute(env,selected=None):
                     parser_status='partial_nonqualified_content_preserved_raw')
         report['stage']='SUCCESS'
     except Exception as error:
-        if str(error) in {'QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT'}:
+        if str(error) in {'QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND'}:
             report['error_code']=str(error)
         report['stage']=stage
         report['provider_requests']=http.attempt_count if http is not None else 0

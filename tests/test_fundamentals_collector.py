@@ -53,6 +53,7 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stdout+result.stderr);self.assertEqual(result.stderr,'')
         self.assertTrue(json.loads(result.stdout)['ok'])
 
+    @patch.object(collector,'APPROVED_REPORTS',('pne-q1-2026',))
     def test_manual_authority_and_sequential_stop(self):
         env=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
             GITHUB_RUN_ATTEMPT='1',GITHUB_SHA='a'*40,EXPECTED_COMMIT='a'*40,AUTHORIZATION='MOSA2-REPORTS-pne-q1-2026:'+'a'*40)

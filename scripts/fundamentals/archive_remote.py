@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-EXECUTIONS = {'fundamentals-pne-q1-2026-20261101-01', 'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
+EXECUTIONS = {'fundamentals-droneshield-fy2025-20261101-01', 'fundamentals-pne-q1-2026-20261101-01', 'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
 ROOT = BASE + '/private/mosa2-collector'
 
 def checked(data):

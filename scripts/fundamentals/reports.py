@@ -1,9 +1,15 @@
 """Reviewed report registry. Adding an adapter/report does not require another workflow."""
 from datetime import date
-from . import pne, zeiss, pne_quarter
+from . import pne, zeiss, pne_quarter, droneshield
 from scripts.fundamentals_pilot_once import PROFILES
 
 REPORTS = {
+    'droneshield-fy-2025': dict(adapter=droneshield,execution='fundamentals-droneshield-fy2025-20261101-01',
+        authorization='MOSA2-REPORT-droneshield-fy-2025:',reusable_manual=True,
+        identity=dict(isin=droneshield.ISIN,name='DroneShield'),
+        preserve_assets=[dict(isin=pne.ISIN,name='PNE AG',observations=11,current=6),
+                         dict(isin=zeiss.ISIN,name='Carl Zeiss Meditec',observations=20,current=10)],
+        periods=[('fy','2025-01-01','2025-12-31'),('fy','2024-01-01','2024-12-31')]),
     'pne-fy-2025': PROFILES['pne'],
     'zeiss-fy-2025': PROFILES['zeiss'],
     'pne-q1-2026': dict(adapter=pne_quarter,execution='fundamentals-pne-q1-2026-20261101-01',
@@ -14,7 +20,7 @@ REPORTS = {
         periods=[('fq','2026-01-01','2026-03-31'),('fq','2025-01-01','2025-03-31')]),
 }
 # Deliberate execution authority, separate from supported adapters. Only this GET is approved.
-APPROVED_REPORTS = ('pne-q1-2026',)
+APPROVED_REPORTS = ('droneshield-fy-2025',)
 
 def selection(keys):
     if not keys or len(keys)>8 or len(set(keys))!=len(keys) or any(k not in REPORTS for k in keys):
