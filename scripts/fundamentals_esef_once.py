@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 import time
 from urllib import request, error, parse
@@ -15,9 +16,31 @@ from scripts.fundamentals import esef
 from scripts.fundamentals.analysis import build
 from scripts.fundamentals.assessment import prepare
 
-AUTH = 'MOSA2-ESEF-20261101:'
-WORKFLOW = '.github/workflows/fundamentals-esef-once.yml'
+AUTH = os.environ.get('ESEF_AUTH_PREFIX', 'MOSA2-ESEF-20261101:')
+WORKFLOW = os.environ.get('ESEF_WORKFLOW', '.github/workflows/fundamentals-esef-once.yml')
 PROFILES = json.loads((shared.ROOT/'scripts/fundamentals/esef_profiles.json').read_text(encoding='utf-8'))
+
+
+def execution_overrides(raw=None):
+    raw = os.environ.get('ESEF_EXECUTION_OVERRIDES', '') if raw is None else raw
+    if not raw:
+        return {}
+    try:
+        values = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError('ESEF_EXECUTION_BINDING') from None
+    expected = {'NO0010081235', 'DK0060252690'}
+    if not isinstance(values, dict) or set(values) != expected or any(not isinstance(v, str) or not re.fullmatch(
+            r'fundamentals-esef-(?:nel|pandora)-20261101-02', v) for v in values.values()):
+        raise ValueError('ESEF_EXECUTION_BINDING')
+    return values
+
+
+for _profile in PROFILES:
+    _override = execution_overrides().get(_profile['isin'])
+    if _override:
+        _profile['execution'] = _override
+
 TOTALS = dict(m2_fundamental_observations=63,m2_fundamental_current=32,m2_market_observations=28,m2_market_current=5)
 PRESERVE = [('DE000A0JBPG2',11,6),('DE0005313704',20,10),('AU000000DRO2',14,7),('US67066G1040',8,4),('US76655K1034',10,5)]
 SAFE = {'ZIP_BOUND','ZIP_PATH','ZIP_TYPE','ZIP_SIZE','XML_DTD','REPORT_COUNT','ZIP_INVALID','LIBRARY_VERSION',

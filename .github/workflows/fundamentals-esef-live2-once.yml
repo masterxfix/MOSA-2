@@ -1,0 +1,74 @@
+name: Manual ESEF annual fundamentals live2 once
+run-name: ESEF LIVE2 FY ${{ inputs.expected_commit }}
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main commit
+        required: true
+        type: string
+      authorization:
+        description: MOSA2-ESEF-LIVE2-20261101 colon exact commit
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mosa2-test-esef-fundamentals-live2-once
+  cancel-in-progress: false
+jobs:
+  pilot:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.run_number == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Exact commit and one-time authorization
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$GITHUB_RUN_NUMBER" = "1"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$AUTHORIZATION" = "MOSA2-ESEF-LIVE2-20261101:$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Existing pinned SSH dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fundamentals-venv"
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -m pip install --disable-pip-version-check --retries 0 -r scripts/requirements-deploy.txt -r scripts/requirements-esef.txt
+      - name: Focused synthetic offline tests before access
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          php -l scripts/fundamentals/core.php
+          php -l scripts/fundamentals/esef_evidence.php
+          php -l scripts/fundamentals/analysis_read.php
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_esef.py -v
+      - name: Two authorized ESEF live2 acquisitions, evidence, atomic imports and independent analysis
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+          GH_TOKEN: ${{ github.token }}
+          ESEF_WORKFLOW: .github/workflows/fundamentals-esef-live2-once.yml
+          ESEF_AUTH_PREFIX: 'MOSA2-ESEF-LIVE2-20261101:'
+          ESEF_EXECUTION_OVERRIDES: '{"NO0010081235":"fundamentals-esef-nel-20261101-02","DK0060252690":"fundamentals-esef-pandora-20261101-02"}'
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: |
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -B scripts/fundamentals_esef_once.py

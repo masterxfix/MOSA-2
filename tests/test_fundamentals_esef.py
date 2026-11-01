@@ -161,5 +161,35 @@ class EsefTests(unittest.TestCase):
             with self.assertRaises(ValueError):runner.guard(dict(env,**{k:v}))
         self.assertEqual(runner.safe_code(ValueError('private secret raw body')),'SAFE_PHASE_FAILURE')
 
+    def test_live2_bindings_and_archive_reservations_are_separate(self):
+        overrides={'NO0010081235':'fundamentals-esef-nel-20261101-02',
+                   'DK0060252690':'fundamentals-esef-pandora-20261101-02'}
+        self.assertEqual(runner.execution_overrides(json.dumps(overrides)),overrides)
+        with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
+            runner.execution_overrides(json.dumps({'NO0010081235':overrides['NO0010081235']}))
+        source=(runner.shared.ROOT/'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
+        self.assertIn("'fundamentals-esef-nel-20261101-02'",source)
+        self.assertIn("'fundamentals-esef-pandora-20261101-02'",source)
+        workflow=(runner.shared.ROOT/'.github/workflows/fundamentals-esef-live2-once.yml').read_text(encoding='utf-8')
+        for token in ('workflow_dispatch','github.run_number == 1','github.run_attempt == 1',
+                      'MOSA2-ESEF-LIVE2-20261101:$GITHUB_SHA',
+                      'ESEF_WORKFLOW: .github/workflows/fundamentals-esef-live2-once.yml',
+                      'fundamentals-esef-nel-20261101-02','fundamentals-esef-pandora-20261101-02'):
+            self.assertIn(token,workflow)
+        old=(runner.shared.ROOT/'.github/workflows/fundamentals-esef-once.yml').read_text(encoding='utf-8')
+        self.assertNotIn('LIVE2',old)
+        old_auth,old_workflow=runner.AUTH,runner.WORKFLOW
+        try:
+            runner.AUTH='MOSA2-ESEF-LIVE2-20261101:'
+            runner.WORKFLOW='.github/workflows/fundamentals-esef-live2-once.yml'
+            env=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
+                GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='1',GITHUB_SHA='a'*40,EXPECTED_COMMIT='a'*40,
+                AUTHORIZATION=runner.AUTH+'a'*40,GITHUB_WORKFLOW_REF='masterxfix/MOSA-2/'+runner.WORKFLOW+'@refs/heads/main')
+            runner.guard(env)
+            with self.assertRaises(ValueError): runner.guard(env|{'GITHUB_RUN_ATTEMPT':'2'})
+            with self.assertRaises(ValueError): runner.guard(env|{'AUTHORIZATION':'MOSA2-ESEF-20261101:'+'a'*40})
+        finally:
+            runner.AUTH,runner.WORKFLOW=old_auth,old_workflow
+
 
 if __name__=='__main__':unittest.main()
