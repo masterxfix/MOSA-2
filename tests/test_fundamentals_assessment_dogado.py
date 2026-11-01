@@ -13,7 +13,7 @@ class DogadoTests(unittest.TestCase):
   exec(Path('scripts/fundamentals/assessment_dogado_remote.py').read_text(),scope)
   return scope
  def data(self):
-  s=snapshot();s['current_observation_ids']=[f['observation_id'] for f in s['facts'] if f['end']=='2025-12-31'];return dict(snapshot=s,price=PRICE,invocation_id='synthetic-dogado',modules={n:Path('scripts/fundamentals/'+n+'.py').read_text() for n in ('assessment','responses_transport')},marker=dict(execution='fundamentals-ai-droneshield-existing-mosa-20261101-01',commit='a'*40,isin='AU000000DRO2',model='gpt-6.1-sol',input_digest=prepare(s)[1],workflow='.github/workflows/fundamentals-assessment-existing-mosa-once.yml'))
+  s=snapshot();s['current_observation_ids']=[f['observation_id'] for f in s['facts'] if f['end']=='2025-12-31'];return dict(snapshot=s,price=PRICE,invocation_id='synthetic-dogado',modules={n:Path('scripts/fundamentals/'+n+'.py').read_text() for n in ('assessment','responses_transport')},marker=dict(execution='fundamentals-ai-droneshield-existing-mosa-20261101-02',commit='a'*40,isin='AU000000DRO2',model='gpt-6.1-sol',input_digest=prepare(s)[1],workflow='.github/workflows/fundamentals-assessment-existing-mosa-once.yml'))
  def test_server_side_validated_success_key_never_returned(self):
   scope=self.scope();data=self.data();events=[]
   scope['existing_key']=lambda *args:dict(key='synthetic-local-key',hash='synthetic-config-hash',identity=dict(mode=0o644))
@@ -24,15 +24,22 @@ class DogadoTests(unittest.TestCase):
    class Fake:
     def __init__(self,key,**kw):self.assert_key=key
     def __call__(self,request,**kwargs):
-     events.append('post');return response(request)
+     events.append('post');rules=json.loads(request['input'])['interpretation_contract']
+     def all_codes(output):
+      output['interpretations']=[dict(code=code,observation_ids=rule['observation_ids'],calculation_ids=rule['calculation_ids']) for code,rule in rules.items() if rule['enabled']]
+      return output
+     return response(request,all_codes)
    t.OpenAIResponsesTransport=Fake;return a,t
   scope['load_modules']=modules
   r=scope['dogado_pilot'](data)
   self.assertTrue(r['ok'],r);self.assertEqual(events,['marker','post']);self.assertEqual(r['model_calls'],1)
   self.assertFalse(r['key_transferred']);self.assertNotIn('synthetic-local-key',json.dumps(r));self.assertNotIn('factual_claims',r)
   self.assertEqual(r['input_digest_verified'],'PASS');self.assertEqual(r['reasoning'],'medium')
-  self.assertEqual(r['interpretation_details'][0]['code'],'CURATED_ROUNDING')
+  self.assertIn('CURATED_ROUNDING',[v['code'] for v in r['interpretation_details']])
   self.assertNotIn('value',r['interpretation_details'][0])
+  self.assertEqual(r['configuration_readback'],'PASS');self.assertTrue(r['mosa_unchanged'])
+  self.assertEqual(len(r['financial_evidence']['facts']),14)
+  self.assertLess(len(json.dumps(r,separators=(',',':')).encode())+2200,8192) # wire format plus protection metadata
  def test_missing_exact_config_stops_before_marker_or_post(self):
   scope=self.scope();scope['existing_key']=Mock(side_effect=RuntimeError('CONFIG_NOT_VISIBLE_OR_READABLE'));scope['reserve_ai']=Mock()
   r=scope['dogado_pilot'](self.data());self.assertFalse(r['ok']);self.assertEqual(r['error_code'],'CONFIG_NOT_VISIBLE_OR_READABLE');self.assertEqual(r['model_calls'],0);scope['reserve_ai'].assert_not_called()
@@ -54,6 +61,9 @@ class DogadoTests(unittest.TestCase):
   scope['load_modules']=modules;r=scope['dogado_pilot'](data)
   self.assertFalse(r['ok']);self.assertEqual(events,['marker','post'])
   self.assertEqual(r['error_code'],'INTERPRETATION_BINDING:NUMERICAL_INCREASE:WRONG_CALCULATION_KIND')
+  self.assertEqual(r['cost_status'],'ESTIMATE_UNVALIDATED_RESPONSE')
+  self.assertEqual(r['actual_cost_upper_bound_usd'],'0.002475')
+  self.assertEqual(r['configuration_readback'],'PASS');self.assertTrue(r['mosa_unchanged'])
   self.assertNotIn('synthetic-local-key',json.dumps(r));self.assertNotIn('calculation_ids',json.dumps(r));self.assertNotIn('factual_claims',r)
  def test_config_permission_and_php_failure_are_safe(self):
   scope=self.scope()
@@ -64,8 +74,31 @@ class DogadoTests(unittest.TestCase):
  def test_fileless_package_and_workflow_without_api_secret(self):
   scope=self.scope();a,t=scope['load_modules'](self.data()['modules']);self.assertEqual(a.DEFAULTS['model'],'gpt-6.1-sol')
   code=Path('.github/workflows/fundamentals-assessment-existing-mosa-once.yml').read_text()
-  self.assertNotIn('MOSA2_OPENAI_API_KEY',code);self.assertIn('github.run_number == 1',code)
-  self.assertIn('github.run_attempt == 1',code);self.assertIn('MOSA2-DRONESHIELD-EXISTING-MOSA-AI-ONCE-20261101:',code)
+  self.assertNotIn('MOSA2_OPENAI_API_KEY',code);self.assertIn('github.run_number == 2',code)
+  self.assertIn('github.run_attempt == 1',code);self.assertIn('MOSA2-DRONESHIELD-SECOND-AI-20261101:',code)
+  self.assertIn('test "$GITHUB_RUN_NUMBER" = "2"',code)
+
+ def test_second_run_guard_rejects_other_runs_attempts_and_authorizations(self):
+  from scripts import fundamentals_assessment_dogado_once as runner
+  sha='a'*40
+  env=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='2',GITHUB_SHA=sha,EXPECTED_COMMIT=sha,AUTHORIZATION='MOSA2-DRONESHIELD-SECOND-AI-20261101:'+sha,GITHUB_WORKFLOW_REF='masterxfix/MOSA-2/'+runner.WORKFLOW+'@refs/heads/main')
+  for changed,allowed in [({},True),({'GITHUB_RUN_NUMBER':'1'},False),({'GITHUB_RUN_NUMBER':'3'},False),({'GITHUB_RUN_ATTEMPT':'2'},False),({'EXPECTED_COMMIT':'b'*40},False),({'AUTHORIZATION':'old'},False)]:
+   with self.subTest(changed=changed),patch.object(runner.shared,'no_other_runs') as runs,patch.object(runner.shared.access,'configuration',side_effect=RuntimeError('synthetic stop before network')) as access:
+    r=runner.execute(dict(env,**changed));self.assertEqual(r['model_calls'],0)
+    self.assertEqual(runs.call_count,int(allowed));self.assertEqual(access.call_count,int(allowed))
+
+ def test_final_db_readback_preserves_first_model_failure_and_unknown_outcome(self):
+  from contextlib import nullcontext
+  from scripts import fundamentals_assessment_dogado_once as runner
+  s=self.data()['snapshot'];error='INTERPRETATION_BINDING:NUMERICAL_INCREASE:WRONG_SIGN'
+  for remote,readback,expected in [(dict(ok=False,model_calls=1,error_code=error,stage='MODEL_POST_AND_VALIDATION'),s,error),
+     (dict(ok=False,model_calls=1,error_code=error,stage='MODEL_POST_AND_VALIDATION'),RuntimeError('private DB error'),error),
+     (RuntimeError('unknown remote result'),s,'RUNNER_STOP_NO_RETRY')]:
+   with patch.object(runner.shared,'guard'),patch.object(runner.shared,'no_other_runs'),patch.object(runner.shared.access,'configuration'),patch.object(runner.shared.access,'ssh_client',return_value=nullcontext(object())),patch.object(runner.shared.access,'tunnel',return_value=nullcontext(3307)),patch.object(runner,'read_db',side_effect=[s,readback]) as reads,patch.object(runner,'remote_pilot',side_effect=remote if isinstance(remote,Exception) else None,return_value=remote):
+    r=runner.execute(dict(GITHUB_RUN_NUMBER='2',GITHUB_WORKFLOW_REF='masterxfix/MOSA-2/'+runner.WORKFLOW+'@refs/heads/main'))
+   self.assertFalse(r['ok']);self.assertEqual(r['error_code'],expected);self.assertEqual(reads.call_count,2)
+   self.assertEqual(r['db_unchanged'],not isinstance(readback,Exception))
+   self.assertEqual(r['model_calls'],'UNKNOWN_NO_RETRY' if isinstance(remote,Exception) else 1)
 
  def test_php_loader_syntax_without_reading_configuration(self):
   import subprocess

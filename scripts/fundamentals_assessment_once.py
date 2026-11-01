@@ -8,7 +8,7 @@ from scripts import fundamentals_pilot_once as shared
 from scripts.fundamentals.analysis import build
 from scripts.fundamentals.assessment import ResponsesAdapter,AssessmentError,prepare,validate,canonical,need,interpretation_error_code
 from scripts.fundamentals.responses_transport import OpenAIResponsesTransport
-PRICE=dict(model='gpt-6.1-sol',input_per_million='2.75',output_per_million='11',checked_at='2026-11-01T16:07:08+00:00',source_url='https://developers.openai.com/api/docs/models/gpt-6.1-sol')
+PRICE=dict(model='gpt-6.1-sol',input_per_million='2.75',output_per_million='11',checked_at='2026-11-01T16:51:12+00:00',source_url='https://developers.openai.com/api/docs/models/gpt-6.1-sol')
 
 def read_db(env,port):
     r=subprocess.run(['php',str(shared.ROOT/'scripts/fundamentals/analysis_read.php')],input=json.dumps(dict(password=env['MOSA_TEST_DB_PASSWORD'],port=port)),text=True,capture_output=True,timeout=600)

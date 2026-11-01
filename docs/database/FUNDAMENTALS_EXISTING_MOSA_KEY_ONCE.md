@@ -50,3 +50,40 @@ Fokussierte Offline-Tests: exakte 0644-Ausnahme und Python/PHP-Parität,
 Fremdpfad/Owner/Gruppe/Symlink/Hardlink/Sonderrechte abgewiesen,
 Identitätsänderung und konkret weltlesbarer Pfad stoppen ohne Key/Marker/POST;
 bestehende Referenz-, Kosten-, Transport-, Einmalmarker- und Secret-Tests.
+
+## Zweite ausdrückliche Freigabe nach aa0b35a
+
+Der vorhandene Workflow wird gezielt für Run Number 2 / Attempt 1 angepasst,
+kein neuer Workflow. Autorisierung MOSA2-DRONESHIELD-SECOND-AI-20261101:<commit>.
+Runner nutzt shared.guard mit reusable_manual und prüft zusätzlich exakt Run 2;
+Workflow prüft Run 2 sowohl im Job-Guard als auch im Shell-Schritt.
+Die Workflow-Historie enthielt vor Vorbereitung nur Run 1 (41324852699).
+Vor dem einzigen Dispatch muss das erneut bestätigt sein.
+Neue Profilkennung fundamentals-ai-droneshield-existing-mosa-20261101-02;
+vorhandene exklusive Reservierungsfunktionen unverändert. Alter Marker bleibt
+verbraucht und unverändert. Höchstens ein weiterer POST, niemals Retry.
+
+Preisquelle am 01.11.2026 16:51:12 UTC frisch geprüft: unverändert Standard
+2 USD/M Input und 10 USD/M Output; konservative Freigabe weiterhin 2,75/11.
+Der vollständige Request einschließlich Interpretationsvertrag geht ins Budget.
+Frischer echter Snapshot über den bestehenden Read-only-DB-Weg, keine Fixtures.
+
+Usage und konservative Kosten werden bereits unmittelbar nach Antwortempfang
+vor fachlicher Validierung in den begrenzten Bericht übernommen. Bei Ablehnung
+bleibt der Kostenstatus ESTIMATE_UNVALIDATED_RESPONSE. Keine Rohantwort speichern.
+Bei Erfolg enthält die Ausgabe nur geprüfte Codes/Referenzen und eine kompakte
+Projektion der bestätigten öffentlichen Fakten und deterministischen Berechnungen
+für die deutsche Zusammenfassung. Der bestehende 8192-Byte-Ergebnisrahmen bleibt.
+
+Konfigurations-Hash/Identität werden nach Möglichkeit auch nach Modellfehlern
+serverintern unverändert nachgeprüft. Kein neuer UID-/Rechte-Diagnoseweg und keine
+Änderung der bewährten Schutz-/Schlüsselzugriffsfunktionen. Finaler unabhängiger
+DB-Readback erfolgt auch nach Validierungsfehler oder unklarem Remote-Ergebnis;
+ein zusätzlicher Readbackfehler überschreibt den ersten Modellfehler nicht.
+Keine DB-Schreiboperation, Rechteänderung, Secrets, Migration oder Deployment.
+Keine Chrome-Prüfung gemäß ausdrücklicher auftragsspezifischer Ausnahme.
+
+Fokussierte vorhandene Tests, erweitert um Run-2-Grenzen, getrennte exklusive
+Reservierung, Kosteninformation bei Ablehnung, begrenzte Finanzprojektion und
+Readback unter Erhalt des Erstfehlers. Die 41 Tests des Ausgangscommits sind
+Grundlage; keine erneute allgemeine Fundamentals-Suite.

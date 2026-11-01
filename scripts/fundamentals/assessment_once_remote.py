@@ -1,6 +1,6 @@
 """Appended to qualified private directory/archive functions; one exclusive marker only."""
 AI_ONCE='fundamentals-ai-droneshield-20261101-01'
-AI_PROFILES={'fundamentals-ai-droneshield-existing-mosa-20261101-01':'.github/workflows/fundamentals-assessment-existing-mosa-once.yml','fundamentals-ai-droneshield-protection-20261101-01':'.github/workflows/fundamentals-assessment-protection-once.yml',AI_ONCE:'.github/workflows/fundamentals-assessment-once.yml','fundamentals-ai-droneshield-dogado-20261101-01':'.github/workflows/fundamentals-assessment-dogado-once.yml'}
+AI_PROFILES={'fundamentals-ai-droneshield-existing-mosa-20261101-02':'.github/workflows/fundamentals-assessment-existing-mosa-once.yml','fundamentals-ai-droneshield-existing-mosa-20261101-01':'.github/workflows/fundamentals-assessment-existing-mosa-once.yml','fundamentals-ai-droneshield-protection-20261101-01':'.github/workflows/fundamentals-assessment-protection-once.yml',AI_ONCE:'.github/workflows/fundamentals-assessment-once.yml','fundamentals-ai-droneshield-dogado-20261101-01':'.github/workflows/fundamentals-assessment-dogado-once.yml'}
 EXECUTIONS.update(AI_PROFILES)
 def reserve_ai(data):
     need(data['execution'] in AI_PROFILES and data['isin']=='AU000000DRO2' and data['model']=='gpt-6.1-sol'

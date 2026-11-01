@@ -1,6 +1,7 @@
 """Fileless Dogado process: never send private configuration/key across SSH."""
 import subprocess
 import types
+from decimal import Decimal
 CONFIG='/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/dashboard_neu/data/private/openai_config.php'
 PHP='/opt/plesk/php/8.4/bin/php'
 
@@ -112,10 +113,10 @@ def load_modules(bundle):
     return sys.modules['mosa_pilot.assessment'],sys.modules['mosa_pilot.responses_transport']
 
 def dogado_pilot(data):
-    report=dict(ok=False,model_calls=0,key_transferred=False,db_writes=0,cost_status='NOT_CALLED');phase='BINDING';key=''
+    report=dict(ok=False,model_calls=0,key_transferred=False,db_writes=0,cost_status='NOT_CALLED');phase='BINDING';key='';conf=None
     try:
         if len(json.dumps(data).encode())>65536:raise RuntimeError('INPUT_BOUND')
-        if data['marker']['execution']!='fundamentals-ai-droneshield-existing-mosa-20261101-01':raise RuntimeError('PILOT_BINDING')
+        if data['marker']['execution']!='fundamentals-ai-droneshield-existing-mosa-20261101-02':raise RuntimeError('PILOT_BINDING')
         a,t=load_modules(data['modules']);snapshot=data['snapshot'];prepared,sha=a.prepare(snapshot)
         a.need(snapshot['identity']['isin']==['AU000000DRO2'] and len(prepared['facts'])==14 and len(snapshot['current_observation_ids'])==7,'PILOT_BINDING')
         a.need(sha==data['marker']['input_digest'],'INPUT_DIGEST')
@@ -131,6 +132,9 @@ def dogado_pilot(data):
                 usage=r.get('usage')
                 if type(usage) is dict:
                     report['usage']={k:usage[k] for k in ('input_tokens','output_tokens','total_tokens') if type(usage.get(k)) is int and usage[k]>=0}
+                    if all(k in report['usage'] for k in ('input_tokens','output_tokens')):
+                        report['actual_cost_upper_bound_usd']=str((Decimal(usage['input_tokens'])*Decimal(data['price']['input_per_million'])+Decimal(usage['output_tokens'])*Decimal(data['price']['output_per_million']))/1000000)
+                        report['cost_status']='ESTIMATE_UNVALIDATED_RESPONSE'
                 return r
         def preflight(request,budget,p,meta):
             nonlocal phase
@@ -149,22 +153,32 @@ def dogado_pilot(data):
         for item in assessment['interpretations']:
             refs=set(item['observation_ids'])
             for ref in item['calculation_ids']:refs.update(calcs[ref]['observation_ids'])
-            entry=details.setdefault(item['code'],dict(metrics=set(),periods=set()))
-            entry['metrics'].update(facts[r]['metric'] for r in refs);entry['periods'].update(facts[r]['end'] for r in refs)
+            entry=details.setdefault(item['code'],dict(observation_ids=set(),calculation_ids=set()))
+            entry['observation_ids'].update(refs);entry['calculation_ids'].update(item['calculation_ids'])
         # Deterministic metadata from validated codes/references, never model prose.
-        report.update(interpretation_details=[dict(code=c,metrics=sorted(v['metrics']),periods=sorted(v['periods'])) for c,v in sorted(details.items())],uncertainties=assessment['uncertainties'],missing_information=assessment['missing_information'],reasoning='medium',input_digest_verified='PASS')
+        report.update(interpretation_details=[dict(code=c,observation_ids=sorted(v['observation_ids']),calculation_ids=sorted(v['calculation_ids'])) for c,v in sorted(details.items())],uncertainties=assessment['uncertainties'],missing_information=assessment['missing_information'],reasoning='medium',input_digest_verified='PASS')
+        # Compact projection of confirmed public financial facts/calculations only.
+        # It is not a saved model response; interpretive references above were validated.
+        fields=('metric','start','end','value','unit','currency','origin','rounded')
+        report['financial_evidence']=dict(fact_columns=fields,facts={ref:[f[k] for k in fields] for ref,f in facts.items()},calculation_columns=['kind','observation_ids','value','unit'],calculations={ref:[c['kind'],c['observation_ids'],c['value'],c.get('unit')] for ref,c in calcs.items()})
         report.update(input_digest=sha,structured_output='PASS',fact_references='PASS',calculation_references='PASS',source_binding='PASS',interpretation_codes=sorted({i['code'] for i in assessment['interpretations']}),facts=len(assessment['factual_claims']),calculations=len(assessment['calculation_claims']),usage={k:result['usage'][k] for k in ('input_tokens','output_tokens','total_tokens') if k in result['usage']},actual_cost_upper_bound_usd=result['actual_cost_upper_bound_usd'],cost_status='CONSERVATIVE_ESTIMATE')
-        phase='CONFIG_READBACK';after=existing_key();a.need(after['hash']==conf['hash'] and after['key']==key and after['identity']==conf['identity'],'CONFIG_CHANGED')
-        report.update(ok=True,stage='SUCCESS',mosa_unchanged=True)
+        report.update(ok=True,stage='SUCCESS')
     except Exception as error:
         allowed={'CONFIG_OTHER_READ_ACCESS','CONFIG_PROCESS_IDENTITY','CONFIG_SYMLINK','CONFIG_NOT_REGULAR','CONFIG_OWNER','CONFIG_HARDLINK','CONFIG_MODE','CONFIG_GROUP_READ_UNTRUSTED','CONFIG_NOT_READABLE','PARENT_SYMLINK','PARENT_NOT_DIRECTORY','PARENT_OWNER','PARENT_WRITABLE_OR_SPECIAL','MARKER_ALREADY_CONSUMED','CONFIG_PATH_OR_PROTECTION','CONFIG_KEY_MISSING','CONFIG_PHP_FAILED','CONFIG_NOT_VISIBLE_OR_READABLE','CONFIG_PROTECTION','CONFIG_PHP_UNAVAILABLE','CONFIG_LOADER_FAILED','CONFIG_CHANGED','INPUT_BOUND','PILOT_BINDING','INPUT_DIGEST','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','OUTPUT_PREFLIGHT_BOUND','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET','INTERPRETATIONS_MISSING'}
         detail=a.interpretation_error_code(error) if 'a' in locals() else None
         report.update(stage=phase,error_code=detail or (str(error) if str(error) in allowed else 'DOGADO_PILOT_STOP_NO_RETRY'))
+    if conf is not None:
+        try:
+            after=existing_key();a.need(after['hash']==conf['hash'] and after['key']==key and after['identity']==conf['identity'],'CONFIG_CHANGED')
+            report.update(configuration_readback='PASS',mosa_unchanged=True)
+        except Exception:
+            report.update(configuration_readback='FAIL',mosa_unchanged=False)
+            if report['ok']:report.update(ok=False,stage='CONFIG_READBACK',error_code='CONFIG_READBACK_FAILED')
     # No remote stdout/stderr, key or config text is forwarded; only this allowlisted report.
     raw=json.dumps(report,ensure_ascii=True)
     if key and key in raw:return dict(ok=False,error_code='SECRET_OUTPUT_BLOCKED',model_calls=report['model_calls'])
     return report
 if __name__=='__main__':
     try:
-        data=json.loads(sys.stdin.read(65537));print(json.dumps(dogado_pilot(data)))
+        data=json.loads(sys.stdin.read(65537));print(json.dumps(dogado_pilot(data),separators=(',',':')))
     except Exception:print(json.dumps(dict(ok=False,error_code='REMOTE_INPUT_FAILED',model_calls=0)))

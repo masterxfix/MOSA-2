@@ -52,3 +52,7 @@ class PilotTests(unittest.TestCase):
   self.assertTrue(scope['reserve_ai'](d)['reserved']);self.assertEqual(len(files),1)
   with self.assertRaises(FileExistsError):scope['reserve_ai'](d)
   self.assertIn(b'bbbbbbbb',next(iter(files.values())))
+  original=dict(files);d.update(execution='fundamentals-ai-droneshield-existing-mosa-20261101-02',workflow='.github/workflows/fundamentals-assessment-existing-mosa-once.yml')
+  self.assertTrue(scope['reserve_ai'](d)['reserved']);self.assertEqual(len(files),2)
+  self.assertTrue(all(files[k]==v for k,v in original.items()))
+  with self.assertRaises(FileExistsError):scope['reserve_ai'](d)
