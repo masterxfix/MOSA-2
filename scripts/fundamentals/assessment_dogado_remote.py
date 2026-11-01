@@ -4,25 +4,87 @@ import types
 CONFIG='/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/dashboard_neu/data/private/openai_config.php'
 PHP='/opt/plesk/php/8.4/bin/php'
 
-# The documented old loader consumes an array with OPENAI_API_KEY. No old code is modified.
-PHP_KEY=r'''$p="/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/dashboard_neu/data/private/openai_config.php";
+# Identical ordered policy in Python and PHP; parity covered by offline matrix tests.
+def file_policy(m,uid,gid):
+    if m['symlink']:return 'CONFIG_SYMLINK'
+    if m['type']!=stat.S_IFREG:return 'CONFIG_NOT_REGULAR'
+    if m['uid']!=uid:return 'CONFIG_OWNER'
+    if m['nlink']!=1:return 'CONFIG_HARDLINK'
+    if m['mode'] not in (0o600,0o640):return 'CONFIG_MODE'
+    if m['mode']==0o640 and m['gid']!=gid:return 'CONFIG_GROUP_READ_UNTRUSTED'
+    return 'PASS'
+
+def parent_policy(m,uid):
+    if m['symlink']:return 'PARENT_SYMLINK'
+    if m['type']!=stat.S_IFDIR:return 'PARENT_NOT_DIRECTORY'
+    if m['uid'] not in (0,uid):return 'PARENT_OWNER'
+    if m['mode'] & 0o7022:return 'PARENT_WRITABLE_OR_SPECIAL'
+    return 'PASS'
+
+def metadata(s):
+    return dict(type=stat.S_IFMT(s.st_mode),uid=s.st_uid,gid=s.st_gid,mode=stat.S_IMODE(s.st_mode),mode_octal=format(stat.S_IMODE(s.st_mode),'04o'),symlink=stat.S_ISLNK(s.st_mode),nlink=s.st_nlink)
+
+def protection_diagnosis(report):
+    process=dict(uid=os.getuid(),euid=os.geteuid(),gid=os.getgid(),egid=os.getegid())
+    diag=dict(process=process,parents=[],first_failure='PASS')
+    report['config_metadata']=diag
+    if process!={'uid':UID,'euid':UID,'gid':GID,'egid':GID}:raise RuntimeError('CONFIG_PROCESS_IDENTITY')
+    fd=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        root=metadata(os.fstat(fd));root['index']=0;root['status']=parent_policy(root,UID);diag['parents'].append(root)
+        if root['status']!='PASS':diag['first_failure']=root['status'];raise RuntimeError(root['status'])
+        parts=CONFIG.strip('/').split('/')
+        for index,part in enumerate(parts[:-1],1):
+            m=metadata(os.stat(part,dir_fd=fd,follow_symlinks=False));m['index']=index;m['status']=parent_policy(m,UID);diag['parents'].append(m)
+            if m['status']!='PASS':diag['first_failure']=m['status'];raise RuntimeError(m['status'])
+            next_fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd);os.close(fd);fd=next_fd
+        m=metadata(os.stat(parts[-1],dir_fd=fd,follow_symlinks=False));diag['file']=m
+        diag['legacy_deviations']=[code for code,ok in [('FILE_TYPE',m['type']==stat.S_IFREG),('UID',m['uid']==UID),('GID',m['gid']==GID),('MODE',m['mode'] in (0o600,0o640))] if not ok]
+        diag['readable']=os.access(CONFIG,os.R_OK,effective_ids=True)
+        code=file_policy(m,UID,GID);diag['first_failure']=code
+        if code!='PASS':raise RuntimeError(code)
+        # Metadata and access checks only; no file bytes are read here.
+        if not diag['readable']:diag['first_failure']='CONFIG_NOT_READABLE';raise RuntimeError('CONFIG_NOT_READABLE')
+        f=os.open(parts[-1],os.O_RDONLY|os.O_NOFOLLOW,dir_fd=fd)
+        try:
+            if metadata(os.fstat(f))!=m:raise RuntimeError('CONFIG_CHANGED')
+        finally:os.close(f)
+        report['protection_policy']='PASS'
+        return diag
+    finally:os.close(fd)
+
+PHP_POLICY=r'''function filePolicy($m,$uid,$gid){
+if($m['symlink'])return 'CONFIG_SYMLINK';
+if($m['type']!==0100000)return 'CONFIG_NOT_REGULAR';
+if($m['uid']!==$uid)return 'CONFIG_OWNER';
+if($m['nlink']!==1)return 'CONFIG_HARDLINK';
+if(!in_array($m['mode'],[0600,0640],true))return 'CONFIG_MODE';
+if($m['mode']===0640&&$m['gid']!==$gid)return 'CONFIG_GROUP_READ_UNTRUSTED';
+return 'PASS';}
+function parentPolicy($m,$uid){
+if($m['symlink'])return 'PARENT_SYMLINK';
+if($m['type']!==0040000)return 'PARENT_NOT_DIRECTORY';
+if(!in_array($m['uid'],[0,$uid],true))return 'PARENT_OWNER';
+if(($m['mode']&07022)!==0)return 'PARENT_WRITABLE_OR_SPECIAL';
+return 'PASS';}
+function meta($s){return ['type'=>$s['mode']&0170000,'uid'=>$s['uid'],'gid'=>$s['gid'],'mode'=>$s['mode']&07777,'symlink'=>($s['mode']&0170000)===0120000,'nlink'=>$s['nlink']];}
+'''
+PHP_KEY=PHP_POLICY+r'''$p="/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/dashboard_neu/data/private/openai_config.php";
 try{
-$s=lstat($p);if(!$s||realpath($p)!==$p||($s['mode']&0170000)!==0100000||$s['uid']!==10317||$s['gid']!==1003||!in_array($s['mode']&0777,[0600,0640],true))exit(2);
+if(realpath($p)!==$p)exit(2);
+$parents=[];$d=dirname($p);while(true){$parents[]=$d;if($d==='/')break;$d=dirname($d);}
+foreach($parents as $d){$s=lstat($d);if(!$s||parentPolicy(meta($s),10317)!=='PASS')exit(2);}
+$s=lstat($p);if(!$s||filePolicy(meta($s),10317,1003)!=='PASS')exit(2);
 $hash=hash_file('sha256',$p);ob_start();try{$v=(static function($path){return require $path;})($p);}finally{ob_end_clean();}
 if(!is_array($v)||!isset($v['OPENAI_API_KEY'])||!is_string($v['OPENAI_API_KEY'])||trim($v['OPENAI_API_KEY'])==='')exit(3);
-clearstatcache(true,$p);$after=lstat($p);foreach(['dev','ino','mode','uid','gid','size','mtime','ctime'] as $k)if($s[$k]!==$after[$k])exit(4);if(hash_file('sha256',$p)!==$hash)exit(4);
+clearstatcache(true,$p);$after=lstat($p);foreach(['dev','ino','mode','uid','gid','size','mtime','ctime','nlink'] as $k)if($s[$k]!==$after[$k])exit(4);if(hash_file('sha256',$p)!==$hash)exit(4);
 echo json_encode(['key'=>trim($v['OPENAI_API_KEY']),'hash'=>$hash],JSON_THROW_ON_ERROR);
 }catch(Throwable){exit(5);}'''
 
-def existing_key():
-    # Only the exact authorized configuration is inspected, no parent scans or alternative secrets.
-    try:
-        fd=os.open(CONFIG,os.O_RDONLY|os.O_NOFOLLOW)
+def existing_key(report=None):
+    report={} if report is None else report
+    try:protection_diagnosis(report)
     except (FileNotFoundError,PermissionError):raise RuntimeError('CONFIG_NOT_VISIBLE_OR_READABLE') from None
-    try:
-        s=os.fstat(fd)
-        if not stat.S_ISREG(s.st_mode) or (s.st_uid,s.st_gid)!=(UID,GID) or stat.S_IMODE(s.st_mode) not in (0o600,0o640):raise RuntimeError('CONFIG_PROTECTION')
-    finally:os.close(fd)
     try:r=subprocess.run([PHP,'-n','-d','display_errors=0','-d','log_errors=0','-r',PHP_KEY],capture_output=True,timeout=15)
     except Exception:raise RuntimeError('CONFIG_PHP_UNAVAILABLE') from None
     if r.returncode:raise RuntimeError({2:'CONFIG_PATH_OR_PROTECTION',3:'CONFIG_KEY_MISSING',4:'CONFIG_CHANGED',5:'CONFIG_PHP_FAILED'}.get(r.returncode,'CONFIG_LOADER_FAILED'))
@@ -41,11 +103,11 @@ def dogado_pilot(data):
     report=dict(ok=False,model_calls=0,key_transferred=False,db_writes=0,cost_status='NOT_CALLED');phase='BINDING';key=''
     try:
         if len(json.dumps(data).encode())>65536:raise RuntimeError('INPUT_BOUND')
-        if data['marker']['execution']!='fundamentals-ai-droneshield-dogado-20261101-01':raise RuntimeError('PILOT_BINDING')
+        if data['marker']['execution']!='fundamentals-ai-droneshield-protection-20261101-01':raise RuntimeError('PILOT_BINDING')
         a,t=load_modules(data['modules']);snapshot=data['snapshot'];prepared,sha=a.prepare(snapshot)
         a.need(snapshot['identity']['isin']==['AU000000DRO2'] and len(prepared['facts'])==14 and len(snapshot['current_observation_ids'])==7,'PILOT_BINDING')
         a.need(sha==data['marker']['input_digest'],'INPUT_DIGEST')
-        phase='CONFIG_READ';conf=existing_key();key=conf['key'];report['server_key_usable']=True
+        phase='CONFIG_METADATA';conf=existing_key(report);key=conf['key'];report['server_key_usable']=True
         phase='API_PREFLIGHT'
         class Observed:
             is_live=True
@@ -74,7 +136,7 @@ def dogado_pilot(data):
         phase='CONFIG_READBACK';after=existing_key();a.need(after['hash']==conf['hash'] and after['key']==key,'CONFIG_CHANGED')
         report.update(ok=True,stage='SUCCESS',mosa_unchanged=True)
     except Exception as error:
-        allowed={'MARKER_ALREADY_CONSUMED','CONFIG_PATH_OR_PROTECTION','CONFIG_KEY_MISSING','CONFIG_PHP_FAILED','CONFIG_NOT_VISIBLE_OR_READABLE','CONFIG_PROTECTION','CONFIG_PHP_UNAVAILABLE','CONFIG_LOADER_FAILED','CONFIG_CHANGED','INPUT_BOUND','PILOT_BINDING','INPUT_DIGEST','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','OUTPUT_PREFLIGHT_BOUND','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET','INTERPRETATIONS_MISSING'}
+        allowed={'CONFIG_PROCESS_IDENTITY','CONFIG_SYMLINK','CONFIG_NOT_REGULAR','CONFIG_OWNER','CONFIG_HARDLINK','CONFIG_MODE','CONFIG_GROUP_READ_UNTRUSTED','CONFIG_NOT_READABLE','PARENT_SYMLINK','PARENT_NOT_DIRECTORY','PARENT_OWNER','PARENT_WRITABLE_OR_SPECIAL','MARKER_ALREADY_CONSUMED','CONFIG_PATH_OR_PROTECTION','CONFIG_KEY_MISSING','CONFIG_PHP_FAILED','CONFIG_NOT_VISIBLE_OR_READABLE','CONFIG_PROTECTION','CONFIG_PHP_UNAVAILABLE','CONFIG_LOADER_FAILED','CONFIG_CHANGED','INPUT_BOUND','PILOT_BINDING','INPUT_DIGEST','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','OUTPUT_PREFLIGHT_BOUND','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET','INTERPRETATIONS_MISSING'}
         report.update(stage=phase,error_code=str(error) if str(error) in allowed else 'DOGADO_PILOT_STOP_NO_RETRY')
     # No remote stdout/stderr, key or config text is forwarded; only this allowlisted report.
     raw=json.dumps(report,ensure_ascii=True)
