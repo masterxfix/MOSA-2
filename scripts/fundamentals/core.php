@@ -4,6 +4,7 @@ namespace Mosa2\Fundamentals;
 use PDO;
 use function Mosa2\Phase2\{check,same,qi,connection};
 require_once dirname(__DIR__).'/schema6_apply.php';
+require_once __DIR__.'/curated.php';
 
 function canonical(mixed $value): string {
     $sort=function(mixed $v)use(&$sort):mixed{if(is_array($v)){if(!array_is_list($v))ksort($v);foreach($v as &$x)$x=$sort($x);unset($x);}return $v;};
@@ -135,10 +136,13 @@ function storedFile(array $plan): array {
     $meta=$plan['metadata'];$stored=$meta;$backend='dogado_private_file';
     if(isset($plan['stored_evidence'])){
         $stored=$plan['stored_evidence'];$backend='dogado_private_evidence_json_v1';
-        same($stored['kind'],'derived_evidence','evidence_kind');same($stored['content_type'],'application/json','evidence_mime');
+        $curated=($stored['kind']??null)==='curated_evidence';
+        same($stored['kind'],$curated?'curated_evidence':'derived_evidence','evidence_kind');same($stored['content_type'],'application/json','evidence_mime');
         $raw=$plan['evidence_json'];check(is_string($raw)&&strlen($raw)<=131072,'evidence_bound');
         same(strlen($raw),$stored['bytes'],'evidence_bytes');same(hash('sha256',$raw),$stored['sha256'],'evidence_hash');
         $doc=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
+        if($curated){curatedEvidence($plan,$doc);$backend='dogado_private_curated_evidence_v1';}
+        else{
         same($doc['format'],'mosa2-fundamental-evidence-v1','evidence_format');same($doc['kind'],'derived_evidence','evidence_kind');
         same(canonical($doc['source_response']),canonical($meta+['retained'=>false]),'response_binding');
         same($doc['parser'],['key'=>$plan['parser_key'],'version'=>$plan['parser_version']],'parser_binding');
@@ -151,6 +155,8 @@ function storedFile(array $plan): array {
             foreach(['original_label','original_value','original_unit'] as $key)check(is_string($fact[$key])&&strlen($fact[$key])>0&&strlen($fact[$key])<=512,'evidence_original');
             same($row['field_path'],'evidence:facts/'.$i.';source='.$fact['position'],'evidence_path');
         }
+        }
+        same($doc['parser'],['key'=>$plan['parser_key'],'version'=>$plan['parser_version']],'parser_binding');
         check(str_ends_with($plan['archive']['storage_key'],'/evidence.json'),'evidence_storage');
     }
     same($plan['archive']['sha256'],$stored['sha256'],'archive_hash');same($plan['archive']['bytes'],$stored['bytes'],'archive_bytes');same($plan['archive']['durable'],true,'archive_durable');
@@ -171,10 +177,11 @@ function persist(PDO $p,array $plan,string $assetId): array {
     $source=$catalog('m2_sources',$plan['source'],['source_key'],true);$sourceId=(string)$source['id'];
     $meta=$plan['metadata'];
     $fileDefinition=['entity_id'=>$assetId,'source_id'=>$sourceId]+$stored;
-    $fetchDefinition=['fetch_key'=>digest(['fundamental-fetch-v1',$sourceId,$meta['url'],$meta['sha256'],$meta['observed_at']]),
+    $curated=($plan['stored_evidence']['kind']??null)==='curated_evidence';
+    $fetchDefinition=['fetch_key'=>digest([$curated?'fundamental-curated-import-v1':'fundamental-fetch-v1',$sourceId,$meta['url'],$meta['sha256'],$meta['observed_at']]),
         'source_id'=>$sourceId,'asset_id'=>$assetId,'route_id'=>null,'route_revision'=>null,'route_sha256'=>null,'job_run_id'=>null,
         'payload_sha256'=>hex2bin($meta['sha256']),'payload_bytes'=>(string)$meta['bytes'],
-        'content_type'=>$meta['content_type'],'observed_at'=>$meta['observed_at'],'http_status'=>(string)$meta['http_status'],
+        'content_type'=>$meta['content_type'],'observed_at'=>$meta['observed_at'],'http_status'=>$curated?null:(string)$meta['http_status'],
         'parser_key'=>$plan['parser_key'],'parser_version'=>$plan['parser_version'],'parse_status'=>$plan['parse_status']];
     $known=query($p,'SELECT * FROM m2_provider_fetches WHERE fetch_key=? LIMIT 2',[$fetchDefinition['fetch_key']]);
     check(count($known)<=1,'fetch_unique');

@@ -98,7 +98,7 @@ class PilotTests(unittest.TestCase):
         for key in env:
             with self.assertRaises(ValueError):pilot.guard(env|{key:'invalid'})
 
-    def test_private_archive_exclusive_durable_readback_and_tamper_rejection(self,derived=False):
+    def test_private_archive_exclusive_durable_readback_and_tamper_rejection(self,derived=False,curated=False):
         scope={'__name__':'fixture'}
         exec(compile(pilot.directories.REMOTE_SOURCE,'<existing-directory-checker>','exec'),scope)
         exec(compile((pilot.ROOT/'scripts/fundamentals/archive_remote.py').read_text(),'<archive>','exec'),scope)
@@ -127,13 +127,14 @@ class PilotTests(unittest.TestCase):
                 stream.close()
             def fsync(self,fd):self.syncs.append(self.fds[fd])
         api=Files(scope);scope['os']=api
-        data=dict(execution=next(iter(scope['EVIDENCE_EXECUTIONS'])) if derived else pilot.EXECUTION,commit='a'*40,action='reserve')
+        data=dict(execution=next(iter(scope['CURATED_EXECUTIONS'])) if curated else next(iter(scope['EVIDENCE_EXECUTIONS'])) if derived else pilot.EXECUTION,commit='a'*40,action='reserve')
         reserved=scope['operation'](data)
         with self.assertRaises(FileExistsError):scope['operation'](data)
         raw=b'\x00synthetic original UTF-8 bytes\xff'
         if derived:raw=json.dumps(dict(kind='derived_evidence',format='mosa2-fundamental-evidence-v1',source_response=dict(retained=False),facts=[dict(value='123')])).encode()
+        if curated:raw=json.dumps(dict(kind='curated_evidence',format='mosa2-curated-evidence-v1',input_method='manually_reviewed_public_facts',http_request_performed=False,http_response=None,facts=[dict(value='123')])).encode()
         metadata=dict(sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw))
-        if derived:metadata.update(kind='derived_evidence',content_type='application/json')
+        if derived:metadata.update(kind='curated_evidence' if curated else 'derived_evidence',content_type='application/json')
         request=data|dict(action='archive',identity=reserved['identity'],metadata=metadata,payload=base64.b64encode(raw).decode())
         receipt=scope['operation'](request)
         self.assertTrue(receipt['durable']);self.assertEqual(api.contents[receipt['storage_key']],raw)

@@ -31,6 +31,12 @@ Es entsteht keine automatische Registrierung, Aktivierung oder Lesefreigabe.
 
 ## Aufbewahrungsentscheidung vom 01.11.2026
 
+Für manuell recherchierte Fakten gilt zusätzlich der explizite Nicht-HTTP-Vertrag
+[FUNDAMENTALS_CURATED_IMPORT.md](FUNDAMENTALS_CURATED_IMPORT.md): Eingang eines
+kuratierten Manifests, HTTP-Status NULL, Hash der tatsächlichen Manifest-Bytes,
+eigene Parser-/Source-/Backendkennung und getrennte Recherche-/Importzeit.
+Ein solcher `m2_provider_fetches`-Datensatz ist kein Runner-Providerabruf.
+
 Für neue HTML-Importe gilt der schlanke Evidence-Vertrag aus
 [FUNDAMENTALS_HTML_EVIDENCE.md](FUNDAMENTALS_HTML_EVIDENCE.md). Die folgenden
 Vollantwort-Regeln beschreiben den bisherigen Archivpfad für bestehende Importe;

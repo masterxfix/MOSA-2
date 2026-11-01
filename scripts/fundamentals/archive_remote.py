@@ -6,7 +6,8 @@ import re
 
 EXECUTIONS = {'fundamentals-droneshield-fy2025-20261101-01', 'fundamentals-pne-q1-2026-20261101-01', 'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
 EVIDENCE_EXECUTIONS = {'fundamentals-droneshield-html-fy2025-20261101-01'}
-EXECUTIONS |= EVIDENCE_EXECUTIONS
+CURATED_EXECUTIONS = {'fundamentals-curated-droneshield-fy2025-20261101-01'}
+EXECUTIONS |= EVIDENCE_EXECUTIONS | CURATED_EXECUTIONS
 ROOT = BASE + '/private/mosa2-collector'
 
 def checked(data):
@@ -70,8 +71,9 @@ def operation(data):
             s=os.fstat(fd)
             need((s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode))==(UID,GID,0o700), 'ARCHIVE_DIRECTORY')
             metadata = data['metadata']
-            derived = ONCE in EVIDENCE_EXECUTIONS
-            need(metadata.get('kind') == 'derived_evidence' if derived else metadata.get('kind') is None, 'STORAGE_KIND')
+            curated = ONCE in CURATED_EXECUTIONS
+            derived = ONCE in EVIDENCE_EXECUTIONS or curated
+            need(metadata.get('kind') == ('curated_evidence' if curated else 'derived_evidence') if derived else metadata.get('kind') is None, 'STORAGE_KIND')
             body_name = 'evidence.json' if derived else 'response.body'
             meta_name = 'evidence-metadata.json' if derived else 'response.json'
             need(re.fullmatch('[0-9a-f]{64}',metadata['sha256']) is not None, 'HASH')
@@ -81,7 +83,12 @@ def operation(data):
                 if derived:
                     need(len(raw)<=131072 and metadata['content_type']=='application/json', 'EVIDENCE_BOUND')
                     doc=json.loads(raw)
-                    need(doc['kind']=='derived_evidence' and doc['format']=='mosa2-fundamental-evidence-v1' and doc['source_response']['retained'] is False, 'EVIDENCE_KIND')
+                    if curated:
+                        need(doc['kind']=='curated_evidence' and doc['format']=='mosa2-curated-evidence-v1'
+                             and doc['input_method']=='manually_reviewed_public_facts' and doc['http_request_performed'] is False
+                             and doc['http_response'] is None, 'EVIDENCE_KIND')
+                    else:
+                        need(doc['kind']=='derived_evidence' and doc['format']=='mosa2-fundamental-evidence-v1' and doc['source_response']['retained'] is False, 'EVIDENCE_KIND')
                     need(1<=len(doc['facts'])<=256, 'EVIDENCE_FACTS')
                 create_file(fd,body_name,raw)
                 create_file(fd,meta_name,json.dumps(metadata,sort_keys=True,ensure_ascii=True).encode())
