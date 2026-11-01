@@ -1,0 +1,50 @@
+{
+  "0001045810": [
+    {
+      "fiscal_year": "2025",
+      "tag": "Revenues",
+      "control_usd": "130497000000",
+      "start": "2024-01-29",
+      "end": "2025-01-26",
+      "scope": "consolidated_total_revenue",
+      "reference": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000021/nvda-20260125.htm",
+      "report_position": "Consolidated statements of operations / Revenue",
+      "review_status": "official_10k_control_not_import_value"
+    },
+    {
+      "fiscal_year": "2026",
+      "tag": "Revenues",
+      "control_usd": "215938000000",
+      "start": "2025-01-27",
+      "end": "2026-01-25",
+      "scope": "consolidated_total_revenue",
+      "reference": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000021/nvda-20260125.htm",
+      "report_position": "Consolidated statements of operations / Revenue",
+      "review_status": "official_10k_control_not_import_value"
+    }
+  ],
+  "0001838359": [
+    {
+      "fiscal_year": "2024",
+      "tag": "RevenueFromContractWithCustomerIncludingAssessedTax",
+      "control_usd": "10790000",
+      "start": "2024-01-01",
+      "end": "2024-12-31",
+      "scope": "consolidated_total_revenue",
+      "reference": "https://www.sec.gov/Archives/edgar/data/1838359/000110465926023454/rgti-20251231x10k.htm",
+      "report_position": "Consolidated statements of operations / Revenue",
+      "review_status": "official_10k_control_not_import_value"
+    },
+    {
+      "fiscal_year": "2025",
+      "tag": "RevenueFromContractWithCustomerIncludingAssessedTax",
+      "control_usd": "7088000",
+      "start": "2025-01-01",
+      "end": "2025-12-31",
+      "scope": "consolidated_total_revenue",
+      "reference": "https://www.sec.gov/Archives/edgar/data/1838359/000110465926023454/rgti-20251231x10k.htm",
+      "report_position": "Consolidated statements of operations / Revenue",
+      "review_status": "official_10k_control_not_import_value"
+    }
+  ]
+}

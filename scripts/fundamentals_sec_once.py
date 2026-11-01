@@ -18,20 +18,20 @@ from scripts.fundamentals import sec_xbrl as sec
 from scripts.fundamentals.analysis import build
 from scripts.fundamentals.assessment import prepare
 
-AUTH = 'MOSA2-SEC-FY-ONCE-20261101:'
+AUTH = 'MOSA2-SEC-REVENUE-20261101:'
 WORKFLOW = '.github/workflows/fundamentals-sec-once.yml'
 PROFILES = (
     dict(cik='0001045810', isin='US67066G1040', name='NVIDIA', sec_names=['NVIDIA CORP','NVIDIA CORPORATION'], years=(2025,2026),
-         execution='fundamentals-sec-nvidia-20261101-01', reference='https://www.sec.gov/Archives/edgar/data/1045810/000104581026000021/nvda-20260125.htm'),
+         execution='fundamentals-sec-nvidia-20261101-02', reference='https://www.sec.gov/Archives/edgar/data/1045810/000104581026000021/nvda-20260125.htm'),
     dict(cik='0001838359', isin='US76655K1034', name='Rigetti Computing', sec_names=['Rigetti Computing, Inc.'], years=(2024,2025),
-         execution='fundamentals-sec-rigetti-20261101-01', reference='https://www.sec.gov/Archives/edgar/data/1838359/000110465926023454/rgti-20251231x10k.htm'),
+         execution='fundamentals-sec-rigetti-20261101-02', reference='https://www.sec.gov/Archives/edgar/data/1838359/000110465926023454/rgti-20251231x10k.htm'),
 )
 PRESERVE = [dict(isin='DE000A0JBPG2',name='PNE AG',observations=11,current=6),
             dict(isin='DE0005313704',name='Carl Zeiss Meditec',observations=20,current=10),
             dict(isin='AU000000DRO2',name='DroneShield',observations=14,current=7)]
-TOTALS = dict(m2_fundamental_observations=45,m2_fundamental_current=23,m2_market_observations=28,m2_market_current=5)
+TOTALS = dict(m2_fundamental_observations=59,m2_fundamental_current=30,m2_market_observations=28,m2_market_current=5)
 ERRORS = {'SEC_IDENTITY','SEC_NUMBER','SEC_BOUND','SEC_RESPONSE_BINDING','SEC_YEARS','SEC_DUPLICATE_KEY',
-    'SEC_STRUCTURE','SEC_PERIOD','SEC_FILING_DATE','SEC_ACCESSION','SEC_FY_ANCHOR_MISSING','SEC_PERIOD_CONFLICT',
+    'SEC_REVENUE_REVIEW','SEC_CONFLICTING_REVENUE_TAGS','SEC_TARGET_BASELINE','SEC_STRUCTURE','SEC_PERIOD','SEC_FILING_DATE','SEC_ACCESSION','SEC_FY_ANCHOR_MISSING','SEC_PERIOD_CONFLICT',
     'SEC_PERIOD_CONTINUITY','SEC_CONFLICTING_FILINGS','SEC_NO_QUALIFIED_FACTS','SEC_EVIDENCE_BOUND',
     'SEC_SNAPSHOT_PROCESS','SEC_SNAPSHOT_READBACK','SEC_ASSET_BASELINE','SEC_ASSET_IDENTITY','SEC_WORKFLOW',
     'SEC_CONTACT_MISSING','SEC_CONTACT_BINDING','SEC_TARGET_NOT_EMPTY','SEC_ACCESS_DENIED','SEC_HTTP_STATUS',
@@ -57,7 +57,8 @@ def select_asset(data, profile):
 
 
 def guard(env):
-    shared.guard(env,dict(authorization=AUTH))
+    shared.guard(env,dict(authorization=AUTH,reusable_manual=True))
+    if env.get('GITHUB_RUN_NUMBER')!='2':raise ValueError('SEC_WORKFLOW')
     if env.get('GITHUB_WORKFLOW_REF')!='masterxfix/MOSA-2/'+WORKFLOW+'@refs/heads/main':raise ValueError('SEC_WORKFLOW')
     # Contact is existing reviewed repository commit metadata, not invented.
     contact=env.get('SEC_CONTACT','')
@@ -75,14 +76,16 @@ def execute(env):
         agent=guard(env);shared.no_other_runs(env);config=shared.access.configuration(env)
         import paramiko
         logging.getLogger('paramiko').disabled=True
-        stage='SSH'
+        stage='SSH';ssh_start=time.monotonic()
         with shared.access.ssh_client(config,{},paramiko) as transport:
             with shared.access.tunnel(transport,{}) as port:
+                report['ssh_setup_ms']=(time.monotonic()-ssh_start)*1000
                 stage='BASELINE_SNAPSHOT'
                 before=read_snapshot(env,port,TOTALS)
                 for profile in PROFILES:
                     asset=select_asset(before,profile)
-                    if asset['facts'] or asset['current']:raise ValueError('SEC_TARGET_NOT_EMPTY')
+                    expected=(6,3) if profile['cik']==PROFILES[0]['cik'] else (8,4)
+                    if (len(asset['facts']),len(asset['current']))!=expected or any(r['metric_key']=='revenue' for r in asset['facts']):raise ValueError('SEC_TARGET_BASELINE')
                 preserved=list(PRESERVE); totals=dict(TOTALS)
                 for profile in PROFILES:
                     item=dict(name=profile['name'],ok=False,provider_requests=0);report['reports'].append(item)
@@ -109,7 +112,10 @@ def execute(env):
                         execution=profile['execution'],commit=env['GITHUB_SHA'])
                     stage='SEC_QUALIFICATION'
                     mapping={k:profile[k] for k in ('cik','isin','sec_names','reference')};mapping['verification']='reviewed_cik_isin'
-                    plan=sec.parse(raw,meta,identity,mapping,profile['years'])
+                    mapping['revenue_reviews']=json.loads((shared.ROOT/'scripts/fundamentals/sec_revenue_reviews.json').read_text())[profile['cik']]
+                    plan=sec.parse(raw,meta,identity,mapping,profile['years'],revenue_only=True)
+                    if len(plan['observations'])!=2:raise ValueError('SEC_REVENUE_REVIEW')
+                    plan['roundtrip_probe']=True
                     del raw,response;http.last_response=None
                     stage='EVIDENCE_ARCHIVE'
                     compact=plan['evidence_json'].encode('utf-8');stored=plan['stored_evidence']
@@ -124,7 +130,7 @@ def execute(env):
                     pending_write=False
                     item.update(result,apply_runner_ms=elapsed)
                     totals['m2_fundamental_observations']+=result['observations'];totals['m2_fundamental_current']+=result['current']
-                    preserved=preserved+[dict(**identity,observations=len(plan['observations']),current=len(plan['metrics']))]
+                    preserved=preserved+[dict(**identity,observations=len(select_asset(before,profile)['facts'])+result['observations'],current=len(select_asset(before,profile)['current'])+result['current'])]
                     del plan,compact
                 stage='INDEPENDENT_ANALYSIS_READBACK'
                 final=read_snapshot(env,port,totals)
@@ -134,7 +140,9 @@ def execute(env):
                     # Independently bind the fresh analysis to the writer's verified result.
                     fields=('metric_key','value_decimal','unit_key','fiscal_year','period_start','period_end','field_path')
                     normalize=lambda rows:sorted(tuple(str(Decimal(str(r[k])).normalize()) if k=='value_decimal' else str(r[k]) for k in fields) for r in rows)
-                    if normalize(asset['facts'])!=normalize(item['verified_facts']):raise ValueError('SEC_ANALYSIS_BINDING')
+                    if normalize([r for r in asset['facts'] if r['metric_key']=='revenue'])!=normalize(item['verified_facts']):raise ValueError('SEC_ANALYSIS_BINDING')
+                    old=select_asset(before,profile)
+                    if [r for r in asset['facts'] if r['metric_key']!='revenue']!=old['facts'] or {k:v for k,v in asset['current'].items() if k!='revenue:fy'}!=old['current']:raise ValueError('SEC_TARGET_BASELINE')
                     item['analysis']=dict(contract=snapshot['contract'],reference_check='PASS',currency='USD',
                         calculations=snapshot['calculations'],missing_metrics=snapshot['missing_metrics'],warnings=snapshot['warnings'])
                 count=sum(bool(a['facts']) for a in final['assets'])

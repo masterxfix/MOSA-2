@@ -19,7 +19,7 @@ function xbrlEvidence(array $plan,array $doc):void {
     check(str_starts_with($mapping['reference'],'https://www.sec.gov/Archives/edgar/data/'.(string)(int)$cik.'/'),'xbrl_reference');
     same($plan['metadata']['http_status'],200,'xbrl_http');
     check(str_starts_with($plan['metadata']['content_type'],'application/json'),'xbrl_mime');
-    $tags=['RevenueFromContractWithCustomerExcludingAssessedTax'=>'revenue','OperatingIncomeLoss'=>'operating_income',
+    $tags=['Revenues'=>'revenue','RevenueFromContractWithCustomerIncludingAssessedTax'=>'revenue','RevenueFromContractWithCustomerExcludingAssessedTax'=>'revenue','OperatingIncomeLoss'=>'operating_income',
         'NetIncomeLoss'=>'profit_attributable_to_owners','ProfitLoss'=>'profit_after_tax','NetCashProvidedByUsedInOperatingActivities'=>'operating_cashflow'];
     $validateReference=static function(array $ref,string $start,string $end,string $year)use($plan):void{
         same($ref['start'],$start,'xbrl_start');same($ref['end'],$end,'xbrl_end');same($ref['fp'],'FY','xbrl_fp');
@@ -42,6 +42,14 @@ function xbrlEvidence(array $plan,array $doc):void {
     same(count($doc['facts']),count($plan['observations']),'xbrl_count');
     foreach($plan['observations'] as $i=>$row){
         $fact=$doc['facts'][$i];same($fact['taxonomy'],'us-gaap','xbrl_taxonomy');same($tags[$fact['tag']]??null,$row['metric_key'],'xbrl_tag');
+        if($row['metric_key']==='revenue'&&$fact['tag']!=='RevenueFromContractWithCustomerExcludingAssessedTax'){
+            $review=$fact['revenue_review'];same($review['scope'],'consolidated_total_revenue','revenue_scope');same($review['tag'],$fact['tag'],'revenue_tag');
+            same($review['reference'],$mapping['reference'],'revenue_reference');same($review['fiscal_year'],$row['fiscal_year'],'revenue_year');
+            same($review['start'],$row['period_start'],'revenue_start');same($review['end'],$row['period_end'],'revenue_end');
+            same(decimal($review['control_usd']),decimal($row['value_decimal']),'revenue_control');
+            check(is_string($fact['concept_definition'])&&strlen($fact['concept_definition'])>0&&strlen($fact['concept_definition'])<=4096,'revenue_definition');
+            check(in_array($review,$mapping['revenue_reviews'],true),'revenue_review_binding');
+        }
         foreach(['metric_key','period_start','period_end','fiscal_year'] as $k)same($fact[$k],$row[$k],'xbrl_fact');
         same($fact['normalized_value'],$row['value_decimal'],'xbrl_value');same($fact['original_value'],$row['value_decimal'],'xbrl_original');
         same($fact['original_unit'],'USD','xbrl_unit');same($fact['normalized_unit'],'USD','xbrl_unit');same($row['unit_key'],'USD','xbrl_unit');

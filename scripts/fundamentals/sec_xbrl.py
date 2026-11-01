@@ -14,9 +14,11 @@ from .zeiss import DEFINITIONS
 PARSER = 'sec_companyfacts_us_gaap_v1'
 SOURCE = dict(source_key='sec_edgar_companyfacts', source_type='regulator_xbrl',
               display_name='SEC EDGAR XBRL Company Facts', base_url='https://data.sec.gov/', enabled='0')
-# No synonym/fallback tags: each tag retains its exact accounting meaning.
+# Revenue alternatives require period-specific consolidated 10-K qualification.
 TAGS = {
     'RevenueFromContractWithCustomerExcludingAssessedTax': 'revenue',
+    'Revenues': 'revenue',
+    'RevenueFromContractWithCustomerIncludingAssessedTax': 'revenue',
     'OperatingIncomeLoss': 'operating_income',
     'NetIncomeLoss': 'profit_attributable_to_owners',
     'ProfitLoss': 'profit_after_tax',
@@ -51,7 +53,7 @@ def number(value):
     return value
 
 
-def parse(raw, metadata, identity, mapping, years):
+def parse(raw, metadata, identity, mapping, years, *, revenue_only=False):
     need(type(raw) is bytes and 0 < len(raw) <= 16*1024*1024, 'SEC_BOUND')
     need(metadata['url'] == url(mapping['cik']) and metadata['http_status'] == 200
          and metadata['bytes'] == len(raw) and metadata['sha256'] == hashlib.sha256(raw).hexdigest(), 'SEC_RESPONSE_BINDING')
@@ -100,10 +102,21 @@ def parse(raw, metadata, identity, mapping, years):
     observations = []; evidence = []; gaps = []
     for year in reversed(years):
         period = periods[str(year)]
-        for tag, metric in TAGS.items():
+        for metric in dict.fromkeys(TAGS.values()):
+            if revenue_only and metric!='revenue':continue
+            review=next((r for r in mapping.get('revenue_reviews',[]) if r['fiscal_year']==str(year)),None) if metric=='revenue' else None
+            tag=review['tag'] if review else next(t for t,m in TAGS.items() if m==metric)
+            need(TAGS.get(tag)==metric,'SEC_REVENUE_REVIEW')
             matches = [c for c in candidates if c['tag'] == tag and c['row']['start'] == period['start'] and c['row']['end'] == period['end']]
             if not matches:
                 gaps.append(dict(metric=metric, fiscal_year=str(year), reason='NO_QUALIFIED_USD_ANNUAL_TAG')); continue
+            if metric=='revenue':
+                rivals=[c for c in candidates if c['metric']==metric and c['row']['start']==period['start'] and c['row']['end']==period['end']]
+                need(all(Decimal(c['value'])==Decimal(matches[0]['value']) for c in rivals),'SEC_CONFLICTING_REVENUE_TAGS')
+                if review:
+                    need(review['scope']=='consolidated_total_revenue' and review['reference']==mapping['reference']
+                         and review['start']==period['start'] and review['end']==period['end']
+                         and Decimal(review['control_usd'])==Decimal(matches[0]['value']),'SEC_REVENUE_REVIEW')
             need(len(matches) <= 64, 'SEC_BOUND')
             need(len({Decimal(c['value']) for c in matches}) == 1, 'SEC_CONFLICTING_FILINGS')
             # Equal facts: prefer original current-period 10-K, then earliest
@@ -118,6 +131,7 @@ def parse(raw, metadata, identity, mapping, years):
             evidence.append(dict(metric_key=metric, fiscal_year=str(year), period_start=period['start'], period_end=period['end'],
                 normalized_value=chosen['value'], normalized_unit='USD', original_value=chosen['value'], original_unit='USD',
                 taxonomy='us-gaap', tag=tag, position=position, cik=mapping['cik'], source_url=metadata['url'],
+                concept_definition=gaap[tag].get('description',''), concept_label=gaap[tag].get('label',''), revenue_review=review,
                 selected=reference(chosen, year), occurrences=[reference(c,year) for c in matches], validation_status='qualified'))
     need(bool(observations), 'SEC_NO_QUALIFIED_FACTS')
     keys = sorted({r['metric_key'] for r in observations})

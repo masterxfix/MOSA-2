@@ -85,3 +85,38 @@ Nächster Ausbau: ESEF/iXBRL deckt zwei weitere Aktien strukturiert ab. HKEX dec
 ebenfalls zwei ab, benötigt jedoch zusätzlich qualifizierte Berichtsextraktion.
 Diese Quellen wurden nur zugeordnet; keine vier zusätzlichen Collector gebaut
 und keine weiteren Datenpakete importiert. Scheduler und Collector bleiben gesperrt.
+
+
+## Umsatz-Ergänzung: Run 2 / Attempt 1
+
+Ausgangsbestand 59/30, NVIDIA 6/3, Rigetti 8/4. Neue Autorisierung
+`MOSA2-SEC-REVENUE-20261101:<SHA>`, neue private Kennungen mit Suffix `-02`;
+`-01` bleibt verbraucht. Derselbe manuelle Workflow wird ausschließlich für Run 2
+gebunden. Keine weiteren Workflowdateien oder KI-Aufrufe.
+
+Die offiziellen, oben verlinkten konsolidierten 10-K-Ergebnisrechnungen zeigen
+NVIDIA 215938/130497 Mio. USD, Rigetti 7088/10790 Tausend USD. Die Inline-XBRL-Tags
+der Original-HTML-Berichte wurden vor dem Live-Lauf ausschließlich im Speicher
+geprüft: NVIDIA `Revenues`; Rigetti enthält `RevenueFromContractWithCustomerIncludingAssessedTax`
+und `Revenues`. Das bloße Vorkommen eines Tags ist kein Nachweis eines geeigneten
+Konzernkontexts. Erst der tatsächliche Company-Facts-Datensatz (gesamter Emittent,
+USD, qualifizierte Jahresperiode) samt Kontrollwertvergleich qualifiziert den Fakt.
+
+`sec_revenue_reviews.json` enthält ausschließlich unabhängige Berichtskontrollen,
+Tag, Zeitraum und Berichtsposition. Importwerte stammen immer aus der tatsächlichen
+SEC-Antwort. Der Parser verwendet diese generischen Reviews, keine Firmennamen.
+Original-Tag, SEC-Konzeptdefinition und -label sowie Review bleiben im Evidence.
+Alle konkurrierenden Revenue-Tags derselben Jahresperiode müssen wertgleich sein;
+andernfalls Stopp. Keine Segmentaddition oder pauschale Gleichsetzung der Tags.
+Nur Umsatzfakten werden ergänzt. Bestehende Beobachtungen und Current-Referenzen
+werden im abschließenden unabhängigen Snapshot vollständig verglichen.
+
+Die frühere Bewertung der etwa 523 ms als Verletzung des SQL-20-ms-Ziels war
+unzutreffend. History-Iterator ca. 0,05 ms und PRIMARY/History-Index waren bereits
+bestätigt. Run 2 ergänzt je Import eine SELECT-1-Probe mit Client- und
+EXPLAIN-Iteratorzeit; Current/History werden wie zuvor getrennt gemessen.
+SSH-Aufbau wird zusätzlich separat berichtet. Das erlaubt die Einordnung des
+Netzwerk-/Tunnelanteils, aber keine isolierte Messung jedes Netzwerksegments.
+Keine Webseiten-Latenz daraus ableiten. Vor der Messung ist keine langsame SQL-
+Abfrage und kein konkreter überflüssiger Roundtrip belegt; deshalb keine
+Indexänderung oder spekulative Performanceoptimierung.

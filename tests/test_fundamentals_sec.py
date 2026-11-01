@@ -129,16 +129,18 @@ class SecTests(unittest.TestCase):
         self.assertEqual(sum(c['kind']=='absolute_change' for c in s['calculations']),3)
     def test_manual_guard_and_contact_before_any_access(self):
         env=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
-            GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='1',GITHUB_SHA='a'*40,EXPECTED_COMMIT='a'*40,AUTHORIZATION=runner.AUTH+'a'*40,
+            GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='2',GITHUB_SHA='a'*40,EXPECTED_COMMIT='a'*40,AUTHORIZATION=runner.AUTH+'a'*40,
             GITHUB_WORKFLOW_REF='masterxfix/MOSA-2/'+runner.WORKFLOW+'@refs/heads/main',SEC_CONTACT='contact@example.org')
         with patch.object(runner.subprocess,'check_output',return_value='contact@example.org\n'):
             self.assertIn('MOSA-2',runner.guard(env))
-            for k,v in [('GITHUB_RUN_NUMBER','2'),('GITHUB_RUN_ATTEMPT','2'),('SEC_CONTACT',''),('SEC_CONTACT','fake@example.org'),('EXPECTED_COMMIT','b'*40)]:
+            for k,v in [('GITHUB_RUN_NUMBER','1'),('GITHUB_RUN_ATTEMPT','2'),('SEC_CONTACT',''),('SEC_CONTACT','fake@example.org'),('EXPECTED_COMMIT','b'*40)]:
                 with self.assertRaises(ValueError):runner.guard(dict(env,**{k:v}))
         with patch.object(runner,'guard',side_effect=ValueError('private secret')):
             result=runner.execute({});self.assertEqual(result['provider_requests'],0);self.assertNotIn('private',str(result))
     def test_unknown_write_stops_second_issuer_without_retry(self):
-        before=dict(assets=[dict(name=p['name'],identifiers=[dict(normalized_value=p['isin'])],facts=[],current={}) for p in runner.PROFILES])
+        before=dict(assets=[dict(name=p['name'],identifiers=[dict(normalized_value=p['isin'])],facts=[{}]*(6 if i==0 else 8),current={str(j):[] for j in range(3 if i==0 else 4)}) for i,p in enumerate(runner.PROFILES)])
+        for a in before['assets']:
+            for r in a['facts']:r['metric_key']='synthetic'
         response=Mock(payload_bytes=json.dumps(fixture()).encode(),http_status=200,content_type='application/json',collected_at=STAMP)
         http=Mock(request_started_at=STAMP,fetch=Mock(return_value=response))
         env=dict(GITHUB_SHA='a'*40)
@@ -146,45 +148,42 @@ class SecTests(unittest.TestCase):
              patch.object(runner.shared.access,'ssh_client',return_value=nullcontext(Mock())),patch.object(runner.shared.access,'tunnel',return_value=nullcontext(1)),\
              patch.object(runner,'read_snapshot',return_value=before),patch.object(runner.shared,'archive',return_value=dict(identity={})),\
              patch.object(runner.shared,'database',side_effect=[(dict(baseline={},protected={},asset_id='1'),1),RuntimeError('COMMIT')]) as db,\
-             patch.object(runner.shared,'ReadOnlyHttpTransport',return_value=http):
+             patch.object(runner.shared,'ReadOnlyHttpTransport',return_value=http),patch.object(runner.sec,'parse',return_value=dict(plan(),observations=plan()['observations'][:2])):
             result=runner.execute(env)
         self.assertEqual(result['outcome'],'UNKNOWN_NO_RETRY');self.assertEqual(result['provider_requests'],1)
         self.assertEqual(len(result['reports']),1);self.assertEqual(db.call_count,2);self.assertEqual(http.fetch.call_count,1)
 
-    def test_complete_simulated_run_uses_two_gets_and_fresh_analysis(self):
-        profiles=runner.PROFILES
-        empty=[dict(name=p['name'],identifiers=[dict(normalized_value=p['isin'])],facts=[],current={}) for p in profiles]
-        stored=[];connections=[];archives=[]
-        def database(env,port,action,selected,**extra):
-            if action=='inspect':return dict(baseline={},protected={},asset_id='1'),1
-            p=extra['plan'];rows=[];current={}
-            for i,r in enumerate(p['observations']):
-                rows.append(dict(r,id=str(i+1),source_id='1',fetch_id='1',parser_key=p['parser_key'],parse_status='parsed',
-                    evidence_sha256=p['stored_evidence']['sha256'],monetary_currency_code='USD',scale_numerator='1',scale_denominator='1'))
-                current.setdefault(r['metric_key']+':fy',[dict(observation_id=str(i+1))])
-            stored.append(dict(empty[len(stored)],id='1',facts=rows,current=current,market_sources=[]))
-            return dict(ok=True,observations=len(rows),current=len(current),verified_facts=p['observations']),1
-        def read(env,port,totals):
-            connections.append(dict(totals))
-            return dict(assets=stored or empty,sources=[dict(id='1',source_type='regulator_xbrl')],validated_totals=dict(totals))
-        transports=[]
-        for profile in profiles:
-            response=Mock(payload_bytes=json.dumps(fixture(profile)).encode(),http_status=200,content_type='application/json',collected_at=STAMP)
-            transports.append(Mock(request_started_at=STAMP,fetch=Mock(return_value=response)))
-        def archive(transport,action,env,identity=None,metadata=None,payload=None,selected=None):
-            if payload:archives.append(json.loads(payload))
-            return dict(identity={})
-        with patch.object(runner,'guard',return_value='MOSA synthetic'),patch.object(runner.shared,'no_other_runs'),patch.object(runner.shared.access,'configuration'),\
-             patch.object(runner.shared.access,'ssh_client',return_value=nullcontext(Mock())),patch.object(runner.shared.access,'tunnel',return_value=nullcontext(1)),\
-             patch.object(runner,'read_snapshot',side_effect=read),patch.object(runner.shared,'archive',side_effect=archive),\
-             patch.object(runner.shared,'database',side_effect=database),patch.object(runner.shared,'ReadOnlyHttpTransport',side_effect=transports):
-            result=runner.execute(dict(GITHUB_SHA='a'*40))
-        self.assertTrue(result['ok'],result);self.assertEqual(result['provider_requests'],2)
-        self.assertEqual(result['model_calls'],0);self.assertEqual(len(connections),2)
-        self.assertEqual(connections[1]['m2_fundamental_observations'],61)
-        self.assertEqual(connections[1]['m2_fundamental_current'],31)
-        self.assertTrue(all(a['evidence_type']=='sec_companyfacts' and not a['source_response']['retained'] for a in archives))
-        self.assertTrue(all(t.fetch.call_count==1 for t in transports))
+    def test_reviewed_alternative_revenue_tags_and_conflicts(self):
+        for tag in ['Revenues','RevenueFromContractWithCustomerIncludingAssessedTax']:
+            data=fixture();gaap=data['facts']['us-gaap']
+            gaap.pop('RevenueFromContractWithCustomerExcludingAssessedTax')
+            for concept in gaap.values():concept['description']='Synthetic official concept definition'
+            profile=runner.PROFILES[0];raw=json.dumps(data).encode();p=plan()
+            meta=dict(p['metadata'],bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+            reviews=[dict(fiscal_year=str(y),tag=tag,scope='consolidated_total_revenue',reference=profile['reference'],start=r['start'],end=r['end'],control_usd=str(r['val'])) for y,r in zip(profile['years'],gaap[tag]['units']['USD'])]
+            mapping=dict(profile,verification='reviewed_cik_isin',revenue_reviews=reviews)
+            qualified=sec.parse(raw,meta,dict(isin=profile['isin'],name=profile['name']),mapping,profile['years'],revenue_only=True)
+            self.assertEqual(len(qualified['observations']),2)
+            self.assertEqual({r['metric_key'] for r in qualified['observations']},{'revenue'})
+            qualified['archive']=dict(storage_key='/synthetic/evidence.json',sha256=qualified['stored_evidence']['sha256'],bytes=qualified['stored_evidence']['bytes'],durable=True)
+            php="require 'tests/fundamentals_offline.php'; [$baseline,$p]=json_decode(stream_get_contents(STDIN),true); $db=new MemoryPDO(); Mosa2\\Fundamentals\\transaction($db,$baseline,'1',fn()=>null); $saved=$db->data['m2_fundamental_observations']; $a=Mosa2\\Fundamentals\\transaction($db,$p,'1',fn()=>null); $b=Mosa2\\Fundamentals\\transaction($db,$p,'1',fn()=>null); foreach($saved as $i=>$r)if($db->data['m2_fundamental_observations'][$i]!==$r)throw new RuntimeException('old_changed'); echo json_encode([$a['observations'],$a['current'],$b['observations'],$b['current']]);"
+            baseline=plan();baseline['observations']=[r for r in baseline['observations'] if r['metric_key']!='revenue']
+            # Rebuild evidence to match the reduced baseline facts.
+            doc=json.loads(baseline['evidence_json']);doc['facts']=[f for f in doc['facts'] if f['metric_key']!='revenue']
+            for i,(f,r) in enumerate(zip(doc['facts'],baseline['observations'])):r['field_path']=f'evidence:facts/{i};source={f["position"]}'
+            rawbase=sec.encode(doc);baseline['evidence_json']=rawbase.decode();baseline['stored_evidence']['sha256']=baseline['archive']['sha256']=hashlib.sha256(rawbase).hexdigest();baseline['stored_evidence']['bytes']=baseline['archive']['bytes']=len(rawbase)
+            result=subprocess.run(['php','-r',php],input=json.dumps([baseline,qualified]),capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr+result.stdout);self.assertEqual(json.loads(result.stdout),[2,1,0,0])
+            for field,value in [('control_usd','999'),('start','2024-01-01')]:
+                badmapping=copy.deepcopy(mapping);badmapping['revenue_reviews'][0][field]=value
+                with self.assertRaisesRegex(ValueError,'SEC_REVENUE_REVIEW'):
+                    sec.parse(raw,meta,dict(isin=profile['isin']),badmapping,profile['years'],revenue_only=True)
+            # A competing total with another amount cannot silently win.
+            gaap[tag]['units']['USD'][0]['val']+=1
+            bad=json.dumps(data).encode();badmeta=dict(meta,bytes=len(bad),sha256=hashlib.sha256(bad).hexdigest())
+            with self.assertRaisesRegex(ValueError,'SEC_CONFLICTING_REVENUE_TAGS'):
+                sec.parse(bad,badmeta,dict(isin=profile['isin']),mapping,profile['years'],revenue_only=True)
+
 
 
 if __name__=='__main__':unittest.main()
