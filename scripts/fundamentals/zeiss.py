@@ -36,24 +36,35 @@ def clean(text):
     return re.sub(r'\s+', ' ', text.replace('\xad', '').replace('\u200b', '')).strip()
 
 class Tables(HTMLParser):
+    """Keep each table's row/cell state independent, in document opening order."""
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.tables = []; self.table = None; self.row = None; self.cell = None
+        self.tables = []; self.stack = []
     def handle_starttag(self, tag, attrs):
         if tag == 'table':
-            if self.table is not None: raise ValueError('NESTED_TABLE')
-            self.table = []
-        elif tag == 'tr' and self.table is not None: self.row = []
-        elif tag in ('td', 'th') and self.row is not None: self.cell = []
+            if self.stack and self.stack[-1]['cell'] is not None:
+                # A parent cell containing a child table is not a scalar fact.
+                self.stack[-1]['child_table'] = True
+            rows = []; self.tables.append(rows)
+            self.stack.append(dict(rows=rows,row=None,cell=None,child_table=False))
+            return
+        if not self.stack: return
+        frame = self.stack[-1]
+        if tag == 'tr': frame['row'] = []
+        elif tag in ('td','th') and frame['row'] is not None:
+            frame['cell'] = []; frame['child_table'] = False
     def handle_data(self, text):
-        if self.cell is not None: self.cell.append(text)
+        if self.stack and self.stack[-1]['cell'] is not None:
+            self.stack[-1]['cell'].append(text)
     def handle_endtag(self, tag):
-        if tag in ('td', 'th') and self.cell is not None:
-            self.row.append(clean(''.join(self.cell))); self.cell = None
-        elif tag == 'tr' and self.row is not None:
-            self.table.append(self.row); self.row = None
-        elif tag == 'table' and self.table is not None:
-            self.tables.append(self.table); self.table = None
+        if not self.stack: return
+        frame = self.stack[-1]
+        if tag in ('td','th') and frame['cell'] is not None:
+            value = '[NESTED_TABLE_CONTENT]' if frame['child_table'] else clean(''.join(frame['cell']))
+            frame['row'].append(value); frame['cell'] = None; frame['child_table'] = False
+        elif tag == 'tr' and frame['row'] is not None:
+            frame['rows'].append(frame['row']); frame['row'] = None; frame['cell'] = None
+        elif tag == 'table': self.stack.pop()
 
 def parse(raw, observed_at):
     text = normalized_text(raw)
@@ -101,7 +112,7 @@ def parse(raw, observed_at):
                   monetary_currency_code=currency,scale_numerator=scale,scale_denominator=denom,status='frozen')
         for k,name,dim,currency,scale,denom in [('EUR_MILLION','Millionen Euro','monetary','EUR','1000000','1'),
             ('EUR_PER_SHARE','Euro je Aktie','monetary_per_share','EUR','1','1'),('PERCENT','Prozent','ratio',None,'1','100')]]
-    return dict(fiscal_year_start_month=10, publication_date=None, parser_key='zeiss_meditec_results_de',parser_version='1',
+    return dict(fiscal_year_start_month=10, publication_date=None, parser_key='zeiss_meditec_results_de',parser_version='2',
         parse_status='partial',source=SOURCE,units=units,observations=observations,
         metrics=[dict(metric_key=k,display_name=v[0],category='income',value_type='decimal',value_semantics=v[1],
                       dimension_key=v[2],status='active') for k,v in sorted(DEFINITIONS.items())])
