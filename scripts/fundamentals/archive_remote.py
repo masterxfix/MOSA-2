@@ -5,7 +5,7 @@ import json
 import re
 
 EXECUTIONS = {'fundamentals-droneshield-fy2025-20261101-01', 'fundamentals-pne-q1-2026-20261101-01', 'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
-EVIDENCE_EXECUTIONS = {'fundamentals-droneshield-html-fy2025-20261101-01'}
+EVIDENCE_EXECUTIONS = {'fundamentals-sec-nvidia-20261101-01', 'fundamentals-sec-rigetti-20261101-01', 'fundamentals-droneshield-html-fy2025-20261101-01'}
 CURATED_EXECUTIONS = {'fundamentals-curated-droneshield-fy2025-20261101-01'}
 EXECUTIONS |= EVIDENCE_EXECUTIONS | CURATED_EXECUTIONS
 ROOT = BASE + '/private/mosa2-collector'

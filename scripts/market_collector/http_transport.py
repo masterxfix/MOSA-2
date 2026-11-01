@@ -42,11 +42,13 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class ReadOnlyHttpTransport:
-    def __init__(self, endpoint, *, timeout=20):
+    def __init__(self, endpoint, *, timeout=20, max_bytes=None):
         require(type(endpoint) is HttpGet, 'qualified GET descriptor required')
         require(type(timeout) in (int, float) and 0 < timeout <= 60, 'bounded timeout required')
         self.endpoint = endpoint
         self.timeout = timeout
+        require(max_bytes is None or type(max_bytes) is int and 0 < max_bytes <= 16*1024*1024, 'bounded response size required')
+        self.max_bytes = max_bytes
         self.attempt_count = 0
         self.request_started_at = None
         self.response_ended_at = None
@@ -67,7 +69,8 @@ class ReadOnlyHttpTransport:
             except urllib.error.HTTPError as error:
                 response = error  # Preserve original error/redirect body, no follow-up.
             with response:
-                body = response.read()
+                body = response.read() if self.max_bytes is None else response.read(self.max_bytes+1)
+                require(self.max_bytes is None or len(body) <= self.max_bytes, 'HTTP_RESPONSE_BOUND')
                 status = response.code
                 content_type = response.headers.get('Content-Type', '')
             self.response_ended_at = utc_now()

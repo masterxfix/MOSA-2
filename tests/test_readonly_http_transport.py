@@ -17,6 +17,18 @@ class Response(BytesIO):
 
 
 class ReadOnlyTransportTests(unittest.TestCase):
+    def test_explicit_response_bound_consumes_attempt_without_retry(self):
+        for body,ok in [(b'1234',True),(b'12345',False)]:
+            endpoint=HttpGet(None,'https://example.invalid/')
+            transport=ReadOnlyHttpTransport(endpoint,max_bytes=4)
+            opener=Mock();opener.open.return_value=Response(body)
+            with patch('urllib.request.build_opener',return_value=opener):
+                if ok:self.assertEqual(transport.fetch(None).payload_bytes,body)
+                else:
+                    with self.assertRaisesRegex(ValueError,'HTTP_RESPONSE_BOUND'):transport.fetch(None)
+                with self.assertRaisesRegex(ValueError,'single-use'):transport.fetch(None)
+            self.assertEqual(opener.open.call_count,1)
+
     def setUp(self):
         self.request=Request('synthetic_v1','201','301','synthetic-get','2001-01-01 10:00:00.000000','SYNTHETIC')
         self.endpoint=HttpGet(self.request,'https://example.invalid/snapshot?instrument=SYNTHETIC',(('Accept','application/json'),))

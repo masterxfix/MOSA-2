@@ -5,6 +5,7 @@ use PDO;
 use function Mosa2\Phase2\{check,same,qi,connection};
 require_once dirname(__DIR__).'/schema6_apply.php';
 require_once __DIR__.'/curated.php';
+require_once __DIR__.'/xbrl_evidence.php';
 
 function canonical(mixed $value): string {
     $sort=function(mixed $v)use(&$sort):mixed{if(is_array($v)){if(!array_is_list($v))ksort($v);foreach($v as &$x)$x=$sort($x);unset($x);}return $v;};
@@ -48,12 +49,22 @@ function validate(array $plan): array {
         check(preg_match('/\A[1-9][0-9]{3}\z/',$r['fiscal_year'])===1,'fiscal_year');
         foreach(['period_start','period_end'] as $k){$d=\DateTimeImmutable::createFromFormat('!Y-m-d',$r[$k]);check($d!==false&&$d->format('Y-m-d')===$r[$k],'date');}
         check($r['period_start']<$r['period_end'],'period_bounds');
+        if(($plan['fiscal_calendar']??null)==='reported_fy'){
+            same($r['period_type'],'fy','reported_fy_only');
+            $period=$plan['reported_periods'][$r['fiscal_year']]??null;check(is_array($period),'reported_period');
+            same($r['period_start'],$period['start'],'reported_start');same($r['period_end'],$period['end'],'reported_end');
+            $days=(int)(new \DateTimeImmutable($r['period_start']))->diff(new \DateTimeImmutable($r['period_end']))->days+1;
+            check(in_array($days,[364,365,366,371],true),'annual_duration');
+            check(abs((int)substr($r['period_end'],0,4)-(int)$r['fiscal_year'])<=1,'reported_year_bound');
+            same($plan['parser_key'],'sec_companyfacts_us_gaap_v1','reported_period_parser');
+        }else{
         $month=$plan['fiscal_year_start_month']??null;check(is_int($month)&&$month>=1&&$month<=12,'fiscal_calendar');
         $year=(int)$r['fiscal_year']-($month===1?0:1);
         $start=new \DateTimeImmutable(sprintf('%04d-%02d-01',$year,$month));
         if($r['period_type']==='fq')$start=$start->modify('+'.(3*((int)$r['fiscal_quarter']-1)).' months');
         $end=$start->modify('+'.($r['period_type']==='fy'?12:3).' months')->modify('-1 day');
         same($r['period_start'],$start->format('Y-m-d'),'fiscal_start');same($r['period_end'],$end->format('Y-m-d'),'fiscal_end');
+        }
         foreach(['as_of_at','reported_at','observed_at'] as $k)timestamp($r[$k]);
         same($r['observed_at'],$plan['metadata']['observed_at'],'observation_time');
         check($r['reported_at']===null||$r['reported_at']<=$r['observed_at'],'publication_time');
@@ -142,6 +153,7 @@ function storedFile(array $plan): array {
         same(strlen($raw),$stored['bytes'],'evidence_bytes');same(hash('sha256',$raw),$stored['sha256'],'evidence_hash');
         $doc=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
         if($curated){curatedEvidence($plan,$doc);$backend='dogado_private_curated_evidence_v1';}
+        elseif(($doc['evidence_type']??null)==='sec_companyfacts'){xbrlEvidence($plan,$doc);}
         else{
         same($doc['format'],'mosa2-fundamental-evidence-v1','evidence_format');same($doc['kind'],'derived_evidence','evidence_kind');
         same(canonical($doc['source_response']),canonical($meta+['retained'=>false]),'response_binding');
