@@ -15,13 +15,13 @@ def read_pdf(raw):
     logging.getLogger('pdfminer').disabled = True
     try:
         with pdfplumber.open(BytesIO(raw), unicode_norm='NFKC') as document:
-            if document.doc.is_extractable is False or not 1 <= len(document.pages) <= MAX_PAGES:
-                raise ValueError('PDF_DOCUMENT_BOUND')
+            if document.doc.is_extractable is False:raise ValueError('PDF_EXTRACTION_FORBIDDEN')
+            if not 1 <= len(document.pages) <= MAX_PAGES:raise ValueError('PDF_PAGE_LIMIT')
             pages=[];total=0
             for index,page in enumerate(document.pages,1):
                 words=page.dedupe_chars(tolerance=1).extract_words(x_tolerance=2,y_tolerance=3,keep_blank_chars=False)
                 total+=sum(len(w['text']) for w in words)
-                if total>MAX_CHARACTERS:raise ValueError('PDF_DOCUMENT_BOUND')
+                if total>MAX_CHARACTERS:raise ValueError('PDF_CHARACTER_LIMIT')
                 lines=[]
                 for word in sorted(words,key=lambda w:(w['bottom'],w['x0'])):
                     if not lines or abs(word['bottom']-lines[-1]['bottom'])>3:
