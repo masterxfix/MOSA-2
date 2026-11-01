@@ -5,6 +5,8 @@ import json
 import re
 
 EXECUTIONS = {'fundamentals-droneshield-fy2025-20261101-01', 'fundamentals-pne-q1-2026-20261101-01', 'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
+EVIDENCE_EXECUTIONS = {'fundamentals-droneshield-html-fy2025-20261101-01'}
+EXECUTIONS |= EVIDENCE_EXECUTIONS
 ROOT = BASE + '/private/mosa2-collector'
 
 def checked(data):
@@ -68,17 +70,26 @@ def operation(data):
             s=os.fstat(fd)
             need((s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode))==(UID,GID,0o700), 'ARCHIVE_DIRECTORY')
             metadata = data['metadata']
+            derived = ONCE in EVIDENCE_EXECUTIONS
+            need(metadata.get('kind') == 'derived_evidence' if derived else metadata.get('kind') is None, 'STORAGE_KIND')
+            body_name = 'evidence.json' if derived else 'response.body'
+            meta_name = 'evidence-metadata.json' if derived else 'response.json'
             need(re.fullmatch('[0-9a-f]{64}',metadata['sha256']) is not None, 'HASH')
             if action == 'archive':
                 raw=base64.b64decode(data['payload'],validate=True)
                 need(len(raw)==metadata['bytes'] and hashlib.sha256(raw).hexdigest()==metadata['sha256'], 'PAYLOAD_HASH')
-                create_file(fd,'response.body',raw)
-                create_file(fd,'response.json',json.dumps(metadata,sort_keys=True,ensure_ascii=True).encode())
-            raw=read_file(fd,'response.body')
+                if derived:
+                    need(len(raw)<=131072 and metadata['content_type']=='application/json', 'EVIDENCE_BOUND')
+                    doc=json.loads(raw)
+                    need(doc['kind']=='derived_evidence' and doc['format']=='mosa2-fundamental-evidence-v1' and doc['source_response']['retained'] is False, 'EVIDENCE_KIND')
+                    need(1<=len(doc['facts'])<=256, 'EVIDENCE_FACTS')
+                create_file(fd,body_name,raw)
+                create_file(fd,meta_name,json.dumps(metadata,sort_keys=True,ensure_ascii=True).encode())
+            raw=read_file(fd,body_name)
             need(len(raw)==metadata['bytes'] and hashlib.sha256(raw).hexdigest()==metadata['sha256'], 'READBACK_HASH')
-            need(json.loads(read_file(fd,'response.json'))==metadata, 'READBACK_METADATA')
+            need(json.loads(read_file(fd,meta_name))==metadata, 'READBACK_METADATA')
             return dict(identity=measured, sha256=metadata['sha256'], bytes=len(raw),
-                storage_key=ROOT+'/runs/'+ONCE+'/response.body', mode='0600', durable=True)
+                storage_key=ROOT+'/runs/'+ONCE+'/'+body_name, mode='0600', durable=True)
         finally:
             os.close(fd)
     finally:

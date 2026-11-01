@@ -20,6 +20,7 @@ import collector_private_directories as directories
 from scripts.schema6_apply_once import no_other_runs
 from scripts.market_collector.http_transport import HttpGet,ReadOnlyHttpTransport
 from scripts.fundamentals import pne, zeiss
+from scripts.fundamentals.html_evidence import evidence
 
 EXECUTION='fundamentals-pne2025-20261101-01'
 AUTHORIZATION='MOSA2-PNE-FUNDAMENTALS-ONCE-20261101:'
@@ -95,23 +96,36 @@ def execute(env,selected=None):
                 stage='PROVIDER_GET'
                 http=ReadOnlyHttpTransport(HttpGet(None,adapter.URL,(('Accept',getattr(adapter,'CONTENT_TYPE','text/html')),('Accept-Encoding','identity'))),timeout=30)
                 response=http.fetch(None)
+                if selected.get('retention')=='derived_evidence':
+                    report.update(html_source_reachable=response.http_status==200 and response.content_type.split(';',1)[0].strip().lower()=='text/html',
+                        pdf_downloads=0,full_responses_archived=0)
                 report['provider_requests']=http.attempt_count
                 raw=response.payload_bytes
                 if not 0<len(raw)<=8*1024*1024:raise ValueError('PAYLOAD_BOUND')
                 metadata=dict(url=adapter.URL,request_started_at=http.request_started_at,observed_at=response.collected_at,
                     http_status=response.http_status,content_type=response.content_type,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),
                     execution=selected['execution'],commit=env['GITHUB_SHA'])
-                stage='RAW_ARCHIVE'
-                archive(transport,'archive',env,reserved['identity'],metadata,raw,selected=selected)
-                verified=archive(transport,'verify',env,reserved['identity'],metadata,selected=selected)
-                report['original_responses']=1
-                report['raw_sha256']=metadata['sha256']
-                report['raw_bytes']=metadata['bytes']
-                report['raw_archive']='DURABLE_PRIVATE_SHA256_PASS'
+                derived=selected.get('retention')=='derived_evidence'
+                if not derived:
+                    stage='RAW_ARCHIVE'
+                    archive(transport,'archive',env,reserved['identity'],metadata,raw,selected=selected)
+                    verified=archive(transport,'verify',env,reserved['identity'],metadata,selected=selected)
+                    report.update(original_responses=1,raw_sha256=metadata['sha256'],raw_bytes=metadata['bytes'],raw_archive='DURABLE_PRIVATE_SHA256_PASS')
                 stage='ADAPTER'
                 if response.http_status!=200 or response.content_type.split(';',1)[0].strip().lower()!=getattr(adapter,'CONTENT_TYPE','text/html'):
                     raise ValueError('HTTP_RESPONSE')
                 plan=adapter.parse(raw,response.collected_at)
+                stored_metadata=metadata
+                if derived:
+                    stage='EVIDENCE_ARCHIVE'
+                    compact,stored_metadata=evidence(plan,metadata,selected['identity'])
+                    # The full response never leaves runner memory or reaches remote storage.
+                    del raw,response
+                    http.last_response=None
+                    archive(transport,'archive',env,reserved['identity'],stored_metadata,compact,selected=selected)
+                    verified=archive(transport,'verify',env,reserved['identity'],stored_metadata,selected=selected)
+                    plan['stored_evidence']=stored_metadata
+                    report.update(evidence_archive='PASS',full_responses_archived=0,source_classification='independent_third_party')
                 plan.update(metadata=metadata,archive=verified)
                 if selected.get('periods'):
                     actual={(r['period_type'],r['period_start'],r['period_end']) for r in plan['observations']}
@@ -123,14 +137,14 @@ def execute(env,selected=None):
                 stage='DB_APPLY_AND_READBACK'
                 result,elapsed=database(env,port,'apply',selected=selected,baseline=before['baseline'],protected=before['protected'],asset_id=before['asset_id'],plan=plan)
                 stage='FINAL_ARCHIVE_READBACK'
-                archive(transport,'verify',env,reserved['identity'],metadata,selected=selected)
+                archive(transport,'verify',env,reserved['identity'],stored_metadata,selected=selected)
                 report.update(result,apply_runner_ms=elapsed,publication_date=plan['publication_date'],
-                    commit=env['GITHUB_SHA'],provider_requests=http.attempt_count,original_responses=1,
-                    raw_archive='DURABLE_PRIVATE_SHA256_PASS',reported_at_policy='NULL_WHEN_NO_EXACT_PUBLICATION_TIMESTAMP',
-                    parser_status='partial_nonqualified_content_preserved_raw')
+                    commit=env['GITHUB_SHA'],provider_requests=http.attempt_count,original_responses=0 if derived else 1,
+                    reported_at_policy='NULL_WHEN_NO_EXACT_PUBLICATION_TIMESTAMP',
+                    parser_status='qualified_evidence_only' if derived else 'partial_nonqualified_content_preserved_raw')
         report['stage']='SUCCESS'
     except Exception as error:
-        if str(error) in {'QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND'}:
+        if str(error) in {'HTML_REPORT_IDENTITY','HTML_CURRENCY_CONFLICT','HTML_COLUMN_STRUCTURE','HTML_TABLE_BOUND','EVIDENCE_BINDING','EVIDENCE_BOUND','QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND'}:
             report['error_code']=str(error)
         report['stage']=stage
         report['provider_requests']=http.attempt_count if http is not None else 0

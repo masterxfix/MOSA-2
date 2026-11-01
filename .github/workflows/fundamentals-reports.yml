@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       reports:
-        description: Comma-separated reviewed report keys; currently only droneshield-fy-2025 authorized
+        description: Comma-separated reviewed report keys; currently only droneshield-html-fy-2025 authorized
         required: true
-        default: droneshield-fy-2025
+        default: droneshield-html-fy-2025
         type: string
       expected_commit:
         description: Exact reviewed main commit
@@ -49,17 +49,17 @@ jobs:
       - name: Existing pinned SSH dependencies
         run: |
           python3 -m venv "$RUNNER_TEMP/fundamentals-venv"
-          "$RUNNER_TEMP/fundamentals-venv/bin/python" -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt -r scripts/requirements-fundamentals-pdf.txt
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Focused synthetic offline tests before access
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           php -l scripts/fundamentals/core.php
           php -l tests/fundamentals_offline.php
-          "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_pdf.py -v
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_html.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_collector.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_generic.py -v
-      - name: Authorized report GET, private archive, atomic facts and independent readback
+      - name: Authorized HTML GET, compact evidence, atomic facts and independent readback
         env:
           PYTHONDONTWRITEBYTECODE: '1'
           REPORT_KEYS: ${{ inputs.reports }}

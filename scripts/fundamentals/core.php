@@ -131,7 +131,34 @@ function choose(array $rows): array {
     }return array_values($slots);
 }
 /** Generic insert-only catalog/facts path; no issuer-specific SQL. */
+function storedFile(array $plan): array {
+    $meta=$plan['metadata'];$stored=$meta;$backend='dogado_private_file';
+    if(isset($plan['stored_evidence'])){
+        $stored=$plan['stored_evidence'];$backend='dogado_private_evidence_json_v1';
+        same($stored['kind'],'derived_evidence','evidence_kind');same($stored['content_type'],'application/json','evidence_mime');
+        $raw=$plan['evidence_json'];check(is_string($raw)&&strlen($raw)<=131072,'evidence_bound');
+        same(strlen($raw),$stored['bytes'],'evidence_bytes');same(hash('sha256',$raw),$stored['sha256'],'evidence_hash');
+        $doc=json_decode($raw,true,64,JSON_THROW_ON_ERROR);
+        same($doc['format'],'mosa2-fundamental-evidence-v1','evidence_format');same($doc['kind'],'derived_evidence','evidence_kind');
+        same(canonical($doc['source_response']),canonical($meta+['retained'=>false]),'response_binding');
+        same($doc['parser'],['key'=>$plan['parser_key'],'version'=>$plan['parser_version']],'parser_binding');
+        same(count($doc['facts']),count($plan['observations']),'evidence_count');
+        foreach($plan['observations'] as $i=>$row){$fact=$doc['facts'][$i];
+            foreach(['metric_key','period_start','period_end'] as $key)same($fact[$key],$row[$key],'evidence_fact');
+            same($fact['normalized_value'],$row['value_decimal'],'evidence_value');same($fact['normalized_unit'],$row['unit_key'],'evidence_unit');
+            same($fact['validation_status'],'qualified','evidence_validation');
+            check(preg_match('/\Ahtml:table=[1-9][0-9]*;row=[1-9][0-9]*;column=[1-9][0-9]*\z/',$fact['position'])===1,'evidence_locator');
+            foreach(['original_label','original_value','original_unit'] as $key)check(is_string($fact[$key])&&strlen($fact[$key])>0&&strlen($fact[$key])<=512,'evidence_original');
+            same($row['field_path'],'evidence:facts/'.$i.';source='.$fact['position'],'evidence_path');
+        }
+        check(str_ends_with($plan['archive']['storage_key'],'/evidence.json'),'evidence_storage');
+    }
+    same($plan['archive']['sha256'],$stored['sha256'],'archive_hash');same($plan['archive']['bytes'],$stored['bytes'],'archive_bytes');same($plan['archive']['durable'],true,'archive_durable');
+    return ['storage_backend'=>$backend,'storage_key'=>$plan['archive']['storage_key'],'mime_type'=>$stored['content_type'],
+        'byte_size'=>(string)$stored['bytes'],'sha256'=>hex2bin($stored['sha256']),'observed_at'=>$meta['observed_at']];
+}
 function persist(PDO $p,array $plan,string $assetId): array {
+    $stored=storedFile($plan);
     $v=validate($plan);$now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');check($now>=$plan['metadata']['observed_at'],'clock');$expected=[];$beforeCounts=counts($p);$inserted=array_fill_keys(array_keys($beforeCounts),0);$updates=0;
     $record=function(string $table,array $row,string $idColumn='id')use($p,&$expected,&$inserted):array{
         $inserted[$table]++;$id=insert($p,$table,$row);if($idColumn==='id')$row=['id'=>$id]+$row;$expected[]=[$table,$row];return $row;};
@@ -143,9 +170,7 @@ function persist(PDO $p,array $plan,string $assetId): array {
     };
     $source=$catalog('m2_sources',$plan['source'],['source_key'],true);$sourceId=(string)$source['id'];
     $meta=$plan['metadata'];
-    $fileDefinition=['entity_id'=>$assetId,'source_id'=>$sourceId,'storage_backend'=>'dogado_private_file',
-        'storage_key'=>$plan['archive']['storage_key'],'mime_type'=>$meta['content_type'],'byte_size'=>(string)$meta['bytes'],
-        'sha256'=>hex2bin($meta['sha256']),'observed_at'=>$meta['observed_at']];
+    $fileDefinition=['entity_id'=>$assetId,'source_id'=>$sourceId]+$stored;
     $fetchDefinition=['fetch_key'=>digest(['fundamental-fetch-v1',$sourceId,$meta['url'],$meta['sha256'],$meta['observed_at']]),
         'source_id'=>$sourceId,'asset_id'=>$assetId,'route_id'=>null,'route_revision'=>null,'route_sha256'=>null,'job_run_id'=>null,
         'payload_sha256'=>hex2bin($meta['sha256']),'payload_bytes'=>(string)$meta['bytes'],
@@ -192,13 +217,16 @@ function persist(PDO $p,array $plan,string $assetId): array {
         'facts_reused'=>count($observations)-$inserted['m2_fundamental_observations'],
         'source_id'=>$sourceId,'metric_keys'=>array_keys($v['metrics'])];
 }
-function readback(PDO $p,array $receipt): void {
+function readback(PDO $p,array $receipt): array {
+    $facts=[];
     foreach($receipt['expected'] as [$table,$row]){
         $keys=isset($row['id'])?['id']:match($table){'m2_fundamental_metrics'=>['metric_key'],'m2_fundamental_units'=>['unit_key','unit_version'],default=>['asset_id','metric_key','period_type']};
         $rows=query($p,'SELECT * FROM '.qi($table).' WHERE '.implode(' AND ',array_map(fn($k)=>qi($k).'=?',$keys)).' LIMIT 2',array_map(fn($k)=>$row[$k],$keys));
         same(count($rows),1,'readback_unique');equalRow($rows[0],$row);
+        if($table==='m2_fundamental_observations')$facts[]=array_intersect_key($rows[0],array_flip(['metric_key','value_decimal','unit_key','fiscal_year','period_start','period_end','field_path']));
     }
     same(counts($p),$receipt['counts'],'exact_row_deltas');
+    return $facts;
 }
 function transaction(PDO $p,array $plan,string $assetId,callable $committing): array {
     validate($plan);check($p->beginTransaction(),'begin');$commitStarted=false;
@@ -233,15 +261,17 @@ function main(): int {
         if($input['action']==='inspect'){$result=['ok'=>true,'asset_id'=>$assetId,'baseline'=>$before,'protected'=>$protected,'schema'=>6,'tables'=>26];}
         else{
             $stage='PLAN';same($before,$input['baseline'],'baseline_drift');same($protected,$input['protected'],'protected_drift');same($assetId,$input['asset_id'],'asset_drift');
-            $plan=$input['plan'];validate($plan);same($plan['archive']['sha256'],$plan['metadata']['sha256'],'archive_hash');same($plan['archive']['bytes'],$plan['metadata']['bytes'],'archive_bytes');same($plan['archive']['durable'],true,'archive_durable');
+            $plan=$input['plan'];validate($plan);storedFile($plan);
+            if(isset($plan['stored_evidence']))same(canonical(json_decode($plan['evidence_json'],true)['issuer']),canonical($input['identity']),'evidence_issuer');
             $stage='TRANSACTION';$receipt=transaction($p,$plan,$assetId,static function()use(&$stage,&$commitStarted){$stage='COMMIT';$commitStarted=true;});
             $stage='INDEPENDENT_READBACK';$read=connection($input['password'],'127.0.0.1',$input['port']);
             check($read->query('SELECT CONNECTION_ID()')->fetchColumn()!==$p->query('SELECT CONNECTION_ID()')->fetchColumn(),'independent');
             $read->exec('SET TRANSACTION READ ONLY');check($read->beginTransaction(),'readonly');
-            schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');readback($read,$receipt);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
+            schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');$verifiedFacts=readback($read,$receipt);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
             $performance=timings($read,$assetId,$plan['observations'][0]['metric_key'],$plan['observations'][0]['period_type'],[min(array_column($plan['observations'],'fiscal_year')),max(array_column($plan['observations'],'fiscal_year'))]);check($read->commit(),'read_end');
             $result=['ok'=>true,'stage'=>'SUCCESS','metrics'=>$receipt['metrics'],'observations'=>$receipt['observations'],'current'=>$receipt['current'],
                 'metric_keys'=>$receipt['metric_keys'],'facts_reused'=>$receipt['facts_reused'],'current_updates'=>$receipt['current_updates'],'protected_assets_unchanged'=>true,'fiscal_periods_validated'=>true,'market_unchanged'=>true,'collector_locked'=>true,'readback'=>'PASS','performance'=>$performance];
+            if(isset($plan['stored_evidence']))$result['verified_facts']=$verifiedFacts;
         }
         echo json_encode($result,JSON_THROW_ON_ERROR);return 0;
     }catch(\Throwable){echo json_encode(['ok'=>false,'stage'=>$stage,'outcome'=>$commitStarted?'COMMIT_CONFIRMED_OR_UNKNOWN_NO_RETRY':'NOT_COMMITTED']);return 1;}

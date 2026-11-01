@@ -29,6 +29,19 @@ bleibt die Quelle, `m2_job_runs` der optionale Betriebsnachweis.
 Routen bleiben optional, wenn die Antwort keine einzelne physische Route besitzt.
 Es entsteht keine automatische Registrierung, Aktivierung oder Lesefreigabe.
 
+## Aufbewahrungsentscheidung vom 01.11.2026
+
+Für neue HTML-Importe gilt der schlanke Evidence-Vertrag aus
+[FUNDAMENTALS_HTML_EVIDENCE.md](FUNDAMENTALS_HTML_EVIDENCE.md). Die folgenden
+Vollantwort-Regeln beschreiben den bisherigen Archivpfad für bestehende Importe;
+sie verlangen keine neuen Vollarchive. Alte Archive bleiben unverändert.
+`m2_provider_fetches.payload_sha256/payload_bytes/content_type` beschreiben weiter
+die tatsächlich empfangene HTTP-Antwort. Bei Backend
+`dogado_private_evidence_json_v1` verweist `file_id` ausdrücklich auf abgeleitete
+Evidenz; `m2_files.sha256/byte_size/mime_type` beschreiben diese JSON-Datei.
+Der versionierte Backend-Vertrag und das JSON-Kennzeichen unterscheiden beide
+Rollen ohne DDL-Änderung. Der bisherige Backend-Vertrag bleibt unverändert.
+
 ## Vollständige Rohantworten vor der Fachauswertung
 
 `m2_files` verweist auf unveränderliche Rohbytes außerhalb öffentlicher

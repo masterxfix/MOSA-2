@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 01.11.2026, 12:50:41 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 01.11.2026, 14:09:22 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -24,8 +24,9 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 
 ## Verbindliche MOSA-2-Oberziele
 
-- **Datenvollständigkeit ist ein oberstes Ziel:** Möglichst alle kostenlos verfügbaren, relevanten Informationen aus den tatsächlich genutzten Quellen erfassen und dauerhaft erhalten. „Heute nicht benötigt“ oder „noch nicht angezeigt“ ist kein ausreichender Grund, verfügbare relevante Daten zu verwerfen.
-- **Bekannte Werte strukturiert, unbekannte Werte erhalten:** Fachlich bekannte Felder werden normalisiert gespeichert. Noch nicht modellierte, aber relevante Anbieterinformationen müssen mit Quelle und Zeitbezug in einer geeigneten Rohdaten-/Payload-/Evidenzschicht erhalten bleiben, bis eine saubere Fachzuordnung existiert.
+- **Relevante Daten mit nachvollziehbarer Herkunft:** MOSA 2 speichert fachlich qualifizierte Zahlen, ihre erforderlichen Herkunftsnachweise und nachvollziehbare KI-Bewertungen. Vollständige PDFs oder Webseiten werden für neue Importe nicht auf Vorrat archiviert; unnötige Rohdatenbestände vermeiden.
+- **Schlanke Evidenz statt Vollantwort:** HTML nur zur Laufzeit auswerten. Pro qualifiziertem Fakt Quell-URL, tatsächliche Erfassung, Unternehmen, Berichtsperiode, Kennzahlenname, Originaleinheit/-wert, genaue Position und Prüfstatus in kompaktem strukturiertem Evidence-JSON erhalten; nur bei Bedarf einen kurzen relevanten Belegauszug ergänzen. Nicht benötigte Inhalte nach Verarbeitung verwerfen. HTTP-Quellantwort und abgeleiteten Nachweis ausdrücklich unterscheiden; der Evidence-Hash bezeichnet ausschließlich die tatsächlich gespeicherten Evidence-Bytes. Fehlt eine korrekte Provenienzabbildung, vor DB-Schreibzugriff stoppen und die kleinste notwendige Änderung benennen.
+- **Bestandsschutz und KI:** Vorhandene alte Archive bleiben unverändert und werden nicht gelöscht. Bestehende PNE-/Zeiss-Verarbeitung erhalten; deren bisheriger Archivweg ist keine Freigabe für neue Vollarchive. KI-Einordnungen erst nach unabhängig bestätigten Fakten erstellen, als Interpretation kennzeichnen und von den Zahlen trennen. Automatische KI-Speicherung oder kostenpflichtige Integration braucht einen eigenen Auftrag.
 - **Performance ist gleichrangig und verbindlich:** normale DB-Abfrage ideal < 20 ms, gesamte DB-Zeit einer normalen Seite < 200 ms, normaler Seitenaufruf < 1,0 s, p95 < 1,5 s, harte Obergrenze 2,0 s. Current, History und Rohdaten/Evidenz getrennt halten; Indizes mit den kritischen Queries planen.
 - **Teilscope ändert nicht das Gesamtziel:** Ein kleiner beauftragter Funktionsschritt darf das langfristige Daten- oder Produktziel nicht stillschweigend enger definieren. Bewusste vorläufige Einschränkungen als offen/temporär dokumentieren und nicht als endgültigen Datenumfang behandeln.
 - **MOSA-Wissen wiederverwenden:** Bereits in MOSA erprobte Datenfelder, Anbieterinformationen und funktionierende allgemeine Logik vor einer Neuentwicklung prüfen und, sofern fachlich bestätigt, in die MOSA-2-Zielarchitektur übernehmen.
@@ -209,6 +210,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 01.11.2026 | 14:09:22 Uhr (MEZ, UTC+01:00) | Neue Nutzerentscheidung zur Aufbewahrung: qualifizierte Zahlen, kompakte Herkunftsevidenz und nachvollziehbare KI-Einordnung; keine neuen Vollarchive auf Vorrat, HTTP-Antwort und Evidence getrennt, alte Archive unverändert. |
 | 01.11.2026 | 12:50:41 Uhr (MEZ, UTC+01:00) | Verbindliche Codex-Modell-/Denkstufenempfehlung vor jedem MOSA-2-Auftrag eingeführt: aktuelles DeepSWE und OpenAI-Hinweise mit eigenen Ergebnissen abgleichen, Gesamtaufwand statt Einzelpreis bewerten, Verfügbarkeit und Benchmarkgrenzen offenlegen. |
 | 31.10.2026 | 13:27:11 Uhr (MEZ, UTC+01:00) | Verbindliche MOSA-2-Oberziele ergänzt: Datenvollständigkeit und Performance gleichrangig, relevante kostenlose Anbieterinformationen erhalten, unbekannte Felder nicht still verwerfen, Teilscope nicht zum Endumfang machen sowie MOSA-Wissen und Produktdesign als Leitplanken festgehalten. |
 | 31.10.2026 | 09:16:24 Uhr (MEZ, UTC+01:00) | Nutzeranweisung festgehalten: vorhandene Betriebserfahrung berücksichtigen, begrenzt ausprobieren und lernen, neue stoppende Bedenken zuerst besprechen und sichtbare Teilerfolge nachweisen. |
