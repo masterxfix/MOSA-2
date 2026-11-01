@@ -1,5 +1,60 @@
 # Offline-Modellbereitschaft: mosa2-ai-assessment-v1
 
+## Offline-Korrektur der Interpretationsschnittstelle nach f979b72
+
+Im ersten echten Lauf 41324852699 wurden Fakten/Berechnungen geprüft, anschließend
+INTERPRETATION_BINDING ausgelöst. Die betroffene Modellzeile wurde nicht erhalten;
+welche einzelne Regel verletzt wurde, ist damit nicht nachgewiesen. Nachweisbar
+war eine Vertragslücke: Die Anweisung nannte nur allgemeine Codes, während die
+unabhängige Prüfung konkrete Berechnungsarten, Vorzeichen und Rundung verlangte.
+
+`INTERPRETATION_RULES` und `interpretation_contract(prepared)` definieren jetzt
+denselben allgemeinen Vertrag für alle Aktien. Der Request enthält je Code
+Regeln, enabled und konkrete zulässige Observation-/Berechnungskennungen.
+Die Anweisung erklärt die Auswahl; der Validator berechnet die Liste erneut
+aus dem geprüften Snapshot und vertraut keiner vom Modell gelieferten Liste.
+
+| Code | Zulässiger Beleg |
+| --- | --- |
+| NUMERICAL_INCREASE | Mindestens eine positive absolute_change-/growth_percent-Berechnung |
+| NUMERICAL_DECREASE | Mindestens eine negative absolute_change-/growth_percent-Berechnung |
+| ADJUSTMENT_GAP | Mindestens eine adjustment_gap-Berechnung, unabhängig vom Vorzeichen |
+| CURATED_ROUNDING | Mindestens ein Fakt mit rounded exakt true; keine Berechnungsreferenzen |
+| LIMITED_COVERAGE | Tatsächliche missing_metrics und mindestens ein vorhandener Kontextfakt; keine Berechnungsreferenzen |
+
+Bei Berechnungscodes sind Observation-Referenzen optional, müssen aber zu den
+tatsächlich ausgewählten Berechnungen gehören. Positive oder negative
+margin_percent-Werte sind keine Wachstumsbelege. Nulländerungen sind weder
+Anstieg noch Rückgang. Unbekannte, doppelte und sachfremde Referenzen werden
+abgewiesen. Bereits ungültige Aussagen werden nicht freigegeben; die bisherigen
+Lücken bei sachfremden Zusatzreferenzen werden strenger geprüft.
+
+Fehlerformat: INTERPRETATION_BINDING:<Code>:<sicherer Grund>, beispielsweise
+WRONG_CALCULATION_KIND, WRONG_SIGN, FACT_NOT_ROUNDED oder
+MISSING_INFORMATION_NOT_ESTABLISHED. Auch die bestehenden Pilot-Fehlerkanäle
+reichen diese begrenzte Meldung weiter. Keine IDs, Finanzwerte, freien
+Exception-Texte oder Modellantworten werden dafür veröffentlicht.
+
+`analysis.py` und das bestehende Ausgabeschema bleiben unverändert: Die getrennten
+Berechnungsarten und Referenzfelder sind bereits geeignet. Die neue Tabelle ist
+zusätzlicher Request-Kontext; Fakten-Digest und strikte Ausgabeprüfung bleiben.
+Kostenprüfung umfasst weiterhin den gesamten Request einschließlich Tabelle.
+
+41 fokussierte Offline-Tests bestanden: alle fünf Codes, Umsatz-/EBITDA-Richtungen,
+positive/negative Margen und Gaps, Rundung, Datenlücken, falsche Referenzen,
+sichere Diagnoseweitergabe und allgemeiner PNE-/Zeiss-/DroneShield-Vertrag samt
+abweichendem Zeiss-Geschäftsjahr. Vollständige Ausgaben sind ausschließlich
+simuliert (simulated=true, model_executed=false), keine neue echte KI-Auswertung.
+Keine API-/Dogado-/DB-Verbindung, Actions, Reservierung oder Rechteänderung.
+Der funktionierende serverseitige Schlüsselzugriff wurde nicht geändert.
+
+Nächster konkreter Schritt: separater Auftrag zur erneuten einmaligen Live-Abnahme
+des neuen Commits, mit frischem Read-only-Snapshot, erneuter Preis-/Kostenprüfung
+und neuer ausdrücklich freigegebener Reservierung/Ausführung. Der erste Versuch
+bleibt verbraucht. Dieser Offline-Auftrag erteilt keine Freigabe für einen weiteren
+Modellaufruf oder ein neues Secret. Die folgenden Abschnitte dokumentieren den
+historischen Ausgangsvertrag und dessen damaligen Vorbereitungsstand.
+
 Basis c076ed16e6e6a7d03d41dd0bd28417c7926485ba. Keine neue DB-Verifikation,
 Modellabfrage, Archivierung oder Actions-Ausführung erforderlich/freigegeben.
 

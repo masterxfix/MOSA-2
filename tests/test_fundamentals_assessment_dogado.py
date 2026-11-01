@@ -36,6 +36,25 @@ class DogadoTests(unittest.TestCase):
  def test_missing_exact_config_stops_before_marker_or_post(self):
   scope=self.scope();scope['existing_key']=Mock(side_effect=RuntimeError('CONFIG_NOT_VISIBLE_OR_READABLE'));scope['reserve_ai']=Mock()
   r=scope['dogado_pilot'](self.data());self.assertFalse(r['ok']);self.assertEqual(r['error_code'],'CONFIG_NOT_VISIBLE_OR_READABLE');self.assertEqual(r['model_calls'],0);scope['reserve_ai'].assert_not_called()
+ def test_interpretation_failure_reports_only_safe_code_and_reason(self):
+  scope=self.scope();data=self.data();events=[]
+  scope['existing_key']=lambda *args:dict(key='synthetic-local-key',hash='synthetic-config-hash',identity={})
+  scope['reserve_ai']=lambda marker:events.append('marker');real_loader=scope['load_modules']
+  def modules(bundle):
+   a,t=real_loader(bundle)
+   class Fake:
+    def __init__(self,*args,**kwargs):pass
+    def __call__(self,req,**kwargs):
+     events.append('post');p=json.loads(req['input'])['snapshot']
+     ref=next(c['calculation_id'] for c in p['calculations'] if c['kind']=='margin_percent')
+     def invalid(output):
+      output['interpretations']=[dict(code='NUMERICAL_INCREASE',observation_ids=[],calculation_ids=[ref])];return output
+     return response(req,invalid)
+   t.OpenAIResponsesTransport=Fake;return a,t
+  scope['load_modules']=modules;r=scope['dogado_pilot'](data)
+  self.assertFalse(r['ok']);self.assertEqual(events,['marker','post'])
+  self.assertEqual(r['error_code'],'INTERPRETATION_BINDING:NUMERICAL_INCREASE:WRONG_CALCULATION_KIND')
+  self.assertNotIn('synthetic-local-key',json.dumps(r));self.assertNotIn('calculation_ids',json.dumps(r));self.assertNotIn('factual_claims',r)
  def test_config_permission_and_php_failure_are_safe(self):
   scope=self.scope()
   scope['protection_diagnosis']=Mock(side_effect=PermissionError('private path not to publish'))

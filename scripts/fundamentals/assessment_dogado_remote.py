@@ -158,7 +158,8 @@ def dogado_pilot(data):
         report.update(ok=True,stage='SUCCESS',mosa_unchanged=True)
     except Exception as error:
         allowed={'CONFIG_OTHER_READ_ACCESS','CONFIG_PROCESS_IDENTITY','CONFIG_SYMLINK','CONFIG_NOT_REGULAR','CONFIG_OWNER','CONFIG_HARDLINK','CONFIG_MODE','CONFIG_GROUP_READ_UNTRUSTED','CONFIG_NOT_READABLE','PARENT_SYMLINK','PARENT_NOT_DIRECTORY','PARENT_OWNER','PARENT_WRITABLE_OR_SPECIAL','MARKER_ALREADY_CONSUMED','CONFIG_PATH_OR_PROTECTION','CONFIG_KEY_MISSING','CONFIG_PHP_FAILED','CONFIG_NOT_VISIBLE_OR_READABLE','CONFIG_PROTECTION','CONFIG_PHP_UNAVAILABLE','CONFIG_LOADER_FAILED','CONFIG_CHANGED','INPUT_BOUND','PILOT_BINDING','INPUT_DIGEST','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','OUTPUT_PREFLIGHT_BOUND','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET','INTERPRETATIONS_MISSING'}
-        report.update(stage=phase,error_code=str(error) if str(error) in allowed else 'DOGADO_PILOT_STOP_NO_RETRY')
+        detail=a.interpretation_error_code(error) if 'a' in locals() else None
+        report.update(stage=phase,error_code=detail or (str(error) if str(error) in allowed else 'DOGADO_PILOT_STOP_NO_RETRY'))
     # No remote stdout/stderr, key or config text is forwarded; only this allowlisted report.
     raw=json.dumps(report,ensure_ascii=True)
     if key and key in raw:return dict(ok=False,error_code='SECRET_OUTPUT_BLOCKED',model_calls=report['model_calls'])

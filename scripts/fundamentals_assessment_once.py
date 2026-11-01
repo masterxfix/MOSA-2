@@ -6,7 +6,7 @@ from decimal import Decimal
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from scripts import fundamentals_pilot_once as shared
 from scripts.fundamentals.analysis import build
-from scripts.fundamentals.assessment import ResponsesAdapter,AssessmentError,prepare,validate,canonical,need
+from scripts.fundamentals.assessment import ResponsesAdapter,AssessmentError,prepare,validate,canonical,need,interpretation_error_code
 from scripts.fundamentals.responses_transport import OpenAIResponsesTransport
 PRICE=dict(model='gpt-6.1-sol',input_per_million='2.75',output_per_million='11',checked_at='2026-11-01T16:07:08+00:00',source_url='https://developers.openai.com/api/docs/models/gpt-6.1-sol')
 
@@ -79,7 +79,7 @@ def execute(env):
         report.update(ok=True,stage='SUCCESS')
     except Exception as error:
         allowed={'PILOT_IDENTITY','PILOT_COUNTS','PILOT_PERIOD_UNIT','PILOT_ORIGIN','DB_READ_FAILED','MARKER_FAILED','WORKFLOW_BINDING','SECRET_MISSING','OUTPUT_PREFLIGHT_BOUND','INTERPRETATIONS_MISSING','DB_CHANGED','INPUT_TOKEN_BOUND','COST_LIMIT','STALE_PRICE','MODEL_TRANSPORT_FAILED','MODEL_INCOMPLETE','MODEL_REFUSAL_OR_TOOL','OUTPUT_SCHEMA','INPUT_DIGEST','INVOCATION_BINDING','FACT_REFERENCE','FACT_BINDING','INCOMPLETE_FACTS','CALCULATION_REFERENCE','CALCULATION_BINDING','INCOMPLETE_CALCULATIONS','INTERPRETATION_REFERENCE','INTERPRETATION_BINDING','MISSING_BINDING','USAGE_MISSING','USAGE_INVALID','USAGE_OVER_BUDGET'}
-        report.update(stage=stage,error_code=str(error) if isinstance(error,AssessmentError) and str(error) in allowed else 'PILOT_STOP_NO_RETRY',outcome='NO_RETRY')
+        report.update(stage=stage,error_code=interpretation_error_code(error) or (str(error) if isinstance(error,AssessmentError) and str(error) in allowed else 'PILOT_STOP_NO_RETRY'),outcome='NO_RETRY')
     # Only bounded approved metadata can reach public logs, even after malformed provider output.
     if report.get('actual_model') not in (None,'gpt-6.1-sol'):report['actual_model']='UNEXPECTED_MODEL'
     if report.get('response_status') not in (None,'completed','incomplete','failed','cancelled','queued','in_progress'):report['response_status']='UNEXPECTED_STATUS'
