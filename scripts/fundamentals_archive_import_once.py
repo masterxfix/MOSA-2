@@ -13,7 +13,7 @@ from scripts import fundamentals_pilot_once as pilot
 from scripts.fundamentals import archived_zeiss as archive
 from scripts.fundamentals_archive_diagnose import guard, ERRORS
 
-AUTHORIZATION='MOSA2-ZEISS-ARCHIVE-IMPORT-20261101:'
+AUTHORIZATION='MOSA2-ZEISS-QUALIFIED-IMPORT-20261101:'
 
 def source():
     definitions=archive.source().split("\nif __name__=='__main__':")[0]
@@ -61,6 +61,7 @@ def execute(env):
             digest=hashlib.sha256(json.dumps(plan,sort_keys=True,ensure_ascii=True).encode()).hexdigest()
             if digest!=reply['plan_sha256']:raise ValueError('PLAN_CHANGED')
             report['qualified_metrics']=len(plan['metrics']);report['nested_tables_supported']=True
+            report['unqualified_metrics']=plan['unqualified_metrics']
             with pilot.access.tunnel(transport,{}) as port:
                 stage='DB_PREFLIGHT'
                 db_env=dict(env,FUNDAMENTALS_PROFILE='zeiss')

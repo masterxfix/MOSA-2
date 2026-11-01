@@ -1,5 +1,34 @@
 # Zeiss: nested-table correction and archive-only import
 
+## Qualified partial import after c9ea06b
+
+Run 41302603556 passed archive, table and EPS qualification, then stopped at
+EBITDA_QUALIFICATION before connecting to the DB or creating the application
+marker. Parser version 3 now separates the ten mandatory table metrics from
+optional narrative EBITDA. All table, EPS, year, number and unit checks remain
+mandatory. Exactly one match of the already qualified EBITDA pattern adds its
+two yearly facts; zero or multiple matches add no EBITDA facts/catalog entry.
+No new wording, estimates or EBIT/EBITA derivations are accepted.
+
+The bounded plan and public result explicitly list unqualified EBITDA with
+EBITDA_PATTERN_NOT_MATCHED or EBITDA_MULTIPLE_MATCHES. Only observed metric keys
+enter the catalog plan. parse_status remains partial; the unchanged complete
+original archive retains all unstructured information.
+
+New manual workflow: fundamentals-zeiss-qualified-import.yml. Separate exact-SHA
+authorization: MOSA2-ZEISS-QUALIFIED-IMPORT-20261101:<commit>. Separate exclusive
+application marker: fundamentals-zeiss-qualified-import-20261101-01.consumed.
+No rerun of the preceding workflow, no provider acquisition and no original
+archive changes. The existing archive verification, bounded transfer, PHP core
+validation, DB preflight, immediately-before-apply reservation, atomic write,
+independent readback and targeted EXPLAIN ANALYZE path are reused unchanged.
+
+Focused tests additionally validate ten metrics without EBITDA through the full
+PHP core, unique optional EBITDA, missing/ambiguous/invalid EBITDA, mandatory
+EPS/table rejection and explicit October-to-September fiscal periods.
+
+## Previous nested-table preparation
+
 Starting commit: fbd11218078eccfe7ac4e7cc1211ef5c9a286692.
 Confirmed first failure: NESTED_TABLE, diagnosed in run 41302067314 against
 the immutable original archive. No new provider acquisition is authorized.

@@ -1,6 +1,6 @@
 """Appended to the reviewed in-place archive reader; no raw stdout or provider IO."""
-APPLY_MARKER='fundamentals-zeiss-archive-import-20261101-01.consumed'
-APPLY_AUTHORIZATION='MOSA2-ZEISS-ARCHIVE-IMPORT-20261101:'
+APPLY_MARKER='fundamentals-zeiss-qualified-import-20261101-01.consumed'
+APPLY_AUTHORIZATION='MOSA2-ZEISS-QUALIFIED-IMPORT-20261101:'
 
 def prepared_plan(data):
     global phase, archive_verified

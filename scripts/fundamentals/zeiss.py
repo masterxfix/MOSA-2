@@ -105,14 +105,19 @@ def parse(raw, observed_at):
         raise ValueError('EPS_BASIC_QUALIFICATION')
     pattern = r'Das Ergebnis vor Zinsen, Steuern und Abschreibungen\s*\(EBITDA\) betrug für das abgelaufene Geschäftsjahr\s+('+NUMBER+r')\s*Mio\.\s*€\s*\(Vorjahr:\s*('+NUMBER+r')\s*Mio\.\s*€\)'
     matches = list(re.finditer(pattern, text))
-    if len(matches) != 1: raise ValueError('EBITDA_QUALIFICATION')
-    for i, year in enumerate((2025, 2024), 1):
-        add('ebitda', matches[0][i], year, f'html-text-v1:{matches[0].start(i)}:{matches[0].end(i)}')
+    unqualified = []
+    if len(matches) == 1:
+        for i, year in enumerate((2025, 2024), 1):
+            add('ebitda', matches[0][i], year, f'html-text-v1:{matches[0].start(i)}:{matches[0].end(i)}')
+    else:
+        unqualified.append(dict(metric_key='ebitda', reason='EBITDA_PATTERN_NOT_MATCHED' if not matches else 'EBITDA_MULTIPLE_MATCHES'))
+    qualified = {r['metric_key'] for r in observations}
     units = [dict(unit_key=k,unit_version='1',display_name=name,dimension_key=dim,
                   monetary_currency_code=currency,scale_numerator=scale,scale_denominator=denom,status='frozen')
         for k,name,dim,currency,scale,denom in [('EUR_MILLION','Millionen Euro','monetary','EUR','1000000','1'),
             ('EUR_PER_SHARE','Euro je Aktie','monetary_per_share','EUR','1','1'),('PERCENT','Prozent','ratio',None,'1','100')]]
-    return dict(fiscal_year_start_month=10, publication_date=None, parser_key='zeiss_meditec_results_de',parser_version='2',
+    return dict(fiscal_year_start_month=10, publication_date=None, parser_key='zeiss_meditec_results_de',parser_version='3',
+        unqualified_metrics=unqualified,
         parse_status='partial',source=SOURCE,units=units,observations=observations,
         metrics=[dict(metric_key=k,display_name=v[0],category='income',value_type='decimal',value_semantics=v[1],
-                      dimension_key=v[2],status='active') for k,v in sorted(DEFINITIONS.items())])
+                      dimension_key=v[2],status='active') for k,v in sorted(DEFINITIONS.items()) if k in qualified])

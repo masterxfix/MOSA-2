@@ -19,7 +19,7 @@ class WritableMarkerFiles(ReadOnlyFiles):
         if not flags & self.O_CREAT:return super().open(path,flags,dir_fd=dir_fd)
         assert flags==self.O_WRONLY|self.O_CREAT|self.O_EXCL|self.O_NOFOLLOW and mode==0o600
         full=self.full(path,dir_fd)
-        assert full.endswith('/locks/fundamentals-zeiss-archive-import-20261101-01.consumed')
+        assert full.endswith('/locks/fundamentals-zeiss-qualified-import-20261101-01.consumed')
         if full in self.contents:raise FileExistsError()
         self.contents[full]=b'';self.writes.append(full)
         self.nodes[full]=SimpleNamespace(st_mode=stat.S_IFREG|0o600,st_uid=10317,st_gid=1003,st_nlink=1,st_size=0)
