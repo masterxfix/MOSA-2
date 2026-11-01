@@ -33,9 +33,30 @@ DEFS['profit_before_tax'] = DEFINITIONS['profit_before_tax'][:2]
 DEFS['ifrs_operating_profit'] = ('IFRS Operating Profit / Loss',
     'Reported consolidated IFRS profit or loss from operating activities; not assumed equivalent to EBIT or EBITDA.')
 
+OASIS_CATALOG_DOCTYPE = re.compile(
+    br'<!DOCTYPE\s+catalog\s+PUBLIC\s+["\']-//OASIS//DTD Entity Resolution XML Catalog V1\.0//EN["\']\s+'
+    br'["\']https?://www\.oasis-open\.org/committees/entity/release/1\.0/catalog\.dtd["\']\s*>', re.I)
+
 
 def need(ok, code):
     if not ok: raise ValueError('ESEF_' + code)
+
+
+def safe_xml_body(body, member):
+    """Reject XML declarations except the standard package catalog doctype.
+
+    The catalog DTD is not needed by the bounded parser. Remove that exact
+    declaration from the temporary copy so no external DTD can be resolved.
+    """
+    upper = body.upper()
+    need(b'<!ENTITY' not in upper, 'XML_DTD')
+    if b'<!DOCTYPE' not in upper:
+        return body
+    path = tuple(part.casefold() for part in PurePosixPath(member).parts[-2:])
+    need(path == ('meta-inf', 'catalog.xml'), 'XML_DTD')
+    sanitized, count = OASIS_CATALOG_DOCTYPE.subn(b'', body, count=1)
+    need(count == 1 and b'<!DOCTYPE' not in sanitized.upper(), 'XML_DTD')
+    return sanitized
 
 
 def decimal(value):
@@ -79,8 +100,7 @@ def package(raw):
                 if suffix not in ('.xhtml', '.html', '.htm', '.xsd', '.xml'): continue
                 body = z.read(e)  # CRC and actual decompression checked by zipfile.
                 need(len(body) == e.file_size, 'ZIP_SIZE')
-                no_html5 = re.sub(br'<!DOCTYPE\s+html\s*>', b'', body, flags=re.I)
-                need(b'<!ENTITY' not in no_html5.upper() and b'<!DOCTYPE' not in no_html5.upper(), 'XML_DTD')
+                body = safe_xml_body(body, e.filename)
                 dest = root.joinpath(*PurePosixPath(e.filename).parts)
                 dest.parent.mkdir(parents=True, exist_ok=True); dest.write_bytes(body)
                 if suffix in ('.xhtml', '.html', '.htm'):

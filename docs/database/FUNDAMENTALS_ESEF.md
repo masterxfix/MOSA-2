@@ -77,7 +77,10 @@ second issuer. A source/qualification failure before writes permits the other
 issuer independently. Final readback also verifies failed issuers remained empty.
 
 ZIP limit 64 MiB; 2048 entries, 256 MiB expanded, 64 MiB per entry, ratio 250.
-Paths, duplicates, links, encryption, CRC, DTD/entity declarations checked.
+Paths, duplicates, links, encryption, CRC, DTD/entity declarations checked. The
+standard OASIS XML Catalog doctype is accepted only at `META-INF/catalog.xml`
+and removed from the temporary copy before parsing; all entities and other
+DOCTYPE forms remain blocked, so no external DTD is resolved.
 Only XHTML/XML/XSD members are written under a temporary directory removed in a
 finally path. No complete ZIP/XHTML/PDF is persisted or uploaded as an artifact.
 Only compact evidence (<=128 KiB) is privately archived with the existing secure

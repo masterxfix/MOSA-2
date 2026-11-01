@@ -128,6 +128,21 @@ class EsefTests(unittest.TestCase):
             with esef.package(zipped('0'*1000000)):pass
         with self.assertRaisesRegex(ValueError,'XML_DTD'):
             with esef.package(zipped('<!DOCTYPE x [<!ENTITY a SYSTEM "https://invalid/">]>'+document())):pass
+        catalog = '<?xml version="1.0"?><!DOCTYPE catalog PUBLIC "-//OASIS//DTD Entity Resolution XML Catalog V1.0//EN" "http://www.oasis-open.org/committees/entity/release/1.0/catalog.dtd"><catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog"/>'
+        buf=io.BytesIO()
+        with zipfile.ZipFile(buf,'w',zipfile.ZIP_DEFLATED) as z:
+            z.writestr('META-INF/catalog.xml',catalog)
+            z.writestr('report/reports/annual.xhtml',document())
+        with esef.package(buf.getvalue()) as (root,reports):
+            self.assertEqual(len(reports),1)
+            self.assertNotIn(b'<!DOCTYPE', (root/'META-INF/catalog.xml').read_bytes())
+        dangerous = catalog.replace('<catalog ', '<!ENTITY bad SYSTEM "https://invalid/"><catalog ')
+        buf=io.BytesIO()
+        with zipfile.ZipFile(buf,'w',zipfile.ZIP_DEFLATED) as z:
+            z.writestr('META-INF/catalog.xml',dangerous)
+            z.writestr('report/reports/annual.xhtml',document())
+        with self.assertRaisesRegex(ValueError,'XML_DTD'):
+            with esef.package(buf.getvalue()): pass
         with esef.package(zipped(document())) as (root,reports):
             self.assertTrue(root.exists());self.assertEqual(len(reports),1)
         self.assertFalse(root.exists())
