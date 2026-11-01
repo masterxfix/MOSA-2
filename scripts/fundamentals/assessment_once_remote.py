@@ -1,9 +1,10 @@
 """Appended to qualified private directory/archive functions; one exclusive marker only."""
 AI_ONCE='fundamentals-ai-droneshield-20261101-01'
-EXECUTIONS.add(AI_ONCE)
+AI_PROFILES={AI_ONCE:'.github/workflows/fundamentals-assessment-once.yml','fundamentals-ai-droneshield-dogado-20261101-01':'.github/workflows/fundamentals-assessment-dogado-once.yml'}
+EXECUTIONS.update(AI_PROFILES)
 def reserve_ai(data):
-    need(data['execution']==AI_ONCE and data['isin']=='AU000000DRO2' and data['model']=='gpt-6.1-sol'
-         and data['workflow']=='.github/workflows/fundamentals-assessment-once.yml'
+    need(data['execution'] in AI_PROFILES and data['isin']=='AU000000DRO2' and data['model']=='gpt-6.1-sol'
+         and data['workflow']==AI_PROFILES[data['execution']]
          and re.fullmatch('[0-9a-f]{64}',data['input_digest']) is not None,'AI_BINDING')
     measured=checked(data)
     token=json.dumps({k:data[k] for k in ('execution','commit','isin','model','workflow','input_digest')},sort_keys=True).encode()
@@ -11,8 +12,8 @@ def reserve_ai(data):
     os.umask(0o077)
     fd=checked_fd(os,ROOT+'/locks',base_identity=tuple(measured[BASE]))
     try:
-        create_file(fd,AI_ONCE+'.consumed',token)
-        raw=read_file(fd,AI_ONCE+'.consumed')
+        create_file(fd,data['execution']+'.consumed',token)
+        raw=read_file(fd,data['execution']+'.consumed')
         need(raw==token,'AI_MARKER_READBACK')
         return dict(sha256=hashlib.sha256(raw).hexdigest(),reserved=True)
     finally:os.close(fd)
