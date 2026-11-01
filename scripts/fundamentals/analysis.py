@@ -1,15 +1,53 @@
 """On-demand deterministic AI input. No model, provider or persistence."""
-from decimal import Decimal as D
+from decimal import Decimal as D, InvalidOperation
 from datetime import date
 IMPORTANT=('revenue','ebit','ebitda','profit_after_tax','operating_cashflow')
+class SnapshotError(ValueError):
+    pass
+
+SNAPSHOT_CODES={'CURRENT_SHAPE','CURRENT_REFERENCE','FACT_SHAPE','PERIOD_INVALID','DECIMAL_INVALID','SOURCE_REFERENCE','SNAPSHOT_VALIDATION_FAILED'}
+
+def validate_input(asset,sources):
+    if not isinstance(asset,dict):raise SnapshotError('FACT_SHAPE')
+    if type(asset.get('current')) is not dict:raise SnapshotError('CURRENT_SHAPE')
+    facts=asset.get('facts')
+    if type(facts) is not list or not all(type(r) is dict for r in facts):raise SnapshotError('FACT_SHAPE')
+    if type(sources) is not list or not all(type(s) is dict and 'id' in s and 'source_type' in s for s in sources):raise SnapshotError('SOURCE_REFERENCE')
+    ids=set();source_ids={str(s['id']) for s in sources}
+    required={'id','metric_key','value_decimal','unit_key','unit_version','period_type','fiscal_year','fiscal_quarter','period_start','period_end','source_id','fetch_id','field_path','evidence_sha256','parser_key','parse_status','monetary_currency_code','scale_numerator','scale_denominator'}
+    for r in facts:
+        if not required<=r.keys() or str(r['id']) in ids:raise SnapshotError('FACT_SHAPE')
+        ids.add(str(r['id']))
+        if str(r['source_id']) not in source_ids or not r['fetch_id'] or not r['field_path'] or not isinstance(r['evidence_sha256'],str) or len(r['evidence_sha256'])!=64:raise SnapshotError('SOURCE_REFERENCE')
+        try:
+            start=date.fromisoformat(r['period_start']);end=date.fromisoformat(r['period_end'])
+            if start>=end or r['period_type'] not in ('fy','fq') or int(r['fiscal_year'])!=end.year:raise ValueError()
+            if r['period_type']=='fy' and r['fiscal_quarter'] is not None:raise ValueError()
+            if r['period_type']=='fq' and str(r['fiscal_quarter']) not in ('1','2','3','4'):raise ValueError()
+        except (ValueError,TypeError):raise SnapshotError('PERIOD_INVALID') from None
+        try:
+            for k in ('value_decimal','scale_numerator','scale_denominator'):
+                if not isinstance(r[k],str) or not D(r[k]).is_finite():raise InvalidOperation()
+            if D(r['scale_numerator'])<=0 or D(r['scale_denominator'])<=0:raise InvalidOperation()
+        except (InvalidOperation,ValueError,TypeError):raise SnapshotError('DECIMAL_INVALID') from None
+    for slot,rows in asset['current'].items():
+        if not isinstance(slot,str) or type(rows) is not list or len(rows)!=1 or type(rows[0]) is not dict or 'observation_id' not in rows[0]:raise SnapshotError('CURRENT_SHAPE')
+
 def build(asset,sources):
+    try:
+        validate_input(asset,sources)
+        return _build(asset,sources)
+    except SnapshotError:raise
+    except (KeyError,TypeError,ValueError,AttributeError,InvalidOperation):raise SnapshotError('SNAPSHOT_VALIDATION_FAILED') from None
+
+def _build(asset,sources):
     facts=asset['facts']; byid={str(r['id']):r for r in facts}
     current=[]
     for slot,rows in asset['current'].items():
         for c in rows:
-            if str(c['observation_id']) not in byid:raise ValueError('CURRENT_REFERENCE')
+            if str(c['observation_id']) not in byid:raise SnapshotError('CURRENT_REFERENCE')
             r=byid[str(c['observation_id'])]
-            if slot!=r['metric_key']+':'+r['period_type']:raise ValueError('CURRENT_REFERENCE')
+            if slot!=r['metric_key']+':'+r['period_type']:raise SnapshotError('CURRENT_REFERENCE')
             current.append(str(c['observation_id']))
     source_ids={str(r['source_id']) for r in facts}
     out=dict(contract='mosa2-ai-analysis-input-v1',identity=dict(id=asset['id'],name=asset['name'],isin=[x['normalized_value'] for x in asset['identifiers']]),
@@ -31,7 +69,7 @@ def build(asset,sources):
         rows=sorted(rows,key=lambda r:r['period_end'])
         for a,b in zip(rows,rows[1:]):
             if int(b['fiscal_year'])-int(a['fiscal_year'])!=1:continue
-            if a['period_end']==b['period_end']:raise ValueError('AMBIGUOUS_PERIOD')
+            if a['period_end']==b['period_end']:raise SnapshotError('PERIOD_INVALID')
             av,bv=D(a['value_decimal']),D(b['value_decimal'])
             calc('absolute_change',[a,b],bv-av,unit=a['unit_key'])
             if av>0:calc('growth_percent',[a,b],(bv/av-1)*100)

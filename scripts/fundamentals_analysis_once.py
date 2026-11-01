@@ -3,7 +3,7 @@ import os,json,sys,subprocess,time
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from scripts import fundamentals_pilot_once as shared
-from scripts.fundamentals.analysis import build
+from scripts.fundamentals.analysis import build, SnapshotError, SNAPSHOT_CODES
 
 PHASES={'SSH_CONNECT','DB_CONNECT','SCHEMA_CHECK','ASSET_DISCOVERY','FUNDAMENTAL_READ','CURRENT_READ','SOURCE_READ','PERFORMANCE_CHECK','JSON_SERIALIZATION','SNAPSHOT_BUILD','READBACK_VALIDATION'}
 ERRORS={'INVALID_UTF8_OR_JSON','DB_OPERATION_FAILED','VALIDATION_FAILED'}
@@ -37,6 +37,8 @@ def execute(env):
             if any(f['origin']=='unknown' for f in snapshot['facts']):raise ValueError('SOURCE_REFERENCE')
         summaries=[dict(name=s['identity']['name'],observations=len(s['facts']),current=len(s['current_observation_ids']),metric_groups=len({f['metric'] for f in s['facts']}),calculation_types=sorted({c['kind'] for c in s['calculations']}),curated_rounded=any(f['rounded'] for f in s['facts'])) for s in snapshots]
         return dict(ok=True,contract='mosa2-ai-analysis-input-v1',equities=len(snapshots),successful_snapshots=len(snapshots),with_fundamentals=sum(bool(s['facts']) for s in snapshots),without_fundamentals=sum(not s['facts'] for s in snapshots),excluded_etfs=data['excluded_etfs'],excluded_other=data['excluded_other'],db_unchanged=data['db_unchanged'],validated_totals=data['validated_totals'],fact_references='PASS',source_references='PASS',provider_requests=0,db_writes=0,model_calls=0,ssh_setup_ms=ssh_ms,performance=data['performance'],summary=summaries)
-    except Exception:return dict(ok=False,stage=stage,error_code='SAFE_PHASE_FAILURE',provider_requests=0,db_writes=0)
+    except Exception as error:
+        code=str(error) if isinstance(error,SnapshotError) and str(error) in SNAPSHOT_CODES else ('SNAPSHOT_VALIDATION_FAILED' if stage=='SNAPSHOT_BUILD' else 'SAFE_PHASE_FAILURE')
+        return dict(ok=False,stage=stage,error_code=code,provider_requests=0,db_writes=0)
 if __name__=='__main__':
     r=execute(os.environ);print(shared.access.public_text(r,os.environ));sys.exit(0 if r['ok'] else 1)

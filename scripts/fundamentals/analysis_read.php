@@ -8,6 +8,12 @@
  $rows=query($p,'SELECT * FROM '.$t.' LIMIT 257');check(count($rows)<=256,'bound');$encoded=[];
  foreach($rows as $r){foreach($r as &$v)$v=$v===null?null:bin2hex((string)$v);unset($v);$encoded[]=canonical($r);}sort($encoded);$out[$t]=$encoded;
  }return hash('sha256',canonical($out));}
+ /** Wire contract: current is always an object; preserve internal arrays/counts. */
+ function analysisWireAssets(array $assets):array {
+     foreach($assets as &$asset)$asset['current']=(object)$asset['current'];
+     unset($asset);return $assets;
+ }
+ if(realpath($_SERVER['SCRIPT_FILENAME']??'')!==__FILE__)return;
  $phase='DB_CONNECT';
  try {
  $i=json_decode(stream_get_contents(STDIN),true,64,JSON_THROW_ON_ERROR);$p=connection($i['password'],'127.0.0.1',$i['port']);
@@ -37,5 +43,5 @@
  $totals=[];foreach(['m2_fundamental_observations'=>45,'m2_fundamental_current'=>23,'m2_market_observations'=>28,'m2_market_current'=>5] as $t=>$n){$totals[$t]=(int)$p->query('SELECT COUNT(*) FROM '.$t)->fetchColumn();same($totals[$t],$n,'baseline_count');}
  foreach(['DE000A0JBPG2'=>[11,6],'DE0005313704'=>[20,10],'AU000000DRO2'=>[14,7]] as $isin=>$counts){$matches=array_values(array_filter($out,fn($a)=>in_array($isin,array_column($a['identifiers'],'normalized_value'),true)));same(count($matches),1,'required_asset');same(count($matches[0]['facts']),$counts[0],'required_observations');same(count($matches[0]['current']),$counts[1],'required_current');}
  $p->commit();$phase='JSON_SERIALIZATION';
- echo json_encode(['ok'=>true,'validated_totals'=>$totals,'assets'=>$out,'sources'=>$sources,'excluded_etfs'=>count(array_filter($assets,fn($a)=>$a['asset_class']==='etf')),'excluded_other'=>count(array_filter($assets,fn($a)=>!in_array($a['asset_class'],['equity','etf'],true))),'db_unchanged'=>true,'performance'=>$performance],JSON_THROW_ON_ERROR);
+ echo json_encode(['ok'=>true,'validated_totals'=>$totals,'assets'=>analysisWireAssets($out),'sources'=>$sources,'excluded_etfs'=>count(array_filter($assets,fn($a)=>$a['asset_class']==='etf')),'excluded_other'=>count(array_filter($assets,fn($a)=>!in_array($a['asset_class'],['equity','etf'],true))),'db_unchanged'=>true,'performance'=>$performance],JSON_THROW_ON_ERROR);
  }catch(Throwable $e){$code=$e instanceof JsonException?'INVALID_UTF8_OR_JSON':($e instanceof PDOException?'DB_OPERATION_FAILED':'VALIDATION_FAILED');echo json_encode(['ok'=>false,'phase'=>$phase,'error_code'=>$code]);exit(1);}
