@@ -11,7 +11,7 @@ from scripts import collector_actions as access
 from scripts.fundamentals import zeiss
 from scripts.fundamentals.archived_zeiss import load
 
-AUTHORIZATION='MOSA2-ZEISS-ARCHIVE-DIAGNOSE-20261101:'
+AUTHORIZATION='MOSA2-ZEISS-ARCHIVE-DIAGNOSE-V2-20261101:'
 ERRORS={'REPORT_IDENTITY_OR_UNITS','NESTED_TABLE','AMBIGUOUS_RESULTS_TABLE','FISCAL_COLUMN_ORDER',
         'DUPLICATE_METRIC','RESULT_COLUMNS','RESULT_VALUE_OR_UNIT','EPS_BASIC_QUALIFICATION','EBITDA_QUALIFICATION','HTTP_RESPONSE'}
 
@@ -37,6 +37,8 @@ def diagnose(raw,metadata):
     tables=zeiss.Tables()
     try:tables.feed(raw.decode('utf-8'))
     except ValueError:return result
+    result['matching_tables']=sum(set(zeiss.ROWS).issubset({r[0] for r in t if r}) for t in tables.tables)
+    result['expected_headings_present']=all(x['exact'] for x in result['identity_checks'])
     result['tables']=[]
     for ti,table in enumerate(tables.tables[:12]):
         rows=[];headers=[]
@@ -51,20 +53,34 @@ def diagnose(raw,metadata):
                         types.append('EMPTY' if not c else 'LABEL' if c==cell else 'NUMBER' if re.fullmatch(zeiss.NUMBER,c) else 'PERCENT' if re.fullmatch(zeiss.NUMBER+r'\s*%',c) else 'EURO' if re.fullmatch(zeiss.NUMBER+r'\s*€',c) else 'OTHER')
                     rows.append(dict(row=ri,label_cell=ci,metric=keys[0],exact=cell in zeiss.ROWS,cells=types))
         if rows:result['tables'].append(dict(table=ti,headers=headers[:4],rows=rows[:24]))
+    matching=[t for t in result['tables'] if len({r['metric'] for r in t['rows']})==len(zeiss.ROWS)]
+    result['recognized_metric_keys']=sorted({r['metric'] for t in result['tables'] for r in t['rows']})
+    result['column_structure_valid']=len(matching)==1 and all(len([c for c in r['cells'] if c!='EMPTY'])==4 for r in matching[0]['rows'])
+    result['number_unit_formats_valid']=bool(matching) and all(
+        [c for c in r['cells'] if c!='EMPTY'][1:3]==[{'monetary':'NUMBER','monetary_per_share':'EURO','ratio':'PERCENT'}[zeiss.DEFINITIONS[r['metric']][2]]]*2
+        for t in matching for r in t['rows'])
+    result['first_validation_deviation']=error
     return result
 
 def execute(env):
     report=dict(ok=False,provider_requests=0,database_access=False,archive_writes=False)
+    phase='GUARDS'
     try:
         guard(env)
+        phase='CONFIGURATION'
+        config=access.profile.configuration(env)
+        phase='SSH_CONNECT'
         import paramiko
         logging.getLogger('paramiko').disabled=True
-        with access.ssh_client(access.profile.configuration(env),{},paramiko) as transport:
-            raw,stored=load(transport)
-            report.update(archive='PASS',diagnosis=diagnose(raw,stored['metadata']),ok=True)
+        with access.ssh_client(config,{},paramiko) as transport:
+            phase='SSH_REMOTE_DIAGNOSIS'
+            report=load(transport)
     except Exception as exc:
-        allowed={'RUN_GUARD','ARCHIVE_VALIDATION_FAILED','ARCHIVE_TIME_INVALID','ARCHIVE_HTTP_METADATA_INVALID'}
-        report['error']=str(exc) if str(exc) in allowed else 'DIAGNOSTIC_STOP'
+        allowed={'RUN_GUARD','SSH_OUTPUT_LIMIT','SSH_STDERR_LIMIT','SSH_COMMAND_TIMEOUT','SSH_SESSION_CHANNEL_REJECTED',
+            'SSH_EXEC_REQUEST_REJECTED','REMOTE_STDERR','RESULT_BOUND','REMOTE_INVALID_JSON','REMOTE_RESULT_INVALID'}
+        fallback={'GUARDS':'GUARD_FAILED','CONFIGURATION':'CONFIGURATION_INVALID','SSH_CONNECT':'SSH_CONNECTION_FAILED',
+            'SSH_REMOTE_DIAGNOSIS':'REMOTE_TRANSPORT_FAILED'}
+        report.update(phase=phase,error=str(exc) if str(exc) in allowed else fallback[phase])
     return report
 
 if __name__=='__main__':
