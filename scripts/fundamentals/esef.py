@@ -7,6 +7,7 @@ DTS discovery is disabled: no guessed extension semantics or network fetches.
 from contextlib import contextmanager
 from datetime import date, timedelta
 from decimal import Decimal
+import html
 import hashlib
 import io
 import json
@@ -27,6 +28,11 @@ IFRS = re.compile(r'https?://xbrl.ifrs.org/taxonomy/20[0-9]{2}-[0-9]{2}-[0-9]{2}
 TAGS = {'Revenue': 'revenue', 'ProfitLossFromOperatingActivities': 'ifrs_operating_profit',
         'ProfitLossBeforeTax': 'profit_before_tax', 'ProfitLoss': 'profit_after_tax',
         'CashFlowsFromUsedInOperatingActivities': 'operating_cashflow'}
+SCOPE_TAGS = {
+    'DescriptionOfNatureOfFinancialStatements',
+    'DisclosureOfBasisOfPreparationOfFinancialStatementsExplanatory',
+    'DisclosureOfBasisOfConsolidationExplanatory',
+}
 DEFS = {k: SEC_DEFS[k] for k in ('revenue', 'profit_after_tax', 'operating_cashflow')}
 DEFS['profit_before_tax'] = DEFINITIONS['profit_before_tax'][:2]
 # Existing operating_income explicitly means US GAAP. Do not mutate its definition.
@@ -36,6 +42,8 @@ DEFS['ifrs_operating_profit'] = ('IFRS Operating Profit / Loss',
 OASIS_CATALOG_DOCTYPE = re.compile(
     br'<!DOCTYPE\s+catalog\s+PUBLIC\s+["\']-//OASIS//DTD Entity Resolution XML Catalog V1\.0//EN["\']\s+'
     br'["\']https?://www\.oasis-open\.org/committees/entity/release/1\.0/catalog\.dtd["\']\s*>', re.I)
+CONSOLIDATED_NEGATION = re.compile(
+    r'\b(?:non[\s-]?consolidated|unconsolidated|not\s+consolidated)\b', re.I)
 
 
 def need(ok, code):
@@ -117,6 +125,57 @@ def expanded(q):
     return '{' + q.namespaceURI + '}' + q.localName
 
 
+def is_consolidated_nature(value):
+    """Accept an explicit consolidated statement in a combined nature label.
+
+    Some issuers label the report as containing both consolidated and separate
+    statements. The word ``separate`` alone is not evidence for consolidation,
+    so it remains rejected unless the same label explicitly says
+    ``consolidated``. Explicit negations of consolidated remain rejected.
+    """
+    return bool(re.search(r'\bconsolidated\b', value, re.I)
+                and not CONSOLIDATED_NEGATION.search(value))
+
+
+def compact_text(value, limit=2048):
+    text = html.unescape(re.sub(r'<[^>]*>', ' ', str(value)))
+    return re.sub(r'\s+', ' ', text).strip()[:limit]
+
+
+def scope_text(value):
+    """Normalize Inline XHTML letter-spacing without inventing report text."""
+    text = compact_text(value)
+    for word in ('consolidated', 'financial', 'statements', 'basis', 'preparation',
+                 'parent', 'subsidiaries', 'separate', 'unconsolidated'):
+        pattern = r'(?<![A-Za-z])' + r'\s*'.join(map(re.escape, word)) + r'(?![A-Za-z])'
+        text = re.sub(pattern, word, text, flags=re.I)
+    return re.sub(r'\s+', ' ', text).strip()[:2048]
+
+
+def is_scope_evidence(record):
+    tag, value = record['tag'], record['value']
+    if tag == 'DescriptionOfNatureOfFinancialStatements':
+        return is_consolidated_nature(value)
+    if tag == 'DisclosureOfBasisOfPreparationOfFinancialStatementsExplanatory':
+        return all(re.search(r'\b' + word + r'\b', value, re.I) for word in ('consolidated', 'financial', 'statements'))
+    if tag == 'DisclosureOfBasisOfConsolidationExplanatory':
+        return all(re.search(r'\b' + word + r'\b', value, re.I) for word in ('consolidated', 'parent', 'subsidiaries'))
+    return False
+
+
+def context_end_evidence(record):
+    """Bind a missing standard end-date fact to the actual XBRL context."""
+    return dict(taxonomy='http://www.xbrl.org/2003/instance', tag='xbrli:endDate',
+                value=record['end'], numeric=False, currency=None, start=None,
+                end=record['end'], entity_scheme=record['entity_scheme'],
+                entity=record['entity'], context_id=record['context_id'],
+                dimensions=record['dimensions'], member=record['member'],
+                member_sha256=record['member_sha256'],
+                position='context:'+record['member']+'#id='+record['context_id']+'/endDate',
+                original_value=record['end'], scale='0', sign='', decimals=None,
+                transform=None)
+
+
 def group_context(c):
     """Only dimensionless or explicit standard consolidated-member contexts.
 
@@ -174,8 +233,9 @@ def records(root, reports):
                 if not IFRS.fullmatch(ns):
                     if numeric and len(issues)<32: issues.append(dict(tag=tag[:128], reason='UNREVIEWED_EXTENSION'))
                     continue
-                if tag not in TAGS and tag not in ('NameOfReportingEntityOrOtherMeansOfIdentification',
-                        'DescriptionOfNatureOfFinancialStatements', 'DateOfEndOfReportingPeriod2013'): continue
+                if tag not in TAGS and tag not in SCOPE_TAGS | {
+                        'NameOfReportingEntityOrOtherMeansOfIdentification',
+                        'DateOfEndOfReportingPeriod2013'}: continue
                 c = f.context
                 if not group_context(c): continue
                 try:
@@ -189,19 +249,22 @@ def records(root, reports):
                         q = measures[0][0]
                         if q.namespaceURI == 'http://www.xbrl.org/2003/iso4217': currency = q.localName
                     dimensions = {expanded(d): expanded(v.memberQname) for d,v in c.qnameDims.items()}
-                    record = dict(taxonomy=ns, tag=tag, value=decimal(value) if numeric else str(value).strip(),
+                    record_value = decimal(value) if numeric else (
+                        scope_text(value) if tag in SCOPE_TAGS else str(value).strip())
+                    record = dict(taxonomy=ns, tag=tag, value=record_value,
                         numeric=numeric, currency=currency, start=start, end=end,
                         entity_scheme=c.entityIdentifier[0], entity=c.entityIdentifier[1], context_id=c.id,
                         dimensions=dimensions, member=member, member_sha256=sha,
                         position='ix:'+member+'#element='+str(f.objectIndex), fact_id=f.id,
-                        original_value=f.rawValue if numeric else str(value).strip(),
+                        original_value=f.rawValue if numeric else compact_text(value),
                         scale=f.get('scale', '0'), sign=f.get('sign', ''), decimals=f.get('decimals'),
                         transform=expanded(f.format) if f.format is not None else None)
                     if numeric:
                         need(re.fullmatch(r'-?[0-9]{1,2}', record['scale']) and abs(int(record['scale']))<=18
                              and record['sign'] in ('','-') and isinstance(record['decimals'],str)
                              and re.fullmatch(r'INF|-?[0-9]{1,2}',record['decimals']), 'NUMBER')
-                    need(len(record['original_value']) <= 2048 and len(record['position']) <= 400, 'FACT_BOUND')
+                    need(len(record['value']) <= 2048 and len(record['original_value']) <= 2048
+                         and len(record['position']) <= 400, 'FACT_BOUND')
                     out.append(record)
                 except (ValueError, ArithmeticError, TypeError, FunctionArgType, ixtFunctionNotAvailable):
                     issues.append(dict(tag=tag, reason='INVALID_TRANSFORM_OR_NUMBER'))
@@ -240,18 +303,25 @@ def qualify(rows, issues, metadata, identity, profile):
     need(bool(own), 'LEI')
     names = [r for r in own if r['tag']=='NameOfReportingEntityOrOtherMeansOfIdentification']
     need(names and all(norm(r['value']) in {norm(n) for n in profile['names']} for r in names), 'ENTITY_NAME')
-    nature = [r for r in own if r['tag']=='DescriptionOfNatureOfFinancialStatements'
-              and re.search(r'\bconsolidated\b', r['value'], re.I)
-              and not re.search(r'\b(non.consolidated|unconsolidated|separate)\b', r['value'], re.I)]
+    nature = [r for r in own if r['tag'] in SCOPE_TAGS and is_scope_evidence(r)]
     need(nature, 'CONSOLIDATED_SCOPE')
-    ends = [r for r in own if r['tag']=='DateOfEndOfReportingPeriod2013']
-    need(ends and {r['value'] for r in ends} == {profile['report_end']}, 'REPORT_END')
-    scope_members = {r['member'] for r in nature} & {r['member'] for r in names} & {r['member'] for r in ends}
+    scope_members = {r['member'] for r in nature} & {r['member'] for r in names}
     need(scope_members, 'CONSOLIDATED_SCOPE')
     years = profile['years']
     need(len(years)==2 and years[1]==years[0]+1 and int(profile['report_end'][:4])==years[1], 'YEARS')
     candidates = [r for r in own if r['member'] in scope_members and r['tag'] in TAGS and r['numeric'] and r['start'] and r['end']
                   and (date.fromisoformat(r['end'])-date.fromisoformat(r['start'])).days+1 in (364,365,366,371)]
+    ends = [r for r in own if r['tag']=='DateOfEndOfReportingPeriod2013']
+    if not ends:
+        seen = set()
+        ends = []
+        for candidate in candidates:
+            key = (candidate['member'], candidate['member_sha256'], candidate['context_id'], candidate['end'])
+            if candidate['end'] == profile['report_end'] and key not in seen:
+                seen.add(key); ends.append(context_end_evidence(candidate))
+    need(ends and {r['value'] for r in ends} == {profile['report_end']}, 'REPORT_END')
+    scope_members &= {r['member'] for r in ends}
+    need(scope_members, 'CONSOLIDATED_SCOPE')
     periods = {}
     for year in years:
         pairs = {(r['start'], r['end']) for r in candidates if r['end'][:4] == str(year)}

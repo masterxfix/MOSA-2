@@ -82,6 +82,30 @@ class EsefTests(unittest.TestCase):
                              ('NEL ASA','Unrelated Company','ENTITY_NAME'),
                              ('Consolidated financial statements','Separate financial statements','CONSOLIDATED_SCOPE')]:
             with self.assertRaisesRegex(ValueError,code):plan(text.replace(old,new))
+
+    def test_pandora_canonical_lei_and_combined_nature_scope(self):
+        profile=runner.PROFILES[1]
+        self.assertEqual(profile['lei'],'5299007OWYZ6I1E46843')
+        text=document(profile).replace('Consolidated financial statements',
+                                      'Consolidated and separate financial statements')
+        self.assertEqual(len(plan(text,profile)['observations']),10)
+        wrong=text.replace('5299007OWYZ6I1E46843','5299007OWYZ61IE46843')
+        with self.assertRaisesRegex(ValueError,'LEI'):
+            plan(wrong,profile)
+        with self.assertRaisesRegex(ValueError,'CONSOLIDATED_SCOPE'):
+            plan(text.replace('Consolidated and separate financial statements',
+                              'Separate financial statements'),profile)
+    def test_explanatory_scope_and_context_end_fallback(self):
+        text=document().replace(
+            '<ix:nonNumeric name="ifrs:DescriptionOfNatureOfFinancialStatements" contextRef="Y2025">Consolidated financial statements</ix:nonNumeric>',
+            '<ix:nonNumeric name="ifrs:DisclosureOfBasisOfPreparationOfFinancialStatementsExplanatory" contextRef="Y2025">The consolidated financial statements of the group</ix:nonNumeric>')
+        text=text.replace('<ix:nonNumeric name="ifrs:DateOfEndOfReportingPeriod2013" contextRef="Y2025">2025-12-31</ix:nonNumeric>','')
+        p=plan(text); evidence=json.loads(p['evidence_json'])
+        self.assertEqual(len(p['observations']),10)
+        self.assertEqual(evidence['consolidation_evidence'][0]['tag'],
+                         'DisclosureOfBasisOfPreparationOfFinancialStatementsExplanatory')
+        self.assertEqual(evidence['report_end_evidence'][0]['tag'],'xbrli:endDate')
+        self.assertEqual(evidence['report_end_evidence'][0]['value'],'2025-12-31')
     def test_parent_and_segment_contexts_never_consolidated(self):
         for axis,member in [('ConsolidatedAndSeparateFinancialStatementsAxis','SeparateMember'),('ProductsAndServicesAxis','Revenue')]:
             text=document().replace('</xbrli:entity>',f'<xbrli:segment><xbrldi:explicitMember dimension="ifrs:{axis}">ifrs:{member}</xbrldi:explicitMember></xbrli:segment></xbrli:entity>')

@@ -19,8 +19,10 @@ function esefEvidence(array $plan,array $doc):void {
     same($plan['metadata']['url'],$profile['url'],'esef_url');same($plan['metadata']['http_status'],200,'esef_http');
     same($plan['metadata']['execution'],$profile['execution'],'esef_execution');
     $ifrs=static fn(string $ns):bool=>preg_match('~\Ahttps?://xbrl.ifrs.org/taxonomy/20[0-9]{2}-[0-9]{2}-[0-9]{2}/ifrs-full\z~',$ns)===1;
-    $record=static function(array $r)use($profile,$ifrs):void{
-        check($ifrs($r['taxonomy']),'esef_taxonomy');same($r['entity'],$profile['lei'],'esef_lei');
+    $record=static function(array $r,bool $contextEnd=false)use($profile,$ifrs):void{
+        if($contextEnd){same($r['taxonomy'],'http://www.xbrl.org/2003/instance','esef_context_taxonomy');same($r['tag'],'xbrli:endDate','esef_context_tag');}
+        else check($ifrs($r['taxonomy']),'esef_taxonomy');
+        same($r['entity'],$profile['lei'],'esef_lei');
         check(in_array($r['entity_scheme'],['http://standards.iso.org/iso/17442','https://standards.iso.org/iso/17442'],true),'esef_scheme');
         check(is_string($r['context_id'])&&strlen($r['context_id'])>0&&strlen($r['context_id'])<=256,'esef_context');
         foreach($r['dimensions'] as $axis=>$member){
@@ -29,18 +31,25 @@ function esefEvidence(array $plan,array $doc):void {
         }
         check(preg_match('/\A[0-9a-f]{64}\z/',$r['member_sha256'])===1,'esef_member_hash');
         check(is_string($r['member'])&&strlen($r['member'])<=220&&!str_contains($r['member'],'..')&&!str_contains($r['member'],'\\')&&!str_contains($r['member'],':')&&!str_starts_with($r['member'],'/'),'esef_member_path');
-        check(str_starts_with($r['position'],'ix:'.$r['member'].'#element=')&&preg_match('/#element=[0-9]+\z/',$r['position'])===1,'esef_position');
+        if($contextEnd)check(str_starts_with($r['position'],'context:'.$r['member'].'#id=')&&str_ends_with($r['position'],'/endDate'),'esef_context_position');
+        else check(str_starts_with($r['position'],'ix:'.$r['member'].'#element=')&&preg_match('/#element=[0-9]+\z/',$r['position'])===1,'esef_position');
+    };
+    $scopeMatches=static function(array $r):bool{
+        $value=$r['value'];$tag=$r['tag'];
+        if($tag==='DescriptionOfNatureOfFinancialStatements')return preg_match('/\bconsolidated\b/i',$value)===1&&preg_match('/\b(non.consolidated|unconsolidated|not\s+consolidated)\b/i',$value)!==1;
+        if($tag==='DisclosureOfBasisOfPreparationOfFinancialStatementsExplanatory')return preg_match('/\bconsolidated\b/i',$value)===1&&preg_match('/\bfinancial\b/i',$value)===1&&preg_match('/\bstatements\b/i',$value)===1;
+        if($tag==='DisclosureOfBasisOfConsolidationExplanatory')return preg_match('/\bconsolidated\b/i',$value)===1&&preg_match('/\bparent\b/i',$value)===1&&preg_match('/\bsubsidiaries\b/i',$value)===1;
+        return false;
     };
     foreach(['identity_evidence','consolidation_evidence','report_end_evidence'] as $key){
         check(count($doc[$key])>=1&&count($doc[$key])<=32,'esef_anchor');
-        foreach($doc[$key] as $r){$record($r);same($r['numeric'],false,'esef_anchor_kind');
+        foreach($doc[$key] as $r){$contextEnd=$key==='report_end_evidence'&&$r['tag']==='xbrli:endDate';$record($r,$contextEnd);same($r['numeric'],false,'esef_anchor_kind');
             if($key==='identity_evidence'){
                 same($r['tag'],'NameOfReportingEntityOrOtherMeansOfIdentification','esef_identity_tag');
                 $norm=static fn($v)=>preg_replace('/[^A-Z0-9]/','',strtoupper($v));check(in_array($norm($r['value']),array_map($norm,$profile['names']),true),'esef_entity_name');
             }elseif($key==='consolidation_evidence'){
-                same($r['tag'],'DescriptionOfNatureOfFinancialStatements','esef_scope_tag');
-                check(preg_match('/\bconsolidated\b/i',$r['value'])===1&&preg_match('/\b(non.consolidated|unconsolidated|separate)\b/i',$r['value'])!==1,'esef_consolidated');
-            }else{same($r['tag'],'DateOfEndOfReportingPeriod2013','esef_end_tag');same($r['value'],$profile['report_end'],'esef_end');}
+                check($scopeMatches($r),'esef_consolidated');
+            }else{if($contextEnd){same($r['value'],$profile['report_end'],'esef_end');}else{same($r['tag'],'DateOfEndOfReportingPeriod2013','esef_end_tag');same($r['value'],$profile['report_end'],'esef_end');}}
         }
     }
     same(array_map('intval',array_keys($plan['reported_periods'])),$profile['years'],'esef_years');$prev=null;
