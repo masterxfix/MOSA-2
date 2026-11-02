@@ -1,0 +1,62 @@
+name: Manual MOSA 2 general market coverage read-only
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main commit SHA
+        type: string
+        required: true
+      authorization:
+        description: Explicit one-shot read-only authorization token
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-market-coverage-readonly
+  cancel-in-progress: false
+
+jobs:
+  coverage:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Require exact revision and one-shot authorization
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$AUTHORIZATION" = "MOSA2-MARKET-COVERAGE-READONLY:$GITHUB_SHA"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Focused selection and read-only safety tests
+        env:
+          PYTHONPATH: .:tests
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          php -l scripts/market_collector/selection.php
+          php -l scripts/market_collector/coverage_read.php
+          python3 -B -m unittest -v test_market_selection test_market_current test_quote_selection
+      - name: One bounded Dogado database coverage read with rollback
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: python3 -B scripts/market_collector/coverage_read.py
