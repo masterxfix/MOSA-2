@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 01.11.2026, 14:09:22 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 02.11.2026, 16:26:05 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -40,6 +40,16 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Kleine beauftragte Versuche durchführen, aus dem tatsächlichen Ergebnis lernen und vorhandene erfolgreiche Funktionen wiederverwenden. Der Fünferlauf vom 31.10.2026 (Actions-Lauf 41198494118) hat BYD, DroneShield, Ubtech Robotics, PNE AG und Carl Zeiss Meditec über Tradegate gespeichert, Current aktualisiert und sichtbar nachgewiesen; dieser Erfolg ist Grundlage, aber nicht der endgültige Marktdatenumfang.
 - Neue Bedenken, die den Auftrag stoppen, seinen Umfang verändern oder einen Anbieterwechsel auslösen würden, zuerst konkret mit dem Nutzer besprechen. Keine zusätzlichen Freigabehürden allein aus ungeprüften Vermutungen einführen.
 - Paket-, Syntax- und Offline-Erfolge als Vorbereitung bezeichnen. Die erfolgreiche Anzeige und ein automatischer Dauerbetrieb sind jeweils eigene, tatsächlich nachzuweisende Ergebnisse.
+
+## Auftragsfreigabe ohne Freigabeschleifen (dauerhafte Regel)
+
+- **Ein Auftrag, ein zusammenhängender Ablauf:** Eine eindeutig beauftragte und zulässige Arbeit soll nach Möglichkeit vollständig erledigt werden. Analyse, Implementierung, lokale Tests, ein Abschluss-Commit, der im Auftrag vorgesehene Push und beauftragte Read-only-Prüfungen werden nicht künstlich in neue Nutzerfreigaben zerlegt. Das gilt auch für zukünftige MOSA-2-Aufträge und neue Chats.
+- **Freigabebedarf vorab klären und bündeln:** Bereits bei der Formulierung des Auftrags alle absehbaren Schritte und nötigen Berechtigungen benennen und den Auftrag so gestalten, dass eine erforderliche Zustimmung möglichst den gesamten konkret beschriebenen Ablauf abdeckt. Nicht routinemäßig nach Commit, dann nach Push und dann nochmals nach demselben bereits beauftragten Actions-Dispatch fragen.
+- **Bereits erteilte Freigabe nicht erneut verlangen:** Ist eine konkrete Aktion mit ihrem Umfang bereits ausdrücklich autorisiert, keine zweite inhaltlich gleiche Bestätigung allein wegen eines Etappenwechsels, Toolwechsels oder technischen Fehlversuchs erfinden. Das gilt nur, solange Ziel, Umfang, Commit-/Workflowbindung und etwaige Einmalbudgets unverändert sind.
+- **Technischen Weg wechseln, nicht erneut um Erlaubnis bitten:** Scheitert eine GitHub-Browsersteuerung, zuerst einen bereits verfügbaren und authentifizierten direkten GitHub-Weg (API, Connector oder CLI) nutzen, soweit er für die Aktion zugelassen ist. Bei unklarer Ausführung ausschließlich lesend feststellen, ob sie bereits erfolgte; nie blind erneut dispatchen oder einen Einmalabruf wiederholen.
+- **Keine künstlichen Sicherheitsstopps:** ChatGPT und Codex führen keine zusätzlichen eigenen Einzelgenehmigungen oder manuellen Zwischenstopps für zuvor beauftragte Routinearbeiten ein. Bestehende technische Schutzprüfungen, genaue Einmalautorisationen und Berechtigungsgrenzen bleiben erhalten; eine Tool- oder Plattformbestätigung, die tatsächlich am Aktionszeitpunkt vorgeschrieben ist, darf nicht umgangen werden.
+- **Keine pauschale Erlaubnis für neue risikoreiche Aktionen:** Eine Freigabe deckt keine später erfundenen Providerabrufe, zusätzlichen DB-Schreibvorgänge, unbekannten GitHub-Actions-Läufe, Ausweitung auf andere Assets oder produktiven Deployments. Solche zusätzlichen oder rechtlich/technisch gesondert bestätigungspflichtigen Aktionen erfordern ihre eigene ausdrückliche Zustimmung. Bereits erteilte konkrete Freigaben dagegen nicht grundlos wiederholen.
+- **Ergebnis statt Daueraufsicht:** Codex arbeitet innerhalb des genehmigten Umfangs eigenständig bis zum Abschluss und berichtet dann kompakt. Fehlt ein zwingender Zugang oder eine wirklich neue Sicherheitsfreigabe, genau den einen konkreten Blocker nennen statt eine mehrstufige Freigabeschleife zu erzeugen.
 
 ## Designbestandsschutz und ausdrückliche Nutzerfreigabe
 
@@ -210,6 +220,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 02.11.2026 | 16:26:05 Uhr (MEZ, UTC+01:00) | Dauerregel gegen wiederholte Freigabeschleifen: zusammenhängende Aufträge, gebündelte Zustimmung, keine erneute Nachfrage bei schon konkret autorisierten Aktionen; GitHub-Direktwege statt Browser-Blockade, unveränderte technische Sicherheitsgrenzen. |
 | 01.11.2026 | 14:09:22 Uhr (MEZ, UTC+01:00) | Neue Nutzerentscheidung zur Aufbewahrung: qualifizierte Zahlen, kompakte Herkunftsevidenz und nachvollziehbare KI-Einordnung; keine neuen Vollarchive auf Vorrat, HTTP-Antwort und Evidence getrennt, alte Archive unverändert. |
 | 01.11.2026 | 12:50:41 Uhr (MEZ, UTC+01:00) | Verbindliche Codex-Modell-/Denkstufenempfehlung vor jedem MOSA-2-Auftrag eingeführt: aktuelles DeepSWE und OpenAI-Hinweise mit eigenen Ergebnissen abgleichen, Gesamtaufwand statt Einzelpreis bewerten, Verfügbarkeit und Benchmarkgrenzen offenlegen. |
 | 31.10.2026 | 13:27:11 Uhr (MEZ, UTC+01:00) | Verbindliche MOSA-2-Oberziele ergänzt: Datenvollständigkeit und Performance gleichrangig, relevante kostenlose Anbieterinformationen erhalten, unbekannte Felder nicht still verwerfen, Teilscope nicht zum Endumfang machen sowie MOSA-Wissen und Produktdesign als Leitplanken festgehalten. |
