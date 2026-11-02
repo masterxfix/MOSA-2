@@ -57,6 +57,38 @@ class MarketSelectionTests(unittest.TestCase):
         self.assertEqual(result['counts']['current_valid'], 1)
         self.assertEqual(result['counts']['current_missing'], 2)
 
+    def test_disabled_qualified_route_is_manual_preparable_but_not_automatic(self):
+        data = base();data['routes'][0]['enabled'] = '0'
+        before = copy.deepcopy(data)
+        result = call(data)['result'];item = next(x for x in result['assets'] if x['name'] == 'Alpha')
+        self.assertEqual(item['route_status'], 'NO_QUALIFIED_ROUTE')
+        self.assertEqual(item['collector_status'], 'ROUTE_UNAVAILABLE')
+        self.assertEqual(item['manual_status'], 'MANUAL_ROUTE_PREPARABLE')
+        self.assertEqual(len(item['manual_routes']), 1)
+        self.assertEqual(item['manual_routes'][0]['enabled'], '0')
+        self.assertEqual(result['counts']['manual_preparable'], 1)
+        self.assertEqual(result['counts']['manual_route_options'], 1)
+        self.assertEqual(data, before)
+
+    def test_enabled_legacy_route_without_unit_is_not_manual_preparable(self):
+        data = base();data['routes'][0].update(enabled='1', unit_contract_version=None, quote_unit_key=None, quote_unit_version=None, unit_status=None, unit_currency=None)
+        result = call(data)['result'];item = next(x for x in result['assets'] if x['name'] == 'Alpha')
+        self.assertEqual(item['route_reason'], 'UNIT_NOT_QUALIFIED')
+        self.assertEqual(item['manual_status'], 'NO_MANUAL_ROUTE')
+        self.assertEqual(item['manual_route_reason'], 'MANUAL_ROUTE_MUST_BE_DISABLED')
+        self.assertEqual(item['manual_routes'], [])
+
+    def test_multiple_manual_sources_are_options_without_automatic_selection(self):
+        data = base();data['routes'][0]['enabled'] = '0'
+        data['routes'].append(route(1, source_id='10', route_id='110', source_key='provider:other_quote', enabled='0'))
+        result = call(data)['result'];item = next(x for x in result['assets'] if x['name'] == 'Alpha')
+        self.assertEqual(item['route_status'], 'NO_QUALIFIED_ROUTE')
+        self.assertEqual(item['collector_status'], 'ROUTE_UNAVAILABLE')
+        self.assertEqual(item['manual_status'], 'MANUAL_ROUTE_PREPARABLE')
+        self.assertEqual(item['manual_route_reason'], 'MULTIPLE_MANUAL_ROUTES')
+        self.assertEqual({x['source_id'] for x in item['manual_routes']}, {'9', '10'})
+        self.assertNotIn('Alpha', [x['name'] for x in result['collector_candidates']])
+
     def test_new_valid_equity_enters_without_selector_code_change(self):
         data = base()
         data['assets'].append(dict(asset_id='5', display_name='Delta', asset_class='equity', status='active'))

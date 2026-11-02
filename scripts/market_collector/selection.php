@@ -30,13 +30,13 @@ function routeKey(array $route): string {
     return implode(':', [(string)($route['asset_id'] ?? ''), (string)($route['source_id'] ?? ''),
         (string)($route['id'] ?? $route['route_id'] ?? '')]);
 }
-function routeReason(array $route, string $assetId): ?string {
+function routeReason(array $route, string $assetId, bool $manual = false): ?string {
     if ((string)($route['asset_id'] ?? '') !== $assetId) return 'ROUTE_ASSET_MISMATCH';
     if (!positiveId(text($route, 'id') ?? text($route, 'route_id'))) return 'ROUTE_ID_INVALID';
     if (!positiveId(text($route, 'source_id')) || !positiveId(text($route, 'route_revision'))) return 'ROUTE_IDENTITY_INVALID';
     if (text($route, 'route_type') !== 'quote') return 'ROUTE_TYPE_UNSUPPORTED';
     if ((string)($route['priority'] ?? '') !== '0') return 'ROUTE_PRIORITY_UNSUPPORTED';
-    if (!truthy($route['enabled'])) return 'ROUTE_DISABLED';
+    if ((string)($route['enabled'] ?? '') !== ($manual ? '0' : '1')) return $manual ? 'MANUAL_ROUTE_MUST_BE_DISABLED' : 'ROUTE_DISABLED';
     if (text($route, 'source_key') === null || preg_match('/^provider:[a-z0-9_]+$/D', text($route, 'source_key')) !== 1) return 'SOURCE_IDENTITY_INVALID';
     if (text($route, 'source_type') !== 'market_data' || !truthy($route['source_enabled'])) return 'SOURCE_NOT_ENABLED_MARKET_DATA';
     if (text($route, 'unit_contract_version') !== 'mosa2-market-unit-v1' || text($route, 'unit_status') !== 'frozen') return 'UNIT_NOT_QUALIFIED';
@@ -48,6 +48,7 @@ function routeReason(array $route, string $assetId): ?string {
 }
 function routeView(array $route, string $assetId): array {
     $reason = routeReason($route, $assetId);
+    $manualReason = routeReason($route, $assetId, true);
     $currency = text($route, 'unit_currency') ?? text($route, 'monetary_currency_code');
     return [
         'route_id' => text($route, 'id') ?? text($route, 'route_id'),
@@ -68,10 +69,13 @@ function routeView(array $route, string $assetId): array {
         'unit_status' => text($route, 'unit_status'),
         'qualification' => $reason === null ? 'QUALIFIED' : 'NOT_QUALIFIED',
         'reason' => $reason,
+        'manual_qualification' => $manualReason === null ? 'PREPARABLE' : 'NOT_PREPARABLE',
+        'manual_reason' => $manualReason,
     ];
 }
-function routeDecision(array $rows, string $assetId): array {
-    if ($rows === []) return ['status' => 'NO_QUALIFIED_ROUTE', 'reason' => 'NO_ROUTE', 'route' => null, 'routes' => []];
+function routeDecision(array $rows, string $assetId, bool $manual = false): array {
+    $emptyStatus = $manual ? 'NO_MANUAL_ROUTE' : 'NO_QUALIFIED_ROUTE';
+    if ($rows === []) return ['status' => $emptyStatus, 'reason' => 'NO_ROUTE', 'route' => null, 'routes' => [], 'manual_routes' => []];
     $views = array_map(static fn(array $row): array => routeView($row, $assetId), $rows);
     $bySource = [];
     foreach ($rows as $row) $bySource[(string)($row['source_id'] ?? '')][] = $row;
@@ -79,14 +83,18 @@ function routeDecision(array $rows, string $assetId): array {
     foreach ($bySource as $sourceRows) {
         $max = max(array_map(static fn(array $row): int => (int)($row['route_revision'] ?? 0), $sourceRows));
         $top = array_values(array_filter($sourceRows, static fn(array $row): bool => (int)($row['route_revision'] ?? 0) === $max));
-        if (count($top) !== 1) return ['status' => 'AMBIGUOUS_ROUTE', 'reason' => 'SAME_REVISION_MULTIPLE_ROUTES', 'route' => null, 'routes' => $views];
+        if (count($top) !== 1) return ['status' => $manual ? 'MANUAL_ROUTE_AMBIGUOUS' : 'AMBIGUOUS_ROUTE', 'reason' => 'SAME_REVISION_MULTIPLE_ROUTES', 'route' => null, 'routes' => $views, 'manual_routes' => []];
         $latest[] = $top[0];
     }
-    $qualified = array_values(array_filter($latest, static fn(array $row): bool => routeReason($row, $assetId) === null));
+    $qualified = array_values(array_filter($latest, static fn(array $row): bool => routeReason($row, $assetId, $manual) === null));
+    if ($manual) return $qualified === []
+        ? ['status' => 'NO_MANUAL_ROUTE', 'reason' => routeReason($latest[0], $assetId, true) ?? 'ROUTE_NOT_PREPARABLE', 'route' => null, 'routes' => $views, 'manual_routes' => []]
+        : ['status' => 'MANUAL_ROUTE_PREPARABLE', 'reason' => count($qualified) > 1 ? 'MULTIPLE_MANUAL_ROUTES' : null, 'route' => null, 'routes' => $views,
+            'manual_routes' => array_map(static fn(array $row): array => routeView($row, $assetId), $qualified)];
     if (count($qualified) === 1) return ['status' => 'QUALIFIED', 'reason' => null, 'route' => routeView($qualified[0], $assetId), 'routes' => $views];
     if (count($qualified) > 1) return ['status' => 'AMBIGUOUS_ROUTE', 'reason' => 'MULTIPLE_QUALIFIED_SOURCES', 'route' => null, 'routes' => $views];
     $reasons = array_values(array_unique(array_map(static fn(array $row): string => routeReason($row, $assetId) ?? 'ROUTE_NOT_QUALIFIED', $latest)));
-    return ['status' => 'NO_QUALIFIED_ROUTE', 'reason' => count($reasons) === 1 ? $reasons[0] : 'ROUTE_NOT_QUALIFIED', 'route' => null, 'routes' => $views];
+    return ['status' => 'NO_QUALIFIED_ROUTE', 'reason' => count($reasons) === 1 ? $reasons[0] : 'ROUTE_NOT_QUALIFIED', 'route' => null, 'routes' => $views, 'manual_routes' => []];
 }
 function currentDecision(?array $current, array $observations, array $routeRows, string $assetId, string $now, int $staleSeconds): array {
     if ($current === null) return ['status' => 'NO_CURRENT', 'current' => null];
@@ -139,19 +147,23 @@ function select(array $assets, array $identifiers, array $routes, array $current
     foreach ($observations as $observation) if (is_array($observation) && text($observation, 'id') !== null) $observationsById[text($observation, 'id')] = $observation;
     $currentByAsset = [];
     foreach ($currents as $current) if (is_array($current) && isset($seenAssets[(string)($current['asset_id'] ?? '')])) $currentByAsset[(string)$current['asset_id']][] = $current;
-    $items = [];$candidates=[];$sourceMap=[];$counts=['active_equities'=>count($equities),'active_etfs_excluded'=>$etfs,'current_present'=>0,'current_valid'=>0,'current_stale'=>0,'current_missing'=>0,'current_invalid'=>0,'qualified_for_collector'=>0,'without_usable_route'=>0];
+    $items = [];$candidates=[];$manualCandidates=[];$sourceMap=[];$counts=['active_equities'=>count($equities),'active_etfs_excluded'=>$etfs,'current_present'=>0,'current_valid'=>0,'current_stale'=>0,'current_missing'=>0,'current_invalid'=>0,'qualified_for_collector'=>0,'without_usable_route'=>0,'manual_preparable'=>0,'manual_route_options'=>0,'without_manual_route'=>0];
     foreach ($equities as $asset) {
         $assetId=$asset['asset_id'];$rows=$idsByAsset[$assetId]??[];$isin=(count($rows)===1)?text($rows[0],'normalized_value'):null;
         $identityStatus=count($rows)!==1||!validIsin($isin)?'INVALID_OR_AMBIGUOUS_ISIN':(count($isinOwners[$isin]??[])!==1?'DUPLICATE_ISIN':'VALID');
-        $route=routeDecision($routesByAsset[$assetId]??[],$assetId);$currentRows=$currentByAsset[$assetId]??[];
+        $route=routeDecision($routesByAsset[$assetId]??[],$assetId);$manualRoute=routeDecision($routesByAsset[$assetId]??[],$assetId,true);$currentRows=$currentByAsset[$assetId]??[];
         $current=count($currentRows)===1?$currentRows[0]:null;$currentResult=count($currentRows)>1?['status'=>'CURRENT_INVALID','current'=>null]:currentDecision($current,$observationsById,$routesByAsset[$assetId]??[],$assetId,$now,$staleSeconds);
         $collectorStatus=$identityStatus!=='VALID'?'INVALID_IDENTITY':($route['status']==='QUALIFIED'?'READY':'ROUTE_UNAVAILABLE');
         if ($current!==null)$counts['current_present']++;$key=$currentResult['status'];if($key==='CURRENT_VALID')$counts['current_valid']++;elseif($key==='CURRENT_STALE')$counts['current_stale']++;elseif($key==='NO_CURRENT')$counts['current_missing']++;else $counts['current_invalid']++;
         if($collectorStatus==='READY'){$counts['qualified_for_collector']++;$candidates[]=['asset_id'=>$assetId,'name'=>text($asset,'display_name'),'isin'=>$isin,'source_id'=>$route['route']['source_id'],'source_key'=>$route['route']['source_key'],'route_id'=>$route['route']['route_id'],'route_revision'=>$route['route']['route_revision'],'quote_unit_key'=>$route['route']['quote_unit_key'],'currency'=>$route['route']['currency']];}
         else $counts['without_usable_route']++;
+        $manualStatus=$identityStatus!=='VALID'?'INVALID_IDENTITY':$manualRoute['status'];
+        $manualRoutes=$identityStatus==='VALID'?$manualRoute['manual_routes']:[];
+        if($manualStatus==='MANUAL_ROUTE_PREPARABLE')$counts['manual_preparable']++;else $counts['without_manual_route']++;
+        foreach($manualRoutes as $manualOption){$counts['manual_route_options']++;$manualCandidates[]=['asset_id'=>$assetId,'name'=>text($asset,'display_name'),'isin'=>$isin,'source_id'=>$manualOption['source_id'],'source_key'=>$manualOption['source_key'],'route_id'=>$manualOption['route_id'],'route_revision'=>$manualOption['route_revision'],'quote_unit_key'=>$manualOption['quote_unit_key'],'currency'=>$manualOption['currency']];}
         foreach($route['routes'] as $routeView){$sourceId=$routeView['source_id'];if($sourceId!==null)$sourceMap[$sourceId]=array_intersect_key($routeView,array_flip(['source_id','source_key','source_name','source_type','source_enabled']));}
-        $items[]=['asset_id'=>$assetId,'name'=>text($asset,'display_name'),'isin'=>$isin,'identity_status'=>$identityStatus,'route_status'=>$route['status'],'route_reason'=>$route['reason'],'routes'=>$route['routes'],'collector_status'=>$collectorStatus,'current_status'=>$currentResult['status'],'current'=>$currentResult['current']];
+        $items[]=['asset_id'=>$assetId,'name'=>text($asset,'display_name'),'isin'=>$isin,'identity_status'=>$identityStatus,'route_status'=>$route['status'],'route_reason'=>$route['reason'],'routes'=>$route['routes'],'collector_status'=>$collectorStatus,'manual_status'=>$manualStatus,'manual_route_reason'=>$identityStatus!=='VALID'?'INVALID_IDENTITY':$manualRoute['reason'],'manual_routes'=>$manualRoutes,'current_status'=>$currentResult['status'],'current'=>$currentResult['current']];
     }
     ksort($sourceMap);usort($items,static fn(array $a,array $b): int => strcmp((string)$a['name'],(string)$b['name']));
-    return ['status'=>'ok','as_of'=>$now,'stale_seconds'=>$staleSeconds,'counts'=>$counts,'sources'=>array_values($sourceMap),'assets'=>$items,'collector_candidates'=>$candidates];
+    return ['status'=>'ok','as_of'=>$now,'stale_seconds'=>$staleSeconds,'counts'=>$counts,'sources'=>array_values($sourceMap),'assets'=>$items,'collector_candidates'=>$candidates,'manual_candidates'=>$manualCandidates];
 }
