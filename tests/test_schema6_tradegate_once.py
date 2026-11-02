@@ -77,6 +77,22 @@ class OneShotAuthTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stderr, "")
 
+    def test_pne_entrypoint_resolves_the_shared_proof_function(self):
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        source = (ROOT / "scripts/market_collector/schema6_tradegate_once.php").read_text(encoding="utf-8")
+        self.assertIn(r"\Mosa2\MarketLive\proofRun($private,$password,$config,$manifest,$gate);", source)
+        self.assertNotIn(r"\Mosa2\MarketAcceptance\proofRun(", source)
+        # Loading the actual PHP entrypoint is offline and must not start main().
+        script = ("require $argv[1];"
+                  "$fn = new ReflectionFunction('Mosa2\\\\MarketLive\\\\proofRun');"
+                  "echo $fn->getNumberOfParameters() . ':' . $fn->getNumberOfRequiredParameters();")
+        result = subprocess.run([php, "-r", script, str(ROOT / "scripts/market_collector/schema6_tradegate_once.php")],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(result.stdout, "5:4")
+
     def test_proof_uses_the_configured_tunnel_endpoint_for_both_connections(self):
         source = (ROOT / "scripts/market_collector/live_persistence.php").read_text(encoding="utf-8")
         proof = source[source.index("function proofRun"):source.index("require_once __DIR__.'/runtime_persistence.php'")]

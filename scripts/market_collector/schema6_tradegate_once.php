@@ -130,7 +130,7 @@ function run(array $input): array {
             same($runtimeConfig['one_shot_scope']??null,'PNE_TRADEGATE','schema6_one_shot_scope');
             same($runtimeConfig['one_shot_authorization']??null,$input['authorization'],'schema6_one_shot_authorization');
         };
-        $report['stage']='provider_and_observation';$proof=\Mosa2\MarketAcceptance\proofRun($private,$password,$config,$manifest,$gate);
+        $report['stage']='provider_and_observation';$proof=\Mosa2\MarketLive\proofRun($private,$password,$config,$manifest,$gate);
         $report['provider_requests']=$proof['provider_requests']??0;$report['provider_gets']=$report['provider_requests'];
         $report['database_connections']+=(int)($proof['database_connections']??0);$report['observation']=$proof['writer']??'FAILED';
         $report['observation_id']=$proof['observation_id']??null;check(($proof['ok']??false)===true,'observation_failed');
