@@ -18,6 +18,8 @@ from scripts.fundamentals.assessment import prepare
 
 AUTH = os.environ.get('ESEF_AUTH_PREFIX', 'MOSA2-ESEF-20261101:')
 WORKFLOW = os.environ.get('ESEF_WORKFLOW', '.github/workflows/fundamentals-esef-once.yml')
+LIVE2_WORKFLOW = '.github/workflows/fundamentals-esef-live2-once.yml'
+LIVE3_WORKFLOW = '.github/workflows/fundamentals-esef-live3-once.yml'
 PROFILES = json.loads((shared.ROOT/'scripts/fundamentals/esef_profiles.json').read_text(encoding='utf-8'))
 
 
@@ -30,8 +32,14 @@ def execution_overrides(raw=None):
     except (TypeError, json.JSONDecodeError):
         raise ValueError('ESEF_EXECUTION_BINDING') from None
     expected = {'NO0010081235', 'DK0060252690'}
+    if WORKFLOW == LIVE3_WORKFLOW:
+        pattern = r'fundamentals-esef-(?:nel|pandora)-20261102-03'
+    elif WORKFLOW in (LIVE2_WORKFLOW, '.github/workflows/fundamentals-esef-once.yml'):
+        pattern = r'fundamentals-esef-(?:nel|pandora)-20261101-02'
+    else:
+        raise ValueError('ESEF_EXECUTION_BINDING')
     if not isinstance(values, dict) or set(values) != expected or any(not isinstance(v, str) or not re.fullmatch(
-            r'fundamentals-esef-(?:nel|pandora)-20261101-02', v) for v in values.values()):
+            pattern, v) for v in values.values()):
         raise ValueError('ESEF_EXECUTION_BINDING')
     return values
 

@@ -214,6 +214,36 @@ class EsefTests(unittest.TestCase):
             with self.assertRaises(ValueError): runner.guard(env|{'AUTHORIZATION':'MOSA2-ESEF-20261101:'+'a'*40})
         finally:
             runner.AUTH,runner.WORKFLOW=old_auth,old_workflow
+    def test_live3_bindings_are_exclusive_and_live1_live2_remain_unchanged(self):
+        live2={'NO0010081235':'fundamentals-esef-nel-20261101-02',
+               'DK0060252690':'fundamentals-esef-pandora-20261101-02'}
+        live3={'NO0010081235':'fundamentals-esef-nel-20261102-03',
+               'DK0060252690':'fundamentals-esef-pandora-20261102-03'}
+        old_auth,old_workflow=runner.AUTH,runner.WORKFLOW
+        try:
+            runner.WORKFLOW=runner.LIVE3_WORKFLOW
+            self.assertEqual(runner.execution_overrides(json.dumps(live3)),live3)
+            with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
+                runner.execution_overrides(json.dumps(live2))
+            runner.WORKFLOW=runner.LIVE2_WORKFLOW
+            self.assertEqual(runner.execution_overrides(json.dumps(live2)),live2)
+            with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
+                runner.execution_overrides(json.dumps(live3))
+            runner.WORKFLOW='.github/workflows/fundamentals-esef-once.yml'
+            with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
+                runner.execution_overrides(json.dumps(live3))
+            source=(runner.shared.ROOT/'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
+            for token in live3.values(): self.assertIn("'"+token+"'",source)
+            workflow=(runner.shared.ROOT/'.github/workflows/fundamentals-esef-live3-once.yml').read_text(encoding='utf-8')
+            for token in ('workflow_dispatch','github.run_number == 1','github.run_attempt == 1',
+                          'MOSA2-ESEF-LIVE3-20261102:$GITHUB_SHA',
+                          'ESEF_WORKFLOW: .github/workflows/fundamentals-esef-live3-once.yml',
+                          'fundamentals-esef-nel-20261102-03','fundamentals-esef-pandora-20261102-03'):
+                self.assertIn(token,workflow)
+            old=(runner.shared.ROOT/'.github/workflows/fundamentals-esef-live2-once.yml').read_text(encoding='utf-8')
+            self.assertNotIn('20261102-03',old)
+        finally:
+            runner.AUTH,runner.WORKFLOW=old_auth,old_workflow
 
 
 if __name__=='__main__':unittest.main()
