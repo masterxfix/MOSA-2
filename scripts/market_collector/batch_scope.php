@@ -49,7 +49,8 @@ function plan(
     array $providerFactories,
     callable $completePlan,
     bool $manual = false,
-    int $maxAssets = 10
+    int $maxAssets = 10,
+    ?array $requestedIsins = null
 ): array {
     $ensure = static function (bool $valid, string $why): void {
         if (!$valid) throw new InvalidArgumentException($why);
@@ -60,6 +61,18 @@ function plan(
         is_array($selection[$manual ? 'manual_candidates' : 'collector_candidates'] ?? null) &&
         array_is_list($selection[$manual ? 'manual_candidates' : 'collector_candidates']),
         'selection_shape');
+    $requestedSet = null;
+    if ($requestedIsins !== null) {
+        $ensure(array_is_list($requestedIsins) && count($requestedIsins) >= 1 &&
+            count($requestedIsins) <= $maxAssets, 'requested_scope');
+        $requestedSet = [];
+        foreach ($requestedIsins as $isin) {
+            $ensure(is_string($isin) &&
+                preg_match('/\A[A-Z]{2}[A-Z0-9]{9}[0-9]\z/D', $isin) === 1 &&
+                !isset($requestedSet[$isin]), 'requested_scope');
+            $requestedSet[$isin] = true;
+        }
+    }
     $ensure(array_is_list($sourcePriority) && $sourcePriority !== [], 'source_priority');
     $priority = [];
     foreach ($sourcePriority as $index => $key) {
@@ -71,6 +84,7 @@ function plan(
     $assets = [];
     $isinOwners = [];
     foreach ($selection['assets'] as $asset) {
+        if ($requestedSet !== null && !isset($requestedSet[$asset['isin'] ?? ''])) continue;
         $id = $asset['asset_id'] ?? null;
         $ensure(is_string($id) && preg_match('/\A[1-9][0-9]*\z/D', $id) === 1 &&
             !isset($assets[$id]), 'selection_asset');
@@ -85,6 +99,7 @@ function plan(
     $candidates = [];
     $requested = $selection[$manual ? 'manual_candidates' : 'collector_candidates'];
     foreach ($requested as $candidate) {
+        if ($requestedSet !== null && !isset($requestedSet[$candidate['isin'] ?? ''])) continue;
         $id = $candidate['asset_id'] ?? null;
         $source = $candidate['source_key'] ?? null;
         $route = $candidate['route_id'] ?? null;
@@ -102,6 +117,7 @@ function plan(
     $unavailable = [];
     $usedPhysicalRoutes = [];
     foreach ($assets as $asset) {
+        if ($requestedSet !== null && !isset($requestedSet[$asset['isin'] ?? ''])) continue;
         $id = $asset['asset_id'];
         $status = $manual ? 'MANUAL_ROUTE_PREPARABLE' : 'READY';
         $actual = $manual ? ($asset['manual_status'] ?? null) : ($asset['collector_status'] ?? null);
@@ -134,6 +150,9 @@ function plan(
         $ready[] = ['asset_id' => $id, 'isin' => $candidate['isin'], 'source_key' => $source,
             'route_id' => $candidate['route_id'], 'manifest' => $manifest];
         $ensure(count($ready) <= $maxAssets, 'batch_limit');
+    }
+    if ($requestedSet !== null) {
+        $ensure(count($ready) === count($requestedSet) && $unavailable === [], 'requested_scope_not_qualified');
     }
     return ['mode' => $manual ? 'manual' : 'automatic', 'prepared' => $ready,
         'unavailable' => $unavailable, 'execution_authorized' => false,

@@ -30,7 +30,7 @@ Inputs: `expected_commit`, exact `scope` JSON, `authorization`.
 
 Scope keys: `mode` (manual), `request_budget` (integer 1–5), `source_priority`
 (ordered registered source keys), `expected_isins` (unique explicitly approved ISINs).
-The complete dynamically qualified selection must match expected_isins exactly.
+Only the ISINs explicitly listed in expected_isins are selected before planning. Exactly those requested assets must qualify; other qualified assets must not be included.
 No new route, source, asset, migration or scheduler state is written.
 
 Authorization: `MOSA2-MARKET-BATCH:<full SHA>:<SHA256 of exact UTF-8 scope input>`.
@@ -39,9 +39,11 @@ authorization before SSH. The token string binds scope; it is not a GitHub crede
 User approval for a historical PNE or five-asset run does not authorize this workflow.
 Exactly one separately approved batch is to be dispatched; no retry or replacement run.
 
-Suggested first live scope: the previously qualified BYD, DroneShield, UBTECH, PNE and
-Carl Zeiss Meditec Tradegate routes, with at most five sequential GETs and existing
-Observation/Current writes in the test database. This live execution is not yet approved
+The first live collector acceptance can use a single qualified ISIN and an exact
+request_budget of 1, without changing the general collector. Provider GETs and test-DB
+writes still require explicit authorization. The separate testsite ISIN input is a
+read-only on-demand provider preview; it never silently dispatches a GitHub Action
+or writes observations. This live execution is not yet approved
 or evidenced by this change. Web/Chrome readback and the two-second browser limit
 remain part of the live acceptance, not an offline performance claim.
 

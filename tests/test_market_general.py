@@ -88,6 +88,15 @@ class GeneralMarketTests(unittest.TestCase):
                 source_name='Qualified source',venue='Registered venue',valid_binding='1')), capture_output=True,text=True,check=True)
             self.assertEqual(json.loads(web.stdout)['price'], row['price'])
 
+    def test_single_requested_isin_from_five_qualified_assets(self):
+        selected = self.state['m2_asset_identifiers'][0]['normalized_value']
+        result = self.call(requested_isins=[selected], request_budget=1)
+        self.assertEqual(result['providers'], 1)
+        self.assertTrue(result['reports'][0]['ok'], result['reports'])
+        self.assertEqual(len(result['state']['m2_market_observations']), 1)
+        self.assertEqual(len(result['state']['m2_market_current']), 1)
+        self.assertEqual(result['state']['m2_market_observations'][0]['asset_id'], '101')
+
     def test_partial_failure_stops_batch_and_never_projects_current(self):
         result = self.call(fail_provider=3)
         report = result['reports'][0]

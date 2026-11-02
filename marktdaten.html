@@ -10,7 +10,7 @@
   <script src="assets/js/page_load_time.js" defer></script>
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/market.js" defer></script>
-  <script src="assets/js/observations.js" defer></script>
+  <script src="assets/js/isin_quotes.js" defer></script>
 </head>
 <body class="market-page">
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -23,22 +23,26 @@
     <section class="hero" aria-labelledby="markt-titel">
       <div class="eyebrow">Der gespeicherte Marktstand · MOSA 2</div>
       <h1 id="markt-titel">Marktdaten.<br><em>Mit Herkunft.</em></h1>
-      <p class="intro">Fünf Aktien. Klare Quellen. Ein nachvollziehbarer Datenstand. Die Anzeige liest vorhandene Kurse und startet keinen Kursabruf.</p>
+      <p class="intro">Ihre ISINs. Klare Quellen. Der Kursabruf startet ausschließlich nach OK. Marktzeit und Abrufzeit werden getrennt angezeigt.</p>
     </section>
 
-    <section class="market-section observation-section" aria-labelledby="observations-titel" data-observation-view>
-      <div class="section-heading"><div><p class="eyebrow">01 / Observations</p><h2 id="observations-titel">Neueste Collector-Beobachtungen</h2></div>
-        <span class="snapshot" data-observation-summary role="status">Observations werden geladen …</span></div>
-      <p class="context-note">Nur gespeicherte Beobachtungen. Das Datenalter bezieht sich auf den Marktzeitpunkt. Die Anzeige aktualisiert alle 120 Sekunden, solange der Tab sichtbar ist; sie startet keinen Collector.</p>
-      <p><button class="observation-refresh" type="button" data-observation-refresh>Anzeige aktualisieren</button></p>
-      <div class="observation-table-wrap" aria-busy="true" data-observation-region>
+    <section class="market-section observation-section" aria-labelledby="observations-titel" data-isin-market-view>
+      <div class="section-heading"><div><p class="eyebrow">01 / Observations</p><h2 id="observations-titel">Meine ISIN-Kursabfragen</h2></div>
+        <span class="snapshot" data-isin-summary role="status">Noch keine ISIN eingegeben.</span></div>
+      <p class="context-note">Nur die von Ihnen eingegebenen ISINs. Tradegate Mid und Börse Frankfurt Last werden separat angefragt. Ältere Kurse sind ausdrücklich als veraltet gekennzeichnet; kein automatischer Abruf.</p>
+      <form class="isin-form" data-isin-form autocomplete="off">
+        <label for="isin-market">ISIN eingeben</label>
+        <div class="isin-form-row"><input id="isin-market" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE000A0JBPG2" spellcheck="false" required><button type="submit">OK</button></div>
+      </form>
+      <ol class="isin-steps" data-isin-steps aria-label="Schritte der Kursabfrage" aria-live="polite"></ol>
+      <div class="observation-table-wrap" aria-busy="false" data-observation-region>
         <table class="market-table observation-table">
-          <caption class="visually-hidden">Neueste gültige gespeicherte Observation je qualifizierter Aktie; alle Zeitangaben UTC</caption>
-          <thead><tr><th scope="col">Aktie</th><th scope="col">Kurs</th><th scope="col">Währung / Einheit</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Marktzeitpunkt</th><th scope="col">Erfasst</th><th scope="col">Datenalter</th><th scope="col">Observation-ID</th><th scope="col">Datenstatus</th></tr></thead>
-          <tbody data-observation-rows><tr><td colspan="9">Gespeicherte Observations werden geladen …</td></tr></tbody>
+          <caption class="visually-hidden">Von Ihnen abgefragte ISINs mit Kursart, Quelle, Marktzeit und Abrufzeit</caption>
+          <thead><tr><th scope="col">Aktie</th><th scope="col">Kurs</th><th scope="col">Währung / Einheit</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Marktzeitpunkt</th><th scope="col">Erfasst</th><th scope="col">Datenalter</th><th scope="col">ISIN</th><th scope="col">Datenstatus</th></tr></thead>
+          <tbody data-isin-table><tr><td colspan="9">Noch keine ISIN eingegeben.</td></tr></tbody>
         </table>
       </div>
-      <noscript><p>Für die Observation-Anzeige bitte JavaScript aktivieren.</p></noscript>
+      <noscript><p>Für die ISIN-Abfrage bitte JavaScript aktivieren.</p></noscript>
     </section>
 
     <section class="market-section" aria-labelledby="messungen-titel">

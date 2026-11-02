@@ -68,6 +68,12 @@ $mut['collector_candidates'][2]['route_id'] = '501';
 $sharedPhysicalPlan = static fn($state,$manifest)=>['route'=>['decision'=>'EXISTING_MATCH','route_id'=>'501'],
     'source'=>['source_id'=>'101'], 'asset'=>['asset_id'=>$manifest['identity']['normalized_value']==='ZZ0000000000'?'10':'20']];
 fail(static fn()=>plan([],$mut,[source('one')],$factories,$sharedPhysicalPlan),'reused physical route');$n++;
+[$s,$factories,$planner]=service();
+$single=plan([],$s,[source('one'),source('two')],$factories,$planner,false,10,['ZZ0000000000']);
+eq(array_column($single['prepared'],'isin'),['ZZ0000000000'],'one selected ISIN only');$n++;
+eq($single['provider_requests'],0,'one scope makes no provider call');$n++;
+fail(static fn()=>plan([],$s,[source('one')],$factories,$planner,false,10,['ZZ0000000099']),'missing user selected ISIN');$n++;
+fail(static fn()=>plan([],$s,[source('one')],$factories,$planner,false,10,['ZZ0000000000','ZZ0000000000']),'duplicate user selected ISIN');$n++;
 $source=file_get_contents(dirname(__DIR__).'/scripts/market_collector/batch_scope.php');
 foreach(['DE000A0JBPG2','tradegate_bsx_mid','MOSA_TEST_DB_PASSWORD','curl_','PDO','file_put_contents'] as $forbidden)
     if (str_contains($source,$forbidden)) throw new RuntimeException('asset or network special case '.$forbidden);

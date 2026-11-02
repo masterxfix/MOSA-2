@@ -228,3 +228,18 @@ dd { color: var(--muted); font-size: .8rem; margin: 6px 0 0 28px; }
   .fundamental-table th, .fundamental-table td { padding-block: 12px; }
   .fundamentals-note { margin-bottom: var(--space-section); }
 }
+
+/* ISIN input and progress only — existing palette, fonts and all previous rules untouched. */
+.isin-form { max-width: 500px; margin-top: 28px; }
+.isin-form label { display: block; margin-bottom: 9px; font-size: .76rem; color: var(--muted); }
+.isin-form-row { display: flex; gap: 10px; }
+.isin-form-row input { min-width: 0; flex: 1; padding: 12px 14px; font: inherit; font-size: .88rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 2px; }
+.isin-form-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.isin-form-row button { padding: 12px 20px; color: var(--bg); background: var(--accent); border: 1px solid var(--accent); border-radius: 2px; font-weight: 600; cursor: pointer; }
+.isin-form-row button:disabled { opacity: .6; cursor: wait; }
+.isin-steps { max-width: 850px; margin: 20px 0 0; padding-left: 20px; color: var(--muted); font-size: .76rem; line-height: 1.9; }
+.isin-steps li[data-status="success"] { color: var(--positive); }
+.isin-steps li[data-status="error"] { color: var(--muted); }
+.asset-index small { display: block; margin-top: 5px; font-size: .68rem; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.asset-index .isin-empty { display: block; color: var(--muted); font-size: .85rem; }
+@media (max-width: 760px) { .isin-form-row { gap: 8px; } .isin-form-row input { width: 100%; } }

@@ -31,9 +31,10 @@ $refresh=static function($approvals)use($config,$connect,$in){
     if($in['readback_fault']??false)$actual['m2_market_current'][0]['price']='999';
     return \Mosa2\MarketCurrent\verifyReadback($result,$actual);
 };
-$scope=['mode'=>$in['mode']??'manual','request_budget'=>5,'source_priority'=>['provider:tradegate_bsx_mid','provider:boerse_frankfurt_api']];
+$scope=['mode'=>$in['mode']??'manual','request_budget'=>$in['request_budget']??5,'source_priority'=>['provider:tradegate_bsx_mid','provider:boerse_frankfurt_api']];
+if(isset($in['requested_isins']))$scope['expected_isins']=$in['requested_isins'];
 $selection=\Mosa2\MarketBatchScope\selection($memory->rows,gmdate('Y-m-d H:i:s').'.000000');
-$plan=\Mosa2\MarketBatchScope\plan($memory->rows,$selection,$scope['source_priority'],\Mosa2\MarketBatch\providers(),'Mosa2\\MarketLive\\completePlan',$scope['mode']==='manual');
+$plan=\Mosa2\MarketBatchScope\plan($memory->rows,$selection,$scope['source_priority'],\Mosa2\MarketBatch\providers(),'Mosa2\\MarketLive\\completePlan',$scope['mode']==='manual',10,$scope['expected_isins']??null);
 $scope['routes']=[];
 foreach($plan['prepared'] as $item){$route=array_values(array_filter($memory->rows['m2_asset_source_routes'],static fn($r)=>$r['id']===$item['route_id']))[0];$scope['routes'][$item['route_id']]=hash('sha256',\Mosa2\Phase3D\json($route));}
 if($in['bad_scope']??false)$scope['routes']=[];
