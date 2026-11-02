@@ -124,7 +124,7 @@ function run(array $input): array {
         same($manifest['policy'],'USE_EXISTING_ROUTE','pne_existing_route');same($manifest['instrument'],ISIN,'pne_manifest_instrument');
         same($manifest['provider_key'],'tradegate_bsx_quote_v1','pne_manifest_provider');same($manifest['adapter_class'],'TradegateQuoteV1','pne_manifest_adapter');
         $plan=\Mosa2\MarketLive\completePlan($initial,$manifest);same($plan['route']['decision'],'EXISTING_MATCH','pne_route_plan');
-        same($plan['route']['row']['id'],ROUTE_ID,'pne_plan_route_id');$private=privateManifest($input['private_root'],$manifest);
+        same($plan['route']['route_id']??null,ROUTE_ID,'pne_plan_route_id');$private=privateManifest($input['private_root'],$manifest);
         $gate=static function(array $runtimeConfig)use($input): void{
             same($runtimeConfig['state_contract']['schema_version']??null,6,'schema6_one_shot_contract');
             same($runtimeConfig['one_shot_scope']??null,'PNE_TRADEGATE','schema6_one_shot_scope');
