@@ -47,10 +47,11 @@ def zipped(text, name='report/reports/annual.xhtml'):
     return buf.getvalue()
 
 
-def plan(text=None, profile=runner.PROFILES[0]):
+def plan(text=None, profile=runner.PROFILES[0], execution=None):
     raw=zipped(document(profile) if text is None else text)
     meta=dict(url=profile['url'],http_status=200,content_type='application/zip',bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),
-              request_started_at=STAMP,observed_at=STAMP,execution=profile['execution'],commit='a'*40)
+              request_started_at=STAMP,observed_at=STAMP,
+              execution=profile['execution'] if execution is None else execution,commit='a'*40)
     p=esef.parse(raw,meta,dict(isin=profile['isin'],name=profile['names'][0]),profile)
     p['archive']=dict(storage_key='/private/synthetic/evidence.json',durable=True,sha256=p['stored_evidence']['sha256'],bytes=p['stored_evidence']['bytes'])
     return p
@@ -176,6 +177,13 @@ class EsefTests(unittest.TestCase):
         result=subprocess.run(['php','tests/fundamentals_esef.php'],input=json.dumps([a,b]),text=True,capture_output=True)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr);self.assertEqual(result.stderr,'')
         self.assertTrue(json.loads(result.stdout)['ok'])
+    def test_live3_plans_keep_reviewed_profiles_and_bind_execution(self):
+        live3={'NO0010081235':'fundamentals-esef-nel-20261102-03',
+               'DK0060252690':'fundamentals-esef-pandora-20261102-03'}
+        plans=[plan(profile=profile,execution=live3[profile['isin']]) for profile in runner.PROFILES]
+        result=subprocess.run(['php','tests/fundamentals_esef.php'],input=json.dumps(plans),text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertTrue(json.loads(result.stdout)['ok'])
     def test_one_shot_guards_and_safe_errors(self):
         env=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
             GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='1',GITHUB_SHA='a'*40,EXPECTED_COMMIT='a'*40,
@@ -219,10 +227,14 @@ class EsefTests(unittest.TestCase):
                'DK0060252690':'fundamentals-esef-pandora-20261101-02'}
         live3={'NO0010081235':'fundamentals-esef-nel-20261102-03',
                'DK0060252690':'fundamentals-esef-pandora-20261102-03'}
+        swapped={'NO0010081235':live3['DK0060252690'],
+                 'DK0060252690':live3['NO0010081235']}
         old_auth,old_workflow=runner.AUTH,runner.WORKFLOW
         try:
             runner.WORKFLOW=runner.LIVE3_WORKFLOW
             self.assertEqual(runner.execution_overrides(json.dumps(live3)),live3)
+            with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
+                runner.execution_overrides(json.dumps(swapped))
             with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
                 runner.execution_overrides(json.dumps(live2))
             runner.WORKFLOW=runner.LIVE2_WORKFLOW

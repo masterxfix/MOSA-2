@@ -17,7 +17,6 @@ function esefEvidence(array $plan,array $doc):void {
     same($doc['issuer']['isin'],$profile['isin'],'esef_isin');check(in_array($doc['issuer']['name'],$profile['names'],true),'esef_name');
     same(canonical($plan['source']),canonical($profile['source']),'esef_source');
     same($plan['metadata']['url'],$profile['url'],'esef_url');same($plan['metadata']['http_status'],200,'esef_http');
-    same($plan['metadata']['execution'],$profile['execution'],'esef_execution');
     $ifrs=static fn(string $ns):bool=>preg_match('~\Ahttps?://xbrl.ifrs.org/taxonomy/20[0-9]{2}-[0-9]{2}-[0-9]{2}/ifrs-full\z~',$ns)===1;
     $record=static function(array $r,bool $contextEnd=false)use($profile,$ifrs):void{
         if($contextEnd){same($r['taxonomy'],'http://www.xbrl.org/2003/instance','esef_context_taxonomy');same($r['tag'],'xbrli:endDate','esef_context_tag');}

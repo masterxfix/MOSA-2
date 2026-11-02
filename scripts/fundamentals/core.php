@@ -77,6 +77,9 @@ function validate(array $plan): array {
     }
     return ['metrics'=>$metrics,'units'=>$units,'records'=>$records];
 }
+function executionBinding(array $plan,mixed $execution): void {
+    if(array_key_exists('execution',$plan['metadata']??[]))same($execution,$plan['metadata']['execution'],'execution_binding');
+}
 function query(PDO $p,string $sql,array $args=[]): array {$q=$p->prepare($sql);$q->execute($args);return $q->fetchAll(PDO::FETCH_ASSOC);}
 function insert(PDO $p,string $table,array $row): string {
     $sql='INSERT INTO '.qi($table).' ('.implode(',',array_map('Mosa2\\Phase2\\qi',array_keys($row))).') VALUES ('.implode(',',array_fill(0,count($row),'?')).')';
@@ -285,7 +288,7 @@ function main(): int {
         if($input['action']==='inspect'){$result=['ok'=>true,'asset_id'=>$assetId,'baseline'=>$before,'protected'=>$protected,'schema'=>6,'tables'=>26];}
         else{
             $stage='PLAN';same($before,$input['baseline'],'baseline_drift');same($protected,$input['protected'],'protected_drift');same($assetId,$input['asset_id'],'asset_drift');
-            $plan=$input['plan'];validate($plan);storedFile($plan);
+            $plan=$input['plan'];executionBinding($plan,$input['execution']??null);validate($plan);storedFile($plan);
             if(isset($plan['stored_evidence']))same(canonical(json_decode($plan['evidence_json'],true)['issuer']),canonical($input['identity']),'evidence_issuer');
             $stage='TRANSACTION';$receipt=transaction($p,$plan,$assetId,static function()use(&$stage,&$commitStarted){$stage='COMMIT';$commitStarted=true;});
             $stage='INDEPENDENT_READBACK';$read=connection($input['password'],'127.0.0.1',$input['port']);

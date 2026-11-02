@@ -5,7 +5,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import re
 import sys
 import time
 from urllib import request, error, parse
@@ -33,21 +32,27 @@ def execution_overrides(raw=None):
         raise ValueError('ESEF_EXECUTION_BINDING') from None
     expected = {'NO0010081235', 'DK0060252690'}
     if WORKFLOW == LIVE3_WORKFLOW:
-        pattern = r'fundamentals-esef-(?:nel|pandora)-20261102-03'
+        allowed = {
+            'NO0010081235': 'fundamentals-esef-nel-20261102-03',
+            'DK0060252690': 'fundamentals-esef-pandora-20261102-03',
+        }
     elif WORKFLOW in (LIVE2_WORKFLOW, '.github/workflows/fundamentals-esef-once.yml'):
-        pattern = r'fundamentals-esef-(?:nel|pandora)-20261101-02'
+        allowed = {
+            'NO0010081235': 'fundamentals-esef-nel-20261101-02',
+            'DK0060252690': 'fundamentals-esef-pandora-20261101-02',
+        }
     else:
         raise ValueError('ESEF_EXECUTION_BINDING')
-    if not isinstance(values, dict) or set(values) != expected or any(not isinstance(v, str) or not re.fullmatch(
-            pattern, v) for v in values.values()):
+    if not isinstance(values, dict) or set(values) != expected or values != allowed:
         raise ValueError('ESEF_EXECUTION_BINDING')
     return values
 
 
-for _profile in PROFILES:
-    _override = execution_overrides().get(_profile['isin'])
-    if _override:
-        _profile['execution'] = _override
+EXECUTION_OVERRIDES = execution_overrides()
+
+
+def execution_for(profile):
+    return EXECUTION_OVERRIDES.get(profile['isin'], profile['execution'])
 
 TOTALS = dict(m2_fundamental_observations=63,m2_fundamental_current=32,m2_market_observations=28,m2_market_current=5)
 PRESERVE = [('DE000A0JBPG2',11,6),('DE0005313704',20,10),('AU000000DRO2',14,7),('US67066G1040',8,4),('US76655K1034',10,5)]
@@ -129,14 +134,15 @@ def execute(env):
                 for profile in PROFILES:
                     item=dict(isin=profile['isin'],ok=False,provider_requests=0,http_requests=0);report['reports'].append(item)
                     a=asset(before,profile['isin']);identity=dict(isin=profile['isin'],name=a['name'])
-                    selected=dict(identity=identity,preserve_assets=list(preserved),execution=profile['execution'],authorization=AUTH)
+                    execution=execution_for(profile)
+                    selected=dict(identity=identity,preserve_assets=list(preserved),execution=execution,authorization=AUTH)
                     try:
                         stage='DB_PREFLIGHT';inspected,elapsed=shared.database(env,port,'inspect',selected=selected)
                         item['preflight_runner_ms']=elapsed
                         stage='PRIVATE_RESERVATION';reserved=shared.archive(transport,'reserve',env,selected=selected)
                         stage='ESEF_PACKAGE_GET';started=time.monotonic();raw,meta=download(profile,item)
                         item['provider_ms']=(time.monotonic()-started)*1000
-                        meta.update(execution=profile['execution'],commit=env['GITHUB_SHA'])
+                        meta.update(execution=execution,commit=env['GITHUB_SHA'])
                         stage='ESEF_QUALIFICATION';plan=esef.parse(raw,meta,identity,profile);del raw
                         stage='EVIDENCE_ARCHIVE';compact=plan['evidence_json'].encode('utf-8');stored=plan['stored_evidence']
                         shared.archive(transport,'archive',env,reserved['identity'],stored,compact,selected=selected)

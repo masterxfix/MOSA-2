@@ -63,6 +63,7 @@ def archive(transport,action,env,identity=None,metadata=None,payload=None,select
 def database(env,port,action,selected=None,**extra):
     selected=selected or profile(env)
     request=dict(action=action,password=env['MOSA_TEST_DB_PASSWORD'],port=port,identity=selected['identity'],preserve_assets=selected['preserve_assets'],
+        execution=selected.get('execution'),
         expected_baseline_counts={'m2_market_current':5,'m2_market_observations':28},**extra)
     child={k:env[k] for k in ('PATH','HOME','LANG','SYSTEMROOT','TEMP','TMP') if k in env}
     start=time.monotonic()
