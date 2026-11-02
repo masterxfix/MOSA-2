@@ -1,5 +1,5 @@
 name: Manual HKEX annual fundamentals once
-run-name: HKEX fundamentals third ${{ inputs.expected_commit }}
+run-name: HKEX fundamentals fourth ${{ inputs.expected_commit }}
 on:
   workflow_dispatch:
     inputs:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       authorization:
-        description: MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102 colon exact commit
+        description: MOSA2-HKEX-FUNDAMENTALS-FOURTH-20261102 colon exact commit
         required: true
         type: string
 permissions:
@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   import:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.run_number == 3
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.run_number == 4
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -29,9 +29,9 @@ jobs:
           AUTHORIZATION: ${{ inputs.authorization }}
         run: |
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
-          test "$GITHUB_RUN_NUMBER" = "3"
+          test "$GITHUB_RUN_NUMBER" = "4"
           test "$GITHUB_RUN_ATTEMPT" = "1"
-          test "$AUTHORIZATION" = "MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102:$GITHUB_SHA"
+          test "$AUTHORIZATION" = "MOSA2-HKEX-FUNDAMENTALS-FOURTH-20261102:$GITHUB_SHA"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
@@ -61,7 +61,7 @@ jobs:
           AUTHORIZATION: ${{ inputs.authorization }}
           GH_TOKEN: ${{ github.token }}
           HKEX_WORKFLOW: .github/workflows/fundamentals-hkex-once.yml
-          HKEX_AUTH_PREFIX: 'MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102:'
+          HKEX_AUTH_PREFIX: 'MOSA2-HKEX-FUNDAMENTALS-FOURTH-20261102:'
           HKEX_EXECUTION_OVERRIDES: '{"CNE100000296":"fundamentals-hkex-byd-20261102-01","CNE100006CQ4":"fundamentals-hkex-ubtech-20261102-01"}'
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}

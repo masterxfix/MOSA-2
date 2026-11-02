@@ -26,17 +26,19 @@ def php_executable():
 
 
 def fixture(unit="RMB'000", years=('2025','2024'), company='BYD Company Limited',
-            standard=True, consolidated=True):
+            standard=True, consolidated=True, income_title='Consolidated Income Statement',
+            cash_title='Consolidated Cash Flow Statement', consolidation_text=None):
+    consolidation_text = consolidation_text or ('consolidated and company financial statements'
+                                                 if consolidated else 'separate financial statements')
     texts=[(40,800,'Annual Report 2025'),(40,780,company),(40,760,'31 December 2025'),
            (40,740,unit),(40,720,'PRC Accounting Standards for Business Enterprises' if standard else 'Other Standard'),
-           (40,700,'consolidated and company financial statements' if consolidated else 'separate financial statements'),
-           (40,670,'Consolidated Income Statement'),(40,650,'31 December 2025'),(40,630,unit),
+           (40,700,consolidation_text),(40,670,income_title),(40,650,'31 December 2025'),(40,630,unit),
            (40,610,'Note V'),(460,610,years[0]),(520,610,years[1])]
     rows=[('I. Operating revenue','803964958','777102455'),('II. Operating profit','40184709','50486047'),
           ('III. Total profit','39753049','49680677'),('IV. Net profit','33760758','41587940')]
     for i,(label,a,b) in enumerate(rows):
         y=585-i*22;texts.extend([(40,y,label),(460,y,a),(520,y,b)])
-    y=470;texts.extend([(40,y,'Consolidated Cash Flow Statement'),(40,y-20,'For 2025'),(40,y-40,unit),
+    y=470;texts.extend([(40,y,cash_title),(40,y-20,'For 2025'),(40,y-40,unit),
         (40,y-60,'Note V'),(460,y-60,years[0]),(520,y-60,years[1]),
         (40,y-85,'Net cash flow from operating activities'),(460,y-85,'59135544'),(520,y-85,'133453873')])
     def escape(t):return t.replace('\\','\\\\').replace('(','\\(').replace(')','\\)')
@@ -88,9 +90,28 @@ class HkexTests(unittest.TestCase):
         bad=copy.deepcopy(hkex.profile_for('byd-company-fy2025'));bad['isin']='CNE100000000'
         with self.assertRaises(ValueError): hkex.parse(base,self._meta(base),bad)
 
+    def test_db_canonical_names_are_accepted_only_with_matching_isins(self):
+        cases=(
+            ('byd-company-fy2025','CNE100000296','BYD'),
+            ('ubtech-robotics-fy2025','CNE100006CQ4','Ubtech Robotics'),
+        )
+        for key,isin,db_name in cases:
+            with self.subTest(key=key):
+                profile=hkex.profile_for(key)
+                raw=fixture(company=profile['name'],income_title=profile['title_patterns'][0],
+                            cash_title=profile['title_patterns'][1],
+                            consolidation_text=profile['consolidation_patterns'][0])
+                meta=self._meta(raw,profile)
+                parsed=hkex.parse(raw,meta,profile,identity=dict(isin=isin,name=db_name))
+                self.assertEqual(parsed['identity']['name'],db_name)
+                with self.assertRaises(ValueError):
+                    hkex.parse(raw,meta,profile,identity=dict(isin='CNE100000296',name=db_name if isin != 'CNE100000296' else 'Ubtech Robotics'))
+                with self.assertRaises(ValueError):
+                    hkex.parse(raw,meta,profile,identity=dict(isin=isin,name='Other Company'))
+
     @staticmethod
-    def _meta(raw):
-        p=hkex.profile_for('byd-company-fy2025')
+    def _meta(raw, profile=None):
+        p=profile or hkex.profile_for('byd-company-fy2025')
         return dict(url=p['url'],observed_at=OBSERVED,http_status=200,content_type='application/pdf',bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
 
     def test_php_writer_current_readback_replay_and_evidence_tamper(self):

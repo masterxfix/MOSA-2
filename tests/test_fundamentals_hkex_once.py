@@ -12,14 +12,14 @@ class HkexOnceTests(unittest.TestCase):
     def env(self):
         sha='a'*40
         return dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
-                    GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='3',GITHUB_SHA=sha,EXPECTED_COMMIT=sha,
+                    GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='4',GITHUB_SHA=sha,EXPECTED_COMMIT=sha,
                     AUTHORIZATION=once.AUTH+sha,GITHUB_WORKFLOW_REF='masterxfix/MOSA-2/'+once.WORKFLOW+'@refs/heads/main')
 
     def test_exact_workflow_and_execution_bindings(self):
         once.guard(self.env())
         self.assertEqual(once.execution_overrides(json.dumps(once.EXECUTIONS)),once.EXECUTIONS)
         workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/fundamentals-hkex-once.yml').read_text(encoding='utf-8')
-        for marker in ('workflow_dispatch:','github.run_attempt == 1','github.run_number == 3','MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102:$GITHUB_SHA',
+        for marker in ('workflow_dispatch:','github.run_attempt == 1','github.run_number == 4','MOSA2-HKEX-FUNDAMENTALS-FOURTH-20261102:$GITHUB_SHA',
                        'fundamentals-hkex-byd-20261102-01','fundamentals-hkex-ubtech-20261102-01','scripts/fundamentals_hkex_once.py'):
             self.assertIn(marker,workflow)
         self.assertIn('reusable_manual=True',Path(__file__).resolve().parents[1].joinpath('scripts/fundamentals_hkex_once.py').read_text(encoding='utf-8'))
@@ -29,9 +29,9 @@ class HkexOnceTests(unittest.TestCase):
     def test_binding_rejects_changed_commit_attempt_workflow_or_execution(self):
         base=self.env()
         for key,value in [('GITHUB_SHA','b'*40),('EXPECTED_COMMIT','b'*40),('GITHUB_RUN_ATTEMPT','2'),
-                          ('GITHUB_RUN_NUMBER','1'),('GITHUB_RUN_NUMBER','2'),('GITHUB_RUN_NUMBER','4'),('GITHUB_RUN_NUMBER','5'),
+                          ('GITHUB_RUN_NUMBER','1'),('GITHUB_RUN_NUMBER','2'),('GITHUB_RUN_NUMBER','3'),('GITHUB_RUN_NUMBER','5'),('GITHUB_RUN_NUMBER','6'),
                           ('GITHUB_WORKFLOW_REF','masterxfix/MOSA-2/.github/workflows/other.yml@refs/heads/main'),
-                          ('AUTHORIZATION','MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102:'+'b'*40)]:
+                          ('AUTHORIZATION','MOSA2-HKEX-FUNDAMENTALS-FOURTH-20261102:'+'b'*40)]:
             with self.subTest(key=key):
                 with self.assertRaises(ValueError): once.guard(base|{key:value})
         bad=dict(once.EXECUTIONS);bad['CNE100000296']='fundamentals-hkex-byd-20261102-02'
@@ -45,6 +45,24 @@ class HkexOnceTests(unittest.TestCase):
             self.assertEqual(expected['isin'],entry['profile']['isin'])
             self.assertEqual(set(expected['values']),{'revenue','operating_profit','profit_before_tax','profit_after_tax','operating_cashflow'})
             self.assertEqual({y for values in expected['values'].values() for y in values},{'2024','2025'})
+
+    def test_canonical_db_names_bind_to_their_unique_isins(self):
+        assets=[
+            dict(name='BYD',identifiers=[dict(normalized_value='CNE100000296')],facts=[],current={}),
+            dict(name='Ubtech Robotics',identifiers=[dict(normalized_value='CNE100006CQ4')],facts=[],current={}),
+            dict(name='BYD Company Limited',identifiers=[dict(normalized_value='CNE100000296')],facts=[],current={}),
+            dict(name='UBTECH ROBOTICS CORP LTD',identifiers=[dict(normalized_value='CNE100006CQ4')],facts=[],current={}),
+        ]
+        self.assertEqual(once.select_asset(dict(assets=assets[:2]), once.PROFILES[0]['profile']), assets[0])
+        self.assertEqual(once.select_asset(dict(assets=assets[:2]), once.PROFILES[1]['profile']), assets[1])
+        self.assertEqual(once.select_asset(dict(assets=assets[2:]), once.PROFILES[0]['profile']), assets[2])
+        self.assertEqual(once.select_asset(dict(assets=assets[2:]), once.PROFILES[1]['profile']), assets[3])
+        for bad in (
+            dict(name='BYD',identifiers=[dict(normalized_value='CNE100006CQ4')],facts=[],current={}),
+            dict(name='Ubtech Robotics',identifiers=[dict(normalized_value='CNE100000296')],facts=[],current={}),
+            dict(name='Other Company',identifiers=[dict(normalized_value='CNE100000296')],facts=[],current={}),
+        ):
+            with self.assertRaises(ValueError): once.select_asset(dict(assets=[bad]), once.PROFILES[0]['profile'])
 
     def test_preservation_scope_binds_all_seven_assets_and_fingerprints(self):
         self.assertEqual(sum(row['observations'] for row in once.PRESERVE),79)
