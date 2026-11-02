@@ -57,11 +57,12 @@ function manifest(array $state,array $selection): array {
             'unit_class'=>'currency_per_instrument'],
     ];
     $route=planMarketRoute($state['m2_asset_source_routes'],
-        ['asset_id'=>$id,'source_id'=>$source['row']['id'],'route_type'=>'quote','priority'=>0,'enabled'=>0,'evidence'=>$evidence],$units);
+        ['asset_id'=>$id,'source_id'=>$source['row']['id'],'route_type'=>'quote','priority'=>0,'enabled'=>$selection['route_enabled']??0,'evidence'=>$evidence],$units);
     check(in_array($route['decision'],['CREATE_REVISION','EXISTING_MATCH'],true),'scope_route_conflict');
     $manifest=['policy'=>$route['decision']==='EXISTING_MATCH'?'USE_EXISTING_ROUTE':'ONBOARD_NEW_ROUTE',
         'identity'=>$identity,'route_evidence'=>$evidence,'unit_binding'=>$units,'instrument'=>$isin,
         'provider_key'=>'tradegate_bsx_quote_v1','adapter_module'=>'scripts.market_collector.tradegate','adapter_class'=>'TradegateQuoteV1'];
+    if(isset($selection['route_enabled']))$manifest['route_enabled']=$selection['route_enabled'];
     completePlan($state,$manifest);
     return $manifest;
 }

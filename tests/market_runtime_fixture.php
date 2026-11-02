@@ -46,6 +46,14 @@ class MemoryStatement extends PDOStatement {
             $columns=array_map(static fn($s)=>trim($s,'`'),explode(',',$m[2]));$row=array_combine($columns,$params);$row['id']=(string)++$this->db->state->last;
             $this->db->state->rows[$m[1]][]=\Mosa2\MarketLive\strings($row);$this->affected=1;return true;
         }
+        if(str_starts_with($sql,'INSERT INTO m2_market_current ')){
+            preg_match('/\(([^)]+)\)/',$sql,$m);$columns=array_map(static fn($s)=>trim($s,'`'),explode(',',$m[1]));
+            $this->db->state->rows['m2_market_current'][]=array_combine($columns,$params);$this->affected=1;return true;
+        }
+        if(str_starts_with($sql,'UPDATE m2_market_current SET ')){
+            preg_match_all('/`([a-z_]+)`=/',$sql,$fields);$asset=array_pop($params);
+            foreach($this->db->state->rows['m2_market_current'] as &$row)if($row['asset_id']===$asset){$row=array_combine($fields[1],$params);$this->affected=1;}unset($row);return true;
+        }
         if(!preg_match('/ FROM `?(m2_\w+)`?/',$sql,$m))throw new RuntimeException('unsupported SQL: '.$sql);
         $rows=$this->db->state->rows[$m[1]];
         if(str_contains($sql,' WHERE ')){
@@ -60,6 +68,7 @@ class MemoryStatement extends PDOStatement {
     }
     public function fetchAll(int $mode=PDO::FETCH_DEFAULT,mixed ...$args):array {return $mode===PDO::FETCH_COLUMN?array_column($this->rows,array_key_first($this->rows[0]??['x'=>null])):$this->rows;}
     public function fetchColumn(int $column=0):mixed{return array_values($this->rows[0]??[] )[$column]??false;}
+    public function fetch(int $mode=PDO::FETCH_DEFAULT,int $orientation=PDO::FETCH_ORI_NEXT,int $offset=0):mixed{return array_shift($this->rows)??false;}
     public function rowCount():int{return $this->affected;}
 }
 class MemoryConnection extends PDO {
@@ -106,7 +115,9 @@ $invoke=static function($config,$request)use($in,$memory,&$providers){
     }
     if(($in['fault']??'')==='replay'&&$request['action']==='replay')$reply['plan']['decision']='INSERT';return $reply;
 };
-if(($in['action']??'')==='states'){
+if(($in['action']??'')==='general'){
+    require_once __DIR__.'/market_general_fixture.php';
+}elseif(($in['action']??'')==='states'){
     $reports=[];$scoped=$in['batch']??[['manifest'=>$in['manifest']]];
     foreach($scoped as $entry){
         $p=new MemoryConnection($memory);$p->beginTransaction();$baseline=null;$phases=[];

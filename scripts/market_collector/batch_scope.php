@@ -4,6 +4,38 @@ namespace Mosa2\MarketBatchScope;
 
 use InvalidArgumentException;
 
+/** Join the authenticated physical catalog for the shared qualification rules. */
+function selection(array $state,string $now): array {
+    require_once __DIR__.'/selection.php';
+    $assets=[];$routes=[];
+    foreach($state['m2_assets'] as $asset){
+        $entities=array_values(array_filter($state['m2_entities'],static fn($e)=>$e['id']===$asset['entity_id']&&$e['status']==='active'));
+        if(count($entities)===1)$assets[]=$asset+['asset_id'=>$asset['entity_id']];
+    }
+    foreach($state['m2_asset_source_routes'] as $route){
+        $sources=array_values(array_filter($state['m2_sources'],static fn($s)=>$s['id']===$route['source_id']));
+        $units=array_values(array_filter($state['m2_units'],static fn($u)=>$u['unit_key']===$route['quote_unit_key']&&$u['unit_version']===$route['quote_unit_version']&&$u['unit_contract_version']===$route['unit_contract_version']));
+        if(count($sources)!==1||count($units)!==1)continue;
+        $routes[]=$route+['source_key'=>$sources[0]['source_key'],'source_name'=>$sources[0]['display_name'],
+            'source_type'=>$sources[0]['source_type'],'source_enabled'=>$sources[0]['enabled'],
+            'unit_status'=>$units[0]['status'],'unit_currency'=>$units[0]['monetary_currency_code']];
+    }
+    $selected=\Mosa2\MarketSelection\select($assets,$state['m2_asset_identifiers'],$routes,
+        $state['m2_market_current'],$state['m2_market_observations'],$now);
+    // Selection reports multiple valid sources as ambiguous for an unconfigured caller.
+    // The batch caller supplies explicit source priorities, so retain all qualified latest options.
+    foreach($selected['assets'] as &$asset){
+        if($asset['identity_status']!=='VALID'||$asset['route_reason']!=='MULTIPLE_QUALIFIED_SOURCES')continue;
+        $latest=[];foreach($asset['routes'] as $r)$latest[$r['source_id']]=max($latest[$r['source_id']]??0,(int)$r['route_revision']);
+        foreach($asset['routes'] as $r)if($r['qualification']==='QUALIFIED'&&(int)$r['route_revision']===$latest[$r['source_id']]){
+            $selected['collector_candidates'][]=['asset_id'=>$asset['asset_id'],'isin'=>$asset['isin'],'name'=>$asset['name']]+$r;
+        }
+        $asset['collector_status']='READY';$selected['counts']['qualified_for_collector']++;$selected['counts']['without_usable_route']--;
+    }unset($asset);
+    return $selected;
+}
+
+
 /**
  * Prepare provider-neutral, already qualified assets for the existing MarketBatch.
  * The caller provides the current read-only MarketSelection result, DB snapshot,
@@ -89,7 +121,7 @@ function plan(
         $usedPhysicalRoutes[$candidate['route_id']] = true;
         $source = $candidate['source_key'];
         $manifest = $providerFactories[$source]($state,
-            ['isin' => $candidate['isin'], 'name' => $candidate['name']]);
+            ['isin' => $candidate['isin'], 'name' => $candidate['name'], 'route_enabled'=>$manual?0:1]);
         $ensure(is_array($manifest) && ($manifest['policy'] ?? null) === 'USE_EXISTING_ROUTE' &&
             ($manifest['identity']['normalized_value'] ?? null) === $candidate['isin'],
             'manifest_binding');

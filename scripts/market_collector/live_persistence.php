@@ -62,7 +62,7 @@ function completePlan(array $state,array $m): array {
     }
     $unit=$m['unit_binding'];$unitRows=array_values(array_filter($state['m2_units'],static fn($r)=>matchFields($r,['unit_key'=>$unit['quote_unit_key'],'unit_version'=>$unit['quote_unit_version'],'unit_contract_version'=>$unit['unit_contract_version']])));same(count($unitRows),1,'quote_unit_exists');
     same($unitRows[0]['monetary_currency_code'],$m['route_evidence']['row']['currency'],'quote_currency');
-    $qualified=['asset_id'=>$asset['asset_id'],'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>0,'evidence'=>$m['route_evidence']];
+    $qualified=['asset_id'=>$asset['asset_id'],'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>$m['route_enabled']??0,'evidence'=>$m['route_evidence']];
     $route=planMarketRoute($state['m2_asset_source_routes'],$qualified,$unit);
     same($route['decision'],$policy==='USE_EXISTING_ROUTE'?'EXISTING_MATCH':'CREATE_REVISION','policy_route_required');
     return ['policy'=>$policy,'asset'=>$asset,'source'=>['decision'=>'EXISTING_MATCH','source_id'=>$sources[0]['id']],
@@ -94,9 +94,10 @@ function compareDelta(array $before,array $after,array $plan,array $inserted): v
     }same($after,$before,'unplanned_delta');
 }
 /** One read-only plan, one provider acquisition, one atomic business transaction, one independent readback. */
-function proofRun(string $privateRoot,string $password,array $config,array $manifest,?callable $acquisitionGate=null): array {
+function proofRun(string $privateRoot,string $password,array $config,array $manifest,?callable $acquisitionGate=null,?callable $connect=null,?callable $invoke=null): array {
     $capture=static fn(PDO $db)=>snapshot($db,$config['state_contract']??[]);
-    $connect=static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307);
+    $connect??=static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307);
+    $invoke??=__NAMESPACE__.'\\bridge';
     $r=['ok'=>false,'stage'=>'preflight','database_connections'=>0,'provider_requests'=>0,'committed'=>false,'rollback'=>null];
     $p=null;$locked=false;$baseline=null;$plan=null;$inserted=[];$lockKey=null;
     try {
@@ -109,14 +110,14 @@ function proofRun(string $privateRoot,string $password,array $config,array $mani
             check(in_array(['source_id','route_type','external_key','route_revision'],$indexes,true)&&in_array(['asset_id','source_id','route_type','route_revision'],$indexes,true),'route_unique_contracts');
         }finally{if($p->inTransaction())$p->rollBack();}
         if($acquisitionGate===null)\Mosa2\CollectorSchema5\acquisitionAllowed($config['state_contract']??[]);
-        else $acquisitionGate($config);
-        $r['stage']='provider';$acquired=bridge($config,['action'=>'fetch','private_root'=>$privateRoot,'php_cli'=>$config['php']]);$r['provider_requests']=1;
+        else $acquisitionGate($config,$baseline,$plan);
+        $r['stage']='provider';$acquired=$invoke($config,['action'=>'fetch','private_root'=>$privateRoot,'php_cli'=>$config['php']]);$r['provider_requests']=1;
         $r['stage']='transaction';$p->beginTransaction();
         try {
             same($capture($p),$baseline,'preflight_drift');same(completePlan($baseline,$manifest),$plan,'plan_drift');
             $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');$store=new \Mosa2\MarketIdentity\PdoStore($p);
             $asset=applyAssetIdentityPlan($store,$plan['asset'],$now);$route=strings(applyMarketRoutePlan($store,$plan['route'],$asset['asset_id'],$now));$binding=routeBinding($route);
-            $writer=bridge($config,['action'=>'plan','acquired'=>$acquired,'route'=>$binding,'created_at'=>$now,'existing'=>existing($baseline['m2_market_observations']),'allow_duplicate'=>($config['allow_duplicate']??false)===true])['plan'];
+            $writer=$invoke($config,['action'=>'plan','acquired'=>$acquired,'route'=>$binding,'created_at'=>$now,'existing'=>existing($baseline['m2_market_observations']),'allow_duplicate'=>($config['allow_duplicate']??false)===true])['plan'];
             $r['writer']=$writer['decision'];
             if($writer['decision']==='INSERT'){
                 \Mosa2\Phase3O\executePlan($p,$writer,$binding,$now);$observationId=$p->lastInsertId();
@@ -131,7 +132,7 @@ function proofRun(string $privateRoot,string $password,array $config,array $mani
             if($writer['decision']==='INSERT'){$expected=\Mosa2\Phase3O\insertValues($writer,$binding,$now);$expected['dedupe_key']=strtoupper(bin2hex($expected['dedupe_key']));same($observation,['id'=>$observationId]+strings($expected),'observation_exact');}
             else same(array_intersect_key($observation,$writer['normalized']),strings($writer['normalized']),'duplicate_payload');
             $stored=array_intersect_key($observation,array_flip(array_merge(\Mosa2\Phase3O\CORE,\Mosa2\Phase3O\UNITS)));
-            $replay=bridge($config,['action'=>'replay','route'=>$binding,'stored'=>$stored,'created_at'=>$now,'existing'=>existing($state['m2_market_observations'])])['plan'];
+            $replay=$invoke($config,['action'=>'replay','route'=>$binding,'stored'=>$stored,'created_at'=>$now,'existing'=>existing($state['m2_market_observations'])])['plan'];
             same($replay['decision'],'DUPLICATE_UNCHANGED','replay');same($replay['canonical_bytes'],$writer['canonical_bytes'],'replay_canonical');same($replay['dedupe_key'],$writer['dedupe_key'],'replay_key');
             foreach($plan['deltas'] as $t=>$delta){$pk=$t==='m2_assets'?'entity_id':'id';$oldIds=array_column($baseline[$t],$pk);$inserted[$t]=array_values(array_filter($state[$t],static fn($row)=>!in_array($row[$pk],$oldIds,true)));}
             compareDelta($baseline,$capture($p),$plan,$inserted);same($p->commit(),true,'commit');$r['committed']=true;

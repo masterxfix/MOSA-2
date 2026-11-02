@@ -120,7 +120,7 @@ class MarketSelectionTests(unittest.TestCase):
         self.assertEqual(item['route_reason'], 'ROUTE_DISABLED')
 
     def test_unsupported_currency_is_not_converted_or_activated(self):
-        data = base();data['routes'][1]['unit_currency'] = 'USD';data['routes'][1]['quote_unit_key'] = 'USD'
+        data = base();data['routes'][1]['unit_currency'] = 'US';data['routes'][1]['quote_unit_key'] = 'USD'
         result = call(data)['result'];item = next(x for x in result['assets'] if x['name'] == 'Beta')
         self.assertEqual(item['route_reason'], 'CURRENCY_NOT_QUALIFIED')
         self.assertNotIn('Beta', [x['name'] for x in result['collector_candidates']])

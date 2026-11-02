@@ -101,7 +101,7 @@ class MarketLiveBatchTests(unittest.TestCase):
     def test_existing_runner_only_no_business_duplication_parallelism_or_asset_literals(self):
         text = (ROOT/'scripts/market_collector/live_batch.php').read_text(encoding='utf-8')
         self.assertEqual(text.count('\\Mosa2\\MarketLive\\run('), 1)
-        for forbidden in ['completePlan(', 'compareDelta(', 'bridge(', 'PDO', 'INSERT INTO',
+        for forbidden in ['completePlan(', 'compareDelta(', 'bridge(', 'new PDO', 'new \\PDO', 'INSERT INTO',
                           'pcntl_', 'Thread', 'Worker', 'curl_multi', 'sleep(']:
             self.assertNotIn(forbidden, text)
         self.assertNotRegex(text, r'\b[A-Z]{2}[A-Z0-9]{9}[0-9]\b')

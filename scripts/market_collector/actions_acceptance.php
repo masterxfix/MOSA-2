@@ -31,10 +31,11 @@ function manifest(array $state,array $selection): array {
             'unit_class'=>'currency_per_instrument']];
     $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']==='provider:boerse_frankfurt_api'));
     same(count($sources),1,'scope_source');
-    $route=planMarketRoute($state['m2_asset_source_routes'],['asset_id'=>$id,'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>0,'evidence'=>$evidence],$units);
+    $route=planMarketRoute($state['m2_asset_source_routes'],['asset_id'=>$id,'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>$selection['route_enabled']??0,'evidence'=>$evidence],$units);
     check(in_array($route['decision'],['CREATE_REVISION','EXISTING_MATCH'],true),'scope_route_conflict');
     $m=['policy'=>$route['decision']==='EXISTING_MATCH'?'USE_EXISTING_ROUTE':'ONBOARD_NEW_ROUTE','identity'=>$identity,'route_evidence'=>$evidence,'unit_binding'=>$units,
         'instrument'=>$isin,'provider_key'=>'boerse_frankfurt_api_v1','adapter_module'=>'scripts.market_collector.boerse_frankfurt','adapter_class'=>'FrankfurtSnapshotV1'];
+    if(isset($selection['route_enabled']))$m['route_enabled']=$selection['route_enabled'];
     completePlan($state,$m);return $m;
 }
 function privateItem(string $root,string $kind,array $m): string {

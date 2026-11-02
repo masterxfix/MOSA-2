@@ -109,8 +109,8 @@ function planMarketRoute(array $current,array $qualified,array $units): array {
     $external='market-v1:'.hash('sha256',$c['proposed_route_key']);
     check(is_string($q['source_id'])&&preg_match('/\A[1-9][0-9]*\z/D',$q['source_id'])===1,'source_id');
     check($q['asset_id']===null||(is_string($q['asset_id'])&&preg_match('/\A[1-9][0-9]*\z/D',$q['asset_id'])),'asset_id');
-    check($q['route_type']==='quote'&&$q['priority']===0&&$q['enabled']===0,'inactive_quote_route');
-    $base=['asset_id'=>$q['asset_id'],'source_id'=>$q['source_id'],'route_type'=>$q['route_type'],'external_key'=>$external,'priority'=>'0','enabled'=>'0'];
+    check($q['route_type']==='quote'&&$q['priority']===0&&in_array($q['enabled'],[0,1],true),'inactive_quote_route');
+    $base=['asset_id'=>$q['asset_id'],'source_id'=>$q['source_id'],'route_type'=>$q['route_type'],'external_key'=>$external,'priority'=>'0','enabled'=>(string)$q['enabled']];
     $seenExternal=[];$seenAsset=[];$group=[];$max=0;
     foreach($current as $r){
         if((string)$r['source_id']!==$q['source_id']||$r['route_type']!==$q['route_type'])continue;
@@ -123,6 +123,7 @@ function planMarketRoute(array $current,array $qualified,array $units): array {
         $seenExternal[$rev]=true;$seenAsset[$rev]=true;$max=max($max,$rev);$group[]=$r;
     }
     foreach($group as $r)if((int)$r['route_revision']===$max&&matchFields($r,$base+$units))return ['decision'=>'EXISTING_MATCH','route_id'=>(string)$r['id'],'row'=>$base+['route_revision'=>(string)$max]+$units,'proposed_route_key'=>$c['proposed_route_key']];
+    if($q['enabled']===1)return ['decision'=>'CONFLICT','reason'=>'active_route_must_exist'];
     if($max>=4294967295)return ['decision'=>'CONFLICT','reason'=>'route_revision_exhausted'];
     return ['decision'=>'CREATE_REVISION','row'=>$base+['route_revision'=>(string)($max+1)]+$units,'proposed_route_key'=>$c['proposed_route_key']];
 }

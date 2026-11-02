@@ -1,0 +1,59 @@
+name: Manual general market collection
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Reviewed full main SHA
+        required: true
+        type: string
+      scope:
+        description: Exact JSON mode, request_budget, source_priority, expected_isins
+        required: true
+        type: string
+      authorization:
+        description: MOSA2-MARKET-BATCH plus SHA and SHA256 of exact scope JSON
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: mosa2-general-market-collection
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Qualified runtime and focused integration checks
+        env:
+          PYTHONPATH: .:tests
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          php -r 'if (PHP_VERSION_ID < 80400 || PHP_VERSION_ID >= 80500 || !extension_loaded("pdo_mysql")) exit(1);'
+          python3 -B -m unittest -v test_market_general test_market_selection test_tradegate_collector test_tradegate_manifest test_market_live_batch
+          php tests/test_market_batch_scope.php
+          python3 -m pip install --disable-pip-version-check --no-input -r scripts/requirements-deploy.txt
+      - name: Execute authorized general batch
+        env:
+          MOSA_MARKET_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_MARKET_SCOPE: ${{ inputs.scope }}
+          MOSA_MARKET_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/collector_actions.py --collection

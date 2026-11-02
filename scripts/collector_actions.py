@@ -1,6 +1,7 @@
 """Manual runner: pinned SSH, direct-tcpip only, PHP on this runner. No remote files."""
 from contextlib import contextmanager
 import json
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -178,7 +179,7 @@ def execute(env, paramiko=None):
 
 
 def main():
-    report = execute(os.environ)
+    report = execute_collection(os.environ) if '--collection' in sys.argv else execute(os.environ)
     encoded = public_text(report, os.environ)
     print(encoded)
     summary = os.environ.get('GITHUB_STEP_SUMMARY')
@@ -186,6 +187,71 @@ def main():
         with open(summary, 'a', encoding='utf-8') as output:
             output.write('MOSA-2 manual collector acceptance\n\n```json\n' + encoded + '\n```\n')
     return 0 if report['ok'] and json.loads(encoded).get('ok') else 1
+
+
+def collection_scope(env):
+    commit = env.get('MOSA_MARKET_EXPECTED_COMMIT', '')
+    import re
+    if (not re.fullmatch('[0-9a-f]{40}', commit) or env.get('GITHUB_SHA') != commit
+            or env.get('GITHUB_ACTIONS') != 'true' or env.get('GITHUB_RUN_ATTEMPT') != '1'
+            or env.get('GITHUB_EVENT_NAME') != 'workflow_dispatch' or env.get('GITHUB_REF') != 'refs/heads/main'
+            or env.get('GITHUB_REPOSITORY') != 'masterxfix/MOSA-2'):
+        raise ConfigurationError('COLLECTION_CONTEXT')
+    raw = env.get('MOSA_MARKET_SCOPE', '')
+    scope = json.loads(raw)
+    if (set(scope) != {'mode', 'request_budget', 'source_priority', 'expected_isins'}
+            or scope['mode'] != 'manual' or type(scope['request_budget']) is not int
+            or not 1 <= scope['request_budget'] <= 5
+            or type(scope['expected_isins']) is not list
+            or not 1 <= len(scope['expected_isins']) <= scope['request_budget']
+            or any(not isinstance(i, str) or not re.fullmatch('[A-Z]{2}[A-Z0-9]{9}[0-9]', i) for i in scope['expected_isins'])
+            or len(set(scope['expected_isins'])) != len(scope['expected_isins'])
+            or type(scope['source_priority']) is not list or not scope['source_priority']
+            or any(s not in ('provider:tradegate_bsx_mid', 'provider:boerse_frankfurt_api') for s in scope['source_priority'])
+            or len(set(scope['source_priority'])) != len(scope['source_priority'])):
+        raise ConfigurationError('COLLECTION_SCOPE')
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    if env.get('MOSA_MARKET_AUTHORIZATION') != 'MOSA2-MARKET-BATCH:' + commit + ':' + digest:
+        raise ConfigurationError('COLLECTION_AUTHORIZATION')
+    return scope
+
+
+def execute_collection(env, paramiko=None):
+    report = dict(ok=False, stage='configuration', provider_requests=0)
+    try:
+        scope = collection_scope(env)
+        config = configuration(env)
+        if paramiko is None:
+            import paramiko
+        report['stage'] = 'ssh'
+        with ssh_client(config, report, paramiko) as transport:
+            report['stage'] = 'db_tunnel'
+            with tunnel(transport, report) as port:
+                with tempfile.TemporaryDirectory(prefix='mosa2-market-batch-') as private:
+                    os.chmod(private, 0o700)
+                    runtime = dict(python=sys.executable, php='php', project=str(ROOT), runtime_path=env.get('PATH', ''),
+                        public_root=str(ROOT), db_host='127.0.0.1', db_port=port,
+                        request_script=str(ROOT/'scripts/market_collector/frankfurt_request.php'),
+                        state_contract=dict(schema_version=6, allow_current=True))
+                    wire = dict(password=env['MOSA_TEST_DB_PASSWORD'], config=runtime, scope=scope, private_root=private)
+                    child_env = {k: env[k] for k in ('PATH','HOME','LANG','SYSTEMROOT','TEMP','TMP') if k in env}
+                    child_env['PYTHONDONTWRITEBYTECODE'] = '1'
+                    report['stage'] = 'collection'
+                    reply = subprocess.run(['php', str(ROOT/'scripts/market_collector/live_batch.php')],
+                        input=json.dumps(wire), text=True, capture_output=True, cwd=ROOT, env=child_env, timeout=600)
+                    if reply.stderr:
+                        raise RuntimeError('COLLECTION_PROCESS_FAILED')
+                    result = json.loads(reply.stdout)
+                    report['collection'] = result
+                    report['provider_requests'] = result.get('provider_requests')
+                    report['ok'] = reply.returncode == 0 and result.get('ok') is True
+    except ConfigurationError as error:
+        report['failure'] = str(error)
+    except Exception as error:
+        report['failure_type'] = type(error).__name__
+        if report['stage'] == 'collection':
+            report['provider_requests'] = None  # Unknown output never means zero requests/writes.
+    return report
 
 
 if __name__ == '__main__':

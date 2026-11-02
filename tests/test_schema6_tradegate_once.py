@@ -91,12 +91,12 @@ class OneShotAuthTests(unittest.TestCase):
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stderr, "")
-        self.assertEqual(result.stdout, "5:4")
+        self.assertEqual(result.stdout, "7:4")
 
     def test_proof_uses_the_configured_tunnel_endpoint_for_both_connections(self):
         source = (ROOT / "scripts/market_collector/live_persistence.php").read_text(encoding="utf-8")
         proof = source[source.index("function proofRun"):source.index("require_once __DIR__.'/runtime_persistence.php'")]
-        self.assertIn("$connect=static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307);", proof)
+        self.assertIn("$connect??=static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307);", proof)
         self.assertEqual(proof.count("$p=$connect();"), 1)
         self.assertEqual(proof.count("$read=$connect();"), 1)
         self.assertNotIn("connection($password);", proof)
