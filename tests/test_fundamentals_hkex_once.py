@@ -12,25 +12,26 @@ class HkexOnceTests(unittest.TestCase):
     def env(self):
         sha='a'*40
         return dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
-                    GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='2',GITHUB_SHA=sha,EXPECTED_COMMIT=sha,
+                    GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='3',GITHUB_SHA=sha,EXPECTED_COMMIT=sha,
                     AUTHORIZATION=once.AUTH+sha,GITHUB_WORKFLOW_REF='masterxfix/MOSA-2/'+once.WORKFLOW+'@refs/heads/main')
 
     def test_exact_workflow_and_execution_bindings(self):
         once.guard(self.env())
         self.assertEqual(once.execution_overrides(json.dumps(once.EXECUTIONS)),once.EXECUTIONS)
         workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/fundamentals-hkex-once.yml').read_text(encoding='utf-8')
-        for marker in ('workflow_dispatch:','github.run_attempt == 1','github.run_number == 2','MOSA2-HKEX-FUNDAMENTALS-SECOND-20261102:$GITHUB_SHA',
+        for marker in ('workflow_dispatch:','github.run_attempt == 1','github.run_number == 3','MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102:$GITHUB_SHA',
                        'fundamentals-hkex-byd-20261102-01','fundamentals-hkex-ubtech-20261102-01','scripts/fundamentals_hkex_once.py'):
             self.assertIn(marker,workflow)
         self.assertIn('reusable_manual=True',Path(__file__).resolve().parents[1].joinpath('scripts/fundamentals_hkex_once.py').read_text(encoding='utf-8'))
+        self.assertNotIn('test_fundamentals_esef.py',workflow)
         self.assertNotIn('schedule:',workflow);self.assertNotIn('push:',workflow)
 
     def test_binding_rejects_changed_commit_attempt_workflow_or_execution(self):
         base=self.env()
         for key,value in [('GITHUB_SHA','b'*40),('EXPECTED_COMMIT','b'*40),('GITHUB_RUN_ATTEMPT','2'),
-                          ('GITHUB_RUN_NUMBER','1'),('GITHUB_RUN_NUMBER','3'),
+                          ('GITHUB_RUN_NUMBER','1'),('GITHUB_RUN_NUMBER','2'),('GITHUB_RUN_NUMBER','4'),('GITHUB_RUN_NUMBER','5'),
                           ('GITHUB_WORKFLOW_REF','masterxfix/MOSA-2/.github/workflows/other.yml@refs/heads/main'),
-                          ('AUTHORIZATION','MOSA2-HKEX-FUNDAMENTALS-SECOND-20261102:'+'b'*40)]:
+                          ('AUTHORIZATION','MOSA2-HKEX-FUNDAMENTALS-THIRD-20261102:'+'b'*40)]:
             with self.subTest(key=key):
                 with self.assertRaises(ValueError): once.guard(base|{key:value})
         bad=dict(once.EXECUTIONS);bad['CNE100000296']='fundamentals-hkex-byd-20261102-02'
