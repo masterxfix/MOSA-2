@@ -1,5 +1,6 @@
 """One authorized HKEX import: two direct PDF GETs, compact Evidence, shared writer."""
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import logging
@@ -108,6 +109,19 @@ def execution_for(profile):
     return execution
 
 
+FACT_FIELDS = ('metric_key', 'value_decimal', 'unit_key', 'fiscal_year', 'period_start', 'period_end', 'field_path')
+
+
+def normalize_fact_rows(rows):
+    return sorted(tuple(Decimal(str(row[key])).normalize() if key == 'value_decimal' else str(row[key])
+                        for key in FACT_FIELDS) for row in rows)
+
+
+def bind_db_result(report_item, result, elapsed):
+    need(result.get('ok') is True and result.get('readback') == 'PASS', 'HKEX_DB_READBACK')
+    report_item.update(result, apply_runner_ms=elapsed, ok=True)
+
+
 def download(profile, item):
     """One direct PDF GET, no redirects and no retry."""
     class NoRedirect(request.HTTPRedirectHandler):
@@ -181,16 +195,16 @@ def execute(env):
                     entry.update(response_sha256=meta['sha256'],response_bytes=meta['bytes'],evidence_sha256=stored['sha256'],
                                  evidence_bytes=len(compact),evidence='PASS',periods=plan['reported_periods'],
                                  currency=plan['units'][0]['monetary_currency_code'],data_gaps=plan['unqualified_metrics'])
-                    packages.append(dict(item=item,plan=plan,stored=stored,reserved=reserved,preflight=inspected,compact=compact))
+                    packages.append(dict(item=item,report=entry,plan=plan,stored=stored,reserved=reserved,preflight=inspected,compact=compact))
                 totals=dict(TOTALS);preserve_by_isin={a['isin']:a for a in preserved}
                 for package in packages:
-                    item=package['item'];stage='DB_APPLY_AND_READBACK';
+                    item=package['item'];report_item=package['report'];stage='DB_APPLY_AND_READBACK';
                     inspected,elapsed=shared.database(env,port,'inspect',selected=item);item['preflight_after_previous_ms']=elapsed
                     pending_write=True
                     result,elapsed=shared.database(env,port,'apply',selected=item,baseline=inspected['baseline'],protected=inspected['protected'],
                                                    asset_id=inspected['asset_id'],plan=package['plan'])
                     stage='FINAL_EVIDENCE_READBACK';shared.archive(transport,'verify',env,package['reserved']['identity'],package['stored'],selected=item)
-                    pending_write=False;item.update(result,apply_runner_ms=elapsed,ok=True)
+                    pending_write=False;bind_db_result(report_item,result,elapsed)
                     totals['m2_fundamental_observations']+=result['observations'];totals['m2_fundamental_current']+=result['current']
                     del package['plan'],package['compact']
                 stage='INDEPENDENT_ANALYSIS_READBACK';final=read_snapshot(env,port,totals)
@@ -201,11 +215,10 @@ def execute(env):
                     else: need({k:v for k,v in new.items() if k not in ('facts','current')}=={k:v for k,v in old.items() if k not in ('facts','current')}, 'HKEX_PRESERVATION')
                 for entry,item in zip(PROFILES,report['reports']):
                     asset=select_asset(final,entry['profile']);snapshot=build(asset,final['sources']);prepare(snapshot)
+                    need(item['ok'] is True and item.get('readback') == 'PASS', 'HKEX_ANALYSIS')
                     need(len(snapshot['facts'])==10 and len(snapshot['current_observation_ids'])==5, 'HKEX_ANALYSIS')
                     need(all(f['currency']=='CNY' and f['unit']=='CNY_THOUSAND' for f in snapshot['facts']), 'HKEX_ANALYSIS')
-                    fields=('metric_key','value_decimal','unit_key','fiscal_year','period_start','period_end','field_path')
-                    norm=lambda rows:sorted(tuple(str(r[k]) for k in fields) for r in rows)
-                    need(norm(asset['facts'])==norm(item['verified_facts']), 'HKEX_ANALYSIS')
+                    need(normalize_fact_rows(asset['facts'])==normalize_fact_rows(item['verified_facts']), 'HKEX_ANALYSIS')
                     item['analysis']=dict(contract=snapshot['contract'],reference_check='PASS',calculations=snapshot['calculations'],
                                           missing_metrics=snapshot['missing_metrics'],warnings=snapshot['warnings'])
                 need(final['validated_totals']==totals, 'HKEX_FINAL_TOTALS')

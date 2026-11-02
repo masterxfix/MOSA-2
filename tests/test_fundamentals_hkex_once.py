@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts import fundamentals_hkex_once as once
+from scripts import fundamentals_analysis_once as analysis_once
 
 
 class HkexOnceTests(unittest.TestCase):
@@ -108,6 +109,50 @@ class HkexOnceTests(unittest.TestCase):
         ):
             with patch.dict(os.environ,{'HKEX_EXECUTION_OVERRIDES':json.dumps(bad)},clear=True):
                 with self.assertRaises(ValueError): once.execution_for(profile)
+
+    def test_apply_result_binds_report_and_exact_decimal_facts(self):
+        facts=[dict(metric_key='revenue',value_decimal='1.0000000',unit_key='CNY_THOUSAND',fiscal_year='2025',
+                    period_start='2025-01-01',period_end='2025-12-31',field_path='evidence:facts/0')]
+        report=dict(isin='CNE100000296',ok=False,provider_requests=1)
+        result=dict(ok=True,readback='PASS',observations=10,current=5,verified_facts=facts)
+        once.bind_db_result(report,result,12.5)
+        self.assertTrue(report['ok'])
+        self.assertEqual(report['readback'],'PASS')
+        self.assertIs(report['verified_facts'],facts)
+        equivalent=[dict(facts[0],value_decimal='1')]
+        different=[dict(facts[0],value_decimal='2')]
+        self.assertEqual(once.normalize_fact_rows(facts),once.normalize_fact_rows(equivalent))
+        self.assertNotEqual(once.normalize_fact_rows(facts),once.normalize_fact_rows(different))
+        with self.assertRaisesRegex(ValueError,'HKEX_DB_READBACK'):
+            once.bind_db_result(dict(ok=False),dict(ok=True,readback='FAIL'),1)
+
+    def test_hkex_readonly_validation_requires_exact_targets_and_preservation(self):
+        def raw_fact(metric,year,value,index):
+            return dict(metric_key=metric,fiscal_year=year,value_decimal=value,unit_key='CNY_THOUSAND',
+                        monetary_currency_code='CNY',fetch_id=100+index,field_path=f'evidence:facts/{index}',evidence_sha256='a'*64)
+        assets=[]
+        snapshots=[]
+        for preserved in once.PRESERVE:
+            assets.append(dict(name=preserved['name'],identifiers=[dict(normalized_value=preserved['isin'])],
+                               facts=[dict(id=str(i)) for i in range(preserved['observations'])],
+                               current={str(i):[dict(observation_id=str(i))] for i in range(preserved['current'])}))
+            snapshots.append(dict(identity=dict(isin=[preserved['isin']]),facts=[],current_observation_ids=[]))
+        for expected in analysis_once.HKEX_EXPECTED['profiles'].values():
+            rows=[];index=0
+            for metric,periods in expected['values'].items():
+                for year,value in periods.items():
+                    rows.append(raw_fact(metric,year,value,index));index+=1
+            assets.append(dict(name=expected['isin'],identifiers=[dict(normalized_value=expected['isin'])],facts=rows,
+                               current={str(i):[dict(observation_id=str(i))] for i in range(5)}))
+            snapshots.append(dict(identity=dict(isin=[expected['isin']]),facts=[dict(unit='CNY_THOUSAND',currency='CNY',origin='issuer_annual_report') for _ in rows],current_observation_ids=[str(i) for i in range(5)]))
+        data=dict(assets=assets,validated_totals=analysis_once.HKEX_TOTALS,db_unchanged=True)
+        summary=analysis_once.validate_hkex_snapshot(data,snapshots)
+        self.assertEqual(summary['target_companies'],2)
+        self.assertEqual(summary['preserved_observations'],79)
+        changed=json.loads(json.dumps(data))
+        changed['assets'][-1]['facts'][0]['value_decimal']='999'
+        with self.assertRaisesRegex(ValueError,'HKEX_VALUES'):
+            analysis_once.validate_hkex_snapshot(changed,snapshots)
 
 
 if __name__=='__main__':unittest.main()

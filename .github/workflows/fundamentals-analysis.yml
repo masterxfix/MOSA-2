@@ -1,5 +1,5 @@
 name: Manual read-only fundamentals analysis
-run-name: Analysis ${{ inputs.expected_commit }}
+run-name: Analysis ${{ inputs.scope }} ${{ inputs.expected_commit }}
 on:
   workflow_dispatch:
     inputs:
@@ -8,9 +8,17 @@ on:
         required: true
         type: string
       authorization:
-        description: MOSA2-ANALYSIS colon exact commit
+        description: MOSA2-ANALYSIS or MOSA2-HKEX-READONLY-20261102 colon exact commit
         required: true
         type: string
+      scope:
+        description: standard or HKEX read-only validation scope
+        required: true
+        type: choice
+        default: standard
+        options:
+          - standard
+          - hkex
 permissions:
   contents: read
   actions: read
@@ -27,9 +35,14 @@ jobs:
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           AUTHORIZATION: ${{ inputs.authorization }}
+          SCOPE: ${{ inputs.scope }}
         run: |
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
-          test "$AUTHORIZATION" = "MOSA2-ANALYSIS:$GITHUB_SHA"
+          case "$SCOPE" in
+            standard) test "$AUTHORIZATION" = "MOSA2-ANALYSIS:$GITHUB_SHA" ;;
+            hkex) test "$AUTHORIZATION" = "MOSA2-HKEX-READONLY-20261102:$GITHUB_SHA" ;;
+            *) exit 1 ;;
+          esac
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
@@ -49,13 +62,14 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           php -l scripts/fundamentals/analysis_read.php
-          
+
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_analysis.py -v
       - name: Read-only coverage and analysis snapshots
         env:
           PYTHONDONTWRITEBYTECODE: '1'
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_ANALYSIS_SCOPE: ${{ inputs.scope }}
           GH_TOKEN: ${{ github.token }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
