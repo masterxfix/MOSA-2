@@ -21,9 +21,15 @@ change was necessary. This is qualification of a narrow standard
 IFRS concept allowlist, **not full ESEF/DTS conformance validation**. No taxonomies
 are fetched. Issuer extensions, including anchored extensions, remain gaps until
 their semantics are reviewed; there is no automatic mapping by similar names.
-The initial implementation requires one document containing its own tagged
-identity, consolidated nature and report-end anchors; fragmented document sets
-without those anchors are not silently merged.
+The qualification requires one document containing its own tagged identity and
+explicit standard IFRS consolidated evidence. In addition to
+`DescriptionOfNatureOfFinancialStatements`, the reviewed explanatory concepts
+`DisclosureOfBasisOfPreparationOfFinancialStatementsExplanatory` and
+`DisclosureOfBasisOfConsolidationExplanatory` may provide that evidence when
+their text explicitly identifies consolidated financial statements. A missing
+`DateOfEndOfReportingPeriod2013` may be bound to an actual `xbrli:endDate` in a
+qualified context from the same report; no date or document is fabricated or
+silently merged.
 
 Accepted IFRS monetary duration concepts:
 
@@ -40,8 +46,8 @@ unchanged; IFRS operating profit gets a distinct controlled definition. Neither
 is asserted to be EBIT or EBITDA. Other existing definitions are reused exactly.
 
 LEI and tagged reporting-entity name must agree with the reviewed profile.
-`DescriptionOfNatureOfFinancialStatements` must explicitly identify consolidated
-statements. Only dimensionless contexts or the standard explicit
+The accepted scope evidence must explicitly identify consolidated statements.
+Only dimensionless contexts or the standard explicit
 ConsolidatedAndSeparateFinancialStatementsAxis/ConsolidatedMember are allowed.
 Parent, segment, typed and unknown dimensions are excluded. The nature, identity,
 end-date anchors and qualified facts must belong to the same report member.
@@ -64,6 +70,37 @@ Current selection and contradictory existing values still use the shared writer.
   [issuer LEI/ISIN disclosure](https://attachment.news.eu.nasdaq.com/aaa1988622eac713d60d229a620e1096f).
 - [Arelle release](https://github.com/Arelle/Arelle/releases/tag/2.47.3),
   [offline/skipDTS API behavior](https://arelle.readthedocs.io/en/latest/command_line.html).
+
+## Real offline qualification status — 2026-11-02
+
+Pandora A/S was qualified from the reviewed ESEF source with exactly one HTTP
+provider request. The original ZIP was processed directly by Arelle 2.47.3 in
+offline mode and was not retained after the run.
+
+| Binding | Result |
+|---|---|
+| ISIN / identity / LEI | `DK0060252690` / `PANDORA A/S` / `5299007OWYZ6I1E46843` |
+| Source package | 27,786,103 bytes; SHA-256 `22f5e1aacaa481925e994a72db835ffb1e43fc472543ea867f78b12c81fa04bb` |
+| Report member | `PAND-2025-12-31-en/reports/PAND-2025-12-31-en.xhtml`; SHA-256 `144c416613858db0cb8ecb9d4340010f7ddb443185ab3c699229732fe968d191` |
+| Scope / context | `DisclosureOfBasisOfConsolidationExplanatory`; `ctx-2`; no dimensions; LEI-bound |
+| Report end | Actual `xbrli:endDate` in `ctx-2`: `2025-12-31` |
+| Periods / currency | FY2025 and FY2024; original currency DKK |
+| Stored compact evidence | 31,028 bytes; SHA-256 `c03961d55fe2e7a342332a861d5eb347cf86617659d6064af9070634f9a55740` |
+
+The real plan contains 10 qualified observations and no gaps:
+
+| Metric | FY2025 | FY2024 |
+|---|---:|---:|
+| Revenue | 32,549,000,000 DKK | 31,680,000,000 DKK |
+| IFRS operating profit / loss | 7,783,000,000 DKK | 7,974,000,000 DKK |
+| Profit before tax | 6,913,000,000 DKK | 6,926,000,000 DKK |
+| Profit after tax | 5,241,000,000 DKK | 5,227,000,000 DKK |
+| Operating cash flow | 7,361,000,000 DKK | 8,721,000,000 DKK |
+
+PHP `storedFile` and `validate` passed, as did the existing offline analysis
+with 10 calculations. No database write, Actions run, AI call, live import or
+deployment was performed. NEL remained at the previously qualified status from
+commit `c15eb45`; it was not downloaded or requalified in this order.
 
 ## One-time execution and retention
 
@@ -121,9 +158,8 @@ status. Those facts are excluded and classified as INVALID_NUMERIC_TRANSFORM.
 Unbound occurrences, other/unknown codes and schema/document errors still stop.
 The focused test also proves a missing required contextRef remains blocking.
 
-No downloads, live DB access, model calls or Actions runs took place. The manual
-workflow is preparation only; live NEL/Pandora acceptance remains a separate
-follow-up order. No UI change or Chrome check.
+The manual workflow is preparation only; live NEL/Pandora import remains a
+separate follow-up order. No UI or design change was made.
 
 Next shared source family after this pilot: HKEX issuer filings for BYD and
 Ubtech, with source identity, annual-period/currency and consolidated-scope
