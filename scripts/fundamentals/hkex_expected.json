@@ -1,0 +1,31 @@
+{
+  "format": "mosa2-hkex-offline-qualification-v1",
+  "currency": "CNY",
+  "unit_key": "CNY_THOUSAND",
+  "scale_numerator": "1000",
+  "scale_denominator": "1",
+  "profiles": {
+    "byd-company-fy2025": {
+      "isin": "CNE100000296",
+      "response_sha256": "7906b6647eb7cf3ab5986e9b8eda8f707969c64dc54c67b83b606744ef9f4846",
+      "values": {
+        "revenue": {"2025": "803964958", "2024": "777102455"},
+        "operating_profit": {"2025": "40184709", "2024": "50486047"},
+        "profit_before_tax": {"2025": "39753049", "2024": "49680677"},
+        "profit_after_tax": {"2025": "33760758", "2024": "41587940"},
+        "operating_cashflow": {"2025": "59135544", "2024": "133453873"}
+      }
+    },
+    "ubtech-robotics-fy2025": {
+      "isin": "CNE100006CQ4",
+      "response_sha256": "f5736f8d7b3794d92f69d2ad04cba8fe1607734c507e853b6109581b4224024d",
+      "values": {
+        "revenue": {"2025": "2000999", "2024": "1305361"},
+        "operating_profit": {"2025": "-779210", "2024": "-1143112"},
+        "profit_before_tax": {"2025": "-774680", "2024": "-1149259"},
+        "profit_after_tax": {"2025": "-789823", "2024": "-1159924"},
+        "operating_cashflow": {"2025": "-784111", "2024": "-883636"}
+      }
+    }
+  }
+}

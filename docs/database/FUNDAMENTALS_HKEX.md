@@ -36,6 +36,19 @@ Gaps: none. Each plan contains 10 observations, 5 metric groups, and an independ
 
 `revenue`, `profit_before_tax`, `profit_after_tax`, and `operating_cashflow` reuse the existing shared catalog definitions and therefore retain their existing definition hashes. The ASBE source rows are only the mapping evidence. `operating_profit` is a new, explicit-row metric whose semantics say “not inferred EBIT”; it is intentionally distinct from IFRS operating profit, US-GAAP operating income, and EBIT.
 
+## One-time workflow preparation
+
+The manual workflow `.github/workflows/fundamentals-hkex-once.yml` is prepared but
+has not been started. It binds `main`, the exact workflow commit, Run 1 / Attempt
+1, the authorization prefix `MOSA2-HKEX-FUNDAMENTALS-ONCE-20261102:`, and the
+execution IDs `fundamentals-hkex-byd-20261102-01` / `fundamentals-hkex-ubtech-20261102-01`.
+Before any later write it expects the test baseline 79/40 fundamentals and
+28/5 market rows, confirms the two target ISINs are empty, and protects these
+seven existing assets by identity, observation/current counts, and full snapshot
+fingerprints: PNE AG 11/6, Carl Zeiss Meditec 20/10, DroneShield 14/7, NVIDIA
+6/3, Rigetti Computing 8/4, NEL ASA 10/5, and Pandora 10/5. These are runtime
+guards, not a claim that the live totals have already changed.
+
 ## Verification boundary
 
 Focused adapter tests, negative identity/unit/year/scope tests, PHP lints, PHP writer/current/readback/replay, Evidence-tamper rejection, and analysis-input validation passed. The real offline pipeline passed for both plans. Counts were 20 observations and 10 current projections in the in-memory writer proof only; the MOSA-2 test database was not accessed or changed.
