@@ -96,10 +96,11 @@ function compareDelta(array $before,array $after,array $plan,array $inserted): v
 /** One read-only plan, one provider acquisition, one atomic business transaction, one independent readback. */
 function proofRun(string $privateRoot,string $password,array $config,array $manifest,?callable $acquisitionGate=null): array {
     $capture=static fn(PDO $db)=>snapshot($db,$config['state_contract']??[]);
+    $connect=static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307);
     $r=['ok'=>false,'stage'=>'preflight','database_connections'=>0,'provider_requests'=>0,'committed'=>false,'rollback'=>null];
     $p=null;$locked=false;$baseline=null;$plan=null;$inserted=[];$lockKey=null;
     try {
-        $r['database_connections']++;$p=connection($password);
+        $r['database_connections']++;$p=$connect();
         $lockKey='m2-live:'.substr(hash('sha256',\Mosa2\Phase3D\json(\Mosa2\MarketIdentity\identifierKey($manifest['identity']))),0,48);
         $q=$p->prepare('SELECT GET_LOCK(?,0)');$q->execute([$lockKey]);$locked=(int)$q->fetchColumn()===1;check($locked,'identifier_lock_busy');
         $p->exec('SET TRANSACTION READ ONLY');$p->beginTransaction();
@@ -143,7 +144,7 @@ function proofRun(string $privateRoot,string $password,array $config,array $mani
         $p=null;
         if($baseline!==null&&($r['committed']||$r['rollback']===true)){
             if($r['committed'])$r['stage']='readback';
-            try{$r['database_connections']++;$read=connection($password);$read->exec('SET TRANSACTION READ ONLY');$read->beginTransaction();
+            try{$r['database_connections']++;$read=$connect();$read->exec('SET TRANSACTION READ ONLY');$read->beginTransaction();
                 try{$after=$capture($read);if($r['committed'])compareDelta($baseline,$after,$plan,$inserted);else same($after,$baseline,'rollback_delta');}
                 finally{if($read->inTransaction())$read->rollBack();$read=null;}
                 $r['readback']='PASS';$r['private_evidence']=['plan'=>$plan,'baseline'=>$baseline,'after'=>$after,'inserted'=>$inserted,'writer'=>$writer??null];

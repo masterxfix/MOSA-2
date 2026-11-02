@@ -200,7 +200,7 @@
       "path": "scripts/market_collector/http_transport.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "1f8e07455cd458e82d4239717e7366c85cd9aba0",
+      "source_blob": "f09c748b58dfbdcf12456cd0ef8df42b6cf0e4d2",
       "requires": [
         "scripts/market_collector/contracts.py"
       ]
@@ -233,7 +233,7 @@
       "path": "scripts/market_collector/live_persistence.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "f07688015656a2616c3f5ddd6aefa195c5d5f62d",
+      "source_blob": "b08e3909b9a4e1e8a48a4dd3015d0da64b652652",
       "requires": [
         "docs/database/migrations/0004_current_observation_provenance.sql",
         "docs/database/seeds/0001_market_units_v1.json",

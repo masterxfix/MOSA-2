@@ -44,6 +44,16 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Set up PHP 8.4 with PDO MySQL
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Verify PHP runtime before checks
+        run: |
+          php -v
+          php -r 'if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 4 || !extension_loaded("pdo_mysql")) { exit(1); }'
       - name: Install pinned deploy dependencies
         run: python3 -m pip install --disable-pip-version-check --no-input -r scripts/requirements-deploy.txt
       - name: Focused one-shot safety and syntax checks
@@ -54,8 +64,12 @@ jobs:
           php -l scripts/market_collector/schema6_tradegate_once.php
           php -l scripts/market_collector/live_persistence.php
           python3 -m py_compile scripts/schema6_tradegate_once.py scripts/market_collector/live_bridge.py scripts/market_collector/tradegate.py
-          python3 -B -m unittest -v test_tradegate_collector test_tradegate_manifest test_schema6_compat test_collector_actions
+          python3 -B -m unittest -v test_tradegate_collector test_tradegate_manifest test_schema6_compat test_collector_actions test_schema6_tradegate_once
           git diff --exit-code
+      - name: Verify PHP runtime before database access
+        run: |
+          php -v
+          php -r 'if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 4 || !extension_loaded("pdo_mysql")) { exit(1); }'
       - name: Perform exactly one qualified PNE provider GET and database write path
         env:
           MOSA_PNE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}

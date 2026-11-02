@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 from unittest.mock import MagicMock
@@ -69,10 +70,20 @@ class OneShotAuthTests(unittest.TestCase):
         self.assertIn("ref: @@DOLLAR@@{{ github.sha }}".replace("@@DOLLAR@@", "$"), workflow)
 
     def test_php_entrypoint_is_syntactically_valid(self):
-        result = subprocess.run(["C:\\php\\php.exe", "-l", str(ROOT / "scripts/market_collector/schema6_tradegate_once.php")],
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        result = subprocess.run([php, "-l", str(ROOT / "scripts/market_collector/schema6_tradegate_once.php")],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stderr, "")
+
+    def test_proof_uses_the_configured_tunnel_endpoint_for_both_connections(self):
+        source = (ROOT / "scripts/market_collector/live_persistence.php").read_text(encoding="utf-8")
+        proof = source[source.index("function proofRun"):source.index("require_once __DIR__.'/runtime_persistence.php'")]
+        self.assertIn("$connect=static fn()=>connection($password,$config['db_host']??'127.0.0.1',$config['db_port']??3307);", proof)
+        self.assertEqual(proof.count("$p=$connect();"), 1)
+        self.assertEqual(proof.count("$read=$connect();"), 1)
+        self.assertNotIn("connection($password);", proof)
 
 
 if __name__ == "__main__":
