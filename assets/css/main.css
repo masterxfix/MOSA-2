@@ -178,3 +178,53 @@ dd { color: var(--muted); font-size: .8rem; margin: 6px 0 0 28px; }
 @media (prefers-reduced-motion: no-preference) {
   a, button { transition: color .18s ease, background-color .18s ease, border-color .18s ease; }
 }
+
+/* Fundamentals view: the existing MOSA 2 palette, type and spacing remain unchanged. */
+.home-fundamentals-link { margin-top: 20px; }
+.fundamentals-hero { max-width: 1000px; padding-bottom: 60px; }
+.fundamental-snapshot { color: var(--muted); font-size: .78rem; margin: 28px 0 0; }
+.fundamentals-section, .fundamentals-note { border-top: 1px solid var(--line); padding-top: 32px; margin-bottom: var(--space-section); }
+.fundamentals-layout { display: grid; grid-template-columns: minmax(220px, .34fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 92px); }
+.fundamental-assets { min-width: 0; }
+.fundamental-total { color: var(--muted); font-size: .72rem; margin: 0 0 18px; }
+.fundamental-total span { color: var(--text); font: 2.2rem/1 var(--display); letter-spacing: -.05em; margin-right: 8px; }
+.fundamental-asset-button { display: grid; grid-template-columns: 28px minmax(0, 1fr) 16px; align-items: center; gap: 14px; width: 100%; padding: 16px 0; color: var(--muted); background: transparent; border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; }
+.fundamental-asset-button:last-child { border-bottom: 1px solid var(--line); }
+.fundamental-asset-button:hover, .fundamental-asset-button[aria-pressed="true"] { color: var(--text); }
+.fundamental-asset-button[aria-pressed="true"] { border-top-color: var(--accent); }
+.fundamental-asset-number { font-size: .65rem; }
+.fundamental-asset-name { font-size: .92rem; }
+.fundamental-asset-arrow { color: var(--accent); font-size: 1rem; text-align: right; }
+.fundamental-detail { min-width: 0; }
+.fundamental-detail-heading { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 28px; }
+.fundamental-detail-heading h2 { margin-bottom: 12px; }
+.fundamental-identity, .fundamental-capture, .fundamental-reference-note { color: var(--muted); font-size: .76rem; margin: 0; }
+.fundamental-capture { margin-top: 8px; }
+.fundamental-table-wrap { margin-top: 28px; }
+.fundamental-table-wrap h3 { color: var(--muted); font-size: .68rem; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; }
+.fundamental-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.fundamental-table th, .fundamental-table td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.fundamental-table th:first-child, .fundamental-table td:first-child { padding-left: 0; }
+.fundamental-table th:last-child, .fundamental-table td:last-child { padding-right: 0; }
+.fundamental-table th { color: var(--muted); font-size: .64rem; font-weight: 500; white-space: nowrap; }
+.fundamental-table td { line-height: 1.6; }
+.fundamental-table td:first-child { font-weight: 550; }
+.fundamental-table .fundamental-value { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fundamental-table td:nth-child(4), .fundamental-table td:nth-child(5) { color: var(--muted); font-size: .72rem; }
+.comparison-table td { white-space: nowrap; }
+.comparison-table td:first-child { white-space: normal; min-width: 150px; }
+.fundamental-reference-note { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 26px; }
+.fundamental-placeholder, .fundamental-error { color: var(--muted); border-top: 1px solid var(--line); padding-top: 24px; }
+.fundamental-error { color: var(--accent); }
+.fundamentals-note { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 8vw, 120px); align-items: start; }
+.fundamentals-note .intro { margin: 0; font-size: .9rem; }
+.fundamentals-note .text-link { display: inline-flex; padding-block: 0; margin-left: 4px; }
+@media (max-width: 760px) {
+  .fundamentals-layout, .fundamentals-note { grid-template-columns: 1fr; gap: 32px; }
+  .fundamentals-section { padding-top: 26px; }
+  .fundamental-table-wrap { overflow-x: auto; }
+  .fundamental-table { min-width: 620px; }
+  .comparison-table { min-width: 560px; }
+  .fundamental-table th, .fundamental-table td { padding-block: 12px; }
+  .fundamentals-note { margin-bottom: var(--space-section); }
+}
