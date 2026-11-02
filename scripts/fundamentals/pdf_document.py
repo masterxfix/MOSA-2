@@ -8,20 +8,29 @@ MAX_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 200
 MAX_CHARACTERS = 2000000
 
-def read_pdf(raw):
-    if not raw.startswith(b'%PDF-') or not 0 < len(raw) <= MAX_BYTES:
+def read_pdf(raw, *, max_bytes=MAX_BYTES, max_pages=MAX_PAGES, max_characters=MAX_CHARACTERS, page_selector=None):
+    """Extract bounded pages while retaining word coordinates for table evidence.
+
+    The default contract is unchanged.  A caller may use a fixed, adapter-owned
+    larger bound and a page selector for a large official report; the selector is
+    evaluated against the page's extracted text before words are retained.
+    """
+    if not raw.startswith(b'%PDF-') or not 0 < len(raw) <= max_bytes:
         raise ValueError('PDF_SIGNATURE_OR_BOUND')
     import pdfplumber
     logging.getLogger('pdfminer').disabled = True
     try:
         with pdfplumber.open(BytesIO(raw), unicode_norm='NFKC') as document:
             if document.doc.is_extractable is False:raise ValueError('PDF_EXTRACTION_FORBIDDEN')
-            if not 1 <= len(document.pages) <= MAX_PAGES:raise ValueError('PDF_PAGE_LIMIT')
+            if not 1 <= len(document.pages) <= max_pages:raise ValueError('PDF_PAGE_LIMIT')
             pages=[];total=0
             for index,page in enumerate(document.pages,1):
+                text=page.extract_text() or ''
+                if page_selector is not None and not page_selector(index,text):
+                    continue
                 words=page.dedupe_chars(tolerance=1).extract_words(x_tolerance=2,y_tolerance=3,keep_blank_chars=False)
                 total+=sum(len(w['text']) for w in words)
-                if total>MAX_CHARACTERS:raise ValueError('PDF_CHARACTER_LIMIT')
+                if total>max_characters:raise ValueError('PDF_CHARACTER_LIMIT')
                 lines=[]
                 for word in sorted(words,key=lambda w:(w['bottom'],w['x0'])):
                     if not lines or abs(word['bottom']-lines[-1]['bottom'])>3:
