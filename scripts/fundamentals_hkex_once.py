@@ -17,7 +17,7 @@ from scripts.fundamentals import hkex
 from scripts.fundamentals.analysis import build
 from scripts.fundamentals.assessment import prepare
 
-AUTH = os.environ.get('HKEX_AUTH_PREFIX', 'MOSA2-HKEX-FUNDAMENTALS-ONCE-20261102:')
+AUTH = os.environ.get('HKEX_AUTH_PREFIX', 'MOSA2-HKEX-FUNDAMENTALS-SECOND-20261102:')
 WORKFLOW = os.environ.get('HKEX_WORKFLOW', '.github/workflows/fundamentals-hkex-once.yml')
 TOTALS = dict(m2_fundamental_observations=79, m2_fundamental_current=40,
               m2_market_observations=28, m2_market_current=5)
@@ -59,7 +59,8 @@ def stamp():
 
 
 def guard(env):
-    shared.guard(env, dict(authorization=AUTH))
+    shared.guard(env, dict(authorization=AUTH, reusable_manual=True))
+    need(env.get('GITHUB_RUN_NUMBER') == '2', 'HKEX_WORKFLOW')
     need(env.get('GITHUB_WORKFLOW_REF') == 'masterxfix/MOSA-2/' + WORKFLOW + '@refs/heads/main', 'HKEX_WORKFLOW')
 
 

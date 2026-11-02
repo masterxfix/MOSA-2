@@ -2,7 +2,9 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 
@@ -10,6 +12,17 @@ from scripts.fundamentals import hkex
 from scripts.fundamentals.analysis import build
 
 OBSERVED='2026-11-02 00:00:00.123456'
+
+
+def php_executable():
+    candidates=[shutil.which('php')]
+    if os.name == 'nt':
+        candidates.append(r'C:\php\php.exe')
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return str(candidate)
+    location='PATH' if os.name != 'nt' else 'PATH or C:\\php\\php.exe'
+    raise FileNotFoundError(f'PHP executable not found in {location}')
 
 
 def fixture(unit="RMB'000", years=('2025','2024'), company='BYD Company Limited',
@@ -81,7 +94,7 @@ class HkexTests(unittest.TestCase):
         return dict(url=p['url'],observed_at=OBSERVED,http_status=200,content_type='application/pdf',bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
 
     def test_php_writer_current_readback_replay_and_evidence_tamper(self):
-        p=subprocess.run([r'C:\php\php.exe','tests/fundamentals_hkex.php'],input=json.dumps([plan(),plan(observed_at='2026-11-02 00:00:01.123456')]),text=True,capture_output=True,cwd=Path(__file__).resolve().parents[1])
+        p=subprocess.run([php_executable(),'tests/fundamentals_hkex.php'],input=json.dumps([plan(),plan(observed_at='2026-11-02 00:00:01.123456')]),text=True,capture_output=True,cwd=Path(__file__).resolve().parents[1])
         self.assertEqual(p.returncode,0,f'php_exit={p.returncode} stderr={p.stderr[:320]!r} stdout={p.stdout[:320]!r}')
         self.assertEqual(p.stderr,'',f'php_stderr={p.stderr[:320]!r}')
         try:
