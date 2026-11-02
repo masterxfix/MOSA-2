@@ -15,7 +15,8 @@
         seen.add(entry.isin);return true;
       }).slice(0,30).map(entry => ({isin:entry.isin,
         name:typeof entry.name === "string" && entry.name.length <= 160 ? entry.name : null,
-        quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => q && q.isin===entry.isin && providers.some(p=>p.key===q.provider) && typeof q.price==="string" && typeof q.market_at==="string").slice(0,2):[]}));
+        quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => q && q.isin===entry.isin && providers.some(p=>p.key===q.provider) && typeof q.price==="string" && typeof q.market_at==="string").slice(0,2):[],
+        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && providers.some(p=>p.key===e.provider) && typeof e.code==="string").slice(0,2):[]}));
     } catch {return [];}
   }
   let entries = restore(), busy = false;
@@ -55,7 +56,7 @@
     for (const tbody of document.querySelectorAll("[data-isin-table]")) {
       const fragment=document.createDocumentFragment();
       for (const entry of entries) {
-        for (const quote of entry.quotes.length?entry.quotes:[null]) {
+        for (const quote of entry.quotes.length?entry.quotes:((entry.errors||[]).length?[]:[null])) {
           const tr=document.createElement("tr");tr.dataset.status=quote?(old(quote)?"stale":"stored"):"missing";
           itemCell(tr,"Aktie",entry.name||entry.isin);
           const price=itemCell(tr,"Kurs",quote?fmtPrice(quote.price)+" "+quote.currency:"—");price.className="market-price";
@@ -67,6 +68,13 @@
           itemCell(tr,"ISIN",entry.isin);
           itemCell(tr,"Status",quote?(old(quote)?"Veraltet":"Kurs abgerufen"):"Noch nicht abgefragt");
           fragment.append(tr);
+        }
+        for(const error of entry.errors||[]){
+          const tr=document.createElement("tr");tr.dataset.status="error";
+          itemCell(tr,"Aktie",entry.name||entry.isin);itemCell(tr,"Kurs","—");itemCell(tr,"Einheit / Kursart","—");
+          itemCell(tr,"Quelle / Handelsplatz",providers.find(p=>p.key===error.provider).label);
+          itemCell(tr,"Marktzeit","—");itemCell(tr,"Abgerufen",date(error.captured_at));itemCell(tr,"Datenalter","—");
+          itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status","Kein bestätigter Kurs: "+error.code);fragment.append(tr);
         }
       }
       if(!entries.length){const tr=document.createElement("tr");tr.className="market-placeholder";const td=itemCell(tr,"ISIN","Noch keine ISIN eingegeben.");td.colSpan=9;fragment.append(tr);}
@@ -97,7 +105,7 @@
     if(!valid(code)){progress(form,"Ungültige ISIN. Bitte zwölf Zeichen einschließlich Prüfziffer eingeben.","error");return;}
     let entry=entries.find(e=>e.isin===code);
     if(!entry){if(entries.length>=30){progress(form,"Die Liste enthält bereits 30 ISINs.","error");return;}entry={isin:code,name:null,quotes:[]};entries.unshift(entry);}
-    entry.quotes=[]; // Never display an older result as this request runs.
+    entry.quotes=[];entry.errors=[]; // Never display an older result as this request runs.
     busy=true;for(const f of forms)f.querySelector("button[type=submit]").disabled=true;
     save();paint();progress(form,"ISIN geprüft: "+code,"success");
     const found=[];
@@ -109,7 +117,9 @@
           found.push(result);
           if(result.name)entry.name=result.name;
           progress(form,provider.label+": "+fmtPrice(result.price)+" "+result.currency+" · "+result.quote_type+(result.stale?" · Kurs ist älter":"")+" · Marktzeit "+date(result.market_at),"success");
-        }catch(error){progress(form,provider.label+": kein bestätigter Kurs ("+(error.name==="AbortError"?"Zeitüberschreitung":error.message||"Fehler")+").","error");}
+        }catch(error){const code=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Fehler";
+          entry.errors.push({provider:provider.key,code,captured_at:new Date().toISOString()});
+          progress(form,provider.label+": kein bestätigter Kurs ("+code+").","error");}
         entry.quotes=found.slice();save();paint();
       }
       if(found.length){const winner=best(entry);progress(form,"Ergebnis: "+(entry.name||code)+" · "+fmtPrice(winner.price)+" "+winner.currency+" · "+winner.source+" · Abgerufen "+date(winner.captured_at)+(old(winner)?" · Marktzeit veraltet":""),"success");}

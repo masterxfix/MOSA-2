@@ -61,7 +61,8 @@ function midpoint(string $a, string $b): string {
     $int = substr($half,0,strlen($half)-$scale);
     $frac = $scale ? substr($half,-$scale) : '';
     if ($remainder) $frac .= '5';
-    return (ltrim($int,'0') ?: '0') . ($frac === '' ? '' : '.' . rtrim($frac,'0'));
+    $frac=rtrim($frac,'0');
+    return (ltrim($int,'0') ?: '0') . ($frac === '' ? '' : '.' . $frac);
 }
 function tdText(string $cell): string {
     return trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($cell), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
@@ -94,7 +95,11 @@ function timeUtc(DateTimeImmutable $instant): string {
 function tradegate(string $html,string $code): array {
     if (strlen($html) > MAX_BYTES) fail('INVALID_SOURCE');
     $table = rows($html);
-    if (column($table,'ISIN') !== $code || strtoupper((string)column($table,'Handelswährung')) !== 'EUR') fail('NO_MATCHING_INSTRUMENT');
+    // Same currency evidence as the qualified TradegateQuoteV1 adapter.
+    $text=tdText(preg_replace('~<[^>]+>~',' ',$html));
+    $currency=strtoupper((string)column($table,'Handelswährung'));
+    if(!preg_match('/^[A-Z]{3}$/D',$currency))$currency=preg_match('/\bKurse in ([A-Z]{3})\b/u',$text,$unit)?$unit[1]:'';
+    if (column($table,'ISIN') !== $code || $currency !== 'EUR') fail('NO_MATCHING_INSTRUMENT');
     $bid = rowValue($table,'Bid');$ask = rowValue($table,'Ask');
     if ($bid===null || $ask===null) fail('QUOTE_MISSING');
     $bid = decimal($bid);$ask = decimal($ask);
@@ -104,12 +109,12 @@ function tradegate(string $html,string $code): array {
     $left=ltrim($ai.str_pad($af,$scale,'0'),'0') ?: '0';
     $right=ltrim($bi.str_pad($bf,$scale,'0'),'0') ?: '0';
     if (strlen($left)>strlen($right) || (strlen($left)===strlen($right) && strcmp($left,$right)>0)) fail('CROSSED_QUOTE');
-    if (!preg_match('/Letzte\s+Aktualisierung:\s*(\d{2}\.\d{2}\.\d{4})\s*@\s*(\d{2}:\d{2}:\d{2})/ui',html_entity_decode(strip_tags($html),ENT_QUOTES | ENT_HTML5,'UTF-8'),$when)) fail('TIME_MISSING');
+    if (!preg_match('/Letzte\s+Aktualisierung:\s*(\d{2}\.\d{2}\.\d{4})\s*@\s*(\d{2}:\d{2}:\d{2})/ui',$text,$when)) fail('TIME_MISSING');
     $stamp=$when[1].' '.$when[2];
     $date=DateTimeImmutable::createFromFormat('!d.m.Y H:i:s',$stamp,new DateTimeZone('Europe/Berlin'));
     if (!$date || $date->format('d.m.Y H:i:s')!==$stamp) fail('INVALID_MARKET_TIME');
-    $name=null;
-    if (preg_match_all('~<h[12]\b[^>]*>(.*?)</h[12]>~si',$html,$titles)) {
+    $name=column($table,'Name');
+    if ($name===null && preg_match_all('~<h[12]\b[^>]*>(.*?)</h[12]>~si',$html,$titles)) {
         foreach ($titles[1] as $heading) {
             $candidate = tdText($heading);
             if ($candidate!=='' && mbLength($candidate)<=160 && !preg_match('/^(Tradegate.*|Kurssuche|Aktien|Information)$/ui',$candidate)) { $name=$candidate; break; }
@@ -121,7 +126,7 @@ function tradegate(string $html,string $code): array {
 function mbLength(string $value): int { return function_exists('mb_strlen') ? mb_strlen($value,'UTF-8') : strlen($value); }
 function frankfurt(string $body,string $code): array {
     if (strlen($body)>MAX_BYTES) fail('INVALID_SOURCE');
-    $data=json_decode($body,true,24,JSON_THROW_ON_ERROR);
+    try{$data=json_decode($body,true,24,JSON_THROW_ON_ERROR);}catch(\JsonException){fail('SOURCE_INVALID_JSON');}
     if (!is_array($data) || ($data['isin']??null)!==$code || ($data['mic']??null)!=='XFRA' || ($data['currency']['originalValue']??null)!=='EUR') fail('NO_MATCHING_INSTRUMENT');
     $number=$data['lastPrice']??null;
     if (!is_int($number)&&!is_float($number)) fail('QUOTE_MISSING');
@@ -140,11 +145,12 @@ function descriptor(string $code,string $provider): array {
         'headers'=>['Accept: text/html,application/xhtml+xml','Referer: https://www.tradegatebsx.com/',
             'User-Agent: FixLab-MOSA-Market-Source-Lab/2.0']];
     if ($provider==='frankfurt') {
-        $date=(new DateTimeImmutable('now',new DateTimeZone('Europe/Berlin')))->format('Y-m-d\TH:i:sP');
+        $local=new DateTimeImmutable('now',new DateTimeZone('Europe/Berlin'));
+        $date=$local->format('Y-m-d\TH:i:sP');
         $url='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$code.'&mic=XFRA';
         return ['url'=>$url,'headers'=>['Accept: application/json','Client-Date: '.$date,
             'X-Client-TraceId: '.md5($date.$url.'af5a8d16eb5dc49f8a72b26fd9185475c7a'),
-            'X-Security: '.md5((new DateTimeImmutable('now',new DateTimeZone('Europe/Berlin')))->format('YmdHi')),
+            'X-Security: '.md5($local->format('YmdHi')),
             'User-Agent: FixLab-MOSA-Frankfurt/1.0']];
     }
     fail('SOURCE_UNSUPPORTED');
@@ -162,8 +168,9 @@ function fetch(string $url,array $headers): string {
         $meta=stream_get_meta_data($stream);
         $responseHeaders=$meta['wrapper_data']??[];
         $status=preg_match('/^HTTP\/\S+\s+(\d{3})\b/',(string)($responseHeaders[0]??''),$m)?(int)$m[1]:0;
-        if ($status!==200) fail('SOURCE_HTTP_ERROR');
+        if ($status!==200) fail('SOURCE_HTTP_'.$status);
         $body=stream_get_contents($stream,MAX_BYTES+1);
+        if(stream_get_meta_data($stream)['timed_out']??false)fail('SOURCE_TIMEOUT');
         if (!is_string($body) || strlen($body)>MAX_BYTES) fail('SOURCE_TOO_LARGE');
         return $body;
     }finally{fclose($stream);}
