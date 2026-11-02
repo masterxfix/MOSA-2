@@ -21,6 +21,7 @@ $fixtures=['lang_schwarz_search'=>$lsSearch,'lang_schwarz_page'=>$lsPage,'tradeg
     'yahoo_home_search'=>$search,'yahoo_home_market'=>$chart];
 $events=[];$requests=[];
 $transport=static function(array $r)use($fixtures,&$requests):array{
+    assertSameValue($r['follow_redirects']??null,false,'no uncounted redirect GETs');
     $requests[]=$r['request_key'];
     if(!array_key_exists($r['request_key'],$fixtures))throw new RuntimeException('unplanned provider');
     return ['body'=>$fixtures[$r['request_key']],'http_status'=>200,'latency_ms'=>1,'error_code'=>null];

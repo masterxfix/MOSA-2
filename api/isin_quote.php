@@ -230,6 +230,9 @@ function sourceTransport(array $request,string $code,callable $emit,?callable $t
     if (!sourceAllowed($request,$code)){
         $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'source_rejected'];
     } else {
+        // Seven descriptors mean at most seven external GETs, including L&S.
+        // Do not silently spend extra requests or leave the approved host via redirects.
+        $request['follow_redirects']=false;
         try{$reply=($transport??'fixlabMosaMarketSourceLabLiveTransport')($request);}
         catch(Throwable){$reply=['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'transport_exception'];}
         if(!is_array($reply))$reply=['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'transport_invalid'];
