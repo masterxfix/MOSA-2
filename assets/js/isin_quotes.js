@@ -1,7 +1,14 @@
 (function () {
   "use strict";
   const KEY = "mosa2-isin-lookup-v1";
-  const providers = Object.freeze([{key:"tradegate",label:"Tradegate BSX"}, {key:"frankfurt",label:"Börse Frankfurt"}]);
+  const providers = Object.freeze([
+    {key:"lang_schwarz_quote",label:"Lang & Schwarz · Geld/Brief"},
+    {key:"lang_schwarz_trade",label:"Lang & Schwarz · letzter Handel"},
+    {key:"tradegate_quote",label:"Tradegate BSX · Geld/Brief"},
+    {key:"tradegate_trade",label:"Tradegate BSX · letzter Handel"},
+    {key:"boerse_frankfurt_trade",label:"Börse Frankfurt · letzter Handel"},
+    {key:"yahoo_home_market",label:"Yahoo Finance · Heimatmarkt"}
+  ]);
   const valid = value => typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
   const forms = [...document.querySelectorAll("[data-isin-form]")];
   if (!forms.length) return;
@@ -15,8 +22,8 @@
         seen.add(entry.isin);return true;
       }).slice(0,30).map(entry => ({isin:entry.isin,
         name:typeof entry.name === "string" && entry.name.length <= 160 ? entry.name : null,
-        quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => q && q.isin===entry.isin && providers.some(p=>p.key===q.provider) && typeof q.price==="string" && typeof q.market_at==="string").slice(0,2):[],
-        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && providers.some(p=>p.key===e.provider) && typeof e.code==="string").slice(0,2):[]}));
+        quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => q && q.isin===entry.isin && providers.some(p=>p.key===q.provider) && typeof q.price==="string" && typeof q.market_at==="string").slice(0,6):[],
+        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && providers.some(p=>p.key===e.provider) && typeof e.code==="string").slice(0,6):[]}));
     } catch {return [];}
   }
   let entries = restore(), busy = false;
@@ -24,7 +31,7 @@
   const fmtPrice = p => {
     const num=Number(p);
     return typeof p==="string" && /^\d+(?:\.\d{1,12})?$/.test(p) && Number.isFinite(num)
-      ? new Intl.NumberFormat("de-DE",{minimumFractionDigits:4,maximumFractionDigits:4}).format(num) : "—";
+      ? new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:10}).format(num) : "—";
   };
   function date(value) {
     const stamp=Date.parse(value);
@@ -86,17 +93,51 @@
     const list=form.parentElement.querySelector("[data-isin-steps]");if(!list)return;
     const item=document.createElement("li");item.dataset.status=kind;item.textContent=message;list.append(item);
   }
-  async function request(code, provider) {
-    const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),11000);
+  async function requestAll(code, onEvent) {
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);
     try {
-      const response=await fetch("api/isin_quote.php",{method:"POST",credentials:"same-origin",cache:"no-store",signal:controller.signal,
-        headers:{"Accept":"application/json","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
-        body:JSON.stringify({isin:code,provider})});
+      const response=await fetch("api/isin_quote.php",{
+        method:"POST",credentials:"same-origin",cache:"no-store",signal:controller.signal,
+        headers:{"Accept":"application/x-ndjson","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+        body:JSON.stringify({isin:code,provider:"all"})
+      });
+      if(!response.ok)throw Error("HTTP_"+response.status);
+      if(response.body && typeof response.body.getReader==="function"){
+        const reader=response.body.getReader(), decoder=new TextDecoder("utf-8");
+        let buffer="",result=null;
+        function event(line){
+          if(!line.trim())return;
+          const message=JSON.parse(line);
+          if(message.event==="result")result=message.data;
+          else if(message.event==="failure")throw Error(message.code||"SOURCE_COMPARISON_FAILED");
+          else onEvent(message);
+        }
+        for(;;){
+          const {value,done}=await reader.read();
+          if(done)break;
+          buffer+=decoder.decode(value,{stream:true});
+          if(buffer.length>200000)throw Error("INVALID_RESPONSE");
+          let at;
+          while((at=buffer.indexOf("\n"))!==-1){event(buffer.slice(0,at));buffer=buffer.slice(at+1);}
+        }
+        buffer+=decoder.decode();
+        if(buffer.trim())event(buffer);
+        if(!result)throw Error("NO_RESULT");
+        return result;
+      }
       const data=await response.json();
-      if(!response.ok || data.status!=="ok" || data.isin!==code || data.provider!==provider || !/^\d+(?:\.\d{1,12})?$/.test(data.price))
-        throw Error(typeof data.code==="string"?data.code:"SOURCE_UNAVAILABLE");
-      return data;
-    } finally {clearTimeout(timer);}
+      return data.event==="result"?data.data:data;
+    }finally{clearTimeout(timer);}
+  }
+  function reportStep(form,event) {
+    if(event.event==="started"){progress(form,"ISIN bestätigt: "+event.isin,"success");return;}
+    if(event.event!=="request")return;
+    if(event.stage==="started"){progress(form,event.name+": Anfrage gestartet.");return;}
+    if(event.stage==="finished"){
+      const code=event.code || (event.http_status===200?null:"HTTP_"+(event.http_status??"unbekannt"));
+      const duration=Number.isInteger(event.duration_ms)?" · "+event.duration_ms+" ms":"";
+      progress(form,event.name+": "+(code?"Fehler "+code:"HTTP 200")+duration,code?"error":"success");
+    }
   }
   async function submit(form) {
     if(busy)return;
@@ -104,27 +145,48 @@
     const list=form.parentElement.querySelector("[data-isin-steps]");if(list)list.replaceChildren();
     if(!valid(code)){progress(form,"Ungültige ISIN. Bitte zwölf Zeichen einschließlich Prüfziffer eingeben.","error");return;}
     let entry=entries.find(e=>e.isin===code);
-    if(!entry){if(entries.length>=30){progress(form,"Die Liste enthält bereits 30 ISINs.","error");return;}entry={isin:code,name:null,quotes:[]};entries.unshift(entry);}
-    entry.quotes=[];entry.errors=[]; // Never display an older result as this request runs.
-    busy=true;for(const f of forms)f.querySelector("button[type=submit]").disabled=true;
-    save();paint();progress(form,"ISIN geprüft: "+code,"success");
-    const found=[];
+    if(!entry){
+      if(entries.length>=30){progress(form,"Die Liste enthält bereits 30 ISINs.","error");return;}
+      entry={isin:code,name:null,quotes:[],errors:[]};entries.unshift(entry);
+    }
+    entry.quotes=[];entry.errors=[]; // The last result is never relabelled as a new request.
+    busy=true;
+    for(const f of forms)f.querySelector("button[type=submit]").disabled=true;
+    save();paint();progress(form,"MOSA-Quellenvergleich für "+code+" gestartet.");
     try{
-      for(const provider of providers){
-        progress(form,provider.label+": Abfrage gestartet.");
-        try{
-          const result=await request(code,provider.key);
-          found.push(result);
-          if(result.name)entry.name=result.name;
-          progress(form,provider.label+": "+fmtPrice(result.price)+" "+result.currency+" · "+result.quote_type+(result.stale?" · Kurs ist älter":"")+" · Marktzeit "+date(result.market_at),"success");
-        }catch(error){const code=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Fehler";
-          entry.errors.push({provider:provider.key,code,captured_at:new Date().toISOString()});
-          progress(form,provider.label+": kein bestätigter Kurs ("+code+").","error");}
-        entry.quotes=found.slice();save();paint();
+      const result=await requestAll(code,event=>reportStep(form,event));
+      if(!result||result.isin!==code||!Array.isArray(result.records)||result.records.length!==providers.length)
+        throw Error("INVALID_RESULT");
+      const seen=new Set();
+      for(const record of result.records){
+        if(!record||!providers.some(p=>p.key===record.provider)||seen.has(record.provider))throw Error("INVALID_PROVIDER_RESULT");
+        seen.add(record.provider);
+        const label=providers.find(p=>p.key===record.provider).label;
+        if(record.status==="ok"&&typeof record.price==="string"&&/^\d+(?:\.\d{1,12})?$/.test(record.price)
+          &&typeof record.market_at==="string"&&typeof record.currency==="string"){
+          entry.quotes.push(record);
+          progress(form,label+": "+fmtPrice(record.price)+" "+record.currency+" · "+record.quote_type+
+            " · Marktzeit "+date(record.market_at)+(old(record)?" · Veraltet":""),"success");
+        }else{
+          const reason=typeof record.code==="string"?record.code:"QUOTE_UNAVAILABLE";
+          entry.errors.push({provider:record.provider,code:reason,captured_at:record.captured_at||new Date().toISOString()});
+          progress(form,label+": kein bestätigter Kurs ("+reason+").","error");
+        }
+        save();paint();
       }
-      if(found.length){const winner=best(entry);progress(form,"Ergebnis: "+(entry.name||code)+" · "+fmtPrice(winner.price)+" "+winner.currency+" · "+winner.source+" · Abgerufen "+date(winner.captured_at)+(old(winner)?" · Marktzeit veraltet":""),"success");}
-      else progress(form,"Kein bestätigter Kurs gefunden. Der ältere Datenbankstand wurde nicht als neuer Kurs übernommen.","error");
-    }finally{busy=false;for(const f of forms)f.querySelector("button[type=submit]").disabled=false;save();paint();}
+      if(typeof result.name==="string"&&result.name)entry.name=result.name;
+      if(entry.quotes.length){
+        const winner=best(entry);
+        progress(form,"Ergebnis: "+(entry.name||code)+" · "+fmtPrice(winner.price)+" "+winner.currency+
+          " · "+winner.source+" · Erfasst "+date(winner.captured_at)+(old(winner)?" · Marktzeit veraltet":""),"success");
+      }else progress(form,"Kein Anbieter hat einen bestätigten Kurs geliefert. Es wird kein alter Wert als aktuell ausgegeben.","error");
+    }catch(error){
+      const reason=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Abfrage fehlgeschlagen";
+      progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
+    }finally{
+      busy=false;for(const f of forms)f.querySelector("button[type=submit]").disabled=false;
+      save();paint();
+    }
   }
   for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);});
   paint();

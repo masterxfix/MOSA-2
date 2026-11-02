@@ -19,6 +19,19 @@ class IsinQuoteTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("PASS synthetic ISIN quote tests", result.stdout)
 
+    def test_all_four_mosa_providers_in_real_shared_source_core(self):
+        php = shutil.which("php")
+        self.assertIsNotNone(php)
+        for file in ("api/isin_quote.php", "api/market_source_engine.php",
+                     "tests/fixtures/isin_quote_all_test.php"):
+            result = subprocess.run([php, "-l", str(ROOT / file)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        result = subprocess.run([php, str(ROOT / "tests/fixtures/isin_quote_all_test.php")],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("PASS all four MOSA providers", result.stdout)
+
     def test_existing_design_preserved_and_fixed_five_replaced(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
         market = (ROOT / "marktdaten.html").read_text(encoding="utf-8")
@@ -42,13 +55,22 @@ class IsinQuoteTests(unittest.TestCase):
         self.assertIn('fetch("api/isin_quote.php"', js)
         self.assertIn('form.addEventListener("submit"', js)
 
-    def test_get_never_triggers_price_collection_and_two_fixed_hosts_only(self):
+    def test_get_never_triggers_collection_and_mosa_provider_hosts_are_fixed(self):
         code = (ROOT / "api/isin_quote.php").read_text(encoding="utf-8")
         self.assertIn("REQUEST_METHOD", code)
         self.assertIn("'POST'", code)
         self.assertIn("SOURCE_UNSUPPORTED", code)
         self.assertIn("https://www.tradegatebsx.com/orderbuch.php?isin=", code)
         self.assertIn("https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin=", code)
+        self.assertIn("api/market_source_engine.php".replace("api/", ""), code)
+        original = (ROOT / "api/market_source_engine.php").read_text(encoding="utf-8")
+        self.assertIn("fixlabRunMosaMarketSourceLab", original)
+        self.assertIn("lang_schwarz_quote", original)
+        self.assertIn("tradegate_trade", original)
+        self.assertIn("yahoo_home_market", original)
+        self.assertIn("boerse_frankfurt_trade", original)
+        self.assertIn("query1.finance.yahoo.com", original)
+        self.assertIn("www.ls-tc.de", original)
         for forbidden in ("INSERT INTO ", "UPDATE m2_", "DELETE FROM ", "exec('DROP", "workflow_dispatch"):
             self.assertNotIn(forbidden, code)
 

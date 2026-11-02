@@ -200,6 +200,109 @@ function preview(string $code,string $provider,?callable $transport=null): array
     return ['status'=>'ok','isin'=>$code,'name'=>$name,'provider'=>$provider,'source'=>SOURCES[$provider],
         'url'=>$spec['url'],'captured_at'=>$observed,'age_seconds'=>$age,'stale'=>$age>1800]+$result;
 }
+
+/** Only the four established MOSA source providers and their documented endpoints. */
+function sourceAllowed(array $request,string $code): bool {
+    $key=$request['request_key']??null;$url=$request['url']??null;
+    if (!is_string($key)||!is_string($url)||strlen($url)>500)return false;
+    $parts=parse_url($url);
+    if (!is_array($parts)||($parts['scheme']??null)!=='https'||(isset($parts['user'])||isset($parts['pass']))
+        ||isset($parts['fragment'])||!in_array($parts['port']??443,[443],true))return false;
+    $host=$parts['host']??'';$path=$parts['path']??'';
+    return match($key) {
+        'lang_schwarz_search' => $url==='https://www.ls-tc.de/_rpc/json/.lstc/instrument/search/main?q='.$code.'&localeId=2',
+        'lang_schwarz_page' => $host==='www.ls-tc.de' && preg_match('~^/de/(aktie|etf)/[1-9][0-9]{0,18}$~D',$path)===1 && !isset($parts['query']),
+        'tradegate_quote' => $url==='https://www.tradegatebsx.com/orderbuch.php?isin='.$code,
+        'tradegate_trade' => $url==='https://www.tradegatebsx.com/orderbuch_umsaetze.php?isin='.$code,
+        'boerse_frankfurt_trade' => $url==='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$code.'&mic=XFRA',
+        'yahoo_home_search' => $url==='https://query1.finance.yahoo.com/v1/finance/search?q='.$code.'&quotesCount=10&newsCount=0',
+        'yahoo_home_market' => $host==='query1.finance.yahoo.com'
+            && preg_match('~^/v8/finance/chart/[a-zA-Z0-9._%=-]{1,128}$~D',$path)===1
+            && ($parts['query']??null)==='range=1d&interval=1d&includePrePost=false',
+        default => false,
+    };
+}
+/** A safe observable wrapper around the proven read-only MOSA source transport. */
+function sourceTransport(array $request,string $code,callable $emit,?callable $transport=null): array {
+    $key=is_string($request['request_key']??null)?$request['request_key']:'unknown';
+    $title=is_string($request['request_type']??null)?$request['request_type']:$key;
+    $emit(['event'=>'request','stage'=>'started','request_key'=>$key,'name'=>$title]);
+    if (!sourceAllowed($request,$code)){
+        $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'source_rejected'];
+    } else {
+        try{$reply=($transport??'fixlabMosaMarketSourceLabLiveTransport')($request);}
+        catch(Throwable){$reply=['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'transport_exception'];}
+        if(!is_array($reply))$reply=['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'transport_invalid'];
+    }
+    $emit(['event'=>'request','stage'=>'finished','request_key'=>$key,'name'=>$title,
+        'http_status'=>is_int($reply['http_status']??null)?$reply['http_status']:null,
+        'duration_ms'=>is_int($reply['latency_ms']??null)?$reply['latency_ms']:null,
+        'code'=>is_string($reply['error_code']??null)?$reply['error_code']:null]);
+    return $reply;
+}
+function asPrice(mixed $price): ?string {
+    if (!is_float($price)&&!is_int($price))return null;
+    if (!is_finite((float)$price)||$price<=0||$price>=1000000000000000)return null;
+    $value=rtrim(rtrim(sprintf('%.10f',(float)$price),'0'),'.');
+    if ($value===''||!preg_match('/^[0-9]+(?:\.[0-9]+)?$/D',$value))return null;
+    return $value;
+}
+function sourceRecord(string $key,array $source,string $code,string $captured): array {
+    $label=is_string($source['provider_label']??null)?$source['provider_label']:$key;
+    $venue=is_string($source['venue_label']??null)?$source['venue_label']:'—';
+    $kind=match($key){
+        'lang_schwarz_quote','tradegate_quote'=>'Mid (Geld/Brief)',
+        'lang_schwarz_trade','tradegate_trade','boerse_frankfurt_trade'=>'Letzter Handel',
+        'yahoo_home_market'=>'Heimatmarktkurs',
+        default=>'Kurs'
+    };
+    $base=['provider'=>$key,'source'=>$label.' · '.$venue,'venue'=>$venue,'quote_type'=>$kind,
+        'isin'=>$code,'captured_at'=>$captured];
+    $price=asPrice($source['price']??null);
+    $currency=$source['currency']??null;
+    $quoted=$source['quoted_at']??null;
+    if(($source['available']??false)!==true||$price===null
+        ||!is_string($currency)||preg_match('/^[A-Z]{3}$/D',$currency)!==1
+        ||!is_string($quoted)){
+        return $base+['status'=>'error','code'=>preg_match('/^[a-z0-9_]{1,90}$/D',(string)($source['error_code']??''))===1
+            ? $source['error_code'] : 'quote_unavailable'];
+    }
+    try{
+        $market=new DateTimeImmutable($quoted);
+        $stamp=timeUtc($market);
+    }catch(Throwable){return $base+['status'=>'error','code'=>'market_time_invalid'];}
+    $age=max(0,time()-$market->getTimestamp());
+    return $base+['status'=>'ok','price'=>$price,'currency'=>$currency,'market_at'=>$stamp,
+        'age_seconds'=>$age,'stale'=>$age>1800,
+        'bid'=>asPrice($source['bid']??null),'ask'=>asPrice($source['ask']??null),
+        'symbol'=>is_string($source['symbol']??null)?$source['symbol']:null];
+}
+/** Executes the unchanged MOSA core once; never writes to the database. */
+function previewAll(string $input,callable $emit,?callable $transport=null): array {
+    $code=isin($input);
+    require_once __DIR__.'/market_source_engine.php';
+    $lab=\fixlabRunMosaMarketSourceLab($code,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
+        static fn(array $request)=>sourceTransport($request,$code,$emit,$transport));
+    $captured=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+    $items=[];$success=0;
+    foreach(['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade',
+        'boerse_frankfurt_trade','yahoo_home_market'] as $key){
+        $source=$lab['sources'][$key]??[];
+        $result=sourceRecord($key,is_array($source)?$source:[],$code,$captured);
+        if($result['status']==='ok')$success++;
+        $items[]=$result;
+    }
+    $name=registeredName($code)??($lab['instrument']['name']??null);
+    if (!is_string($name)||trim($name)===''||mbLength($name)>160)$name=null;
+    return ['status'=>$success>0?'ok':'error','isin'=>$code,'name'=>$name,
+        'captured_at'=>$captured,'success_count'=>$success,'records'=>$items,'request_count'=>count($lab['requests']??[])];
+}
+function emitStream(array $event): void {
+    echo json_encode($event,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
+    if(function_exists('ob_flush')&&ob_get_level()>0)@ob_flush();
+    flush();
+}
+
 /** Only called when this script is directly requested as the HTTP endpoint. */
 function main(): void {
     ini_set('display_errors','0');ini_set('log_errors','0');
@@ -218,13 +321,23 @@ function main(): void {
         $payload=json_decode((string)$wire,true,4,JSON_THROW_ON_ERROR);
         if (!is_array($payload)||array_keys($payload)!==['isin','provider']||!is_string($payload['isin'])||!is_string($payload['provider'])) fail('INVALID_REQUEST');
         $code=isin($payload['isin']);$provider=$payload['provider'];
-        if (!isset(SOURCES[$provider])) fail('SOURCE_UNSUPPORTED');
+        if (!isset(SOURCES[$provider])&&$provider!=='all') fail('SOURCE_UNSUPPORTED');
         // The user explicitly starts one provider GET per button activation; short session limit prevents accidental loops.
         session_name('MOSA2_ISIN');session_set_cookie_params(['secure'=>true,'httponly'=>true,'samesite'=>'Strict','path'=>'/']);
         if (!session_start()) fail('SESSION_UNAVAILABLE');
         $key=$code.':'.$provider;$now=microtime(true);
         if ($now-($_SESSION['quote_at'][$key]??0)<3.0) {session_write_close();http_response_code(429);echo '{"status":"error","code":"TOO_FREQUENT"}';return;}
         $_SESSION['quote_at'][$key]=$now;session_write_close();
+        if($provider==='all'){
+            header('Content-Type: application/x-ndjson; charset=utf-8');
+            header('X-Accel-Buffering: no');
+            emitStream(['event'=>'started','isin'=>$code]);
+            try{
+                $result=previewAll($code,__NAMESPACE__.'\\emitStream');
+                emitStream(['event'=>'result','data'=>$result]);
+            }catch(Throwable){emitStream(['event'=>'failure','code'=>'SOURCE_COMPARISON_FAILED']);}
+            return;
+        }
         echo json_encode(preview($code,$provider),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
     }catch(QuoteFailure $error){
         http_response_code(in_array($error->getMessage(),['INVALID_ISIN','INVALID_REQUEST','SOURCE_UNSUPPORTED'],true)?400:502);
