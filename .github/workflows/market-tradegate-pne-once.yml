@@ -1,0 +1,71 @@
+name: Manual MOSA 2 PNE Tradegate one-shot
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed main commit SHA
+        type: string
+        required: true
+      authorization:
+        description: Exact PNE Tradegate one-shot authorization token plus full commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa2-pne-tradegate-one-shot-20261102
+  cancel-in-progress: false
+
+jobs:
+  once:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Require exact revision, authorization and existing secrets
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_PNE_AUTHORIZATION_PREFIX: 'MOSA2-PNE-TRADEGATE-ONE-SHOT-20261102:'
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$AUTHORIZATION" = "$MOSA_PNE_AUTHORIZATION_PREFIX$EXPECTED_COMMIT"
+          for name in MOSA_TEST_SFTP_PASSWORD MOSA_TEST_SFTP_HOST_KEY_SHA256 MOSA_TEST_DB_PASSWORD; do
+            if [ -z "$(printenv "$name")" ]; then echo "MISSING_SECRET: $name"; exit 1; fi
+          done
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install pinned deploy dependencies
+        run: python3 -m pip install --disable-pip-version-check --no-input -r scripts/requirements-deploy.txt
+      - name: Focused one-shot safety and syntax checks
+        env:
+          PYTHONPATH: .:tests
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          php -l scripts/market_collector/schema6_tradegate_once.php
+          php -l scripts/market_collector/live_persistence.php
+          python3 -m py_compile scripts/schema6_tradegate_once.py scripts/market_collector/live_bridge.py scripts/market_collector/tradegate.py
+          python3 -B -m unittest -v test_tradegate_collector test_tradegate_manifest test_schema6_compat test_collector_actions
+          git diff --exit-code
+      - name: Perform exactly one qualified PNE provider GET and database write path
+        env:
+          MOSA_PNE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_PNE_AUTHORIZATION: ${{ inputs.authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/schema6_tradegate_once.py

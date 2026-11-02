@@ -94,7 +94,7 @@ function compareDelta(array $before,array $after,array $plan,array $inserted): v
     }same($after,$before,'unplanned_delta');
 }
 /** One read-only plan, one provider acquisition, one atomic business transaction, one independent readback. */
-function proofRun(string $privateRoot,string $password,array $config,array $manifest): array {
+function proofRun(string $privateRoot,string $password,array $config,array $manifest,?callable $acquisitionGate=null): array {
     $capture=static fn(PDO $db)=>snapshot($db,$config['state_contract']??[]);
     $r=['ok'=>false,'stage'=>'preflight','database_connections'=>0,'provider_requests'=>0,'committed'=>false,'rollback'=>null];
     $p=null;$locked=false;$baseline=null;$plan=null;$inserted=[];$lockKey=null;
@@ -107,7 +107,8 @@ function proofRun(string $privateRoot,string $password,array $config,array $mani
             $indexes=[];foreach($p->query('SHOW INDEX FROM m2_asset_source_routes')->fetchAll() as $index)if((int)$index['Non_unique']===0)$indexes[$index['Key_name']][]=$index['Column_name'];
             check(in_array(['source_id','route_type','external_key','route_revision'],$indexes,true)&&in_array(['asset_id','source_id','route_type','route_revision'],$indexes,true),'route_unique_contracts');
         }finally{if($p->inTransaction())$p->rollBack();}
-        \Mosa2\CollectorSchema5\acquisitionAllowed($config['state_contract']??[]);
+        if($acquisitionGate===null)\Mosa2\CollectorSchema5\acquisitionAllowed($config['state_contract']??[]);
+        else $acquisitionGate($config);
         $r['stage']='provider';$acquired=bridge($config,['action'=>'fetch','private_root'=>$privateRoot,'php_cli'=>$config['php']]);$r['provider_requests']=1;
         $r['stage']='transaction';$p->beginTransaction();
         try {
