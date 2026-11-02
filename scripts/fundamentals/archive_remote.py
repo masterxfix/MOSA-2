@@ -5,7 +5,7 @@ import json
 import re
 
 EXECUTIONS = {'fundamentals-droneshield-fy2025-20261101-01', 'fundamentals-pne-q1-2026-20261101-01', 'fundamentals-pne2025-20261101-01', 'fundamentals-zeiss2025-20261101-01'}
-EVIDENCE_EXECUTIONS = {'fundamentals-esef-nel-20261101-01', 'fundamentals-esef-pandora-20261101-01', 'fundamentals-esef-nel-20261101-02', 'fundamentals-esef-pandora-20261101-02', 'fundamentals-esef-nel-20261102-03', 'fundamentals-esef-pandora-20261102-03', 'fundamentals-esef-nel-20261102-04', 'fundamentals-esef-pandora-20261102-04', 'fundamentals-sec-nvidia-20261101-02', 'fundamentals-sec-rigetti-20261101-02', 'fundamentals-sec-nvidia-20261101-01', 'fundamentals-sec-rigetti-20261101-01', 'fundamentals-droneshield-html-fy2025-20261101-01'}
+EVIDENCE_EXECUTIONS = {'fundamentals-esef-nel-20261101-01', 'fundamentals-esef-pandora-20261101-01', 'fundamentals-esef-nel-20261101-02', 'fundamentals-esef-pandora-20261101-02', 'fundamentals-esef-nel-20261102-03', 'fundamentals-esef-pandora-20261102-03', 'fundamentals-esef-nel-20261102-04', 'fundamentals-esef-pandora-20261102-04', 'fundamentals-sec-nvidia-20261101-02', 'fundamentals-sec-rigetti-20261101-02', 'fundamentals-sec-nvidia-20261101-01', 'fundamentals-sec-rigetti-20261101-01', 'fundamentals-droneshield-html-fy2025-20261101-01', 'fundamentals-hkex-byd-20261102-01', 'fundamentals-hkex-ubtech-20261102-01'}
 CURATED_EXECUTIONS = {'fundamentals-curated-droneshield-fy2025-20261101-01'}
 EXECUTIONS |= EVIDENCE_EXECUTIONS | CURATED_EXECUTIONS
 ROOT = BASE + '/private/mosa2-collector'

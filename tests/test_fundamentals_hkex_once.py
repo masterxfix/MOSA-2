@@ -1,6 +1,9 @@
+import ast
 import json
+import os
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from scripts import fundamentals_hkex_once as once
 
@@ -41,6 +44,11 @@ class HkexOnceTests(unittest.TestCase):
             self.assertEqual({y for values in expected['values'].values() for y in values},{'2024','2025'})
 
     def test_preservation_scope_binds_all_seven_assets_and_fingerprints(self):
+        self.assertEqual(sum(row['observations'] for row in once.PRESERVE),79)
+        self.assertEqual(sum(row['current'] for row in once.PRESERVE),40)
+        self.assertEqual({row['isin'] for row in once.PRESERVE},
+                         {'DE000A0JBPG2','DE0005313704','AU000000DRO2','US67066G1040',
+                          'US76655K1034','NO0010081235','DK0060252690'})
         assets=[]
         for entry in once.PRESERVE:
             assets.append(dict(name=entry['name'],identifiers=[dict(normalized_value=entry['isin'])],
@@ -51,6 +59,34 @@ class HkexOnceTests(unittest.TestCase):
         self.assertTrue(all(len(row['fingerprint'])==64 for row in preserved))
         changed=list(assets);changed[0]=dict(changed[0],facts=changed[0]['facts'][:-1])
         with self.assertRaises(ValueError): once.assets_with_fundamentals(dict(assets=changed))
+
+    def test_archive_allowlist_is_exclusive_for_hkex_executions(self):
+        source=(Path(__file__).resolve().parents[1]/'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
+        tree=ast.parse(source)
+        values={}
+        for node in tree.body:
+            if isinstance(node,ast.Assign) and len(node.targets)==1 and isinstance(node.targets[0],ast.Name):
+                if node.targets[0].id in {'EVIDENCE_EXECUTIONS','CURATED_EXECUTIONS'}:
+                    values[node.targets[0].id]=ast.literal_eval(node.value)
+        evidence=values['EVIDENCE_EXECUTIONS'];curated=values['CURATED_EXECUTIONS']
+        hkex={'fundamentals-hkex-byd-20261102-01','fundamentals-hkex-ubtech-20261102-01'}
+        self.assertTrue(hkex <= evidence)
+        self.assertTrue(hkex.isdisjoint(curated))
+        for value in ('fundamentals-hkex-byd-20261102-02','fundamentals-hkex-ubtech-20261102-02',
+                      'fundamentals-hkex-ubtech-20261102-01-swapped','unknown-hkex-execution'):
+            self.assertNotIn(value,evidence)
+
+    def test_execution_for_uses_only_authorized_static_mapping(self):
+        profile=once.PROFILES[0]['profile']
+        with patch.dict(os.environ,{},clear=True):
+            self.assertEqual(once.execution_for(profile),once.EXECUTIONS[profile['isin']])
+        for bad in (
+            {},
+            {'CNE100000296':'fundamentals-hkex-ubtech-20261102-01','CNE100006CQ4':'fundamentals-hkex-byd-20261102-01'},
+            {'CNE100000296':'unknown-execution','CNE100006CQ4':'fundamentals-hkex-ubtech-20261102-01'},
+        ):
+            with patch.dict(os.environ,{'HKEX_EXECUTION_OVERRIDES':json.dumps(bad)},clear=True):
+                with self.assertRaises(ValueError): once.execution_for(profile)
 
 
 if __name__=='__main__':unittest.main()

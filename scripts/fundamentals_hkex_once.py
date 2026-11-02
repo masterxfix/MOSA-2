@@ -29,9 +29,9 @@ PRESERVE = (
     dict(isin='DE000A0JBPG2', name='PNE AG', observations=11, current=6),
     dict(isin='DE0005313704', name='Carl Zeiss Meditec', observations=20, current=10),
     dict(isin='AU000000DRO2', name='DroneShield', observations=14, current=7),
-    dict(isin='US67066G1040', name='NVIDIA', observations=6, current=3),
-    dict(isin='US76655K1034', name='Rigetti Computing', observations=8, current=4),
-    dict(isin='NO0010081235', name='NEL ASA', observations=10, current=5),
+    dict(isin='US67066G1040', name='NVIDIA', observations=8, current=4),
+    dict(isin='US76655K1034', name='Rigetti Computing', observations=10, current=5),
+    dict(isin='NO0010081235', name='NEL ASA', observations=6, current=3),
     dict(isin='DK0060252690', name='Pandora', observations=10, current=5),
 )
 PROFILES = tuple(dict(profile=p, execution=EXECUTIONS[p['isin']]) for p in hkex.PROFILES)
@@ -100,7 +100,11 @@ def execution_overrides(raw=None):
 
 
 def execution_for(profile):
-    return execution_overrides().get(profile['isin'], profile['execution'])
+    overrides=execution_overrides()
+    need(profile['isin'] in EXECUTIONS, 'HKEX_WORKFLOW')
+    execution=overrides.get(profile['isin'], EXECUTIONS[profile['isin']])
+    need(execution==EXECUTIONS[profile['isin']], 'HKEX_WORKFLOW')
+    return execution
 
 
 def download(profile, item):

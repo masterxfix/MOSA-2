@@ -46,7 +46,7 @@ Before any later write it expects the test baseline 79/40 fundamentals and
 28/5 market rows, confirms the two target ISINs are empty, and protects these
 seven existing assets by identity, observation/current counts, and full snapshot
 fingerprints: PNE AG 11/6, Carl Zeiss Meditec 20/10, DroneShield 14/7, NVIDIA
-6/3, Rigetti Computing 8/4, NEL ASA 10/5, and Pandora 10/5. These are runtime
+8/4, Rigetti Computing 10/5, NEL ASA 6/3, and Pandora 10/5. These are runtime
 guards, not a claim that the live totals have already changed.
 
 ## Verification boundary
