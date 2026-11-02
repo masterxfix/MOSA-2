@@ -22,7 +22,7 @@ function hkexEvidence(array $plan,array $doc):void {
     check(count(array_filter($profiles,fn($p)=>canonical($p)===canonical($profile)))===1,'hkex_reviewed_profile');
     same(canonical($profile),canonical($plan['hkex_profile']),'hkex_plan_profile');
     same($doc['issuer'], $plan['identity'],'hkex_issuer');same($doc['issuer']['isin'],$profile['isin'],'hkex_isin');
-    same($doc['issuer']['name'],$profile['name'],'hkex_name');same($plan['metadata']['url'],$profile['url'],'hkex_url');
+    check(in_array($doc['issuer']['name'],$profile['names'],true),'hkex_name');same($plan['metadata']['url'],$profile['url'],'hkex_url');
     same($plan['metadata']['http_status'],200,'hkex_http');check(str_starts_with($plan['metadata']['content_type'],'application/pdf'),'hkex_mime');
     same($doc['reporting_standard'],$profile['standard'],'hkex_standard');same($doc['consolidation_status'],'consolidated','hkex_consolidation');
     same($plan['source']['source_key'],'hkex_official_annual_reports','hkex_source');same($plan['source']['enabled'],'0','hkex_disabled');

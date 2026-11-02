@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .pdf_document import read_pdf
-from . import zeiss
+from . import sec_xbrl, zeiss
 
 PARSER = 'hkex_consolidated_annual_pdf_v1'
 VERSION = '1'
@@ -21,14 +21,13 @@ SOURCE = dict(source_key='hkex_official_annual_reports', source_type='exchange_a
 
 DEFINITIONS = {
     'revenue': zeiss.DEFINITIONS['revenue'][:2],
+    # Reuse the frozen shared catalog semantics; ASBE's explicit total-profit,
+    # net-profit and operating-cash-flow rows are only the source mapping.
+    'profit_before_tax': zeiss.DEFINITIONS['profit_before_tax'][:2],
+    'profit_after_tax': sec_xbrl.DEFS['profit_after_tax'][:2],
+    'operating_cashflow': sec_xbrl.DEFS['operating_cashflow'][:2],
     'operating_profit': ('Operating Profit / Loss',
                          'Reported consolidated operating profit or loss explicitly titled by the issuer; not inferred EBIT.'),
-    'profit_before_tax': ('Profit Before Tax',
-                          'Reported consolidated total profit or loss before income tax; mapped only from the explicit ASBE total-profit row.'),
-    'profit_after_tax': ('Profit After Tax',
-                         'Reported consolidated net profit or loss after income tax; not profit attributable to owners only.'),
-    'operating_cashflow': ('Operating Cashflow',
-                           'Reported consolidated net cash flow from operating activities; not cash balances.'),
 }
 
 ROWS = {
@@ -201,7 +200,7 @@ def _fact(metric, row, year, profile, unit_key, original_unit, scale_numerator, 
                 validation_status='qualified')
 
 
-def parse(raw, metadata, profile):
+def parse(raw, metadata, profile, identity=None):
     _need(profile in PROFILES, 'HKEX_PROFILE')
     _need(metadata['url'] == profile['url'] and metadata['http_status'] == 200, 'HKEX_RESPONSE_BINDING')
     _need(metadata['content_type'].lower().startswith(CONTENT_TYPE), 'HKEX_RESPONSE_MIME')
@@ -234,8 +233,10 @@ def parse(raw, metadata, profile):
     metrics=[dict(metric_key=k,display_name=DEFINITIONS[k][0],category='cashflow' if k=='operating_cashflow' else 'income',
                   value_type='decimal',value_semantics=DEFINITIONS[k][1],dimension_key='monetary',status='active')
              for k in ('revenue','operating_profit','profit_before_tax','profit_after_tax','operating_cashflow')]
+    issuer=identity or dict(isin=profile['isin'],name=profile['name'])
+    _need(issuer['isin']==profile['isin'] and issuer['name'] in profile['names'], 'HKEX_IDENTITY')
     doc=dict(format='mosa2-fundamental-evidence-v1',kind='derived_evidence',evidence_type='hkex_pdf',
-             source_response=dict(metadata,retained=False),issuer=dict(isin=profile['isin'],name=profile['name']),
+             source_response=dict(metadata,retained=False),issuer=issuer,
              identity_mapping=profile,source_classification='official_hkex_annual_report',
              parser=dict(key=PARSER,version=VERSION),
              reporting_standard=profile['standard'],consolidation_status='consolidated',
@@ -251,6 +252,6 @@ def parse(raw, metadata, profile):
               unqualified_metrics=[],metadata=metadata,evidence_json=compact.decode('utf-8'),
               stored_evidence=dict(metadata,kind='derived_evidence',content_type='application/json',bytes=len(compact),
                                    sha256=hashlib.sha256(compact).hexdigest()),archive=None,
-              identity=dict(isin=profile['isin'],name=profile['name']),hkex_profile=profile,
+              identity=issuer,hkex_profile=profile,
               reported_periods=periods)
     return plan

@@ -32,6 +32,10 @@ All values below are consolidated, in `RMB’000`, with exact PDF page/column lo
 
 Gaps: none. Each plan contains 10 observations, 5 metric groups, and an independently validated identity, standard, consolidation, period, unit, sign, row, column, page, and coordinate locator.
 
+## Catalog compatibility
+
+`revenue`, `profit_before_tax`, `profit_after_tax`, and `operating_cashflow` reuse the existing shared catalog definitions and therefore retain their existing definition hashes. The ASBE source rows are only the mapping evidence. `operating_profit` is a new, explicit-row metric whose semantics say “not inferred EBIT”; it is intentionally distinct from IFRS operating profit, US-GAAP operating income, and EBIT.
+
 ## Verification boundary
 
 Focused adapter tests, negative identity/unit/year/scope tests, PHP lints, PHP writer/current/readback/replay, Evidence-tamper rejection, and analysis-input validation passed. The real offline pipeline passed for both plans. Counts were 20 observations and 10 current projections in the in-memory writer proof only; the MOSA-2 test database was not accessed or changed.

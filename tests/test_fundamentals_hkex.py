@@ -48,6 +48,15 @@ def plan(raw=None, observed_at=OBSERVED):
 
 
 class HkexTests(unittest.TestCase):
+    def test_catalog_definitions_reuse_existing_keys_without_operating_profit_aliasing(self):
+        from scripts.fundamentals import sec_xbrl, zeiss
+        self.assertEqual(hkex.DEFINITIONS['revenue'][:2],zeiss.DEFINITIONS['revenue'][:2])
+        self.assertEqual(hkex.DEFINITIONS['profit_before_tax'][:2],zeiss.DEFINITIONS['profit_before_tax'][:2])
+        self.assertEqual(hkex.DEFINITIONS['profit_after_tax'][:2],sec_xbrl.DEFS['profit_after_tax'][:2])
+        self.assertEqual(hkex.DEFINITIONS['operating_cashflow'][:2],sec_xbrl.DEFS['operating_cashflow'][:2])
+        self.assertNotEqual(hkex.DEFINITIONS['operating_profit'][:2],('IFRS Operating Profit / Loss','Reported consolidated IFRS profit or loss from operating activities; not assumed equivalent to EBIT or EBITDA.'))
+        self.assertNotEqual(hkex.DEFINITIONS['operating_profit'][:2],('Operating Income / Loss','Reported consolidated US-GAAP operating income or loss; not assumed equivalent to EBIT.'))
+
     def test_adapter_values_units_and_evidence(self):
         p=plan();self.assertEqual(len(p['observations']),10);self.assertEqual({r['unit_key'] for r in p['observations']},{'CNY_THOUSAND'})
         self.assertEqual([r['value_decimal'] for r in p['observations'][:4]],['803964958','777102455','40184709','50486047'])
@@ -73,7 +82,13 @@ class HkexTests(unittest.TestCase):
 
     def test_php_writer_current_readback_replay_and_evidence_tamper(self):
         p=subprocess.run([r'C:\php\php.exe','tests/fundamentals_hkex.php'],input=json.dumps([plan(),plan(observed_at='2026-11-02 00:00:01.123456')]),text=True,capture_output=True,cwd=Path(__file__).resolve().parents[1])
-        self.assertEqual(p.returncode,0,p.stdout+p.stderr);self.assertEqual(p.stderr,'');self.assertEqual(json.loads(p.stdout)['replay'],'PASS')
+        self.assertEqual(p.returncode,0,f'php_exit={p.returncode} stderr={p.stderr[:320]!r} stdout={p.stdout[:320]!r}')
+        self.assertEqual(p.stderr,'',f'php_stderr={p.stderr[:320]!r}')
+        try:
+            result=json.loads(p.stdout)
+        except json.JSONDecodeError as error:
+            self.fail(f'php_stdout_not_json line={error.lineno} column={error.colno} stdout_prefix={p.stdout[:320]!r}')
+        self.assertEqual(result['replay'],'PASS')
 
     def test_analysis_input_contract_accepts_qualified_plan_shape(self):
         p=plan();facts=[];current={}
