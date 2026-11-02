@@ -19,8 +19,8 @@ function snapshot(PDO $p,array $contract=[]): array {
         $keys=$p->query('SHOW KEYS FROM '.qi($t)." WHERE Key_name='PRIMARY'")->fetchAll();check($keys!==[],'primary_key');
         $out[$t]=array_map(__NAMESPACE__.'\\strings',$p->query('SELECT '.implode(',',$select).' FROM '.qi($t).' ORDER BY '.implode(',',array_map(static fn($k)=>qi($k['Column_name']),$keys)))->fetchAll());
     }
-    if(($contract['allow_current']??false)!==true)same($out['m2_market_current'],[],'current_nonempty');same($out['m2_market_bars'],[],'bars_nonempty');
-    same(count($out['m2_units']),4,'four_units');same(array_column($out['m2_schema_migrations'],'version'),$envelope['versions'],'ledger_versions');
+    if(($contract['allow_current']??false)!==true)same($out['m2_market_current'],[],'current_nonempty');
+    same(array_column($out['m2_schema_migrations'],'version'),$envelope['versions'],'ledger_versions');
     $digests=$envelope['digests'];
     foreach($out['m2_schema_migrations'] as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
     if(($contract['schema_version']??3)>=5){

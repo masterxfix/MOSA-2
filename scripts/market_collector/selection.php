@@ -2,7 +2,6 @@
 namespace Mosa2\MarketSelection;
 
 const MAX_ASSETS = 1000;
-const SUPPORTED_CURRENCIES = ['EUR', 'GBP', 'GBX'];
 
 function fail(string $reason): void { throw new \InvalidArgumentException($reason); }
 function requireValue(bool $ok, string $reason): void { if (!$ok) fail($reason); }
@@ -41,8 +40,8 @@ function routeReason(array $route, string $assetId, bool $manual = false): ?stri
     if (text($route, 'source_type') !== 'market_data' || !truthy($route['source_enabled'])) return 'SOURCE_NOT_ENABLED_MARKET_DATA';
     if (text($route, 'unit_contract_version') !== 'mosa2-market-unit-v1' || text($route, 'unit_status') !== 'frozen') return 'UNIT_NOT_QUALIFIED';
     $currency = text($route, 'unit_currency') ?? text($route, 'monetary_currency_code');
-    if (!in_array($currency, SUPPORTED_CURRENCIES, true)) return 'CURRENCY_NOT_QUALIFIED';
-    if (!in_array(text($route, 'quote_unit_key'), SUPPORTED_CURRENCIES, true) || text($route, 'quote_unit_version') === null) return 'QUOTE_UNIT_NOT_QUALIFIED';
+    if ($currency === null || preg_match('/^[A-Z]{3}$/D', $currency) !== 1) return 'CURRENCY_NOT_QUALIFIED';
+    if (($quoteUnit = text($route, 'quote_unit_key')) === null || $quoteUnit === '' || !positiveId(text($route, 'quote_unit_version'))) return 'QUOTE_UNIT_NOT_QUALIFIED';
     if (!preg_match('/^market-v1:[a-f0-9]{64}$/D', text($route, 'external_key') ?? '')) return 'ROUTE_EXTERNAL_ID_INVALID';
     return null;
 }

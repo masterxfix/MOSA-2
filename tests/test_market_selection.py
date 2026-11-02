@@ -125,6 +125,33 @@ class MarketSelectionTests(unittest.TestCase):
         self.assertEqual(item['route_reason'], 'CURRENCY_NOT_QUALIFIED')
         self.assertNotIn('Beta', [x['name'] for x in result['collector_candidates']])
 
+    def test_new_frozen_currency_units_use_the_shared_route_contract(self):
+        data = base();data['currents'] = [];data['observations'] = []
+        data['routes'][0].update(unit_currency='USD', quote_unit_key='USD')
+        data['routes'][1].update(unit_currency='NOK', quote_unit_key='NOK')
+        result = call(data)['result']
+        self.assertEqual(result['counts']['qualified_for_collector'], 2)
+        self.assertEqual({x['currency'] for x in result['collector_candidates']}, {'USD', 'NOK'})
+        self.assertTrue(all(x['route_status'] == 'QUALIFIED' for x in result['assets'][:2]))
+
+    def test_currency_and_unit_are_still_required_and_frozen(self):
+        data = base();data['routes'][0].update(unit_currency='US', quote_unit_key='USD')
+        data['routes'][1].update(unit_currency='USD', quote_unit_key='USD', unit_status=None)
+        result = call(data)['result']
+        by_name = {x['name']: x for x in result['assets']}
+        self.assertEqual(by_name['Alpha']['route_reason'], 'CURRENCY_NOT_QUALIFIED')
+        self.assertEqual(by_name['Beta']['route_reason'], 'UNIT_NOT_QUALIFIED')
+        self.assertEqual(result['counts']['qualified_for_collector'], 0)
+
+    def test_shared_live_snapshot_is_not_bound_to_four_units_or_empty_bars(self):
+        live = (ROOT / 'scripts/market_collector/live_persistence.php').read_text(encoding='utf-8')
+        snapshot = live.split('function snapshot(', 1)[1].split('function completePlan(', 1)[0]
+        self.assertNotIn("'four_units'", snapshot)
+        self.assertNotIn("'bars_nonempty'", snapshot)
+        self.assertIn("'seed_binding'", snapshot)
+        self.assertIn("'ledger_checksum'", snapshot)
+        self.assertIn("'table_set'", snapshot)
+
     def test_current_input_is_not_mutated_and_stale_is_explicit(self):
         data = base();data['currents'][0]['market_at'] = '2026-11-02 10:00:00.000000';data['currents'][0]['observed_at'] = '2026-11-02 10:00:00.000000'
         data['observations'][0]['market_at'] = '2026-11-02 10:00:00.000000';data['observations'][0]['observed_at'] = '2026-11-02 10:00:00.000000'
