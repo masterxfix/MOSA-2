@@ -4,6 +4,13 @@ import logging
 from pathlib import Path
 import sys
 
+# This script is directly executable from the repository root.  Its shared
+# helpers live one directory above this file and must be importable on Linux
+# as well as Windows without relying on the caller's working directory.
+SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
 import collector_actions as shared
 import collector_db_locality as remote
 import deploy_test_sftp as profile

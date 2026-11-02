@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   coverage:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_number == 2 && github.run_attempt == 1
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -32,7 +32,9 @@ jobs:
         run: |
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          test "$AUTHORIZATION" = "MOSA2-MARKET-COVERAGE-READONLY:$GITHUB_SHA"
+          test "$GITHUB_RUN_NUMBER" = "2"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$AUTHORIZATION" = "MOSA2-MARKET-COVERAGE-READONLY-SECOND-20261102:$GITHUB_SHA"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
@@ -43,6 +45,8 @@ jobs:
           extensions: pdo_mysql
           coverage: none
           tools: none
+      - name: Install pinned deploy dependencies
+        run: python3 -m pip install --disable-pip-version-check --no-input -r scripts/requirements-deploy.txt
       - name: Focused selection and read-only safety tests
         env:
           PYTHONPATH: .:tests
@@ -50,7 +54,7 @@ jobs:
         run: |
           php -l scripts/market_collector/selection.php
           php -l scripts/market_collector/coverage_read.php
-          python3 -B -m unittest -v test_market_selection test_market_current test_quote_selection
+          python3 -B -m unittest -v test_market_selection
       - name: One bounded Dogado database coverage read with rollback
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}

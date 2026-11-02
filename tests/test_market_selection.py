@@ -1,18 +1,30 @@
 """General DB-driven market selection; synthetic only, no network or database."""
 import copy
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PHP = r'C:\php\php.exe'
 NOW = '2026-11-02 12:00:00.000000'
 UNITS = dict(unit_contract_version='mosa2-market-unit-v1', quote_unit_key='EUR', quote_unit_version='1', unit_status='frozen', unit_currency='EUR')
 
 
+def php_executable():
+    candidates = [shutil.which('php')]
+    if os.name == 'nt':
+        candidates.append(r'C:\php\php.exe')
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return str(candidate)
+    location = 'PATH' if os.name != 'nt' else 'PATH or C:\\php\\php.exe'
+    raise FileNotFoundError(f'PHP executable not found in {location}')
+
+
 def call(data):
-    return json.loads(subprocess.check_output([PHP, str(ROOT / 'tests/market_selection_fixture.php')], input=json.dumps(data).encode()))
+    return json.loads(subprocess.check_output([php_executable(), str(ROOT / 'tests/market_selection_fixture.php')], input=json.dumps(data).encode()))
 
 
 def route(asset_id, source_id='9', route_id=None, revision='1', **changes):
