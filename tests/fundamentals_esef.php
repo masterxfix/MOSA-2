@@ -7,13 +7,16 @@ $n=0;
 function ensure(bool $ok):void{global $n;$n++;if(!$ok)throw new RuntimeException('assertion_'.$n);}
 function reject(callable $f):bool{try{$f();return false;}catch(Throwable){return true;}}
 function rejectCode(callable $f,string $code):bool{try{$f();return false;}catch(Throwable $e){return $e->getMessage()===$code;}}
+function currentCount(array $plan):int{return count(array_unique(array_map(fn($r)=>$r['metric_key'].':'.$r['period_type'],$plan['observations'])));}
+function metricKeys(array $plan):array{return array_values(array_unique(array_column($plan['metrics'],'metric_key')));}
 executionBinding($a,$a['metadata']['execution']);
 ensure(rejectCode(fn()=>executionBinding($a,$b['metadata']['execution']),'execution_binding'));
 ensure(rejectCode(fn()=>executionBinding($a,'fundamentals-esef-unauthorized'),'execution_binding'));
 $p=new MemoryPDO();$first=transaction($p,$a,'41',fn()=>null);$old=$p->data;
 $second=transaction($p,$b,'42',fn()=>null);
-ensure($first['observations']===10&&$first['current']===5);ensure($second['observations']===10&&$second['current']===5);
-ensure($second['metrics']===0&&$second['inserted']['m2_fundamental_units']===1);
+ensure($first['observations']===count($a['observations'])&&$first['current']===currentCount($a));
+ensure($second['observations']===count($b['observations'])&&$second['current']===currentCount($b));
+ensure($second['metrics']===count(array_diff(metricKeys($b),metricKeys($a)))&&$second['inserted']['m2_fundamental_units']===1);
 foreach(['m2_fundamental_observations','m2_fundamental_current'] as $t)ensure(array_values(array_filter($p->data[$t],fn($r)=>$r['asset_id']==='41'))===$old[$t]);
 $repeat=transaction($p,$a,'41',fn()=>null);ensure(array_sum($repeat['inserted'])===0&&$repeat['current_updates']===0);
 foreach([1,7,15] as $failure){$q=new MemoryPDO($failure);ensure(reject(fn()=>transaction($q,$a,'41',fn()=>null)));ensure($q->data===[]&&$q->rollbacks===1);}

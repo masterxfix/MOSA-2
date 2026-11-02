@@ -19,6 +19,7 @@ AUTH = os.environ.get('ESEF_AUTH_PREFIX', 'MOSA2-ESEF-20261101:')
 WORKFLOW = os.environ.get('ESEF_WORKFLOW', '.github/workflows/fundamentals-esef-once.yml')
 LIVE2_WORKFLOW = '.github/workflows/fundamentals-esef-live2-once.yml'
 LIVE3_WORKFLOW = '.github/workflows/fundamentals-esef-live3-once.yml'
+LIVE4_WORKFLOW = '.github/workflows/fundamentals-esef-live4-once.yml'
 PROFILES = json.loads((shared.ROOT/'scripts/fundamentals/esef_profiles.json').read_text(encoding='utf-8'))
 
 
@@ -31,7 +32,12 @@ def execution_overrides(raw=None):
     except (TypeError, json.JSONDecodeError):
         raise ValueError('ESEF_EXECUTION_BINDING') from None
     expected = {'NO0010081235', 'DK0060252690'}
-    if WORKFLOW == LIVE3_WORKFLOW:
+    if WORKFLOW == LIVE4_WORKFLOW:
+        allowed = {
+            'NO0010081235': 'fundamentals-esef-nel-20261102-04',
+            'DK0060252690': 'fundamentals-esef-pandora-20261102-04',
+        }
+    elif WORKFLOW == LIVE3_WORKFLOW:
         allowed = {
             'NO0010081235': 'fundamentals-esef-nel-20261102-03',
             'DK0060252690': 'fundamentals-esef-pandora-20261102-03',

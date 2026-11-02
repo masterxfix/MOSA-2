@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import socket
 import subprocess
 import unittest
@@ -184,6 +185,24 @@ class EsefTests(unittest.TestCase):
         result=subprocess.run(['php','tests/fundamentals_esef.php'],input=json.dumps(plans),text=True,capture_output=True)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertTrue(json.loads(result.stdout)['ok'])
+    def test_live4_plans_keep_reviewed_profiles_and_bind_execution(self):
+        live4={'NO0010081235':'fundamentals-esef-nel-20261102-04',
+               'DK0060252690':'fundamentals-esef-pandora-20261102-04'}
+        nel_text=re.sub(r'<ix:nonFraction name="ifrs:(Revenue|ProfitLoss)"[^>]*>[^<]*</ix:nonFraction>',
+                        '',document(runner.PROFILES[0]))
+        nel=plan(text=nel_text,profile=runner.PROFILES[0],execution=live4['NO0010081235'])
+        pandora=plan(profile=runner.PROFILES[1],execution=live4['DK0060252690'])
+        self.assertEqual(len(nel['observations']),6)
+        self.assertEqual(len(nel['unqualified_metrics']),4)
+        self.assertEqual(nel['reported_periods'],{'2024':{'start':'2024-01-01','end':'2024-12-31'},
+                                                    '2025':{'start':'2025-01-01','end':'2025-12-31'}})
+        self.assertEqual(nel['units'][0]['monetary_currency_code'],'NOK')
+        self.assertEqual(len(pandora['observations']),10)
+        self.assertEqual(pandora['unqualified_metrics'],[])
+        self.assertEqual(pandora['units'][0]['monetary_currency_code'],'DKK')
+        result=subprocess.run(['php','tests/fundamentals_esef.php'],input=json.dumps([nel,pandora]),text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertTrue(json.loads(result.stdout)['ok'])
     def test_one_shot_guards_and_safe_errors(self):
         env=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch',
             GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_NUMBER='1',GITHUB_SHA='a'*40,EXPECTED_COMMIT='a'*40,
@@ -256,6 +275,36 @@ class EsefTests(unittest.TestCase):
             self.assertNotIn('20261102-03',old)
         finally:
             runner.AUTH,runner.WORKFLOW=old_auth,old_workflow
+    def test_live4_bindings_are_strict_and_prior_runs_remain_closed(self):
+        live1={'NO0010081235':'fundamentals-esef-nel-20261101-01',
+               'DK0060252690':'fundamentals-esef-pandora-20261101-01'}
+        live2={'NO0010081235':'fundamentals-esef-nel-20261101-02',
+               'DK0060252690':'fundamentals-esef-pandora-20261101-02'}
+        live3={'NO0010081235':'fundamentals-esef-nel-20261102-03',
+               'DK0060252690':'fundamentals-esef-pandora-20261102-03'}
+        live4={'NO0010081235':'fundamentals-esef-nel-20261102-04',
+               'DK0060252690':'fundamentals-esef-pandora-20261102-04'}
+        swapped={'NO0010081235':live4['DK0060252690'],
+                 'DK0060252690':live4['NO0010081235']}
+        old_workflow=runner.WORKFLOW
+        try:
+            runner.WORKFLOW=runner.LIVE4_WORKFLOW
+            self.assertEqual(runner.execution_overrides(json.dumps(live4)),live4)
+            for invalid in (live1,live2,live3,swapped,{'NO0010081235':live4['NO0010081235']}):
+                with self.assertRaisesRegex(ValueError,'ESEF_EXECUTION_BINDING'):
+                    runner.execution_overrides(json.dumps(invalid))
+            source=(runner.shared.ROOT/'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
+            for token in live4.values(): self.assertIn("'"+token+"'",source)
+            workflow=(runner.shared.ROOT/'.github/workflows/fundamentals-esef-live4-once.yml').read_text(encoding='utf-8')
+            for token in ('workflow_dispatch','github.run_number == 1','github.run_attempt == 1',
+                          'MOSA2-ESEF-LIVE4-20261102:$GITHUB_SHA',
+                          'ESEF_WORKFLOW: .github/workflows/fundamentals-esef-live4-once.yml',
+                          'fundamentals-esef-nel-20261102-04','fundamentals-esef-pandora-20261102-04'):
+                self.assertIn(token,workflow)
+            for old in (runner.LIVE2_WORKFLOW,runner.LIVE3_WORKFLOW,'.github/workflows/fundamentals-esef-once.yml'):
+                self.assertNotIn('20261102-04',(runner.shared.ROOT/old).read_text(encoding='utf-8'))
+        finally:
+            runner.WORKFLOW=old_workflow
 
 
 if __name__=='__main__':unittest.main()
