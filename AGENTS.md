@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 03.11.2026, 18:53:32 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 03.11.2026, 19:29:40 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -59,6 +59,8 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - **Unabhängige Ergebnisse entkoppeln:** Ist ein DB-Schreibschritt wegen einer tatsächlich fehlenden Voraussetzung nicht zulässig, beauftragte und erfolgreich geprüfte unabhängige Web-/Dokumentationsänderungen dennoch über ihren vorgesehenen Weg abschließen. Den Gesamtauftrag als teilweise offen melden, ohne durch den Web-Deploy eine DB-Aktion auszulösen.
 - **Risikogerechte Test-DB-Bereinigung:** Für ausdrücklich beauftragte, eng über ISIN/Asset-ID abgegrenzte Löschungen in `h29077_mosa2_test` zunächst read-only Identität, referenzierende Zeilen, Fremdschlüssel, Löschumfang und Sicherungsbedarf prüfen. Eine auf den betroffenen Datenverbund begrenzte, überprüfbar rückspielbare Sicherung kann ausreichend sein; der unabhängig geprüfte **Vollrestore der gesamten Testdatenbank** ist nicht pauschal für jede kleine transaktionale Löschung vorgeschrieben. Vor dem endgültigen Commit sind ein belegter Rückweg, eine begrenzte Transaktion und ein unabhängiger Postcheck notwendig. Fehlt der verlässliche Rückweg, nur den DB-Schreibschritt stoppen. Historische Archivschutzregeln und Sicherheitsgrenzen bleiben gültig.
 - **Keine zweite gleiche Freigabe:** Eine eindeutige Nutzeranweisung zur Entfernung eines konkret benannten Wertpapiers aus der Testdatenbank ist die fachliche Zustimmung zur genau abgegrenzten Entfernung. Nach erfolgreichem Preflight nicht erneut für denselben Umfang fragen. Neue Assets, zusätzliche Provider-/DB-Aktionen, ein neuer Secret-Zugang oder ein unbekannter Workflow sind dadurch nicht autorisiert.
+
+- **Bewusst irreversibler vollständiger Testdaten-Reset:** Beauftragt der Nutzer ausdrücklich den vollständigen Neustart der fachlichen Daten in ausschließlich `h29077_mosa2_test`, dürfen genau die als entbehrlich bezeichneten Pilot-/Testdatensätze endgültig verworfen werden. In diesem eng begrenzten Fall ist ein Backup oder unabhängiger Restore **der bewusst verworfenen Dateninhalte** keine pauschale Voraussetzung; danach können diese Daten nicht wiederhergestellt werden und dürfen nicht als gesichert bezeichnet werden. Stattdessen vor jedem Write den tatsächlich verwendeten Test-DB-Zugang, Datenbankidentität, aktuelle vollständige Tabellen-/FK-/Ledger-Struktur, ausschließlich entbehrlichen Datenbestand, stillgelegte eigene Schreiber sowie die reproduzierbare Schema- und Basiskonfigurationsgrundlage prüfen. Ohne eindeutige Abgrenzung, passenden nicht-interaktiven Schreibzugang oder tragfähigen Schema-Wiederaufbau-Nachweis STOP. Daten in MOSA, anderen DBs, bestehenden externen Archiven und anderen Dateisystembereichen bleiben unberührt. Reset per eng begrenzten transaktionalen `DELETE` in FK-sicherer Reihenfolge, nie `DROP`, `TRUNCATE`, FK-Deaktivierung oder Ledger-Löschung; danach unabhängiger Readback. Die vier zusätzlichen Anforderungen des speziellen Vollbackup-Workflows (Live-Dump, unabhängiger Recovery-Key, Vollrestore alter Daten, signierter Langzeit-Ruhe-Nachweis) gelten für den Reset nur, wenn tatsächlich dieser Backup-Workflow verwendet wird. Bestehende Plattform- und Secret-Schutzprüfungen bleiben verbindlich.
 
 ## Designbestandsschutz und ausdrückliche Nutzerfreigabe
 
@@ -230,6 +232,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 03.11.2026 | 19:29:40 Uhr (MEZ, UTC+01:00) | Nutzerbeauftragten vollständigen Reset entbehrlicher Test-Fachdaten von `h29077_mosa2_test` ausdrücklich von der Rücksicherung der bewusst zu verwerfenden Daten abgegrenzt; Schemaschutz, kontrollierte Löschung und unabhängiger Postcheck bleiben Pflicht. |
 | 03.11.2026 | 18:53:32 Uhr (MEZ, UTC+01:00) | Geringer Auftragsumfang verbindlich: historische Collector-/Sicherheitsmodule nicht unnötig verändern, unabhängige Web-/DB-Teilschritte entkoppeln, risikogerechte Testdaten-Sicherung statt pauschaler Vollrestore-Pflicht und keine erneuten Freigaben für denselben Scope. |
 | 03.11.2026 | 18:06:43 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung dokumentiert: PNE AG / ISIN DE000A0JBPG2 wird aus dem aktiven MOSA-2-Projekt und der MOSA-2-Testdatenbank entfernt. Historische Archive und Nachweise bleiben unverändert; `masterxfix/fixlab` bleibt unberührt. |
 | 03.11.2026 | 08:33:18 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung ergänzt: Erfolgreich geprüfte MOSA-2-Webänderungen werden ohne weitere Freigabe über den vorgesehenen Workflow auf die MOSA-2-Testsite deployed; Produktionsdeployments und neue externe Aktionen bleiben freigabepflichtig. |
