@@ -19,11 +19,16 @@ class DatabaseResetContractTests(unittest.TestCase):
     def test_only_target_database_and_expected_schema_are_allowed(self):
         self.assertIn("TARGET_DATABASE = 'h29077_mosa2_test'", PHP)
         self.assertIn("EXPECTED_VERSION = '8.0.26-16'", PHP)
-        self.assertIn("const TABLES = [", PHP)
-        self.assertEqual(len(re.findall(r"'m2_[a-z_]+',?", PHP.split("const TABLES = [", 1)[1].split("];", 1)[0])), 17)
+        self.assertIn("envelope(6)['tables']", PHP)
+        self.assertIn("CollectorSchema6\\schemas()", PHP)
+        self.assertIn("'schema_version' => 6", PHP)
+        self.assertIn("same(count($actual), 6, 'ledger_count')", PHP)
 
     def test_reset_uses_delete_order_without_schema_or_fk_shortcuts(self):
-        self.assertIn("$db->exec('DELETE FROM '.qi($table));", PHP)
+        self.assertIn("$db->exec('DELETE FROM '.qi($table).$filter);", PHP)
+        self.assertIn("job_key <> 'collector_reservations_v1'", PHP)
+        self.assertIn("'m2_fundamental_current', 'm2_fundamental_observations', 'm2_provider_fetches'", PHP)
+        self.assertIn("'m2_collector_requests', 'm2_collector_cycles', 'm2_collector_days'", PHP)
         self.assertNotIn("TRUNCATE", PHP.upper())
         self.assertNotIn("DROP TABLE", PHP.upper())
         self.assertNotIn("FOREIGN_KEY_CHECKS=0", PHP.upper())
@@ -43,6 +48,12 @@ class DatabaseResetContractTests(unittest.TestCase):
         self.assertIn('"SUBPROCESS_TIMEOUT"', REMOTE)
         self.assertIn("return result", REMOTE)
         self.assertIn("'error_code' => safeFailureCode($error)", PHP)
+
+    def test_schema6_retains_definitions_and_bootstrap(self):
+        self.assertIn("'m2_fundamental_metrics', 'm2_fundamental_units', 'm2_collector_state'", PHP)
+        self.assertIn("lockedDatabase($db)", PHP)
+        self.assertIn("serialize($rows)", PHP)
+        self.assertNotIn("const TABLES = [", PHP)
 
     def test_baseline_and_independent_postcheck_are_required(self):
         self.assertIn("baseline($db)", PHP)

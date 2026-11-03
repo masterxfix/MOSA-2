@@ -7,69 +7,36 @@ use PDO;
 use Throwable;
 use function Mosa2\Phase2\{check, same, connection, qi};
 
-require_once __DIR__.'/phase3k/unit_schema.php';
+require_once __DIR__.'/market_collector/schema6.php';
 
 const TARGET_DATABASE = 'h29077_mosa2_test';
 const EXPECTED_VERSION = '8.0.26-16';
 const LOCK_NAME = 'mosa2_h29077_mosa2_test_full_reset';
-const TABLES = [
-    'm2_entities', 'm2_sources', 'm2_relationships', 'm2_files', 'm2_events',
-    'm2_jobs', 'm2_job_runs', 'm2_assets', 'm2_asset_identifiers',
-    'm2_asset_source_routes', 'm2_schema_migrations', 'm2_sync_checkpoints',
-    'm2_module_state', 'm2_market_current', 'm2_market_observations',
-    'm2_market_bars', 'm2_units',
+function expectedTables(): array {
+    // The live Dogado database was upgraded to Schema 6 on 2026-11-01.
+    return \Mosa2\CollectorSchema5\envelope(6)['tables'];
+}
+const RETAINED = [
+    'm2_sources', 'm2_units', 'm2_module_state', 'm2_schema_migrations',
+    'm2_fundamental_metrics', 'm2_fundamental_units', 'm2_collector_state',
 ];
-const RETAINED = ['m2_sources', 'm2_units', 'm2_module_state', 'm2_schema_migrations'];
 const PURGE_ORDER = [
+    'm2_fundamental_current', 'm2_fundamental_observations', 'm2_provider_fetches',
     'm2_market_current', 'm2_market_observations', 'm2_market_bars',
+    'm2_collector_requests', 'm2_collector_cycles', 'm2_collector_days',
     'm2_asset_identifiers', 'm2_asset_source_routes', 'm2_relationships',
     'm2_files', 'm2_events', 'm2_job_runs', 'm2_sync_checkpoints',
     'm2_assets', 'm2_jobs', 'm2_entities',
 ];
-const LEDGER = [
-    ['version' => 1, 'migration_key' => '0001_core_asset_identity', 'checksum' => '9c3ac21f02fc242e9561d94aaa4a4c4fe6a430d11aa5f0681f0c9eace81446dd'],
-    ['version' => 2, 'migration_key' => '0002_market_current_history', 'checksum' => '205bea42cfc93a64f76eb61c10377e47dceae38815c4351817a17aced00a75ee'],
-    ['version' => 3, 'migration_key' => '0003_market_units', 'checksum' => '199933884802bd139b706e50e57e04687e9cbe5f8bd1366e98e302af7d47b8ee'],
-    ['version' => 4, 'migration_key' => '0004_current_observation_provenance', 'checksum' => '46238979889d2fe1bdaac4c5ba4c1ddda7f5810cd87cdf1a8b806db71f63df70'],
-];
-
 function fail(string $code): never { throw new \RuntimeException($code); }
 
 function migrationSchema(string $root): array {
-    $work = tempnam(sys_get_temp_dir(), 'mosa2-reset-'); check(is_string($work), 'migration_workspace');
-    check(unlink($work) && mkdir($work, 0700), 'migration_workspace');
-    try {
-        foreach ([
-            '0001.sql' => '0001_core_asset_identity.sql',
-            '0002.sql' => '0002_market_current_history.sql',
-            '0003.sql' => '0003_market_units.sql',
-        ] as $target => $source) check(copy($root.'/'.$source, $work.'/'.$target), 'migration_artifact:'.$source);
-        $schema = \Mosa2\Phase3K\schemas($work, 5);
-    } finally {
-        foreach (['0001.sql', '0002.sql', '0003.sql'] as $name) if (is_file($work.'/'.$name)) unlink($work.'/'.$name);
-        rmdir($work);
-    }
-    $current =& $schema['m2_market_current'];
-    $current['columns'] += [
-        'observation_id' => ['type' => 'bigint unsigned', 'nullable' => 'YES', 'extra' => '', 'collation' => null, 'charset' => null, 'default' => null],
-        'observation_format_version' => ['type' => 'tinyint unsigned', 'nullable' => 'YES', 'extra' => '', 'collation' => null, 'charset' => null, 'default' => null],
-        'observation_dedupe_key' => ['type' => 'binary(32)', 'nullable' => 'YES', 'extra' => '', 'collation' => null, 'charset' => null, 'default' => null],
-        'route_revision' => ['type' => 'int unsigned', 'nullable' => 'YES', 'extra' => '', 'collation' => null, 'charset' => null, 'default' => null],
-    ];
-    $current['indexes']['ix_market_current_observation'] = ['unique' => false, 'columns' => ['observation_id']];
-    $current['fks']['fk_market_current_observation'] = [
-        'columns' => ['observation_id'], 'table' => 'm2_market_observations',
-        'targets' => ['id'], 'delete' => 'RESTRICT',
-    ];
-    $current['checks']['ck_market_current_provenance'] = '((observation_id IS NULL AND observation_format_version IS NULL AND observation_dedupe_key IS NULL AND route_revision IS NULL) OR (observation_id IS NOT NULL AND observation_format_version = 2 AND observation_dedupe_key IS NOT NULL AND route_revision > 0)) IS TRUE';
-    unset($current);
-    return $schema;
+    return \Mosa2\CollectorSchema6\schemas();
 }
 
 function exactTables(PDO $db): void {
     $actual = $db->query('SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME')->fetchAll(PDO::FETCH_COLUMN);
-    $expected = TABLES; sort($expected);
-    same($actual, $expected, 'table_contract');
+    same($actual, expectedTables(), 'table_contract');
 }
 
 function noForeignObjects(PDO $db): void {
@@ -100,28 +67,35 @@ function rows(PDO $db, string $table): array {
         'm2_units' => 'unit_key,unit_version',
         'm2_module_state' => 'module_key',
         'm2_schema_migrations' => 'version',
+        'm2_fundamental_metrics' => 'metric_key',
+        'm2_fundamental_units' => 'unit_key,unit_version',
+        'm2_collector_state' => 'provider',
         default => '1',
     };
     return $db->query('SELECT * FROM '.qi($table).' ORDER BY '.$order)->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function rowDigest(array $rows): string {
-    return hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+    return hash('sha256', serialize($rows)); // binary SHA-256 columns are not UTF-8
 }
 
 function counts(PDO $db): array {
     $result = [];
-    foreach (TABLES as $table) $result[$table] = (int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn();
+    foreach (expectedTables() as $table) $result[$table] = (int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn();
     return $result;
 }
 
 function ledger(PDO $db): array {
     $actual = $db->query('SELECT version,migration_key,LOWER(HEX(checksum)) AS checksum,applied_at FROM m2_schema_migrations ORDER BY version')->fetchAll(PDO::FETCH_ASSOC);
-    same(count($actual), count(LEDGER), 'ledger_count');
+    $contract = \Mosa2\CollectorSchema5\envelope(6);
+    $files = glob(dirname(__DIR__).'/docs/database/migrations/000[1-6]_*.sql');
+    sort($files);
+    same(count($files), 6, 'migration_files');
+    same(count($actual), 6, 'ledger_count');
     foreach ($actual as $i => $row) {
-        same((int)$row['version'], LEDGER[$i]['version'], 'ledger_version');
-        same($row['migration_key'], LEDGER[$i]['migration_key'], 'ledger_key');
-        same($row['checksum'], LEDGER[$i]['checksum'], 'ledger_checksum');
+        same((int)$row['version'], $i + 1, 'ledger_version');
+        same($row['migration_key'], basename($files[$i], '.sql'), 'ledger_key');
+        same($row['checksum'], $contract['digests'][$i], 'ledger_checksum');
         check((bool)preg_match('/\\A\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\z/D', $row['applied_at']), 'ledger_timestamp');
     }
     return $actual;
@@ -129,7 +103,7 @@ function ledger(PDO $db): array {
 
 function baseline(PDO $db): array {
     $result = [];
-    foreach (['m2_sources', 'm2_units', 'm2_module_state'] as $table) {
+    foreach (RETAINED as $table) {
         $data = rows($db, $table);
         $result[$table] = ['count' => count($data), 'sha256' => rowDigest($data)];
     }
@@ -137,6 +111,7 @@ function baseline(PDO $db): array {
 }
 
 function activeWriters(PDO $db): array {
+    \Mosa2\CollectorSchema5\lockedDatabase($db);
     $enabled = (int)$db->query("SELECT COUNT(*) FROM m2_jobs WHERE enabled=1")->fetchColumn();
     $running = (int)$db->query("SELECT COUNT(*) FROM m2_job_runs WHERE status='running'")->fetchColumn();
     same($enabled, 0, 'enabled_writer_jobs');
@@ -151,7 +126,7 @@ function preflight(PDO $db, string $root): array {
     $ledger = ledger($db); $counts = counts($db); $baseline = baseline($db); $writers = activeWriters($db);
     return [
         'database' => TARGET_DATABASE, 'account' => 'h29077_mosa2_test@localhost',
-        'version' => EXPECTED_VERSION, 'port' => 3307, 'tables' => count(TABLES),
+        'version' => EXPECTED_VERSION, 'port' => 3307, 'tables' => count(expectedTables()),
         'structure_counts' => $structure['counts'], 'ledger' => $ledger,
         'counts' => $counts, 'baseline' => $baseline, 'grants' => $grants,
         'writers' => $writers, 'foreign_objects' => 0,
@@ -162,9 +137,11 @@ function purge(PDO $db): array {
     $deleted = [];
     foreach (PURGE_ORDER as $table) {
         try {
-            $before = (int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn();
-            $db->exec('DELETE FROM '.qi($table));
-            same((int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn(), 0, 'delete_readback:'.$table);
+            // Keep the disabled Collector bootstrap job, delete only obsolete jobs.
+            $filter = $table === 'm2_jobs' ? " WHERE job_key <> 'collector_reservations_v1'" : '';
+            $before = (int)$db->query('SELECT COUNT(*) FROM '.qi($table).$filter)->fetchColumn();
+            $db->exec('DELETE FROM '.qi($table).$filter);
+            same((int)$db->query('SELECT COUNT(*) FROM '.qi($table).$filter)->fetchColumn(), 0, 'delete_readback:'.$table);
         } catch (Throwable $error) {
             throw new \RuntimeException('purge_failed:'.$table, 0, $error);
         }
@@ -197,8 +174,11 @@ function postcheck(PDO $db, string $root, array $before, array $ledgerBefore, ar
     $schema = migrationSchema($root); $structure = \Mosa2\Phase3K\structure($db, $schema);
     same(ledger($db), $ledgerBefore, 'ledger_changed');
     $after = counts($db);
-    foreach (PURGE_ORDER as $table) same($after[$table], 0, 'purge_not_empty:'.$table);
-    foreach (['m2_sources', 'm2_units', 'm2_module_state'] as $table) {
+    foreach (PURGE_ORDER as $table) {
+        if ($table === 'm2_jobs') same($after[$table], 1, 'bootstrap_job_missing');
+        else same($after[$table], 0, 'purge_not_empty:'.$table);
+    }
+    foreach (RETAINED as $table) {
         $data = rows($db, $table);
         same(count($data), $baselineBefore[$table]['count'], 'baseline_count:'.$table);
         same(rowDigest($data), $baselineBefore[$table]['sha256'], 'baseline_changed:'.$table);
@@ -207,9 +187,10 @@ function postcheck(PDO $db, string $root, array $before, array $ledgerBefore, ar
     $orphans = orphanChecks($db);
     $simple = $db->query('SELECT id,source_key FROM m2_sources ORDER BY id LIMIT 1')->fetch(PDO::FETCH_ASSOC);
     check(is_array($simple), 'simple_read');
-    $collectorTables = $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('m2_collector_state','m2_collector_cycles','m2_collector_days','m2_collector_requests')")->fetchColumn();
-    $collectorDisabled = $after['m2_jobs'] === 0 && $after['m2_job_runs'] === 0 && (int)$collectorTables === 0;
-    check($collectorDisabled, 'collector_not_disabled');
+    \Mosa2\CollectorSchema5\lockedDatabase($db);
+    same($after['m2_collector_requests'], 0, 'collector_requests_not_empty');
+    same($after['m2_collector_cycles'], 0, 'collector_cycles_not_empty');
+    same($after['m2_collector_days'], 0, 'collector_days_not_empty');
     return ['counts' => $after, 'structure_counts' => $structure['counts'], 'orphans' => $orphans, 'simple_read' => 'PASS', 'collector_disabled' => true, 'retained_baseline' => $baselineBefore];
 }
 
@@ -259,7 +240,7 @@ function run(array $input, string $root): array {
     try { $after = postcheck($db, $root, $before['counts'], $ledgerBefore, $baselineBefore); }
     finally { if ($db->inTransaction()) $db->rollBack(); $db = null; }
     unset($password, $input);
-    return ['status' => 'RESET_SUCCEEDED', 'database' => TARGET_DATABASE, 'schema_version' => 4, 'tables' => count(TABLES), 'deleted' => $deleted, 'preflight_counts' => $before['counts'], 'postcheck' => $after, 'commit_attempted' => $commitAttempted, 'committed' => $committed];
+    return ['status' => 'RESET_SUCCEEDED', 'database' => TARGET_DATABASE, 'schema_version' => 6, 'tables' => count(expectedTables()), 'deleted' => $deleted, 'preflight_counts' => $before['counts'], 'postcheck' => $after, 'commit_attempted' => $commitAttempted, 'committed' => $committed];
     } catch (Throwable $error) {
         $status = $committed ? 'RESET_POSTCHECK_FAILED' : ($commitAttempted ? 'RESET_OUTCOME_UNKNOWN' : 'RESET_NOT_EXECUTED');
         return ['status' => $status, 'phase' => $phase, 'error_code' => safeFailureCode($error),
