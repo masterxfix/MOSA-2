@@ -161,9 +161,13 @@ function preflight(PDO $db, string $root): array {
 function purge(PDO $db): array {
     $deleted = [];
     foreach (PURGE_ORDER as $table) {
-        $before = (int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn();
-        $db->exec('DELETE FROM '.qi($table));
-        same((int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn(), 0, 'delete_readback:'.$table);
+        try {
+            $before = (int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn();
+            $db->exec('DELETE FROM '.qi($table));
+            same((int)$db->query('SELECT COUNT(*) FROM '.qi($table))->fetchColumn(), 0, 'delete_readback:'.$table);
+        } catch (Throwable $error) {
+            throw new \RuntimeException('purge_failed:'.$table, 0, $error);
+        }
         $deleted[$table] = $before;
     }
     return $deleted;
@@ -209,25 +213,40 @@ function postcheck(PDO $db, string $root, array $before, array $ledgerBefore, ar
     return ['counts' => $after, 'structure_counts' => $structure['counts'], 'orphans' => $orphans, 'simple_read' => 'PASS', 'collector_disabled' => true, 'retained_baseline' => $baselineBefore];
 }
 
+function safeFailureCode(Throwable $error): string {
+    if ($error instanceof \PDOException) return 'database_operation_failed';
+    $message = $error->getMessage();
+    return $error instanceof \RuntimeException
+        && preg_match('/\A[a-z][a-z0-9_:.-]{0,127}\z/D', $message)
+        ? $message : 'contract_or_runtime_failed';
+}
+
 function run(array $input, string $root): array {
+    $phase = 'INPUT'; $commitAttempted = false; $committed = false;
+    try {
     check(($input['attempt'] ?? null) === '1', 'first_attempt_only');
     $commit = $input['commit'] ?? '';
     check(is_string($commit) && preg_match('/\\A[0-9a-f]{40}\\z/D', $commit) === 1, 'commit_binding');
     same($input['authorization'] ?? null, 'MOSA2-TEST-DATA-RESET:'.$commit, 'reset_authorization');
     same($input['mode'] ?? null, 'irreversible-full-test-data-reset', 'reset_mode');
     $password = $input['password'] ?? null; check(is_string($password) && $password !== '', 'reset_secret');
+    $port = $input['db_port'] ?? null;
+    check(is_int($port) && $port >= 1 && $port <= 65535, 'invalid_local_tunnel_port');
 
-    $db = connection($password); readOnlyBegin($db);
+    $phase = 'PRECHECK';
+    $db = connection($password, '127.0.0.1', $port); readOnlyBegin($db);
     try { $before = preflight($db, $root); $ledgerBefore = $before['ledger']; $baselineBefore = $before['baseline']; }
     finally { if ($db->inTransaction()) $db->rollBack(); $db = null; }
 
-    $db = connection($password); $lock = null; $commitAttempted = false; $committed = false; $deleted = [];
+    $phase = 'DELETE';
+    $db = connection($password, '127.0.0.1', $port); $lock = null; $deleted = [];
     try {
         $lock = (int)$db->query("SELECT GET_LOCK('".LOCK_NAME."',5)")->fetchColumn();
         same($lock, 1, 'reset_lock');
         check($db->beginTransaction(), 'reset_transaction');
         same((int)$db->query('SELECT @@foreign_key_checks')->fetchColumn(), 1, 'foreign_keys_before_delete');
         $deleted = purge($db);
+        $phase = 'COMMIT';
         $commitAttempted = true; $db->commit(); $committed = true;
     } finally {
         if (!$committed && !$commitAttempted && $db->inTransaction()) $db->rollBack();
@@ -235,11 +254,17 @@ function run(array $input, string $root): array {
         $db = null;
     }
 
-    $db = connection($password); readOnlyBegin($db);
+    $phase = 'POSTCHECK';
+    $db = connection($password, '127.0.0.1', $port); readOnlyBegin($db);
     try { $after = postcheck($db, $root, $before['counts'], $ledgerBefore, $baselineBefore); }
     finally { if ($db->inTransaction()) $db->rollBack(); $db = null; }
     unset($password, $input);
     return ['status' => 'RESET_SUCCEEDED', 'database' => TARGET_DATABASE, 'schema_version' => 4, 'tables' => count(TABLES), 'deleted' => $deleted, 'preflight_counts' => $before['counts'], 'postcheck' => $after, 'commit_attempted' => $commitAttempted, 'committed' => $committed];
+    } catch (Throwable $error) {
+        $status = $committed ? 'RESET_POSTCHECK_FAILED' : ($commitAttempted ? 'RESET_OUTCOME_UNKNOWN' : 'RESET_NOT_EXECUTED');
+        return ['status' => $status, 'phase' => $phase, 'error_code' => safeFailureCode($error),
+            'commit_attempted' => $commitAttempted, 'committed' => $committed];
+    }
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
@@ -248,9 +273,10 @@ if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE
         $wire = stream_get_contents(STDIN, 8193); check(strlen($wire) <= 8192, 'input_limit');
         $input = json_decode($wire, true, 32, JSON_THROW_ON_ERROR);
         $report = run($input, dirname(__DIR__).'/docs/database/migrations');
-        echo json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), PHP_EOL; exit(0);
+        echo json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), PHP_EOL;
+        exit($report['status'] === 'RESET_SUCCEEDED' ? 0 : 1);
     } catch (Throwable $error) {
-        echo json_encode(['status' => 'RESET_NOT_EXECUTED', 'failure_type' => $error instanceof \PDOException ? 'DATABASE_OPERATION_FAILED' : 'CONTRACT_CHECK_FAILED'], JSON_THROW_ON_ERROR), PHP_EOL; exit(1);
+        echo json_encode(['status' => 'RESET_OUTCOME_UNKNOWN', 'phase' => 'INPUT_OR_OUTPUT', 'error_code' => 'unhandled_runtime_error'], JSON_THROW_ON_ERROR), PHP_EOL; exit(1);
     }
 }
 

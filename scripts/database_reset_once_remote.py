@@ -43,6 +43,7 @@ def execute(env, paramiko=None):
                     "commit": commit,
                     "authorization": authorization,
                     "mode": "irreversible-full-test-data-reset",
+                    "db_port": port,
                 }
                 child_env = {k: env[k] for k in ("PATH", "HOME", "LANG", "SYSTEMROOT", "TEMP", "TMP") if k in env}
                 child_env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -53,13 +54,16 @@ def execute(env, paramiko=None):
                     cwd=ROOT, env=child_env, timeout=600,
                 )
                 if reply.stderr or len(reply.stdout) > 32768:
-                    return {"status": "RESET_RESULT_REJECTED"}
+                    return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_OUTPUT_REJECTED"}
                 result = json.loads(reply.stdout)
-                if not isinstance(result, dict) or result.get("status") not in {"RESET_SUCCEEDED", "RESET_NOT_EXECUTED"}:
-                    return {"status": "RESET_RESULT_REJECTED"}
-                return result if reply.returncode == 0 else {"status": result.get("status", "RESET_NOT_EXECUTED")}
+                allowed = {"RESET_SUCCEEDED", "RESET_NOT_EXECUTED", "RESET_OUTCOME_UNKNOWN", "RESET_POSTCHECK_FAILED"}
+                if not isinstance(result, dict) or result.get("status") not in allowed:
+                    return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_RESULT_REJECTED"}
+                if (reply.returncode == 0) != (result["status"] == "RESET_SUCCEEDED"):
+                    return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_EXIT_MISMATCH"}
+                return result
     except subprocess.TimeoutExpired:
-        return {"status": "RESET_SUBPROCESS_TIMEOUT"}
+        return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_TIMEOUT"}
     except Exception:
         return {"status": {"CONFIGURATION": "RESET_CONFIGURATION_REJECTED", "SSH": "RESET_SSH_REJECTED", "TUNNEL": "RESET_TUNNEL_REJECTED", "SUBPROCESS": "RESET_SUBPROCESS_REJECTED"}.get(stage, "RESET_UNEXPECTED_REJECTED")}
 

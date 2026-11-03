@@ -29,6 +29,21 @@ class DatabaseResetContractTests(unittest.TestCase):
         self.assertNotIn("FOREIGN_KEY_CHECKS=0", PHP.upper())
         self.assertIn("same((int)$db->query('SELECT @@foreign_key_checks')->fetchColumn(), 1", PHP)
 
+    def test_dynamic_ssh_tunnel_port_reaches_all_database_connections(self):
+        self.assertIn('"db_port": port', REMOTE)
+        self.assertIn("check(is_int($port) && $port >= 1 && $port <= 65535", PHP)
+        self.assertEqual(PHP.count("connection($password, '127.0.0.1', $port)"), 3)
+        self.assertNotIn("connection($password);", PHP)
+
+    def test_commit_outcome_is_not_reported_as_not_executed(self):
+        self.assertIn("$phase = 'COMMIT';", PHP)
+        self.assertIn("$commitAttempted = true; $db->commit(); $committed = true;", PHP)
+        self.assertIn("'RESET_POSTCHECK_FAILED'", PHP)
+        self.assertIn("'RESET_OUTCOME_UNKNOWN'", PHP)
+        self.assertIn('"SUBPROCESS_TIMEOUT"', REMOTE)
+        self.assertIn("return result", REMOTE)
+        self.assertIn("'error_code' => safeFailureCode($error)", PHP)
+
     def test_baseline_and_independent_postcheck_are_required(self):
         self.assertIn("baseline($db)", PHP)
         self.assertIn("postcheck($db, $root", PHP)
