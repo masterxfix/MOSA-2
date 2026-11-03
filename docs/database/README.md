@@ -111,8 +111,12 @@ Die Namen sind zunächst Arbeitsnamen.
 7. **History-Abfragen sind begrenzt.** Immer fachlicher Schlüssel/Zeitraum/LIMIT statt ungebundener Vollsuche.
 8. **Schemaerweiterungen müssen das Performance-Budget nachweisen.** Mehr Felder, Historie oder Rohdaten sind kein Grund, die normalen Current-Lesewege zu verlangsamen.
 9. **MOSA und MOSA 2 bleiben getrennt.** Kein Trigger- oder Dual-Write-Zwang. Daten werden kontrolliert und mit Checkpoints übernommen.
-10. **DB-Änderungen sind eigene, kontrollierte Schritte.** Preview → Check → ausdrückliche Freigabe → Apply → Postcheck.
+10. **DB-Änderungen bleiben kontrollierte Schritte, ohne doppelte Freigabe.** Read-only Preview → Identitäts-/Fremdschlüssel-/Rückweg-Check → Apply im ausdrücklich bereits beauftragten Umfang → unabhängiger Postcheck. Eine erneute Freigabe für denselben Umfang zwischen Check und Apply ist nicht nötig; bei zusätzlichem Scope oder fehlender sicherer Rückkehrmöglichkeit den Schreibschritt stoppen.
 11. **KI-Autonomie wird stufenweise vergeben.** Jede erlaubte Aktion besitzt einen klaren Scope und wird protokolliert.
+
+### Gezielte Bereinigung der MOSA-2-Testdatenbank
+
+Bei einer ausdrücklich angeordneten Entfernung eines einzelnen Test-Assets muss nicht automatisch der gesamte Schema-4-Backup-/Restore-Ablauf ausgelöst werden. Zuerst den konkreten Datensatzverbund anhand der fachlichen Identität (z. B. ISIN), zugehörigen Primärschlüssel und Fremdschlüssel nachvollziehbar bestimmen. Vor dem Schreiben eine zum tatsächlichen Löschumfang passende, sicher aufbewahrte und überprüfbar rückspielbare Sicherung sowie einen begrenzten Transaktions- und unabhängigen Postcheck vorsehen. Ein unbelegter bloßer Rollback-Plan schützt **nicht** vor Datenverlust nach einem Commit; fehlt ein geeigneter Rückweg, findet keine Löschung statt. Der gesondert vorbereitete vollständige Schema-Backup-/Restore-Workflow behält seine eigenen zwingenden Prüfungen, ist aber kein universelles Gate für jede kleine Testdatenbereinigung. Historische Archivnachweise, andere Wertpapiere und MOSA bleiben geschützt.
 
 ## Phase 0: Hosting-Plattform qualifizieren
 

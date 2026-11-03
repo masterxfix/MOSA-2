@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 03.11.2026, 18:06:43 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 03.11.2026, 18:53:32 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -51,6 +51,14 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - **Keine künstlichen Sicherheitsstopps:** ChatGPT und Codex führen keine zusätzlichen eigenen Einzelgenehmigungen oder manuellen Zwischenstopps für zuvor beauftragte Routinearbeiten ein. Bestehende technische Schutzprüfungen, genaue Einmalautorisationen und Berechtigungsgrenzen bleiben erhalten; eine Tool- oder Plattformbestätigung, die tatsächlich am Aktionszeitpunkt vorgeschrieben ist, darf nicht umgangen werden.
 - **Keine pauschale Erlaubnis für neue risikoreiche Aktionen:** Eine Freigabe deckt keine später erfundenen Providerabrufe, zusätzlichen DB-Schreibvorgänge, unbekannten GitHub-Actions-Läufe, Ausweitung auf andere Assets oder produktiven Deployments. Solche zusätzlichen oder rechtlich/technisch gesondert bestätigungspflichtigen Aktionen erfordern ihre eigene ausdrückliche Zustimmung. Bereits erteilte konkrete Freigaben dagegen nicht grundlos wiederholen.
 - **Ergebnis statt Daueraufsicht:** Codex arbeitet innerhalb des genehmigten Umfangs eigenständig bis zum Abschluss und berichtet dann kompakt. Fehlt ein zwingender Zugang oder eine wirklich neue Sicherheitsfreigabe, genau den einen konkreten Blocker nennen statt eine mehrstufige Freigabeschleife zu erzeugen.
+
+## Verhältnismäßigkeit und kleiner Auftragsscope
+
+- **Kleine Änderung ohne historische Nebenbaustellen:** Vor Implementierung den tatsächlich aktuellen Nutzpfad, erforderliche Dateien und Tabellen sowie den kleinsten prüfbaren Umfang bestimmen. Für die Entfernung eines Wertpapiers aus L1 oder der Testdatenbank nicht automatisch bereits abgeschlossene Einmal-Collector, Remote-/SSH-/DB-Transporte, Autorisierungs-, Secret-, Audit- oder Release-Dateien umbauen. Eine solche Änderung braucht eine nachgewiesene aktuelle fachliche Abhängigkeit; historische Nachweise bleiben unverfälscht.
+- **Commit präzise abgrenzen:** Vor Commit/Push den Diff gegen `origin/main` und den Commit-Dateisatz prüfen. Fremde oder auftragsfremde lokale Änderungen nicht mit übertragen und dabei nicht verwerfen. Verbindliche Secret- und Uploadprüfungen bleiben aktiv; eine von ihnen beanstandete Datei darf nicht über einen anderen Übertragungsweg eingeschleust werden.
+- **Unabhängige Ergebnisse entkoppeln:** Ist ein DB-Schreibschritt wegen einer tatsächlich fehlenden Voraussetzung nicht zulässig, beauftragte und erfolgreich geprüfte unabhängige Web-/Dokumentationsänderungen dennoch über ihren vorgesehenen Weg abschließen. Den Gesamtauftrag als teilweise offen melden, ohne durch den Web-Deploy eine DB-Aktion auszulösen.
+- **Risikogerechte Test-DB-Bereinigung:** Für ausdrücklich beauftragte, eng über ISIN/Asset-ID abgegrenzte Löschungen in `h29077_mosa2_test` zunächst read-only Identität, referenzierende Zeilen, Fremdschlüssel, Löschumfang und Sicherungsbedarf prüfen. Eine auf den betroffenen Datenverbund begrenzte, überprüfbar rückspielbare Sicherung kann ausreichend sein; der unabhängig geprüfte **Vollrestore der gesamten Testdatenbank** ist nicht pauschal für jede kleine transaktionale Löschung vorgeschrieben. Vor dem endgültigen Commit sind ein belegter Rückweg, eine begrenzte Transaktion und ein unabhängiger Postcheck notwendig. Fehlt der verlässliche Rückweg, nur den DB-Schreibschritt stoppen. Historische Archivschutzregeln und Sicherheitsgrenzen bleiben gültig.
+- **Keine zweite gleiche Freigabe:** Eine eindeutige Nutzeranweisung zur Entfernung eines konkret benannten Wertpapiers aus der Testdatenbank ist die fachliche Zustimmung zur genau abgegrenzten Entfernung. Nach erfolgreichem Preflight nicht erneut für denselben Umfang fragen. Neue Assets, zusätzliche Provider-/DB-Aktionen, ein neuer Secret-Zugang oder ein unbekannter Workflow sind dadurch nicht autorisiert.
 
 ## Designbestandsschutz und ausdrückliche Nutzerfreigabe
 
@@ -222,6 +230,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 03.11.2026 | 18:53:32 Uhr (MEZ, UTC+01:00) | Geringer Auftragsumfang verbindlich: historische Collector-/Sicherheitsmodule nicht unnötig verändern, unabhängige Web-/DB-Teilschritte entkoppeln, risikogerechte Testdaten-Sicherung statt pauschaler Vollrestore-Pflicht und keine erneuten Freigaben für denselben Scope. |
 | 03.11.2026 | 18:06:43 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung dokumentiert: PNE AG / ISIN DE000A0JBPG2 wird aus dem aktiven MOSA-2-Projekt und der MOSA-2-Testdatenbank entfernt. Historische Archive und Nachweise bleiben unverändert; `masterxfix/fixlab` bleibt unberührt. |
 | 03.11.2026 | 08:33:18 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung ergänzt: Erfolgreich geprüfte MOSA-2-Webänderungen werden ohne weitere Freigabe über den vorgesehenen Workflow auf die MOSA-2-Testsite deployed; Produktionsdeployments und neue externe Aktionen bleiben freigabepflichtig. |
 | 02.11.2026 | 16:26:05 Uhr (MEZ, UTC+01:00) | Dauerregel gegen wiederholte Freigabeschleifen: zusammenhängende Aufträge, gebündelte Zustimmung, keine erneute Nachfrage bei schon konkret autorisierten Aktionen; GitHub-Direktwege statt Browser-Blockade, unveränderte technische Sicherheitsgrenzen. |
