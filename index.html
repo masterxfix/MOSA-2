@@ -38,7 +38,7 @@
         <a class="text-link" href="marktdaten.html#observations-titel">Meine ISINs ansehen <span aria-hidden="true">→</span></a>
         <form class="isin-form" data-isin-form autocomplete="off">
           <label for="isin-home">ISIN eingeben</label>
-          <div class="isin-form-row"><input id="isin-home" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE000A0JBPG2" spellcheck="false" required><button type="submit">OK</button></div>
+        <div class="isin-form-row"><input id="isin-home" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE0005313704" spellcheck="false" required><button type="submit">OK</button></div>
         </form>
         <ol class="isin-steps" data-isin-steps aria-label="Schritte der Kursabfrage" aria-live="polite"></ol>
       </div><ol class="asset-index" data-isin-list aria-label="Meine eingegebenen ISINs"></ol>
@@ -49,7 +49,7 @@
 <article class="evidence-row" data-status="core"><h3>Ein gemeinsamer Kern</h3><p>Das Core-Schema ist real angelegt und vollständig geprüft – technisch freigegeben für die weitere Testentwicklung.</p><span class="badge success">Technisch freigegeben</span></article>
 <article class="evidence-row" data-status="model"><h3>Eindeutige Identitäten</h3><p>17 Tabellen verbinden den gemeinsamen Kern, Identitäten, Marktdaten und versionierte Einheiten.</p><span class="badge neutral">17 Tabellen</span></article>
 <article class="evidence-row" data-status="version"><h3>Versionierte Verträge</h3><p>Schema-Version 4 und die hinterlegten Einheiten sind geprüft. Die weitere Entwicklung baut darauf auf.</p><span class="badge neutral">Schema 4</span></article>
-<article class="evidence-row" data-status="collector"><h3>Kontrolliert erprobt</h3><p>Der PNE-Einzeltest und der Drei-Aktien-Test mit PNE, Carl Zeiss Meditec und DroneShield auf Dogado waren erfolgreich.</p><span class="badge success">Live getestet</span></article>
+<article class="evidence-row" data-status="collector"><h3>Kontrolliert erprobt</h3><p>Historische Einzel- und Mehraktientests auf Dogado waren erfolgreich.</p><span class="badge success">Live getestet</span></article>
 <article class="evidence-row" data-status="integrity"><h3>Nachvollziehbare Übernahme</h3><p>Die Observations 4909, 4910 und 4911 wurden unabhängig zurückgelesen. Dedupe und Replay sind bestätigt; Current und Bars blieben in diesem damaligen Test unverändert.</p><span class="badge success">Bestätigt</span></article></div>
       <p class="context-note">Historischer Drei-Aktien-Test: durchschnittlich rund 4,43 Sekunden Collector-Laufzeit je Aktie. Automatischer Regelbetrieb bleibt gesperrt.</p>
     </section>

@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 03.11.2026, 08:33:18 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 03.11.2026, 18:06:43 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -27,7 +27,7 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 
 - **Relevante Daten mit nachvollziehbarer Herkunft:** MOSA 2 speichert fachlich qualifizierte Zahlen, ihre erforderlichen Herkunftsnachweise und nachvollziehbare KI-Bewertungen. Vollständige PDFs oder Webseiten werden für neue Importe nicht auf Vorrat archiviert; unnötige Rohdatenbestände vermeiden.
 - **Schlanke Evidenz statt Vollantwort:** HTML nur zur Laufzeit auswerten. Pro qualifiziertem Fakt Quell-URL, tatsächliche Erfassung, Unternehmen, Berichtsperiode, Kennzahlenname, Originaleinheit/-wert, genaue Position und Prüfstatus in kompaktem strukturiertem Evidence-JSON erhalten; nur bei Bedarf einen kurzen relevanten Belegauszug ergänzen. Nicht benötigte Inhalte nach Verarbeitung verwerfen. HTTP-Quellantwort und abgeleiteten Nachweis ausdrücklich unterscheiden; der Evidence-Hash bezeichnet ausschließlich die tatsächlich gespeicherten Evidence-Bytes. Fehlt eine korrekte Provenienzabbildung, vor DB-Schreibzugriff stoppen und die kleinste notwendige Änderung benennen.
-- **Bestandsschutz und KI:** Vorhandene alte Archive bleiben unverändert und werden nicht gelöscht. Bestehende PNE-/Zeiss-Verarbeitung erhalten; deren bisheriger Archivweg ist keine Freigabe für neue Vollarchive. KI-Einordnungen erst nach unabhängig bestätigten Fakten erstellen, als Interpretation kennzeichnen und von den Zahlen trennen. Automatische KI-Speicherung oder kostenpflichtige Integration braucht einen eigenen Auftrag.
+- **Bestandsschutz und KI:** Vorhandene alte Archive und historische Nachweise bleiben unverändert und werden nicht gelöscht. Bestehende allgemeine Verarbeitung und fachlich bestätigte Adapter bleiben erhalten; ein bisheriger Archivweg ist keine Freigabe für neue Vollarchive. KI-Einordnungen erst nach unabhängig bestätigten Fakten erstellen, als Interpretation kennzeichnen und von den Zahlen trennen. Automatische KI-Speicherung oder kostenpflichtige Integration braucht einen eigenen Auftrag.
 - **Performance ist gleichrangig und verbindlich:** normale DB-Abfrage ideal < 20 ms, gesamte DB-Zeit einer normalen Seite < 200 ms, normaler Seitenaufruf < 1,0 s, p95 < 1,5 s, harte Obergrenze 2,0 s. Current, History und Rohdaten/Evidenz getrennt halten; Indizes mit den kritischen Queries planen.
 - **Teilscope ändert nicht das Gesamtziel:** Ein kleiner beauftragter Funktionsschritt darf das langfristige Daten- oder Produktziel nicht stillschweigend enger definieren. Bewusste vorläufige Einschränkungen als offen/temporär dokumentieren und nicht als endgültigen Datenumfang behandeln.
 - **MOSA-Wissen wiederverwenden:** Bereits in MOSA erprobte Datenfelder, Anbieterinformationen und funktionierende allgemeine Logik vor einer Neuentwicklung prüfen und, sofern fachlich bestätigt, in die MOSA-2-Zielarchitektur übernehmen.
@@ -38,7 +38,7 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 ## Nutzererfahrung und praktische Teilerfolge
 
 - Der Nutzer berichtet am 31.10.2026, dass Secure Dashboard und MOSA gleichzeitig minütlich Kurse erfolgreich abrufen. Diese Betriebserfahrung bei der Planung berücksichtigen; eine hypothetische Überlastung nicht als beobachteten Fehler darstellen.
-- Kleine beauftragte Versuche durchführen, aus dem tatsächlichen Ergebnis lernen und vorhandene erfolgreiche Funktionen wiederverwenden. Der Fünferlauf vom 31.10.2026 (Actions-Lauf 41198494118) hat BYD, DroneShield, Ubtech Robotics, PNE AG und Carl Zeiss Meditec über Tradegate gespeichert, Current aktualisiert und sichtbar nachgewiesen; dieser Erfolg ist Grundlage, aber nicht der endgültige Marktdatenumfang.
+- Kleine beauftragte Versuche durchführen, aus dem tatsächlichen Ergebnis lernen und vorhandene erfolgreiche Funktionen wiederverwenden. Der historische Fünferlauf vom 31.10.2026 (Actions-Lauf 41198494118) hat fünf damals ausgewählte Wertpapiere über Tradegate gespeichert, Current aktualisiert und sichtbar nachgewiesen; dieser Erfolg ist Grundlage, aber nicht der endgültige Marktdatenumfang.
 - Neue Bedenken, die den Auftrag stoppen, seinen Umfang verändern oder einen Anbieterwechsel auslösen würden, zuerst konkret mit dem Nutzer besprechen. Keine zusätzlichen Freigabehürden allein aus ungeprüften Vermutungen einführen.
 - Paket-, Syntax- und Offline-Erfolge als Vorbereitung bezeichnen. Die erfolgreiche Anzeige und ein automatischer Dauerbetrieb sind jeweils eigene, tatsächlich nachzuweisende Ergebnisse.
 
@@ -222,6 +222,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 03.11.2026 | 18:06:43 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung dokumentiert: PNE AG / ISIN DE000A0JBPG2 wird aus dem aktiven MOSA-2-Projekt und der MOSA-2-Testdatenbank entfernt. Historische Archive und Nachweise bleiben unverändert; `masterxfix/fixlab` bleibt unberührt. |
 | 03.11.2026 | 08:33:18 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung ergänzt: Erfolgreich geprüfte MOSA-2-Webänderungen werden ohne weitere Freigabe über den vorgesehenen Workflow auf die MOSA-2-Testsite deployed; Produktionsdeployments und neue externe Aktionen bleiben freigabepflichtig. |
 | 02.11.2026 | 16:26:05 Uhr (MEZ, UTC+01:00) | Dauerregel gegen wiederholte Freigabeschleifen: zusammenhängende Aufträge, gebündelte Zustimmung, keine erneute Nachfrage bei schon konkret autorisierten Aktionen; GitHub-Direktwege statt Browser-Blockade, unveränderte technische Sicherheitsgrenzen. |
 | 01.11.2026 | 14:09:22 Uhr (MEZ, UTC+01:00) | Neue Nutzerentscheidung zur Aufbewahrung: qualifizierte Zahlen, kompakte Herkunftsevidenz und nachvollziehbare KI-Einordnung; keine neuen Vollarchive auf Vorrat, HTTP-Antwort und Evidence getrennt, alte Archive unverändert. |
