@@ -58,7 +58,7 @@ class DatabaseResetContractTests(unittest.TestCase):
     def test_baseline_and_independent_postcheck_are_required(self):
         self.assertIn("baseline($db)", PHP)
         self.assertIn("postcheck($db, $root", PHP)
-        self.assertIn("connection($password); readOnlyBegin($db)", PHP)
+        self.assertIn("connection($password, '127.0.0.1', $port); readOnlyBegin($db)", PHP)
         self.assertIn("collector_disabled", PHP)
 
 
