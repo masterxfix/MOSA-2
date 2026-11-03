@@ -1,0 +1,65 @@
+name: MOSA-2 irreversible test data reset once
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed commit to execute
+        required: true
+        type: string
+      reset_authorization:
+        description: Commit-bound authorization for the explicitly ordered test-data reset
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa2-h29077-mosa2-test-reset
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require exact reviewed revision and authorization
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          RESET_AUTHORIZATION: ${{ inputs.reset_authorization }}
+        run: |
+          test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
+          test "$RESET_AUTHORIZATION" = "MOSA2-TEST-DATA-RESET:$GITHUB_SHA"
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+
+      - name: Install existing tunnel dependencies
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+
+      - name: Run one preflight, one transactional reset and one independent postcheck
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          MOSA2_RESET_EXPECTED_COMMIT: ${{ github.sha }}
+          MOSA2_RESET_AUTHORIZATION: ${{ inputs.reset_authorization }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_DB_PASSWORD: ${{ secrets.MOSA_TEST_DB_PASSWORD }}
+        run: python3 -B scripts/database_reset_once_remote.py
+
