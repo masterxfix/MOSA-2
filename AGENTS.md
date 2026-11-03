@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 02.11.2026, 16:26:05 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 03.11.2026, 08:33:18 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -18,6 +18,7 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Bestehende Architektur zuerst verstehen, dann ändern.
 - Änderungen klein, nachvollziehbar und testbar halten.
 - Keine produktiven Deployments ohne ausdrückliche Freigabe des Nutzers.
+- MOSA-2-Webänderungen mit bestandenem fokussiertem Test und verbindlicher Chrome-Sichtprüfung sollen ohne weitere Nutzerfreigabe über den vorgesehenen Workflow auf die MOSA-2-Testsite deployed werden. Diese Dauerfreigabe gilt ausschließlich für die MOSA-2-Testsite; Produktionsdeployments, zusätzliche Provider-/DB-Schreibvorgänge und sonstige neue externe Aktionen bleiben ausdrücklich freigabepflichtig.
 - Keine produktiven Zugangsdaten, Secrets oder Datenbankzugänge hinzufügen oder verändern, sofern dies nicht ausdrücklich beauftragt wurde.
 - Keine Änderungen außerhalb dieses Repositories vornehmen.
 - Keine Änderungen an `masterxfix/fixlab`.
@@ -153,6 +154,7 @@ Diese Grenze ist verbindlich und hat Vorrang vor Komfort, Toolwahl oder Automati
 - `web213` kann technisch weitere Verzeichnisse sehen; diese Sichtbarkeit ist **keine Freigabe**. MOSA-2-Dateioperationen bleiben hart auf den genannten Test-Webroot begrenzt.
 - Für normale Testsite-Deployments keine Plesk-Aufgabe und keine erneute Passwortabfrage verwenden, solange der GitHub-Actions-Weg verfügbar ist.
 - Der Testsite-Workflow startet nur manuell per `workflow_dispatch`; kein automatischer Produktionsdeploy. Der ältere Workflow für `mosa.scharwerk.de` ist davon getrennt und darf nicht als Testsite-Ersatz verwendet werden.
+- Nach bestandenem beauftragtem lokalem Testlauf und verbindlicher Chrome-Sichtprüfung ist ein MOSA-2-Testsite-Deploy Teil desselben Arbeitsablaufs und benötigt keine zusätzliche Nutzerfreigabe. Codex verwendet dabei den exakten geprüften Commit und die ausdrücklich betroffenen Webdateien; der Testsite-Deploy darf keine echten Providerabrufe oder Datenbankänderungen auslösen.
 - Detailvertrag, Nachweise und aktuelle Betriebsinformationen stehen in `docs/DEPLOYMENT.md` und `docs/dogado/README.md`.
 
 ## Arbeitsweise für Codex
@@ -220,6 +222,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 03.11.2026 | 08:33:18 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung ergänzt: Erfolgreich geprüfte MOSA-2-Webänderungen werden ohne weitere Freigabe über den vorgesehenen Workflow auf die MOSA-2-Testsite deployed; Produktionsdeployments und neue externe Aktionen bleiben freigabepflichtig. |
 | 02.11.2026 | 16:26:05 Uhr (MEZ, UTC+01:00) | Dauerregel gegen wiederholte Freigabeschleifen: zusammenhängende Aufträge, gebündelte Zustimmung, keine erneute Nachfrage bei schon konkret autorisierten Aktionen; GitHub-Direktwege statt Browser-Blockade, unveränderte technische Sicherheitsgrenzen. |
 | 01.11.2026 | 14:09:22 Uhr (MEZ, UTC+01:00) | Neue Nutzerentscheidung zur Aufbewahrung: qualifizierte Zahlen, kompakte Herkunftsevidenz und nachvollziehbare KI-Einordnung; keine neuen Vollarchive auf Vorrat, HTTP-Antwort und Evidence getrennt, alte Archive unverändert. |
 | 01.11.2026 | 12:50:41 Uhr (MEZ, UTC+01:00) | Verbindliche Codex-Modell-/Denkstufenempfehlung vor jedem MOSA-2-Auftrag eingeführt: aktuelles DeepSWE und OpenAI-Hinweise mit eigenen Ergebnissen abgleichen, Gesamtaufwand statt Einzelpreis bewerten, Verfügbarkeit und Benchmarkgrenzen offenlegen. |
