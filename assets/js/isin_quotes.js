@@ -23,7 +23,7 @@
       }).slice(0,30).map(entry => ({isin:entry.isin,
         name:typeof entry.name === "string" && entry.name.length <= 160 ? entry.name : null,
         quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => q && q.isin===entry.isin && providers.some(p=>p.key===q.provider) && typeof q.price==="string" && typeof q.market_at==="string").slice(0,6):[],
-        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && providers.some(p=>p.key===e.provider) && typeof e.code==="string").slice(0,6):[]}));
+        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && (e.provider==="all" || providers.some(p=>p.key===e.provider)) && typeof e.code==="string").slice(0,6):[]}));
     } catch {return [];}
   }
   let entries = restore(), busy = false;
@@ -39,7 +39,7 @@
   }
   function old(quote) {
     const stamp=Date.parse(quote.market_at);
-    return !Number.isFinite(stamp) || Date.now()-stamp>1800000;
+    return Boolean(quote.refresh_failed_at) || !Number.isFinite(stamp) || Date.now()-stamp>1800000;
   }
   function best(entry) {
     return entry.quotes.slice().sort((a,b)=>Date.parse(b.market_at)-Date.parse(a.market_at) || providers.findIndex(p=>p.key===a.provider)-providers.findIndex(p=>p.key===b.provider))[0] || null;
@@ -79,7 +79,7 @@
         for(const error of entry.errors||[]){
           const tr=document.createElement("tr");tr.dataset.status="error";
           itemCell(tr,"Aktie",entry.name||entry.isin);itemCell(tr,"Kurs","—");itemCell(tr,"Einheit / Kursart","—");
-          itemCell(tr,"Quelle / Handelsplatz",providers.find(p=>p.key===error.provider).label);
+          itemCell(tr,"Quelle / Handelsplatz",sourceLabel(error.provider));
           itemCell(tr,"Marktzeit","—");itemCell(tr,"Abgerufen",date(error.captured_at));itemCell(tr,"Datenalter","—");
           itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status","Kein bestätigter Kurs: "+error.code);fragment.append(tr);
         }
@@ -139,6 +139,50 @@
       progress(form,event.name+": "+(code?"Fehler "+code:"HTTP 200")+duration,code?"error":"success");
     }
   }
+  function sourceLabel(provider) {
+    return providers.find(p=>p.key===provider)?.label || "MOSA-Quellenvergleich";
+  }
+  function applyResult(entry,result,form,preserveExisting) {
+    if(!result||result.isin!==entry.isin||!Array.isArray(result.records)||result.records.length!==providers.length)
+      throw Error("INVALID_RESULT");
+    let quotes=preserveExisting?entry.quotes.slice():[];
+    let errors=preserveExisting?entry.errors.filter(error=>error.provider!=="all"):[];
+    const seen=new Set();let successful=0,failed=0;
+    for(const record of result.records){
+      if(!record||!providers.some(p=>p.key===record.provider)||seen.has(record.provider))throw Error("INVALID_PROVIDER_RESULT");
+      seen.add(record.provider);
+      const label=sourceLabel(record.provider);
+      if(record.status==="ok"&&typeof record.price==="string"&&/^\d+(?:\.\d{1,12})?$/.test(record.price)
+        &&typeof record.market_at==="string"&&typeof record.currency==="string"){
+        const fresh={...record};delete fresh.refresh_failed_at;
+        quotes=quotes.filter(quote=>quote.provider!==record.provider);quotes.push(fresh);
+        errors=errors.filter(error=>error.provider!==record.provider);successful++;
+        progress(form,label+": "+fmtPrice(record.price)+" "+record.currency+" · "+record.quote_type+
+          " · Marktzeit "+date(record.market_at)+(old(record)?" · Veraltet":""),"success");
+      }else{
+        const reason=typeof record.code==="string"?record.code:"QUOTE_UNAVAILABLE";
+        const capturedAt=typeof record.captured_at==="string"?record.captured_at:new Date().toISOString();
+        if(preserveExisting)quotes=quotes.map(quote=>quote.provider===record.provider?{...quote,refresh_failed_at:capturedAt}:quote);
+        errors=errors.filter(error=>error.provider!==record.provider);
+        errors.push({provider:record.provider,code:reason,captured_at:capturedAt});failed++;
+        progress(form,label+": kein bestätigter Kurs ("+reason+").","error");
+      }
+    }
+    entry.quotes=quotes;entry.errors=errors;
+    if(typeof result.name==="string"&&result.name)entry.name=result.name;
+    return {successful,failed};
+  }
+  function markRequestFailure(entry,reason) {
+    const capturedAt=new Date().toISOString();
+    entry.quotes=entry.quotes.map(quote=>({...quote,refresh_failed_at:capturedAt}));
+    entry.errors=entry.errors.filter(error=>error.provider!=="all");
+    entry.errors.push({provider:"all",code:reason,captured_at:capturedAt});
+  }
+  function setBusy(value) {
+    busy=value;
+    for(const form of forms){const button=form.querySelector("button[type=submit]");if(button)button.disabled=value;}
+    for(const button of document.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
+  }
   async function submit(form) {
     if(busy)return;
     const code=form.querySelector("[data-isin-input]").value.trim().toUpperCase();
@@ -150,32 +194,12 @@
       entry={isin:code,name:null,quotes:[],errors:[]};entries.unshift(entry);
     }
     entry.quotes=[];entry.errors=[]; // The last result is never relabelled as a new request.
-    busy=true;
-    for(const f of forms)f.querySelector("button[type=submit]").disabled=true;
+    setBusy(true);
     save();paint();progress(form,"MOSA-Quellenvergleich für "+code+" gestartet.");
     try{
       const result=await requestAll(code,event=>reportStep(form,event));
-      if(!result||result.isin!==code||!Array.isArray(result.records)||result.records.length!==providers.length)
-        throw Error("INVALID_RESULT");
-      const seen=new Set();
-      for(const record of result.records){
-        if(!record||!providers.some(p=>p.key===record.provider)||seen.has(record.provider))throw Error("INVALID_PROVIDER_RESULT");
-        seen.add(record.provider);
-        const label=providers.find(p=>p.key===record.provider).label;
-        if(record.status==="ok"&&typeof record.price==="string"&&/^\d+(?:\.\d{1,12})?$/.test(record.price)
-          &&typeof record.market_at==="string"&&typeof record.currency==="string"){
-          entry.quotes.push(record);
-          progress(form,label+": "+fmtPrice(record.price)+" "+record.currency+" · "+record.quote_type+
-            " · Marktzeit "+date(record.market_at)+(old(record)?" · Veraltet":""),"success");
-        }else{
-          const reason=typeof record.code==="string"?record.code:"QUOTE_UNAVAILABLE";
-          entry.errors.push({provider:record.provider,code:reason,captured_at:record.captured_at||new Date().toISOString()});
-          progress(form,label+": kein bestätigter Kurs ("+reason+").","error");
-        }
-        save();paint();
-      }
-      if(typeof result.name==="string"&&result.name)entry.name=result.name;
-      if(entry.quotes.length){
+      const outcome=applyResult(entry,result,form,false);save();paint();
+      if(outcome.successful){
         const winner=best(entry);
         progress(form,"Ergebnis: "+(entry.name||code)+" · "+fmtPrice(winner.price)+" "+winner.currency+
           " · "+winner.source+" · Erfasst "+date(winner.captured_at)+(old(winner)?" · Marktzeit veraltet":""),"success");
@@ -184,11 +208,46 @@
       const reason=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Abfrage fehlgeschlagen";
       progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
     }finally{
-      busy=false;for(const f of forms)f.querySelector("button[type=submit]").disabled=false;
+      setBusy(false);
       save();paint();
     }
   }
+  async function refreshAll(button) {
+    if(busy)return;
+    entries=restore();paint();
+    const form=forms[0],list=form.parentElement.querySelector("[data-isin-steps]");
+    if(list)list.replaceChildren();
+    if(!entries.length){progress(form,"Keine gespeicherten ISINs. Es wurde keine Abfrage ausgelöst.");return;}
+    const snapshot=entries.slice();let successful=0,failed=0;
+    setBusy(true);progress(form,"Aktualisierung gestartet: "+snapshot.length+" ISIN"+(snapshot.length===1?"":"s")+".");
+    try{
+      for(const [index,entry] of snapshot.entries()){
+        const label=entry.name||entry.isin;
+        progress(form,"Aktualisiere "+(index+1)+" von "+snapshot.length+": "+label);
+        try{
+          const result=await requestAll(entry.isin,event=>reportStep(form,event));
+          const outcome=applyResult(entry,result,form,true);
+          if(outcome.successful){
+            successful++;
+            progress(form,label+": "+outcome.successful+" Kurs"+(outcome.successful===1?"":"e")+" aktualisiert"+
+              (outcome.failed?", "+outcome.failed+" Quellenfehler":""),outcome.failed?"info":"success");
+          }else{
+            failed++;progress(form,label+": fehlgeschlagen: kein bestätigter Kurs.","error");
+          }
+        }catch(error){
+          failed++;
+          const reason=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Abfrage fehlgeschlagen";
+          markRequestFailure(entry,reason);progress(form,label+": fehlgeschlagen: "+reason,"error");
+        }
+        save();paint();
+      }
+      progress(form,"Aktualisierung abgeschlossen: "+successful+" erfolgreich, "+failed+" fehlgeschlagen.",failed?"error":"success");
+    }finally{
+      setBusy(false);save();paint();
+    }
+  }
   for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);});
+  for(const button of document.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",()=>refreshAll(button));
   paint();
   globalThis.MosaIsinLookup=Object.freeze({valid});
 }());

@@ -32,7 +32,7 @@
       <p class="context-note">Nur die von Ihnen eingegebenen ISINs. Tradegate Mid und Börse Frankfurt Last werden separat angefragt. Ältere Kurse sind ausdrücklich als veraltet gekennzeichnet; kein automatischer Abruf.</p>
       <form class="isin-form" data-isin-form autocomplete="off">
         <label for="isin-market">ISIN eingeben</label>
-        <div class="isin-form-row"><input id="isin-market" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE000A0JBPG2" spellcheck="false" required><button type="submit">OK</button></div>
+        <div class="isin-form-row"><input id="isin-market" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE000A0JBPG2" spellcheck="false" required><button type="submit">OK</button><button type="button" data-isin-refresh>Aktualisieren</button></div>
       </form>
       <ol class="isin-steps" data-isin-steps aria-label="Schritte der Kursabfrage" aria-live="polite"></ol>
       <div class="observation-table-wrap" aria-busy="false" data-observation-region>
