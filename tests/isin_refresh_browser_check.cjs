@@ -1,4 +1,9 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const cacheVersion='isin-20261103';
+for(const file of ['marktdaten.html','index.html']){
+  const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
+  assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
+}
 
 class E {
   constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.textContent='';this.disabled=false;this.events={};}
@@ -20,8 +25,8 @@ const document={
 };
 
 const oldDroneShield={provider:'tradegate_quote',source:'Tradegate BSX · Geld/Brief',price:'1.0000000000',currency:'EUR',quote_type:'Mid (Geld/Brief)',market_at:'2026-11-02T12:00:00Z',captured_at:'2026-11-02T12:01:00Z',isin:'AU000000DRO2'};
-const oldPne={provider:'boerse_frankfurt_trade',source:'Börse Frankfurt · letzter Handel',price:'5.0000000000',currency:'EUR',quote_type:'Letzter Handel',market_at:'2026-11-02T12:02:00Z',captured_at:'2026-11-02T12:03:00Z',isin:'DE000A0JBPG2'};
-const initial=[{isin:'AU000000DRO2',name:'DroneShield',quotes:[oldDroneShield],errors:[]},{isin:'DE000A0JBPG2',name:'PNE AG',quotes:[oldPne],errors:[]}];
+const oldEtf={provider:'boerse_frankfurt_trade',source:'Börse Frankfurt · letzter Handel',price:'5.0000000000',currency:'EUR',quote_type:'Letzter Handel',market_at:'2026-11-02T12:02:00Z',captured_at:'2026-11-02T12:03:00Z',isin:'IE00BMYDM794'};
+const initial=[{isin:'AU000000DRO2',name:'DroneShield',quotes:[oldDroneShield],errors:[]},{isin:'IE00BMYDM794',name:'L&G Hydrogen Economy ETF',quotes:[oldEtf],errors:[]}];
 const storage=new Map([['mosa2-isin-lookup-v1',JSON.stringify(initial)]]),localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)};
 const calls=[];let active=0,maxActive=0;
 const providers=['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'];
@@ -32,7 +37,8 @@ async function fetch(url,options){
   assert.equal(options.method,'POST');assert.equal(body.provider,'all');
   assert.equal(refresh.disabled,true,'Refresh is disabled during an update');assert.equal(submit.disabled,true,'OK is disabled during an update');
   await new Promise(resolve=>setTimeout(resolve,5));active--;
-  return {ok:true,body:null,json:async()=>body.isin==='AU000000DRO2'?successResult(body.isin,'DroneShield'):body.isin==='DE000A0JBPG2'?failedResult(body.isin,'PNE AG'):successResult(body.isin,'BYD')};
+  assert.ok(steps.children.some(item=>item.textContent.includes('Aktualisiere 1 von 2: DroneShield')),'Progress is visible before the first provider request');
+  return {ok:true,body:null,json:async()=>body.isin==='AU000000DRO2'?successResult(body.isin,'DroneShield'):body.isin==='IE00BMYDM794'?failedResult(body.isin,'L&G Hydrogen Economy ETF'):successResult(body.isin,'BYD')};
 }
 
 const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number,String,Object,Array,Set,Math,Error,setTimeout,clearTimeout};sandbox.globalThis=sandbox;
@@ -44,13 +50,13 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   assert.equal(calls.length,2,'Exactly one request per saved ISIN');
   assert.equal(maxActive,1,'Saved ISINs are requested sequentially');
   const stored=JSON.parse(storage.get('mosa2-isin-lookup-v1'));
-  assert.deepEqual(stored.map(entry=>entry.isin),['AU000000DRO2','DE000A0JBPG2'],'ISINs remain unique and ordered');
+  assert.deepEqual(stored.map(entry=>entry.isin),['AU000000DRO2','IE00BMYDM794'],'ISINs remain unique and ordered');
   assert.equal(stored[0].name,'DroneShield');assert.equal(stored[0].quotes.length,6,'All six existing quote records remain available');
   assert.equal(stored[0].quotes.find(quote=>quote.provider==='tradegate_quote').price,'10.200');
-  assert.equal(stored[1].name,'PNE AG');
+  assert.equal(stored[1].name,'L&G Hydrogen Economy ETF');
   const retained=stored[1].quotes.find(quote=>quote.provider==='boerse_frankfurt_trade');
-  assert.equal(retained.market_at,oldPne.market_at,'Failed refresh keeps the old market timestamp');
-  assert.equal(retained.captured_at,oldPne.captured_at,'Failed refresh keeps the old capture timestamp');
+  assert.equal(retained.market_at,oldEtf.market_at,'Failed refresh keeps the old market timestamp');
+  assert.equal(retained.captured_at,oldEtf.captured_at,'Failed refresh keeps the old capture timestamp');
   assert.ok(retained.refresh_failed_at,'Failed refresh marks the retained quote as stale');
   assert.equal(stored[1].errors[0].code,'SOURCE_TIMEOUT','The actual provider error is stored');
   assert.ok(steps.children.some(item=>item.textContent.includes('Aktualisiere 1 von 2: DroneShield')),'Progress names the first ISIN');
