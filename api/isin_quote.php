@@ -298,6 +298,9 @@ function previewAll(string $input,callable $emit,?callable $transport=null): arr
     $name=registeredName($code)??($lab['instrument']['name']??null);
     if (!is_string($name)||trim($name)===''||mbLength($name)>160)$name=null;
     return ['status'=>$success>0?'ok':'error','isin'=>$code,'name'=>$name,
+        'instrument_type'=>in_array($lab['instrument_type']??null,['stock','etf','fund','other'],true)?$lab['instrument_type']:'unknown',
+        'instrument_type_source'=>is_string($lab['instrument_type_source']??null)?$lab['instrument_type_source']:null,
+        'instrument_type_verified_at'=>is_string($lab['instrument_type_verified_at']??null)?$lab['instrument_type_verified_at']:null,
         'captured_at'=>$captured,'success_count'=>$success,'records'=>$items,'request_count'=>count($lab['requests']??[])];
 }
 function emitStream(array $event): void {

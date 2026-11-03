@@ -9,6 +9,8 @@
     {key:"boerse_frankfurt_trade",label:"Börse Frankfurt · letzter Handel"},
     {key:"yahoo_home_market",label:"Yahoo Finance · Heimatmarkt"}
   ]);
+  const typeLabels = Object.freeze({stock:"Aktie",etf:"ETF",fund:"Fonds",other:"Sonstiges",unknown:"Unbekannt"});
+  const confirmedTypes = new Set(["stock","etf","fund","other"]);
   const valid = value => typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
   const forms = [...document.querySelectorAll("[data-isin-form]")];
   if (!forms.length) return;
@@ -22,6 +24,9 @@
         seen.add(entry.isin);return true;
       }).slice(0,30).map(entry => ({isin:entry.isin,
         name:typeof entry.name === "string" && entry.name.length <= 160 ? entry.name : null,
+        instrument_type:confirmedTypes.has(entry.instrument_type)?entry.instrument_type:"unknown",
+        instrument_type_source:typeof entry.instrument_type_source === "string" && entry.instrument_type_source.length <= 80 ? entry.instrument_type_source : null,
+        instrument_type_verified_at:typeof entry.instrument_type_verified_at === "string" && entry.instrument_type_verified_at.length <= 80 ? entry.instrument_type_verified_at : null,
         quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => q && q.isin===entry.isin && providers.some(p=>p.key===q.provider) && typeof q.price==="string" && typeof q.market_at==="string").slice(0,6):[],
         errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && (e.provider==="all" || providers.some(p=>p.key===e.provider)) && typeof e.code==="string").slice(0,6):[]}));
     } catch {return [];}
@@ -44,6 +49,7 @@
   function best(entry) {
     return entry.quotes.slice().sort((a,b)=>Date.parse(b.market_at)-Date.parse(a.market_at) || providers.findIndex(p=>p.key===a.provider)-providers.findIndex(p=>p.key===b.provider))[0] || null;
   }
+  function typeLabel(entry) {return typeLabels[entry.instrument_type] || typeLabels.unknown;}
   function itemCell(row,label,value) {const cell=document.createElement("td");cell.dataset.label=label;cell.textContent=value;row.append(cell);return cell;}
   function paint() {
     for (const list of document.querySelectorAll("[data-isin-list]")) {
@@ -52,7 +58,7 @@
         const quote=best(entry), li=document.createElement("li");
         const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");
         const link=document.createElement("a");link.href="marktdaten.html";link.textContent=entry.name || entry.isin;
-        const detail=document.createElement("small");detail.textContent=entry.isin + (quote ? " · "+fmtPrice(quote.price)+" "+quote.currency+" · "+quote.source+(old(quote)?" · Veraltet":"") : " · Noch kein Abruf");
+        const detail=document.createElement("small");detail.textContent=entry.isin+" · "+typeLabel(entry)+(quote ? " · "+fmtPrice(quote.price)+" "+quote.currency+" · "+quote.source+(old(quote)?" · Veraltet":"") : " · Noch kein Abruf");
         link.append(detail);const arrow=document.createElement("span");arrow.textContent="↗";
         li.append(number,link,arrow);fragment.append(li);
       }
@@ -65,7 +71,7 @@
       for (const entry of entries) {
         for (const quote of entry.quotes.length?entry.quotes:((entry.errors||[]).length?[]:[null])) {
           const tr=document.createElement("tr");tr.dataset.status=quote?(old(quote)?"stale":"stored"):"missing";
-          itemCell(tr,"Aktie",entry.name||entry.isin);
+          itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));
           const price=itemCell(tr,"Kurs",quote?fmtPrice(quote.price)+" "+quote.currency:"—");price.className="market-price";
           itemCell(tr,"Einheit / Kursart",quote?quote.currency+" · "+quote.quote_type:"—");
           itemCell(tr,"Quelle / Handelsplatz",quote?quote.source:"—");
@@ -78,13 +84,13 @@
         }
         for(const error of entry.errors||[]){
           const tr=document.createElement("tr");tr.dataset.status="error";
-          itemCell(tr,"Aktie",entry.name||entry.isin);itemCell(tr,"Kurs","—");itemCell(tr,"Einheit / Kursart","—");
+          itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));itemCell(tr,"Kurs","—");itemCell(tr,"Einheit / Kursart","—");
           itemCell(tr,"Quelle / Handelsplatz",sourceLabel(error.provider));
           itemCell(tr,"Marktzeit","—");itemCell(tr,"Abgerufen",date(error.captured_at));itemCell(tr,"Datenalter","—");
           itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status","Kein bestätigter Kurs: "+error.code);fragment.append(tr);
         }
       }
-      if(!entries.length){const tr=document.createElement("tr");tr.className="market-placeholder";const td=itemCell(tr,"ISIN","Noch keine ISIN eingegeben.");td.colSpan=9;fragment.append(tr);}
+      if(!entries.length){const tr=document.createElement("tr");tr.className="market-placeholder";const td=itemCell(tr,"ISIN","Noch keine ISIN eingegeben.");td.colSpan=10;fragment.append(tr);}
       tbody.replaceChildren(fragment);
     }
     for (const label of document.querySelectorAll("[data-isin-summary]")) label.textContent=entries.length+" ISIN"+(entries.length===1?"":"s")+" · Manuell abgefragte Kurse";
@@ -145,6 +151,13 @@
   function applyResult(entry,result,form,preserveExisting) {
     if(!result||result.isin!==entry.isin||!Array.isArray(result.records)||result.records.length!==providers.length)
       throw Error("INVALID_RESULT");
+    if(confirmedTypes.has(result.instrument_type) && typeof result.instrument_type_source === "string" && result.instrument_type_source !== ""){
+      entry.instrument_type=result.instrument_type;
+      entry.instrument_type_source=result.instrument_type_source;
+      entry.instrument_type_verified_at=typeof result.instrument_type_verified_at === "string" ? result.instrument_type_verified_at : null;
+    }else if(result.instrument_type === "unknown" && result.instrument_type_source === "lang_schwarz_conflict"){
+      entry.instrument_type="unknown";entry.instrument_type_source=result.instrument_type_source;entry.instrument_type_verified_at=null;
+    }
     let quotes=preserveExisting?entry.quotes.slice():[];
     let errors=preserveExisting?entry.errors.filter(error=>error.provider!=="all"):[];
     const seen=new Set();let successful=0,failed=0;

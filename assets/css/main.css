@@ -106,7 +106,7 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .market-table th { font-size: .64rem; font-weight: 500; color: var(--muted); letter-spacing: .04em; white-space: nowrap; }
 .market-table td { white-space: pre-line; line-height: 1.8; }
 .market-table td:first-child { font-weight: 550; font-size: .95rem; min-width: 150px; }
-.market-table td:nth-child(3), .market-table td:nth-child(4) { color: var(--muted); font-size: .74rem; }
+.market-table td:nth-child(4), .market-table td:nth-child(5) { color: var(--muted); font-size: .74rem; }
 .market-price { font-variant-numeric: tabular-nums; white-space: nowrap !important; font-size: 1.1rem; letter-spacing: -.025em; }
 .market-placeholder { height: 180px; color: var(--muted); }
 .market-table tr[data-status="stale"] td:last-child { color: var(--warning); font-weight: 600; }
@@ -171,7 +171,7 @@ dd { color: var(--muted); font-size: .8rem; margin: 6px 0 0 28px; }
   .market-table td:first-child { display: block; font: 1.4rem/1.4 var(--display); margin-bottom: 10px; padding: 0; }
   .market-table td:first-child::before { content: none; }
   .market-table .market-price { font-size: 1.1rem; }
-  .market-table td:nth-child(3), .market-table td:nth-child(4) { font-size: .76rem; }
+  .market-table td:nth-child(4), .market-table td:nth-child(5) { font-size: .76rem; }
   .market-placeholder td { display: block; }
   .market-placeholder td::before { content: none; }
 }

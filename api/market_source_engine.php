@@ -250,7 +250,7 @@ function fixlabMosaMarketSourceLabBase(string $isin=''):array
     return [
         'contract_version'=>FIXLAB_MOSA_MARKET_SOURCE_LAB_VERSION,'mode'=>'read_only','ok'=>false,'status'=>'not_run','instrument_key'=>$isin,'asset_type'=>'security',
         'provider_key'=>FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,'provider_label'=>'L&S · Tradegate BSX · Börse Frankfurt · Yahoo Heimatmarkt','isin'=>$isin,
-        'instrument'=>['isin'=>$isin,'name'=>null,'wkn'=>null,'instrument_id'=>null,'market_id'=>null],'requested_at'=>null,
+        'instrument'=>['isin'=>$isin,'name'=>null,'wkn'=>null,'instrument_id'=>null,'market_id'=>null],'instrument_type'=>'unknown','instrument_type_source'=>null,'instrument_type_verified_at'=>null,'requested_at'=>null,
         'sources'=>[
             'lang_schwarz_quote'=>fixlabMosaMarketSourceLabSource('lang_schwarz_quote','lang_schwarz','Lang & Schwarz','L&S TradeCenter','quote'),
             'tradegate_quote'=>fixlabMosaMarketSourceLabSource('tradegate_quote','tradegate_bsx','Tradegate BSX','Tradegate BSX','quote'),
@@ -360,6 +360,48 @@ function fixlabMosaMarketSourceLabInstrument(array $rows,string $isin):?array
 {
     $matches=[];foreach($rows as$row)if(is_array($row)&&($row['isin']??null)===$isin)$matches[]=$row;if($matches===[])return null;usort($matches,static function(array$left,array$right):int{$stock=static fn(array$row):bool=>($row['categorySymbol']??null)==='STK'||in_array(strtolower((string)($row['categoryName']??'')),['aktie','stock'],true);return(int)$stock($right)<=>(int)$stock($left);});
     $row=$matches[0];$id=$row['instrumentId']??$row['id']??null;return is_numeric($id)&&(int)$id>0?['id'=>(int)$id,'row'=>$row]:null;
+}
+
+function fixlabMosaMarketSourceLabTypeLabel(mixed $value):?string
+{
+    if(!is_string($value))return null;$normalized=strtolower(trim(preg_replace('/\s+/u',' ',str_replace(['_','-'],' ',$value))??''));
+    return match($normalized){
+        'stk','stock','aktie','aktien'=>'stock',
+        'etf'=>'etf',
+        'fnd','fund','fonds','mutualfund','mutual fund'=>'fund',
+        'bond','bonds','anleihe','anleihen','certificate','certificates','zertifikat','zertifikate','warrant','warrants','optionsschein','optionsscheine','option','optionen','etc','etn','note','notes'=>'other',
+        default=>null,
+    };
+}
+
+function fixlabMosaMarketSourceLabTypeLink(mixed $value):?string
+{
+    if(!is_string($value))return null;$link=trim($value);
+    return match(true){
+        preg_match('~^/de/aktie/[1-9][0-9]*$~D',$link)===1=>'stock',
+        preg_match('~^/de/etf/[1-9][0-9]*$~D',$link)===1=>'etf',
+        preg_match('~^/de/(?:fonds|fund)/[1-9][0-9]*$~D',$link)===1=>'fund',
+        preg_match('~^/de/(?:anleihe|anleihen|certificate|certificates|zertifikat|zertifikate|warrant|warrants|optionsschein|optionsscheine|option|optionen|etc|etn|note|notes)/[1-9][0-9]*$~D',$link)===1=>'other',
+        default=>null,
+    };
+}
+
+function fixlabMosaMarketSourceLabClassifyInstruments(array $rows,string $isin,DateTimeImmutable $verifiedAt):array
+{
+    $matches=array_values(array_filter($rows,static fn(mixed $row):bool=>is_array($row)&&($row['isin']??null)===$isin));
+    if($matches===[])return ['instrument_type'=>'unknown','instrument_type_source'=>null,'instrument_type_verified_at'=>null];
+    $types=[];$unresolved=false;$conflict=false;
+    foreach($matches as $row){
+        $evidence=[];
+        foreach([fixlabMosaMarketSourceLabTypeLabel($row['categorySymbol']??null),fixlabMosaMarketSourceLabTypeLabel($row['categoryName']??null),fixlabMosaMarketSourceLabTypeLink($row['link']??null)] as $type)if($type!==null)$evidence[$type]=true;
+        if(count($evidence)>1){$conflict=true;continue;}
+        if($evidence===[]){$unresolved=true;continue;}
+        $types[]=array_key_first($evidence);
+    }
+    $types=array_values(array_unique($types));
+    if($conflict||count($types)>1)return ['instrument_type'=>'unknown','instrument_type_source'=>'lang_schwarz_conflict','instrument_type_verified_at'=>null];
+    if($unresolved||count($types)!==1)return ['instrument_type'=>'unknown','instrument_type_source'=>null,'instrument_type_verified_at'=>null];
+    return ['instrument_type'=>$types[0],'instrument_type_source'=>'lang_schwarz','instrument_type_verified_at'=>$verifiedAt->format(DateTimeInterface::ATOM)];
 }
 
 function fixlabMosaMarketSourceLabInstrumentPath(array $instrument):?string
@@ -511,7 +553,7 @@ function fixlabRunMosaMarketSourceLab(mixed $isin,mixed $provider=FIXLAB_MOSA_MA
     if(!in_array($assetType,['stock','etf'],true))return array_replace($result,['status'=>'invalid_input','errors'=>['asset_type_invalid']]);$result['asset_type']=$assetType;if(!fixlabMosaMarketSourceLabIsinValid($normalized))return array_replace($result,['status'=>'invalid_input','errors'=>['isin_invalid']]);if($provider!==FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER)return array_replace($result,['status'=>'invalid_input','errors'=>['provider_invalid']]);$transport??='fixlabMosaMarketSourceLabLiveTransport';$responses=[];
 
     $searchRequest=fixlabMosaMarketSourceLabLsRequest('lang_schwarz_search','L&S Instrumentensuche','/_rpc/json/.lstc/instrument/search/main',['q'=>$normalized,'localeId'=>2]);$responses['lang_schwarz_search']=fixlabMosaMarketSourceLabExecute($searchRequest,$transport);$result['external_fetch_executed']=true;$result['requests'][]=fixlabMosaMarketSourceLabPublicRequest($searchRequest,$responses['lang_schwarz_search']);$result['raw_responses']['lang_schwarz_search']=fixlabMosaMarketSourceLabRawResponse($responses['lang_schwarz_search'],true);
-    $instrument=$responses['lang_schwarz_search']['ok']?fixlabMosaMarketSourceLabInstrument(fixlabMosaMarketSourceLabRows($responses['lang_schwarz_search']['json']),$normalized):null;$instrumentId=null;$marketId=1;
+    $searchRows=fixlabMosaMarketSourceLabRows($responses['lang_schwarz_search']['json']);$result=array_replace($result,fixlabMosaMarketSourceLabClassifyInstruments($searchRows,$normalized,$now));$instrument=$responses['lang_schwarz_search']['ok']?fixlabMosaMarketSourceLabInstrument($searchRows,$normalized):null;$instrumentId=null;$marketId=1;
     if($instrument!==null&&fixlabMosaMarketSourceLabInstrumentPath($instrument)!==null){$row=$instrument['row'];$instrumentId=$instrument['id'];$marketRaw=$row['marketId']??1;$marketId=is_numeric($marketRaw)&&(int)$marketRaw>0?(int)$marketRaw:1;$result['instrument']=['isin'=>$normalized,'name'=>fixlabMosaMarketSourceLabFirstText($row,['name','displayName','displayname','instrumentName','securityName','nameLong','nameShort','label']),'wkn'=>fixlabMosaMarketSourceLabFirstText($row,['wkn','WKN']),'instrument_id'=>$instrumentId,'market_id'=>$marketId];
         $pageRequest=fixlabMosaMarketSourceLabLsRequest('lang_schwarz_page','L&S Offerte und Handelskurse',(string)fixlabMosaMarketSourceLabInstrumentPath($instrument));$responses['lang_schwarz_page']=fixlabMosaMarketSourceLabExecute($pageRequest,$transport,false);$result['requests'][]=fixlabMosaMarketSourceLabPublicRequest($pageRequest,$responses['lang_schwarz_page']);$result['raw_responses']['lang_schwarz_page']=fixlabMosaMarketSourceLabRawResponse($responses['lang_schwarz_page'],false);
         $result['sources']['lang_schwarz_quote']['isin']=$normalized;

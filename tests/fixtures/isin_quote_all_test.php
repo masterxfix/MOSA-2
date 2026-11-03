@@ -47,6 +47,42 @@ assertSameValue($map['yahoo_home_market']['currency'],'EUR','yahoo native curren
 assertSameValue($map['yahoo_home_market']['symbol'],'PNE.DE','yahoo native ticker');
 assertSameValue($map['tradegate_trade']['quote_type'],'Letzter Handel','trade type');
 assertSameValue($map['tradegate_quote']['quote_type'],'Mid (Geld/Brief)','mid type');
+assertSameValue($result['instrument_type'],'stock','L&S exact stock classification');
+assertSameValue($result['instrument_type_source'],'lang_schwarz','stock classification source');
+if(!is_string($result['instrument_type_verified_at'])||$result['instrument_type_verified_at']==='')throw new RuntimeException('stock classification timestamp missing');
+
+$etfCode='IE00BMYDM794';
+$etfFixtures=$fixtures;
+$etfFixtures['lang_schwarz_search']=json_encode(['data'=>[['isin'=>$etfCode,'instrumentId'=>123456,'marketId'=>1,'categorySymbol'=>'ETF','categoryName'=>'ETF','link'=>'/de/etf/123456','name'=>'L&G Hydrogen Economy ETF']]]);
+$etfRequests=[];
+$etf=previewAll($etfCode,static function(array $event):void{} ,static function(array $request)use($etfFixtures,&$etfRequests):array{
+    $etfRequests[]=$request['request_key'];return ['body'=>$etfFixtures[$request['request_key']],'http_status'=>200,'latency_ms'=>1,'error_code'=>null];
+});
+assertSameValue($etf['instrument_type'],'etf','L&S exact ETF classification');
+assertSameValue($etf['instrument_type_source'],'lang_schwarz','ETF classification source');
+assertSameValue($etf['request_count'],7,'ETF classification reuses the seven existing GETs');
+
+$foreignCode='AU000000DRO2';
+$missingFixtures=$fixtures;
+$missingFixtures['lang_schwarz_search']=json_encode(['data'=>[['isin'=>$code,'instrumentId'=>123456,'marketId'=>1,'categorySymbol'=>'STK','link'=>'/de/aktie/123456','name'=>'PNE AG']]]);
+$missing=previewAll($foreignCode,static function(array $event):void{} ,static function(array $request)use($missingFixtures):array{
+    return ['body'=>$missingFixtures[$request['request_key']],'http_status'=>200,'latency_ms'=>1,'error_code'=>null];
+});
+assertSameValue($missing['instrument_type'],'unknown','foreign ISIN remains unknown');
+assertSameValue($missing['instrument_type_source'],null,'missing classification has no confirmation source');
+assertSameValue($missing['instrument_type_verified_at'],null,'missing classification has no timestamp');
+
+$conflictFixtures=$fixtures;
+$conflictFixtures['lang_schwarz_search']=json_encode(['data'=>[
+    ['isin'=>$foreignCode,'instrumentId'=>123456,'marketId'=>1,'categorySymbol'=>'STK','link'=>'/de/aktie/123456','name'=>'DroneShield'],
+    ['isin'=>$foreignCode,'instrumentId'=>123457,'marketId'=>1,'categorySymbol'=>'ETF','link'=>'/de/etf/123457','name'=>'DroneShield'],
+]]);
+$conflict=previewAll($foreignCode,static function(array $event):void{} ,static function(array $request)use($conflictFixtures):array{
+    return ['body'=>$conflictFixtures[$request['request_key']],'http_status'=>200,'latency_ms'=>1,'error_code'=>null];
+});
+assertSameValue($conflict['instrument_type'],'unknown','conflicting classifications remain unknown');
+assertSameValue($conflict['instrument_type_source'],'lang_schwarz_conflict','conflict is reported');
+
 $bad=['request_key'=>'yahoo_home_market','url'=>'https://attacker.example/v8/finance/chart/PNE.DE?range=1d&interval=1d&includePrePost=false'];
 assertSameValue(sourceAllowed($bad,$code),false,'reject foreign host');
 $bad=['request_key'=>'lang_schwarz_page','url'=>'https://www.ls-tc.de/de/aktie/123456/../../secret'];
