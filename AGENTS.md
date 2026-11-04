@@ -1,6 +1,6 @@
 # MOSA 2 – Agent Instructions
 
-**Letzte Änderung:** 03.11.2026, 19:29:40 Uhr — Europe/Berlin (MEZ, UTC+01:00).
+**Letzte Änderung:** 04.11.2026, 07:31:46 Uhr — Europe/Berlin (MEZ, UTC+01:00).
 
 ## Geltungsbereich
 
@@ -11,6 +11,13 @@ Diese Regeln gelten für alle Arbeiten in diesem Repository.
 - Jede Änderung an `AGENTS.md` muss im selben Commit mit Datum, Uhrzeit und kurzer Änderungsbeschreibung im Änderungsprotokoll am Dateiende dokumentiert werden. Die Kopfzeile **Letzte Änderung** ist ebenfalls zu aktualisieren.
 - Den tatsächlichen Bearbeitungszeitpunkt verwenden und in der Zeitzone **Europe/Berlin** mit der zum Datum passenden UTC-Abweichung angeben. Datum oder Uhrzeit nicht schätzen.
 - Bei nachträglich dokumentierten Änderungen den belegten ursprünglichen Commit-Zeitpunkt verwenden und den Nachtrag samt Commit kenntlich machen. Vorhandene Protokolleinträge bleiben erhalten.
+
+## Aktuelle Nutzerentscheidung vom 04.11.2026: Keine Testdaten löschen
+
+- **Verbindlich, Vorrang vor früheren Löschaufträgen:** Der Nutzer hat den vollständigen Reset und die zuvor beauftragten Löschungen/Bereinigungen der bestehenden Daten in `h29077_mosa2_test` eingestellt. Die bisherigen fachlichen Testdaten bleiben erhalten; **keine weiteren Reset-, PNE-DB-Lösch- oder Bereinigungsversuche** aufgrund früherer Aufträge, Commit-Autorisierungen oder gespeicherter Workflow-Eingaben. Das ersetzt die früheren Löschabsichten, ohne die historischen Protokolle zu verändern.
+- **Reset-Workflow deaktiviert:** `.github/workflows/database-reset-once.yml` bleibt zu Dokumentationszwecken erhalten, seine Lösch-Job-Ausführung ist im aktuellen Stand fest auf `false` gesetzt. Nicht erneut starten oder durch alternative Laufwege umgehen.
+- **Technischer Stand:** Die Schema-6-Migration am 01.11.2026 wurde in Actions-Lauf `41288523408` als erfolgreich mit 26 Tabellen und Ledger 1–6 berichtet. Reset-Läufe `41696655740` und `41722459508` waren erfolglos; für den letzten korrigierten Reset-Commit `dfc103b9` liegt kein Live-Löschlauf vor. Daraus folgt **kein Nachweis einer erfolgreichen Löschung** und keine aktuelle vollständige unabhängige Datenbankinventur. Keine DB-Zugriffe nur für diese Statusdokumentation.
+- Diese Entscheidung betrifft die zuvor geplante **Datenlöschung**, nicht die normale weitere MOSA-2-Entwicklung. Neue destruktive DB-Aufträge benötigen eine neue ausdrückliche Nutzerentscheidung; kein Widerruf durch allgemeine Entwicklungsaufträge. `masterxfix/fixlab`, MOSA, externe Archive, andere Datenbanken und Laufwerk `E:` bleiben unberührt.
 
 ## Grundprinzipien
 
@@ -232,6 +239,7 @@ Alle Zeitangaben gelten für **Europe/Berlin**. Der Nachtrag dokumentiert die zu
 
 | Datum | Uhrzeit und UTC-Abweichung | Änderung |
 | --- | --- | --- |
+| 04.11.2026 | 07:31:46 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung: bisherigen vollständigen MOSA-2-Testdaten-Reset und zuvor beauftragte Datenlöschungen eingestellt; Datenbestand behalten. Reset-Workflow deaktiviert; frühere Löschfreigaben gelten nicht fort. Schema/DB bleiben unverändert. |
 | 03.11.2026 | 19:29:40 Uhr (MEZ, UTC+01:00) | Nutzerbeauftragten vollständigen Reset entbehrlicher Test-Fachdaten von `h29077_mosa2_test` ausdrücklich von der Rücksicherung der bewusst zu verwerfenden Daten abgegrenzt; Schemaschutz, kontrollierte Löschung und unabhängiger Postcheck bleiben Pflicht. |
 | 03.11.2026 | 18:53:32 Uhr (MEZ, UTC+01:00) | Geringer Auftragsumfang verbindlich: historische Collector-/Sicherheitsmodule nicht unnötig verändern, unabhängige Web-/DB-Teilschritte entkoppeln, risikogerechte Testdaten-Sicherung statt pauschaler Vollrestore-Pflicht und keine erneuten Freigaben für denselben Scope. |
 | 03.11.2026 | 18:06:43 Uhr (MEZ, UTC+01:00) | Nutzerentscheidung dokumentiert: PNE AG / ISIN DE000A0JBPG2 wird aus dem aktiven MOSA-2-Projekt und der MOSA-2-Testdatenbank entfernt. Historische Archive und Nachweise bleiben unverändert; `masterxfix/fixlab` bleibt unberührt. |

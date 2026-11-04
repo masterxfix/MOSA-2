@@ -1,4 +1,6 @@
-name: MOSA-2 irreversible test data reset once
+name: MOSA-2 reset cancelled (disabled)
+# 2026-11-04: User withdrew authorization for deleting the existing test data.
+# Keep this file as historical evidence only; never perform database changes.
 
 on:
   workflow_dispatch:
@@ -21,7 +23,8 @@ concurrency:
 
 jobs:
   reset:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && github.ref == 'refs/heads/main'
+    # Hard-disabled: previous reset authorization withdrawn on 2026-11-04.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

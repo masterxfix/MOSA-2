@@ -2,6 +2,14 @@
 
 Dieser Bereich beschreibt die geplante Datenbank für MOSA 2. Die neue Struktur wird **parallel zu MOSA** aufgebaut. MOSA wird nicht abgeschaltet, sondern bleibt weiterhin nutzbar und dient als Spielwiese/Labor für neue Ideen und Funktionen.
 
+## Aktuelle Nutzerentscheidung: Datenlöschung eingestellt (04.11.2026)
+
+Der Nutzer hat den ursprünglich beauftragten vollständigen Reset sowie die früheren Lösch-/Bereinigungswünsche für die vorhandenen Daten in `h29077_mosa2_test` **zurückgezogen**. Bestehende fachliche Testdaten bleiben erhalten; **keinen weiteren Reset oder DB-Löschversuch starten**, auch nicht für PNE, allein aufgrund früherer Aufträge oder Autorisierungstokens. Die frühere Reset-Prozedur unten ist **historische Dokumentation und aktuell nicht zur Ausführung freigegeben**.
+
+Der manuelle Reset-Workflow `.github/workflows/database-reset-once.yml` ist im Repository durch eine fest deaktivierte Job-Bedingung (`if: \${{ false }}`) stillgelegt. Code und Fehlversuche bleiben zu Audit-/Lernzwecken erhalten. Der erfolgreich berichtete Schema-6-Apply vom 01.11.2026 (Actions-Lauf `41288523408`, 26 Tabellen, Ledger 1–6) ersetzt die ältere Schema-4-Ausgangsannahme. Die Reset-Läufe `41696655740` und `41722459508` endeten erfolglos; für den korrigierten Commit `dfc103b9` liegt kein weiterer Reset-Lauf vor. **Eine erfolgreiche Löschung oder eine aktuelle vollständige Live-Inventur ist nicht nachgewiesen.** Diese GitHub-Änderung führt keinerlei DB-Operation aus.
+
+Die weitere nicht-löschende MOSA-2-Entwicklung bleibt möglich. Eine spätere destruktive Datenbankänderung braucht eine neue konkrete Beauftragung; historische Löschzustimmungen gelten nicht als Dauerfreigabe. MOSA, `masterxfix/fixlab`, andere Datenbanken und private Archive bleiben unberührt.
+
 ## Oberste Architekturziele
 
 1. **Vollständigkeit:** Möglichst alle kostenlos verfügbaren, relevanten Informationen aus den tatsächlich genutzten Quellen werden erfasst und dauerhaft erhalten. Ein Feld darf nicht nur deshalb verworfen werden, weil es heute noch nicht angezeigt oder ausgewertet wird.
