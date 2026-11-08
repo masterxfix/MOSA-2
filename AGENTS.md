@@ -26,6 +26,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 ### Codex
 **Bekannter Browserfehler:** Der Computer-Use-Start scheitert bei gesperrtem `E:` mit `0x8007000F`. Keine erneute Ursachen-Testreihe; Chrome nur über einen E:-freien Zugangsweg nutzen.
 - **Aufträge umsetzen:** Änderungen eigenständig durchführen und gezielt testen.
+- **Testsite-Deployment abschließen:** Ist das Deployment im Auftrag enthalten, den bestehenden Workflow einschließlich „Run workflow“ ohne erneute Rückfrage ausführen und das Ergebnis prüfen. Nur bei tatsächlich erforderlicher neuer Freigabe stoppen.
 - **Chrome nutzen:** Google Chrome ist Standard; den vom Nutzer stets bereitgestellten Zugang zuerst prüfen und verwenden.
 - **Tokens sparen:** Nur benötigte Dateien und Informationen lesen; vorhandene Ergebnisse nutzen und unnötige Vollscans, Wiederholungen und lange Protokolle vermeiden – ohne notwendige Prüfungen auszulassen.
 - **Live-Prüfung nach Seitenänderungen:** Jede geänderte MOSA-2-Seite anschließend in Chrome live prüfen, die korrekte Umsetzung bestätigen und die gemessene Seitenladezeit melden. Ohne erfolgreichen Live-Test keinen Abschluss als erfolgreich melden.
