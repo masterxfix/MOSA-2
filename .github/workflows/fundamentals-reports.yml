@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       reports:
-        description: Comma-separated reviewed report keys; currently only droneshield-html-fy-2025 authorized
+        description: Comma-separated reviewed report keys; approved single runs include droneshield-html-fy-2025 and nel-q2-2026
         required: true
         default: droneshield-html-fy-2025
         type: string
@@ -59,7 +59,7 @@ jobs:
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_html.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_collector.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_generic.py -v
-      - name: Authorized HTML GET, compact evidence, atomic facts and independent readback
+      - name: Authorized report GET, compact evidence, atomic facts and independent readback
         env:
           PYTHONDONTWRITEBYTECODE: '1'
           REPORT_KEYS: ${{ inputs.reports }}

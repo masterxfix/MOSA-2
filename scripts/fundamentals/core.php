@@ -8,6 +8,7 @@ require_once __DIR__.'/curated.php';
 require_once __DIR__.'/xbrl_evidence.php';
 require_once __DIR__.'/esef_evidence.php';
 require_once __DIR__.'/hkex_evidence.php';
+require_once __DIR__.'/nel_q2_evidence.php';
 
 function canonical(mixed $value): string {
     $sort=function(mixed $v)use(&$sort):mixed{if(is_array($v)){if(!array_is_list($v))ksort($v);foreach($v as &$x)$x=$sort($x);unset($x);}return $v;};
@@ -161,6 +162,7 @@ function storedFile(array $plan): array {
         elseif(($doc['evidence_type']??null)==='sec_companyfacts'){xbrlEvidence($plan,$doc);}
         elseif(($doc['evidence_type']??null)==='esef_inline'){esefEvidence($plan,$doc);}
         elseif(($doc['evidence_type']??null)==='hkex_pdf'){hkexEvidence($plan,$doc);}
+        elseif(($doc['evidence_type']??null)==='nel_q2_pdf'){nelQ2Evidence($plan,$doc);}
         else{
         same($doc['format'],'mosa2-fundamental-evidence-v1','evidence_format');same($doc['kind'],'derived_evidence','evidence_kind');
         same(canonical($doc['source_response']),canonical($meta+['retained'=>false]),'response_binding');

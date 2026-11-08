@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from scripts import fundamentals_pilot_once as shared
-from scripts.fundamentals.reports import APPROVED_REPORTS, selection
+from scripts.fundamentals.reports import APPROVED_REPORTS, APPROVED_SINGLE_REPORTS, selection
 
 def collect(env, keys, execute=shared.execute):
     reports=[dict(r,authorization='MOSA2-REPORTS-'+','.join(keys)+':',reusable_manual=True) for r in selection(keys)]
-    if tuple(keys)!=APPROVED_REPORTS:raise ValueError('REPORT_AUTHORIZATION')
+    if tuple(keys) not in (APPROVED_REPORTS, APPROVED_SINGLE_REPORTS):raise ValueError('REPORT_AUTHORIZATION')
     # All authorizations are checked before the first connection or GET.
     for report in reports:shared.guard(env,report)
     results=[]

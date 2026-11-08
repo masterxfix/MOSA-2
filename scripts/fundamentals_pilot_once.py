@@ -98,14 +98,19 @@ def execute(env,selected=None):
                 http=ReadOnlyHttpTransport(HttpGet(None,adapter.URL,(('Accept',getattr(adapter,'CONTENT_TYPE','text/html')),('Accept-Encoding','identity'))),timeout=30)
                 response=http.fetch(None)
                 if selected.get('retention')=='derived_evidence':
-                    report.update(html_source_reachable=response.http_status==200 and response.content_type.split(';',1)[0].strip().lower()=='text/html',
-                        pdf_downloads=0,full_responses_archived=0)
+                    content_type=response.content_type.split(';',1)[0].strip().lower()
+                    report.update(html_source_reachable=response.http_status==200 and content_type=='text/html',
+                        pdf_downloads=1 if response.http_status==200 and content_type=='application/pdf' else 0,
+                        full_responses_archived=0)
                 report['provider_requests']=http.attempt_count
                 raw=response.payload_bytes
                 if not 0<len(raw)<=8*1024*1024:raise ValueError('PAYLOAD_BOUND')
                 metadata=dict(url=adapter.URL,request_started_at=http.request_started_at,observed_at=response.collected_at,
                     http_status=response.http_status,content_type=response.content_type,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),
                     execution=selected['execution'],commit=env['GITHUB_SHA'])
+                report.update(source_url=metadata['url'],source_http_status=metadata['http_status'],
+                              source_content_type=metadata['content_type'],source_sha256=metadata['sha256'],
+                              source_bytes=metadata['bytes'])
                 derived=selected.get('retention')=='derived_evidence'
                 if not derived:
                     stage='RAW_ARCHIVE'
@@ -119,14 +124,17 @@ def execute(env,selected=None):
                 stored_metadata=metadata
                 if derived:
                     stage='EVIDENCE_ARCHIVE'
-                    compact,stored_metadata=evidence(plan,metadata,selected['identity'])
+                    builder=getattr(adapter,'evidence',None)
+                    compact,stored_metadata=(builder(plan,metadata,selected['identity'])
+                                             if builder is not None else evidence(plan,metadata,selected['identity']))
                     # The full response never leaves runner memory or reaches remote storage.
                     del raw,response
                     http.last_response=None
                     archive(transport,'archive',env,reserved['identity'],stored_metadata,compact,selected=selected)
                     verified=archive(transport,'verify',env,reserved['identity'],stored_metadata,selected=selected)
                     plan['stored_evidence']=stored_metadata
-                    report.update(evidence_archive='PASS',full_responses_archived=0,source_classification='independent_third_party')
+                    report.update(evidence_archive='PASS',full_responses_archived=0,
+                                  source_classification='official_issuer_quarterly_report' if builder is not None else 'independent_third_party')
                 plan.update(metadata=metadata,archive=verified)
                 if selected.get('periods'):
                     actual={(r['period_type'],r['period_start'],r['period_end']) for r in plan['observations']}
@@ -145,7 +153,7 @@ def execute(env,selected=None):
                     parser_status='qualified_evidence_only' if derived else 'partial_nonqualified_content_preserved_raw')
         report['stage']='SUCCESS'
     except Exception as error:
-        if str(error) in {'HTML_REPORT_IDENTITY','HTML_CURRENCY_CONFLICT','HTML_COLUMN_STRUCTURE','HTML_TABLE_BOUND','EVIDENCE_BINDING','EVIDENCE_BOUND','QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND'}:
+        if str(error) in {'HTML_REPORT_IDENTITY','HTML_CURRENCY_CONFLICT','HTML_COLUMN_STRUCTURE','HTML_TABLE_BOUND','EVIDENCE_BINDING','EVIDENCE_BOUND','QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND','NEL_RESPONSE_BINDING','NEL_RESPONSE_MIME','NEL_RESPONSE_HASH','NEL_PDF_EMPTY','NEL_DOCUMENT_IDENTITY','NEL_REPORT_PERIOD','NEL_UNIT','NEL_REVENUE_AMBIGUOUS','NEL_EBITDA_AMBIGUOUS','NEL_IFRS_OPERATING_PROFIT_AMBIGUOUS','NEL_PROFIT_AFTER_TAX_AMBIGUOUS','NEL_OPERATING_CASHFLOW_AMBIGUOUS','NEL_IWATANI_EVIDENCE','NEL_IDENTITY','NEL_EVIDENCE_BINDING','NEL_EVIDENCE_BOUND'}:
             report['error_code']=str(error)
         report['stage']=stage
         report['provider_requests']=http.attempt_count if http is not None else 0
