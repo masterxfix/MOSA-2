@@ -15,6 +15,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 3. **Einfach entwickeln:** Vorhandene Funktionen wiederverwenden und unnötige Komplexität vermeiden.
 4. **Fehler selbst beheben:** Ursachen ermitteln, Korrekturen durchführen und Ergebnisse tatsächlich überprüfen.
 5. **Grenzen einhalten:** Nur notwendige Sicherheitsprüfungen durchführen und keine Änderungen außerhalb des Auftrags vornehmen.
+6. **Standardbrowser Chrome:** Codex verwendet Google Chrome und nutzt den vom Nutzer stets bereitgestellten Zugang. Vor einer Meldung über fehlenden Browserzugriff ist die vorhandene Chrome-Verbindung zu prüfen.
 
 **Grundsatz:** Das funktionierende Ergebnis zählt, nicht die Anzahl der Arbeitsschritte, Tests oder Dokumentationen.
 
