@@ -131,6 +131,13 @@ class NelQ2Tests(unittest.TestCase):
         self.assertEqual(selected[0]['preserve_assets'][0]['current'], 3)
         self.assertEqual(selected[0]['periods'], [('fq', '2026-04-01', '2026-06-30')])
 
+    def test_pdf_reader_is_installed_and_checked_before_authorized_get(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/fundamentals-reports.yml').read_text(encoding='utf-8')
+        self.assertIn('pdfplumber==0.11.9', workflow)
+        self.assertIn("import pdfplumber; assert pdfplumber.__version__", workflow)
+        self.assertLess(workflow.index("import pdfplumber; assert pdfplumber.__version__"),
+                        workflow.index('Authorized report GET, compact evidence'))
+
     def test_registered_nel_execution_matches_both_reservation_lists(self):
         execution = reports.REPORTS['nel-q2-2026']['execution']
         source = (Path(__file__).resolve().parents[1] / 'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
