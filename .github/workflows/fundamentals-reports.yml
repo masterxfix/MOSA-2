@@ -50,10 +50,12 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/fundamentals-venv"
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -m pip install --disable-pip-version-check 'pdfplumber==0.11.9'
       - name: Focused synthetic offline tests before access
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -c 'import pdfplumber; assert pdfplumber.__version__ == "0.11.9"'
           php -l scripts/fundamentals/core.php
           php -l tests/fundamentals_offline.php
           php -l tests/fundamentals_nel_q2.php
