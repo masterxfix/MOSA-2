@@ -17,6 +17,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 4. **Fehler beheben:** Ursachen ermitteln, korrigieren und Ergebnisse nachweisen.
 5. **Grenzen einhalten:** Nur notwendige Prüfungen und Änderungen im Auftragsumfang.
 6. **Laufwerk E: ist tabu:** ChatGPT und Codex dürfen `E:` niemals lesen, öffnen, aufrufen oder prüfen – auch nicht, wenn es entsperrt ist. Werkzeuge, die darauf zugreifen würden, nicht starten.
+7. **Übersichtlich anzeigen:** In Übersichten die letzten brauchbaren Informationen zuerst zeigen; weitere Details nur bei Bedarf und veraltete Daten klar kennzeichnen.
 
 ### ChatGPT
 - **Aufträge formulieren:** Codex klare, kurze Aufgaben und überprüfbare Ziele geben.
