@@ -39,7 +39,7 @@ function event(mixed $value, int $now): ?array {
     $turn=$value['turn_id_short']??null;
     $id=$value['event_id']??null;
     $when=$value['recorded_at_utc']??null;
-    if (!is_string($session) || !preg_match('/^[A-Za-z0-9_-]{4,16}$/D',$session) ||
+    if (!is_string($session) || $session==='unknown' || !preg_match('/^[A-Za-z0-9_-]{4,16}$/D',$session) ||
         !is_string($turn) || !preg_match('/^(?:unknown|[A-Za-z0-9_-]{4,16})$/D',$turn) ||
         !is_string($id) || !preg_match('/^[a-f0-9]{32}$/D',$id) ||
         !is_string($when) || !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/D',$when)) return null;
