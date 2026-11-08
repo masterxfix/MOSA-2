@@ -13,6 +13,37 @@ function storePath(): string {
     return dirname(__DIR__, 2).'/mosa2-codex-status-private/status.json';
 }
 
+/**
+ * Plesk-compatible secret source: use the existing environment setting when
+ * provided; otherwise read one private, owner-only file outside the webroot.
+ * This file is provisioned on the server, NEVER committed or web-deployed.
+ */
+function privateTokenPath(): string {
+    return dirname(storePath()).'/token.txt';
+}
+
+function readPrivateToken(string $path): ?string {
+    $dir=dirname($path);
+    if (is_link($dir) || !is_dir($dir) || is_link($path) || !is_file($path)) return null;
+    clearstatcache(true,$path);
+    $permissions=@fileperms($path);
+    $size=@filesize($path);
+    if ($permissions===false || ($permissions & 0077)!==0 ||
+        $size===false || $size<64 || $size>66) return null;
+    $contents=@file_get_contents($path,false,null,0,67);
+    if (!is_string($contents) || strlen($contents)>66) return null;
+    $token=rtrim($contents,"\r\n");
+    return preg_match('/^[a-f0-9]{64}$/D',$token)===1 ? $token : null;
+}
+
+function ingestSecret(): ?string {
+    $env=getenv('MOSA2_CODEX_STATUS_TOKEN');
+    if (is_string($env) && $env!=='') {
+        return strlen($env)>=32 && strlen($env)<=512 ? $env : null;
+    }
+    return readPrivateToken(privateTokenPath());
+}
+
 function initial(): array {
     return ['version'=>VERSION, 'ever_seen'=>false, 'runs'=>[]];
 }

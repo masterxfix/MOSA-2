@@ -19,7 +19,7 @@ if (($_SERVER['REQUEST_METHOD']??'GET')!=='POST') {
     $reply(405);
 }
 if (strtolower(trim(explode(';',(string)($_SERVER['CONTENT_TYPE']??''),2)[0]))!=='application/json') $reply(415);
-$secret=getenv('MOSA2_CODEX_STATUS_TOKEN');
+$secret=\Mosa2\CodexStatus\ingestSecret();
 $given=(string)($_SERVER['HTTP_X_MOSA2_CODEX_TOKEN']??'');
 if (!is_string($secret) || strlen($secret)<32 || strlen($secret)>512 ||
     strlen($given)>512 || !hash_equals($secret,$given)) $reply(401);
