@@ -37,6 +37,12 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .brand-version { color: var(--accent); font-weight: 400; }
 .project-label, .snapshot { color: var(--muted); font-size: .76rem; }
 .dot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin: 0 8px 2px 18px; }
+/* Codex status is a separate indicator; the existing .dot remains a text separator. */
+.topbar-meta { display: inline-flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.codex-status-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; opacity: 0; }
+.codex-status-dot[data-state="idle"] { opacity: 1; background: #64748b; }
+.codex-status-dot[data-state="running"] { opacity: 1; background: #34d399; }
+
 .site-nav { display: flex; flex-wrap: wrap; gap: 12px 32px; padding-block: 18px; font-size: .8rem; }
 .site-nav a { color: var(--muted); text-decoration: none; padding-bottom: 5px; border-bottom: 1px solid transparent; }
 .site-nav a:hover, .site-nav a[aria-current="page"] { color: var(--text); border-color: var(--accent); }
