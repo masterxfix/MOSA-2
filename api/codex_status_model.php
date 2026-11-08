@@ -82,7 +82,11 @@ function apply(array $state, array $events): array {
         }
     }
     uasort($runs,static fn(array $a,array $b):int=>$b['at']<=>$a['at']);
-    $state['runs']=array_slice($runs,0,128,true);
+    // Never evict an unfinished task and thereby fabricate an idle state.
+    $active=array_filter($runs,static fn(array $run):bool=>$run['state']==='running');
+    if (count($active)>128) throw new \RuntimeException('too_many_active_tasks');
+    $finished=array_filter($runs,static fn(array $run):bool=>$run['state']==='finished');
+    $state['runs']=$active+array_slice($finished,0,128-count($active),true);
     return $state;
 }
 
