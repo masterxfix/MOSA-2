@@ -30,7 +30,20 @@ def main():
     metadata = dict(url=nel_q2.URL, observed_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f"),
                     http_status=status, content_type=content_type, bytes=len(raw), sha256=digest)
     identity = dict(isin=nel_q2.ISIN, name="NEL ASA")
-    plan = nel_q2.parse(raw, metadata, identity)
+    try:
+        plan = nel_q2.parse(raw, metadata, identity)
+    except ValueError:
+        # Fail-safe public-source diagnostics, bounded and without source-byte archival.
+        pages = nel_q2.read_pdf(raw, max_bytes=16 * 1024 * 1024, max_pages=40,
+                                max_characters=1000000)
+        income = nel_q2._tables(pages, nel_q2.TABLE_PATTERNS["income"],
+                                "Consolidated statement of comprehensive income")
+        print("NEL_DIAG income_rows=" + str(len(income)), flush=True)
+        for entry in income:
+            if "operat" in entry["row"].casefold():
+                print("NEL_DIAG operating page=" + str(entry["page"]) +
+                      " row=" + entry["row"][:140] + " value=" + str(entry["value"]), flush=True)
+        raise
     actual = {row["metric_key"]: row["value_decimal"] for row in plan["observations"]}
     if actual != EXPECTED:
         raise ValueError("NEL_REAL_PDF_VALUES")
