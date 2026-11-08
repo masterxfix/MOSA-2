@@ -24,7 +24,7 @@ REPORTS = {
         preserve_assets=[dict(isin=pne.ISIN,name='PNE AG',period_type='fy',observations=7,current=4),
                          dict(isin=zeiss.ISIN,name='Carl Zeiss Meditec',observations=20,current=10)],
         periods=[('fq','2026-01-01','2026-03-31'),('fq','2025-01-01','2025-03-31')]),
-    'nel-q2-2026': dict(adapter=nel_q2,execution='fundamentals-nel-q2-2026-20261108-01',
+    'nel-q2-2026': dict(adapter=nel_q2,execution='fundamentals-nel-q2-2026-20261108-02',
         authorization='MOSA2-REPORT-nel-q2-2026:',reusable_manual=True,retention='derived_evidence',
         identity=dict(isin=nel_q2.ISIN,name='NEL ASA'),
         preserve_assets=[dict(isin=nel_q2.ISIN,name='NEL ASA',observations=6,current=3)],
