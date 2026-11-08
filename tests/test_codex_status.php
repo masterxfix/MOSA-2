@@ -70,6 +70,14 @@ $check(sourcePresence($sourceEnvelope('fake',$now),$now)===null,
 $sourceRun=apply(initial(),[$start]);
 $sourceRun['presence']=sourcePresence($sourceEnvelope('idle',$now),$now);
 $check(state($sourceRun,$now)==='idle','MOSA source state overrides local active reducer');
+$subsecond=$event('UserPromptSubmit','subsecond','turn9876',0,16);
+$subsecond['recorded_at_utc']=gmdate('Y-m-d\TH:i:s',$now).'.800Z';
+$parsedSubsecond=event($subsecond,$now);
+$check($parsedSubsecond!==null,'native fractional timestamp accepted');
+$latest=apply(initial(),[$parsedSubsecond]);
+$latest['presence']=sourcePresence($sourceEnvelope('idle',$now),$now);
+$check(state($latest,$now)==='idle','MOSA source within same UTC second overrides fractional native event');
+
 $check(state($sourceRun,$now+181)==='unavailable','stale source is not presented as idle');
 $eventAfter=event($event('UserPromptSubmit','newabc12','newturn1',35,15),$now+35);
 $sourceRun=apply($sourceRun,[$eventAfter]);
