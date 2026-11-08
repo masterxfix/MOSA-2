@@ -58,12 +58,16 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .market-entry { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 8vw, 120px); border-top: 1px solid var(--line); padding-block: var(--space-section); }
 .section-copy > p:not(.eyebrow) { color: var(--muted); font-size: .9rem; margin-block: 24px; max-width: 440px; }
 .asset-index { list-style: none; padding: 0; margin: 0; }
-.asset-index li { display: grid; grid-template-columns: 28px 1fr 16px; align-items: center; gap: 18px; padding-block: 18px; border-bottom: 1px solid var(--line); }
+.asset-index li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 16px; align-items: center; gap: 18px; padding-block: 18px; border-bottom: 1px solid var(--line); }
 .asset-index li:first-child { border-top: 1px solid var(--line); }
 .asset-index span { color: var(--muted); font-size: .65rem; }
 .asset-index span:last-child { font-size: 1rem; color: var(--accent); }
 .asset-index a { text-decoration: none; font-size: 1.1rem; }
 .asset-index a:hover { color: var(--accent); }
+.asset-index button, .isin-delete-all { padding: 6px 10px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 2px; font-size: .68rem; cursor: pointer; }
+.asset-index button:hover, .isin-delete-all:hover { color: var(--text); border-color: var(--accent); }
+.asset-index button:disabled, .isin-delete-all:disabled { color: var(--muted); opacity: .55; cursor: wait; }
+.isin-list-actions { margin-top: 20px; }
 .results { padding-bottom: var(--space-section); }
 .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
 .section-heading .eyebrow { margin-bottom: 12px; }

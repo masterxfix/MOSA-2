@@ -32,7 +32,10 @@
     } catch {return [];}
   }
   let entries = restore(), busy = false;
-  const save = () => {try {localStorage.setItem(KEY, JSON.stringify(entries));} catch { /* Browser storage is optional. */ }};
+  const save = () => {try {
+    if (entries.length) localStorage.setItem(KEY, JSON.stringify(entries));
+    else localStorage.removeItem(KEY);
+  } catch { /* Browser storage is optional. */ }};
   const fmtPrice = p => {
     const num=Number(p);
     return typeof p==="string" && /^\d+(?:\.\d{1,12})?$/.test(p) && Number.isFinite(num)
@@ -51,6 +54,10 @@
   }
   function typeLabel(entry) {return typeLabels[entry.instrument_type] || typeLabels.unknown;}
   function itemCell(row,label,value) {const cell=document.createElement("td");cell.dataset.label=label;cell.textContent=value;row.append(cell);return cell;}
+  function syncDeleteButtons() {
+    for (const button of document.querySelectorAll("[data-isin-remove]")) button.disabled = busy;
+    for (const button of document.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
+  }
   function paint() {
     for (const list of document.querySelectorAll("[data-isin-list]")) {
       const fragment=document.createDocumentFragment();
@@ -59,8 +66,10 @@
         const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");
         const link=document.createElement("a");link.href="marktdaten.html";link.textContent=entry.name || entry.isin;
         const detail=document.createElement("small");detail.textContent=entry.isin+" · "+typeLabel(entry)+(quote ? " · "+fmtPrice(quote.price)+" "+quote.currency+" · "+quote.source+(old(quote)?" · Veraltet":"") : " · Noch kein Abruf");
-        link.append(detail);const arrow=document.createElement("span");arrow.textContent="↗";
-        li.append(number,link,arrow);fragment.append(li);
+        link.append(detail);
+        const remove=document.createElement("button");remove.type="button";remove.className="isin-delete";remove.dataset.isinRemove=entry.isin;remove.textContent="Entfernen";remove.setAttribute("aria-label",entry.isin+" entfernen");
+        const arrow=document.createElement("span");arrow.textContent="↗";
+        li.append(number,link,remove,arrow);fragment.append(li);
       }
       if (!entries.length) {const li=document.createElement("li");li.className="isin-empty";li.textContent="Noch keine ISIN eingegeben.";fragment.append(li);}
       list.replaceChildren(fragment);
@@ -94,6 +103,17 @@
       tbody.replaceChildren(fragment);
     }
     for (const label of document.querySelectorAll("[data-isin-summary]")) label.textContent=entries.length+" ISIN"+(entries.length===1?"":"s")+" · Manuell abgefragte Kurse";
+    syncDeleteButtons();
+  }
+  function removeEntry(isin) {
+    if (busy) return;
+    const index=entries.findIndex(entry=>entry.isin===isin);
+    if (index<0) return;
+    entries.splice(index,1);save();paint();
+  }
+  function clearEntries() {
+    if (busy || !entries.length || !window.confirm("Alle gespeicherten ISINs in diesem Browser löschen?")) return;
+    entries=[];save();paint();
   }
   function progress(form,message,kind="info") {
     const list=form.parentElement.querySelector("[data-isin-steps]");if(!list)return;
@@ -195,6 +215,7 @@
     busy=value;
     for(const form of forms){const button=form.querySelector("button[type=submit]");if(button)button.disabled=value;}
     for(const button of document.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
+    syncDeleteButtons();
   }
   async function submit(form) {
     if(busy)return;
@@ -261,6 +282,11 @@
   }
   for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);});
   for(const button of document.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",()=>refreshAll(button));
+  for(const list of document.querySelectorAll("[data-isin-list]")) list.addEventListener("click",event=>{
+    const button=event.target.closest("[data-isin-remove]");
+    if(button) removeEntry(button.dataset.isinRemove);
+  });
+  for(const button of document.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries);
   paint();
   globalThis.MosaIsinLookup=Object.freeze({valid});
 }());
