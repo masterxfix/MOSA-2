@@ -71,6 +71,13 @@ PAGES[0]['text'] += '\nNel ASA second quarter 2026 financial results.'
 
 
 class NelQ2Tests(unittest.TestCase):
+    def setUp(self):
+        # Synthetic fixtures are intentionally not the issuer's exact PDF.
+        # Runtime keeps its pinned source hash; patch only the test input.
+        fixed = patch.object(nel_q2, 'ORIGINAL_SHA256', hashlib.sha256(RAW).hexdigest())
+        fixed.start()
+        self.addCleanup(fixed.stop)
+
     def metadata(self):
         return dict(url=nel_q2.URL, observed_at=OBSERVED, http_status=200,
                     content_type='application/pdf', bytes=len(RAW),
@@ -107,6 +114,13 @@ class NelQ2Tests(unittest.TestCase):
                                 cwd=Path(__file__).resolve().parents[1])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)['observations'], 5)
+
+    def test_unreviewed_pdf_digest_stops_before_extraction(self):
+        with patch.object(nel_q2, 'ORIGINAL_SHA256', '0' * 64):
+            with patch.object(nel_q2, 'read_pdf') as reader:
+                with self.assertRaisesRegex(ValueError, 'NEL_DOCUMENT_HASH'):
+                    nel_q2.parse(RAW, self.metadata(), dict(isin=nel_q2.ISIN, name='NEL ASA'))
+                reader.assert_not_called()
 
     def test_original_bold_glyph_splits_are_normalized(self):
         self.assertEqual(nel_q2._normal('O perating loss'), 'Operating loss')
