@@ -39,10 +39,9 @@ def main():
         income = nel_q2._tables(pages, nel_q2.TABLE_PATTERNS["income"],
                                 "Consolidated statement of comprehensive income")
         print("NEL_DIAG income_rows=" + str(len(income)), flush=True)
-        for entry in income:
-            if "operat" in entry["row"].casefold():
-                print("NEL_DIAG operating page=" + str(entry["page"]) +
-                      " row=" + entry["row"][:140] + " value=" + str(entry["value"]), flush=True)
+        for entry in income[:40]:
+            print("NEL_DIAG income page=" + str(entry["page"]) +
+                  " row=" + entry["row"][:140] + " value=" + str(entry["value"]), flush=True)
         raise
     actual = {row["metric_key"]: row["value_decimal"] for row in plan["observations"]}
     if actual != EXPECTED:
