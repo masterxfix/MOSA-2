@@ -26,6 +26,8 @@ jobs:
           php -l api/codex_status.php
           php -l api/codex_status_ingest.php
           php tests/test_codex_status.php
+          php -l tests/test_codex_status_secret.php
+          php tests/test_codex_status_secret.php
       - name: Browser state transitions
         run: |
           node --version
