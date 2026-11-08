@@ -3,6 +3,12 @@
 ## Zweck
 In `index.html`, `marktdaten.html` und `fundamentaldaten.html` erscheint rechts im Kopfbereich ein 11-Pixel-Punkt: **Grau** = kein aktueller Auftrag, **Grün** = mindestens ein laufender Codex-Auftrag. Hover-/Screenreader-Text erläutert den Zustand. Bei fehlender, fehlerhafter oder veralteter Evidenz bleibt der Punkt unsichtbar (nicht irreführend grau).
 
+## MOSA als maßgebliche Drei-Zustände-Quelle
+
+Die bestehende MOSA-Aktivitätsauswertung entscheidet für native Codex-Aufträge (CLI und VS Code) über genau drei Zustände: `running`, `idle`, `unavailable`. Der native MOSA-Sender überträgt diesen **bereits von MOSA berechneten Wert** als kleines Metadatum über seine bestehende authentifizierte MOSA-2-Spiegelung; es werden weder neue Hooks, Zugangsdaten noch zusätzliche Netzwerkendpunkte benötigt. MOSA 2 speichert den Wert im vorhandenen privaten Statusspeicher und zeigt ihn nur an. Die bisherige ereignisbasierte Berechnung bleibt ausschließlich als Rückfallweg während der kontrollierten Umstellung erhalten, damit die bereits abgenommene Anzeige nicht ausfällt. Bei widersprüchlichen oder veralteten Daten wird kein künstliches Grün erzeugt.
+
+**Auslieferungsreihenfolge:** Zuerst den MOSA-Quell-PR samt optionaler Bestätigungsmetadaten kontrolliert ausrollen, danach den aktualisierten nativen Sender und den MOSA-2-Empfänger. Erst nach authentifizierter Ende-zu-Ende-Live-Abnahme und gleichen Grün/Grau-Zuständen auf allen drei Seiten gilt die Umstellung als erfolgt.
+
 ## Herkunft und Vertragsgrenze
 Bewährte MOSA-Telemetrie statt eines frei erfundenen Statussignals: `mosa_ai_control_telemetry_v1`, `surface=codex_cli|codex_vscode`, `UserPromptSubmit` (Start), `Stop` oder `SessionEnd` (Ende), dazwischen Tool-Ereignisse als Aktivitätsnachweis. `SessionStart` ist ausdrücklich **kein** Auftragsstart. Andere Oberflächen wie `work_desktop` und WinSCP zählen nicht. Parallele Codex-Aufträge werden getrennt berücksichtigt. Laufende Aufträge ohne neue native Evidenz für mehr als 180 Sekunden werden **unbekannt**, nicht inaktiv.
 
