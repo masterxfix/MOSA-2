@@ -14,6 +14,7 @@
     var label = state === "running" ? "Codex-Auftrag läuft" :
       state === "idle" ? "Kein aktueller Codex-Auftrag" : "Codex-Status nicht verfügbar";
     dot.setAttribute("aria-label", label);
+    dot.setAttribute("aria-hidden", valid ? "false" : "true");
     dot.title = label;
   }
 
