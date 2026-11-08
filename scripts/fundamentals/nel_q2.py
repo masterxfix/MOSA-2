@@ -13,6 +13,7 @@ PUBLICATION = '2026-07-15'
 PARSER = 'nel_q2_2026_pdf_v1'
 VERSION = '1'
 CONTENT_TYPE = 'application/pdf'
+PARSE_CONTEXT = 'metadata_identity'
 ORIGINAL_SHA256 = '60336ebdbcba904234ea9c40a759eb22baf9892fab571651b78e3c319f89a116'
 SOURCE = dict(source_key='nel_official_quarterly_reports', source_type='issuer_quarterly_report',
               display_name='NEL ASA official quarterly reports',

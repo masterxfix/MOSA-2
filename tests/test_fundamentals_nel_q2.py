@@ -7,8 +7,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+from scripts import fundamentals_pilot_once as pilot
 from scripts.fundamentals import nel_q2
 from scripts.fundamentals import reports
 
@@ -164,6 +165,22 @@ class NelQ2Tests(unittest.TestCase):
         self.assertIn("import pdfplumber; assert pdfplumber.__version__", workflow)
         self.assertLess(workflow.index("import pdfplumber; assert pdfplumber.__version__"),
                         workflow.index('Authorized report GET, compact evidence'))
+
+    def test_shared_runner_uses_bound_metadata_for_contextual_adapters(self):
+        adapter = Mock()
+        adapter.PARSE_CONTEXT = 'metadata_identity'
+        adapter.parse.return_value = {'ok': True}
+        response = Mock(collected_at=OBSERVED)
+        metadata = self.metadata()
+        identity = {'isin': nel_q2.ISIN, 'name': 'NEL ASA'}
+
+        self.assertEqual(pilot._parse_adapter(adapter, RAW, response, metadata, identity), {'ok': True})
+        adapter.parse.assert_called_once_with(RAW, metadata, identity)
+
+        legacy = Mock()
+        legacy.parse.return_value = {'legacy': True}
+        self.assertEqual(pilot._parse_adapter(legacy, RAW, response, metadata, identity), {'legacy': True})
+        legacy.parse.assert_called_once_with(RAW, OBSERVED)
 
     def test_registered_nel_execution_matches_both_reservation_lists(self):
         execution = reports.REPORTS['nel-q2-2026']['execution']

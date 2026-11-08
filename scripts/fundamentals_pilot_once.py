@@ -37,6 +37,13 @@ def profile(env):
     return PROFILES[env.get('FUNDAMENTALS_PROFILE','pne')]
 
 
+def _parse_adapter(adapter, raw, response, metadata, identity):
+    """Call adapters through their declared input contract."""
+    if getattr(adapter, 'PARSE_CONTEXT', None) == 'metadata_identity':
+        return adapter.parse(raw, metadata, identity)
+    return adapter.parse(raw, response.collected_at)
+
+
 def guard(env,selected=None):
     selected=selected or profile(env)
     required=dict(GITHUB_REPOSITORY='masterxfix/MOSA-2',GITHUB_REF='refs/heads/main',
@@ -120,7 +127,7 @@ def execute(env,selected=None):
                 stage='ADAPTER'
                 if response.http_status!=200 or response.content_type.split(';',1)[0].strip().lower()!=getattr(adapter,'CONTENT_TYPE','text/html'):
                     raise ValueError('HTTP_RESPONSE')
-                plan=adapter.parse(raw,response.collected_at)
+                plan=_parse_adapter(adapter,raw,response,metadata,selected['identity'])
                 stored_metadata=metadata
                 if derived:
                     stage='EVIDENCE_ARCHIVE'
@@ -153,7 +160,7 @@ def execute(env,selected=None):
                     parser_status='qualified_evidence_only' if derived else 'partial_nonqualified_content_preserved_raw')
         report['stage']='SUCCESS'
     except Exception as error:
-        if str(error) in {'HTML_REPORT_IDENTITY','HTML_CURRENCY_CONFLICT','HTML_COLUMN_STRUCTURE','HTML_TABLE_BOUND','EVIDENCE_BINDING','EVIDENCE_BOUND','QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND','NEL_RESPONSE_BINDING','NEL_RESPONSE_MIME','NEL_RESPONSE_HASH','NEL_PDF_EMPTY','NEL_DOCUMENT_IDENTITY','NEL_REPORT_PERIOD','NEL_UNIT','NEL_REVENUE_AMBIGUOUS','NEL_EBITDA_AMBIGUOUS','NEL_IFRS_OPERATING_PROFIT_AMBIGUOUS','NEL_PROFIT_AFTER_TAX_AMBIGUOUS','NEL_OPERATING_CASHFLOW_AMBIGUOUS','NEL_IWATANI_EVIDENCE','NEL_IDENTITY','NEL_EVIDENCE_BINDING','NEL_EVIDENCE_BOUND'}:
+        if str(error) in {'HTML_REPORT_IDENTITY','HTML_CURRENCY_CONFLICT','HTML_COLUMN_STRUCTURE','HTML_TABLE_BOUND','EVIDENCE_BINDING','EVIDENCE_BOUND','QUARTER_IDENTITY','REPORT_PERIOD','RESULTS_SECTION','UNIT_CONFLICT','FACT_CONFLICT','NO_QUALIFIED_FACTS','PERIOD_CONFLICT','PDF_SIGNATURE_OR_BOUND','PDF_DOCUMENT_BOUND','PDF_EXTRACTION','PDF_YEAR_COLUMNS','PDF_HIGHLIGHTS_TABLE','PDF_DOCUMENT_IDENTITY','PDF_CURRENCY_CONFLICT','PDF_UNIT_CONFLICT','HTTP_RESPONSE','PAYLOAD_BOUND','NEL_RESPONSE_BINDING','NEL_RESPONSE_MIME','NEL_RESPONSE_HASH','NEL_DOCUMENT_HASH','NEL_Q2_VALUE_MISMATCH','NEL_PDF_EMPTY','NEL_DOCUMENT_IDENTITY','NEL_REPORT_PERIOD','NEL_UNIT','NEL_REVENUE_AMBIGUOUS','NEL_EBITDA_AMBIGUOUS','NEL_IFRS_OPERATING_PROFIT_AMBIGUOUS','NEL_PROFIT_AFTER_TAX_AMBIGUOUS','NEL_OPERATING_CASHFLOW_AMBIGUOUS','NEL_IWATANI_EVIDENCE','NEL_IDENTITY','NEL_EVIDENCE_BINDING','NEL_EVIDENCE_BOUND'}:
             report['error_code']=str(error)
         report['stage']=stage
         report['provider_requests']=http.attempt_count if http is not None else 0
