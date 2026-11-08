@@ -36,7 +36,8 @@ try {
         if (!is_array($item)) $reply(422);
         // A mirror of the existing MOSA batch may contain WORK or WinSCP events.
         if (!in_array($item['surface']??null,['codex_cli','codex_vscode'],true)) continue;
-        if (in_array($item['event_type']??null,['SessionStart'],true)) continue;
+        if (!in_array($item['event_type']??null,
+            ['UserPromptSubmit','Stop','SessionEnd','PreToolUse','PostToolUse','PermissionRequest','WorkStep'],true)) continue;
         $value=event($item,$now);
         if ($value===null) $reply(422);
         $parsed[]=$value;
