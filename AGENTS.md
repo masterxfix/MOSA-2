@@ -30,7 +30,8 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 - **Ergebnisse bewerten:** Fehlende Nachweise erkennen und Lessons Learned ableiten.
 
 ### Codex
-- **PC-Steuerung nur mit meinem Ja:** Normale Steuerung eines einzelnen Browser-Tabs ist ohne Rückfrage erlaubt. Will Codex ein Werkzeug starten, das auch den gesamten PC, andere Fenster, Maus oder Tastatur steuern kann, muss es **vor dem Start** fragen: „Darf ich jetzt deinen PC mit Computer Use steuern?“ und mein ausdrückliches **Ja** abwarten – auch wenn das Werkzeug nur für Chrome eingesetzt werden soll. **Ohne Ja kein Start.** Nach Escape oder einem Abbruch muss Codex vor jedem erneuten Start wieder fragen.
+- **Chrome ohne PC-Übernahme:** Für Chrome-Aufgaben zuerst die vorhandene, auf den Browser begrenzte Steuerung nutzen; dafür ist keine gesonderte Freigabe nötig. Die Bedienung von Chrome ist kein Grund, ungefragt Computer Use zu starten.
+- **Vollständige PC-Steuerung nur mit meinem Ja:** Will Codex tatsächlich den gesamten PC/Desktop steuern, muss es **vor dem Start** ausdrücklich fragen: „Darf ich jetzt deinen PC mit Computer Use steuern?“ und mein **Ja abwarten**. Ohne Ja keine PC-Übernahme. Nach Escape/Abbruch vor jedem erneuten Start wieder fragen.
 **Bekannter Browserfehler:** Der Computer-Use-Start scheitert bei gesperrtem `E:` mit `0x8007000F`. Keine erneute Ursachen-Testreihe; Chrome nur über einen E:-freien Zugangsweg nutzen.
 - **Aufträge umsetzen:** Änderungen eigenständig durchführen und gezielt testen.
 - **Ende statt Editor:** Codex nutzt zuerst bewährte MOSA-Funktionen und beendet Browser- und Serverarbeiten nur nach nachweislich gespeichertem, sicher geprüftem und live getestetem Ergebnis; offene Editoren und unfertige Konfigurationen sind kein Abschluss.
