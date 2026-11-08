@@ -1,6 +1,7 @@
 """Single manually authorized read-only DB analysis, no provider requests."""
 from decimal import Decimal
 import os,json,sys,subprocess,time
+import re
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from scripts import fundamentals_pilot_once as shared
@@ -11,6 +12,7 @@ PHASES={'SSH_CONNECT','DB_CONNECT','SCHEMA_CHECK','ASSET_DISCOVERY','FUNDAMENTAL
 ERRORS={'INVALID_UTF8_OR_JSON','DB_OPERATION_FAILED','VALIDATION_FAILED'}
 HKEX_TOTALS={'m2_fundamental_observations':99,'m2_fundamental_current':50,'m2_market_observations':28,'m2_market_current':5}
 HKEX_AUTH='MOSA2-HKEX-READONLY-20261102:'
+ISIN_RE=re.compile(r'^[A-Z]{2}[A-Z0-9]{9}[0-9]$')
 
 class ScopeValidationError(ValueError):
  pass
@@ -22,6 +24,12 @@ def scope_for(env):
 
 def auth_prefix(scope):
  return HKEX_AUTH if scope=='hkex' else 'MOSA2-ANALYSIS:'
+
+def target_isin(env):
+ value=env.get('MOSA_ANALYSIS_ISIN','').strip()
+ if not value:return None
+ if not ISIN_RE.fullmatch(value):raise ValueError('ANALYSIS_ISIN')
+ return value
 
 def _assets_by_isin(assets):
  out={}
@@ -63,6 +71,7 @@ def execute(env):
     stage='GUARDS'
     try:
         scope=scope_for(env)
+        isin=target_isin(env)
         shared.guard(env,dict(reusable_manual=True,authorization=auth_prefix(scope)))
         shared.no_other_runs(env);config=shared.access.configuration(env)
         import paramiko
@@ -74,6 +83,7 @@ def execute(env):
                 stage='DB_CONNECT'
                 request_data=dict(password=env['MOSA_TEST_DB_PASSWORD'],port=port)
                 if scope=='hkex':request_data['expected_totals']=HKEX_TOTALS
+                if isin is not None:request_data['isin']=isin
                 p=subprocess.run(['php',str(shared.ROOT/'scripts/fundamentals/analysis_read.php')],input=json.dumps(request_data),text=True,capture_output=True,timeout=600)
                 if p.stderr or len(p.stdout)>262144:raise ValueError('DB_PROCESS_FAILED')
                 stage='JSON_SERIALIZATION'
@@ -84,6 +94,9 @@ def execute(env):
                 if p.returncode:raise ValueError('DB_PROCESS_FAILED')
         stage='SNAPSHOT_BUILD'
         snapshots=[build(a,data['sources']) for a in data['assets']]
+        if isin is not None:
+            matches=[s for s in snapshots if isin in s['identity']['isin']]
+            if len(matches)!=1 or len(snapshots)!=1:raise ScopeValidationError('TARGET_ASSET_SCOPE')
         stage='READBACK_VALIDATION'
         for snapshot in snapshots:
             refs={f['observation_id'] for f in snapshot['facts']}
@@ -91,7 +104,8 @@ def execute(env):
             if any(f['origin']=='unknown' for f in snapshot['facts']):raise ValueError('SOURCE_REFERENCE')
         hkex_summary=validate_hkex_snapshot(data,snapshots) if scope=='hkex' else None
         summaries=[dict(name=s['identity']['name'],observations=len(s['facts']),current=len(s['current_observation_ids']),metric_groups=len({f['metric'] for f in s['facts']}),calculation_types=sorted({c['kind'] for c in s['calculations']}),curated_rounded=any(f['rounded'] for f in s['facts'])) for s in snapshots]
-        result=dict(ok=True,contract='mosa2-ai-analysis-input-v1',equities=len(snapshots),successful_snapshots=len(snapshots),with_fundamentals=sum(bool(s['facts']) for s in snapshots),without_fundamentals=sum(not s['facts'] for s in snapshots),excluded_etfs=data['excluded_etfs'],excluded_other=data['excluded_other'],db_unchanged=data['db_unchanged'],validated_totals=data['validated_totals'],fact_references='PASS',source_references='PASS',provider_requests=0,db_writes=0,model_calls=0,ssh_setup_ms=ssh_ms,performance=data['performance'],summary=summaries)
+        result=dict(ok=True,contract='mosa2-ai-analysis-input-v1',equities=len(snapshots),successful_snapshots=len(snapshots),with_fundamentals=sum(bool(s['facts']) for s in snapshots),without_fundamentals=sum(not s['facts'] for s in snapshots),excluded_etfs=data['excluded_etfs'],excluded_other=data['excluded_other'],db_unchanged=data['db_unchanged'],validated_totals=data['validated_totals'],fact_references='PASS',source_references='PASS',provider_requests=0,db_writes=0,model_calls=0,ssh_setup_ms=ssh_ms,performance=data['performance'],summary=summaries,read_only_confirmed=data.get('read_only_confirmed') is True,db_identity=data.get('db_identity'),market_data_read=data.get('market_data_read',True))
+        if isin is not None:result.update(target_isin=isin,target_asset_count=len(snapshots),target_observations=len(snapshots[0]['facts']),target_current=len(snapshots[0]['current_observation_ids']))
         if scope=='hkex':result.update(hkex_summary)
         return result
     except ScopeValidationError as error:

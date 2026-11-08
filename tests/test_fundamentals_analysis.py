@@ -30,6 +30,18 @@ class AnalysisTests(unittest.TestCase):
   s=Path('scripts/fundamentals/analysis_read.php').read_text()
   self.assertIn("$a['asset_class']!=='equity'",s);self.assertIn('LIMIT 257',s);self.assertIn('TRANSACTION READ ONLY',s)
 
+ def test_single_isin_read_mode_contract(self):
+  from pathlib import Path
+  from scripts import fundamentals_analysis_once as runner
+  self.assertEqual(runner.target_isin({'MOSA_ANALYSIS_ISIN':'NO0010081235'}),'NO0010081235')
+  with self.assertRaisesRegex(ValueError,'ANALYSIS_ISIN'):
+   runner.target_isin({'MOSA_ANALYSIS_ISIN':'NO001008123X'})
+  reader=Path('scripts/fundamentals/analysis_read.php').read_text()
+  workflow=Path('.github/workflows/fundamentals-analysis.yml').read_text()
+  self.assertIn("'m2_market_current'",reader)
+  self.assertIn("'market_data_read'=>!$targeted",reader)
+  self.assertIn('MOSA_ANALYSIS_ISIN: ${{ inputs.isin }}',workflow)
+
  def test_binary_json_failure_and_explicit_projection(self):
   import subprocess,json
   r=subprocess.run(['php','-r',"try{json_encode(['period_key'=>hex2bin(str_repeat('ff',32))],JSON_THROW_ON_ERROR);}catch(JsonException $e){echo $e->getCode();}"],capture_output=True,text=True)
