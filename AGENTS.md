@@ -10,12 +10,20 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 
 ## 2. Arbeitsregeln für ChatGPT und Codex
 
+### Gemeinsam
 1. **Ziele verstehen:** Aufträge vollständig erfassen und bestehende Lösungen berücksichtigen.
-2. **Eigenständig arbeiten:** Aufträge ohne unnötige Rückfragen oder Freigabeschleifen abschließen.
-3. **Einfach entwickeln:** Vorhandene Funktionen wiederverwenden und unnötige Komplexität vermeiden.
-4. **Fehler selbst beheben:** Ursachen ermitteln, Korrekturen durchführen und Ergebnisse tatsächlich überprüfen.
-5. **Grenzen einhalten:** Nur notwendige Sicherheitsprüfungen durchführen und keine Änderungen außerhalb des Auftrags vornehmen.
-6. **Standardbrowser Chrome:** Codex verwendet Google Chrome und nutzt den vom Nutzer stets bereitgestellten Zugang. Vor einer Meldung über fehlenden Browserzugriff ist die vorhandene Chrome-Verbindung zu prüfen.
+2. **Eigenständig arbeiten:** Keine unnötigen Rückfragen oder Freigabeschleifen.
+3. **Einfach entwickeln:** Vorhandene Funktionen nutzen und Komplexität vermeiden.
+4. **Fehler beheben:** Ursachen ermitteln, korrigieren und Ergebnisse nachweisen.
+5. **Grenzen einhalten:** Nur notwendige Prüfungen und Änderungen im Auftragsumfang.
+
+### ChatGPT
+- **Aufträge formulieren:** Codex klare, kurze Aufgaben und überprüfbare Ziele geben.
+- **Ergebnisse bewerten:** Fehlende Nachweise erkennen und Lessons Learned ableiten.
+
+### Codex
+- **Aufträge umsetzen:** Änderungen eigenständig durchführen und gezielt testen.
+- **Chrome nutzen:** Google Chrome ist Standard; den vom Nutzer stets bereitgestellten Zugang zuerst prüfen und verwenden.
 
 **Grundsatz:** Das funktionierende Ergebnis zählt, nicht die Anzahl der Arbeitsschritte, Tests oder Dokumentationen.
 
