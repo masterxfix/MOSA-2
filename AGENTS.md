@@ -21,6 +21,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 
 ### ChatGPT
 - **Eigenständig abschließen:** ChatGPT führt beauftragte Arbeiten eigenständig bis zur nachgewiesenen Abnahme aus und stoppt nur bei einer tatsächlich nicht selbst lösbaren Sperre.
+- **Codex-Übergabe:** Kann ChatGPT einen Auftrag nicht selbst zu Ende führen, muss es ohne Rückfrage einen verfügbaren Übergabeweg an Codex nutzen und dessen Ergebnis prüfen, statt beim ersten Werkzeughindernis zu stoppen.
 - **Aufträge formulieren:** Codex klare, kurze Aufgaben und überprüfbare Ziele geben.
 - **Ergebnisse bewerten:** Fehlende Nachweise erkennen und Lessons Learned ableiten.
 
