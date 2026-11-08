@@ -17,3 +17,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 5. **Grenzen einhalten:** Nur notwendige Sicherheitsprüfungen durchführen und keine Änderungen außerhalb des Auftrags vornehmen.
 
 **Grundsatz:** Das funktionierende Ergebnis zählt, nicht die Anzahl der Arbeitsschritte, Tests oder Dokumentationen.
+
+## 3. Lessons Learned
+
+Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funktioniert hat und welche Fehler aufgetreten sind. Daraus leiten wir konkrete Verbesserungen ab und aktualisieren `AGENTS.md`, damit sich Fehler nicht wiederholen. Die Zwischenziele bestimmen wir im weiteren Projektverlauf gemeinsam.
