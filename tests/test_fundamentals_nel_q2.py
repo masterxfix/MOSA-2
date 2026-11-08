@@ -108,6 +108,19 @@ class NelQ2Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)['observations'], 5)
 
+    def test_original_bold_glyph_splits_are_normalized(self):
+        self.assertEqual(nel_q2._normal('O perating loss'), 'Operating loss')
+        self.assertEqual(nel_q2._normal('N et income (loss) for the period'), 'Net income (loss) for the period')
+        self.assertEqual(nel_q2._normal('T otal operating expenses'), 'Total operating expenses')
+        modified = copy.deepcopy(PAGES)
+        modified[0]['lines'][5] = line([('O perating loss', 10), ('-205220', 300)], 200)
+        modified[0]['lines'][6] = line([('N et income (loss) for the period', 10), ('-188571', 300)], 220)
+        with patch.object(nel_q2, 'read_pdf', return_value=modified):
+            plan = nel_q2.parse(RAW, self.metadata(), dict(isin=nel_q2.ISIN, name='NEL ASA'))
+        result = {row['metric_key']: row['value_decimal'] for row in plan['observations']}
+        self.assertEqual(result['ifrs_operating_profit'], '-205220')
+        self.assertEqual(result['profit_after_tax'], '-188571')
+
     def test_segment_total_is_section_scoped_and_duplicate_stops(self):
         changed = copy.deepcopy(PAGES)
         # A repeated Total inside EBITDA must not be silently accepted.
