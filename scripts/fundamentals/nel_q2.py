@@ -13,6 +13,7 @@ PUBLICATION = '2026-07-15'
 PARSER = 'nel_q2_2026_pdf_v1'
 VERSION = '1'
 CONTENT_TYPE = 'application/pdf'
+ORIGINAL_SHA256 = '60336ebdbcba904234ea9c40a759eb22baf9892fab571651b78e3c319f89a116'
 SOURCE = dict(source_key='nel_official_quarterly_reports', source_type='issuer_quarterly_report',
               display_name='NEL ASA official quarterly reports',
               base_url='https://mb.cision.com/Public/115/4374557/', enabled='0')
@@ -165,6 +166,7 @@ def parse(raw, metadata, identity):
     _need(metadata['url'] == URL and metadata['http_status'] == 200, 'NEL_RESPONSE_BINDING')
     _need(metadata['content_type'].lower().startswith(CONTENT_TYPE), 'NEL_RESPONSE_MIME')
     _need(metadata['bytes'] == len(raw) and metadata['sha256'] == hashlib.sha256(raw).hexdigest(), 'NEL_RESPONSE_HASH')
+    _need(metadata['sha256'] == ORIGINAL_SHA256, 'NEL_DOCUMENT_HASH')
     pages = read_pdf(raw, max_bytes=16 * 1024 * 1024, max_pages=40, max_characters=1000000)
     _need(pages, 'NEL_PDF_EMPTY')
     all_text = ' '.join(page['text'] for page in pages)
