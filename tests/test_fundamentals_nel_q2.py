@@ -184,6 +184,11 @@ class NelQ2Tests(unittest.TestCase):
 
     def test_registered_nel_execution_matches_both_reservation_lists(self):
         execution = reports.REPORTS['nel-q2-2026']['execution']
+        history = {
+            'fundamentals-nel-q2-2026-20261108-01',
+            'fundamentals-nel-q2-2026-20261108-02',
+        }
+        self.assertEqual(execution, 'fundamentals-nel-q2-2026-20261108-03')
         source = (Path(__file__).resolve().parents[1] / 'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
         tree = ast.parse(source)
         values = {}
@@ -193,8 +198,19 @@ class NelQ2Tests(unittest.TestCase):
                     values[node.targets[0].id] = ast.literal_eval(node.value)
         self.assertIn(execution, values['EXECUTIONS'])
         self.assertIn(execution, values['EVIDENCE_EXECUTIONS'])
+        self.assertTrue(history <= values['EXECUTIONS'])
+        self.assertTrue(history <= values['EVIDENCE_EXECUTIONS'])
         self.assertLess(source.index("need(data['execution'] in EXECUTIONS"),
                         source.index("create_file(locks, ONCE+'.consumed'"))
+
+    def test_nel_contract_remains_fail_closed(self):
+        self.assertEqual(nel_q2.PARSE_CONTEXT, 'metadata_identity')
+        source = (Path(__file__).resolve().parents[1] / 'scripts/fundamentals/nel_q2.py').read_text(encoding='utf-8')
+        self.assertIn("ORIGINAL_SHA256 = '60336ebdbcba904234ea9c40a759eb22baf9892fab571651b78e3c319f89a116'", source)
+        self.assertEqual(nel_q2.EXPECTED_Q2_VALUES,
+                         {'revenue': '153407', 'ebitda': '-155337',
+                          'ifrs_operating_profit': '-205220',
+                          'profit_after_tax': '-188571', 'operating_cashflow': '1673'})
 
     def test_wrong_report_period_or_identity_stops(self):
         with patch.object(nel_q2, 'read_pdf', return_value=PAGES):
