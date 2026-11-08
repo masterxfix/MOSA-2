@@ -7,20 +7,21 @@ Asset: NEL ASA, ISIN `NO0010081235`
 
 ## Ergebnis
 
-Der einmalige Import wurde **nicht ausgeführt**. Beide autorisierten Läufe stoppten vor dem PDF-Abruf und vor jeder Datenbank-Schreiboperation in der bestehenden privaten Evidence-Reservierung. Es gibt deshalb keinen bestätigten Import und keinen unabhängigen Post-Import-Readback.
+Der einmalige Importversuch wurde **nicht erfolgreich abgeschlossen**. Der autorisierte Lauf `42512074642` erreichte nach genau einem erfolgreichen PDF-Abruf den Adapter, stoppte dort mit `STOP_NO_RETRY` und erreichte den Writer nicht. Es wurden daher keine der fünf Q2-Fakten gespeichert.
 
-Der öffentliche Teil der Quelle wurde zuvor einmal fachlich geprüft: [offizieller NEL-Q2-2026-Bericht (PDF)](https://mb.cision.com/Public/115/4374557/96afc9701633c3dd.pdf). Ein Source-SHA-256 aus dem autorisierten Importlauf existiert nicht, weil dieser Lauf die Quelle nicht abgerufen hat.
+Der aktuelle `main`-Commit für den Lauf war `de0e56d00c301d2f95ed195215c1ec9a312052c1`. Der öffentliche Teil der Quelle wurde im Lauf einmal abgerufen: [offizieller NEL-Q2-2026-Bericht (PDF)](https://mb.cision.com/Public/115/4374557/96afc9701633c3dd.pdf), HTTP 200, 510279 Bytes, SHA-256 `60336ebdbcba904234ea9c40a759eb22baf9892fab571651b78e3c319f89a116`.
 
 ## Bestätigter DB-Precheck
 
-Der authentifizierte Read-only-Lauf `42487931725` bestätigte vor dem Import:
+Der unabhängige authentifizierte Read-only-Lauf `42512499151` bestätigte nach dem fehlgeschlagenen Importversuch:
 
 - Datenbankidentität: `h29077_mosa2_test`
 - genau ein NEL-Asset für `NO0010081235`
 - 6 bestehende Fundamental-Observations
 - 3 bestehende Fundamental-Current-Zuordnungen
 - keine Q2-2026-Fakten
-- READ ONLY bestätigt, 0 DB-Schreiboperationen, 0 Provider-/KI-Aufrufe
+- FY-Bestand unverändert mit Observations für 2024 und 2025; Current-Zuordnungen für `ifrs_operating_profit`, `operating_cashflow` und `profit_before_tax`
+- `read_only_confirmed=true`, `db_writes=0`, `db_unchanged=true`, `provider_requests=0`, `market_data_read=false`, Quellen- und Faktenreferenzen bestanden
 
 Die sechs FY-Observations und drei FY-Current-Zuordnungen waren damit die unveränderte Import-Baseline.
 
@@ -40,10 +41,11 @@ Der Iwatani-Effekt wurde ausschließlich als Herkunftshinweis vorgesehen. Es wur
 
 ## Actions-Nachweis
 
-1. Lauf `42491260261`, Commit `9cf3a90ff4461d8b85bd8b0b0ceb9408d0fcb174`: Offline- und Commit-Prüfungen bestanden; Abbruch bei `PRIVATE_RESERVATION`, `STOP_NO_RETRY`, `provider_requests=0`, `observations=0`, `current=0`.
-2. Nach Korrektur der fehlenden Execution-Allowlist wurde Lauf `42491547644`, Commit `b9ce07e26eca5035a8d3b0d78a3f9ca050247e4d`, gestartet. Auch dieser Lauf stoppte in `PRIVATE_RESERVATION` mit `STOP_NO_RETRY`, `provider_requests=0`, `observations=0`, `current=0`.
+1. Lauf `42512074642`, Commit `de0e56d00c301d2f95ed195215c1ec9a312052c1`, mit `reports=nel-q2-2026` und konsistenter Execution-/Authorization-Kennung: Commit- und Offline-Prüfungen bestanden; genau ein PDF-GET mit HTTP 200 wurde ausgeführt.
+2. Der Lauf stoppte in `stage=ADAPTER` mit `STOP_NO_RETRY`, `provider_requests=1`, `observations=0`, `current=0`, `full_responses_archived=0`. Die fünf Fakten wurden nicht erzeugt; der Writer und die Importtransaktion wurden nicht erreicht. Es gab keinen automatischen Wiederholungsversuch.
+3. Der anschließende unabhängige Read-only-Run `42512499151` bestätigte den unveränderten Bestand mit 6 Observations / 3 Current, `db_writes=0` und `db_unchanged=true`.
 
-Der öffentliche Nachweis belegt damit: kein PDF-GET, keine Evidence-Archivierung, keine Transaktion, kein Commit der fünf Fakten und keine Änderung an Markt- oder Fremdassetdaten durch diese Läufe. Ein Postcheck nach erfolgreichem DB-Commit war mangels Commit nicht möglich und wird nicht als bestanden ausgegeben.
+Der Nachweis belegt damit: ein einzelner PDF-GET, keine Evidence-Archivierung, keine Importtransaktion, kein Commit der fünf Fakten und keine Änderung an Markt- oder Fremdassetdaten. Der unabhängige Postcheck ist als Read-only-Bestandstest bestanden, nicht als erfolgreicher Import-Postcheck: Die erwarteten fünf Q2-Fakten existieren weiterhin nicht.
 
 ## Codekorrekturen
 
@@ -55,7 +57,7 @@ Alle drei Commits sind nach `main` gepusht. Es wurden keine Webseiten, keine Tab
 
 ## Offener Blocker
 
-Die bestehende Remote-Reservierung liefert nach dem Allowlist-Fix weiterhin nur den absichtlich gekürzten Fehlerzustand `PRIVATE_RESERVATION`. Die interne Ursache wird durch den bestehenden sicheren Remote-Reader nicht in die Actions-Logs ausgegeben. Ein Umgehen oder Löschen eines möglichen One-shot-Locks sowie ein weiterer Importlauf wären ohne erneute gezielte Freigabe nicht vertretbar.
+Der PDF-Abruf war erfolgreich, aber der bestehende NEL-Adapter stoppte anschließend in der gekürzten öffentlichen Phase `ADAPTER`. Der Actions-Nachweis enthält keine feinere interne Parser-/Validierungsursache; deshalb wird keine nicht belegte Unterursache behauptet. Der einmalige autorisierte Versuch ist verbraucht. Ein weiterer Importlauf oder eine Änderung am Reservierungsmarker ist nicht erfolgt und nicht Bestandteil dieses Abschlusses.
 
 ## Zwischenziel 7A – korrigierte Execution-Kennung
 
