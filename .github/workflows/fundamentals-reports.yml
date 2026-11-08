@@ -56,6 +56,8 @@ jobs:
         run: |
           php -l scripts/fundamentals/core.php
           php -l tests/fundamentals_offline.php
+          php -l tests/fundamentals_nel_q2.php
+          "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_nel_q2.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_html.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_collector.py -v
           "$RUNNER_TEMP/fundamentals-venv/bin/python" -B -m unittest discover -s tests -p test_fundamentals_generic.py -v

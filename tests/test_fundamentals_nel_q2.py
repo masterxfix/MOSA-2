@@ -1,6 +1,9 @@
+import ast
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 from unittest.mock import patch
@@ -81,7 +84,8 @@ class NelQ2Tests(unittest.TestCase):
         plan['archive'] = dict(storage_key='/private/mosa2/nel-q2/evidence.json',
                                sha256=stored['sha256'], bytes=stored['bytes'], durable=True)
         plan['stored_evidence'] = stored
-        php = r'C:\php\php.exe'
+        php = os.environ.get('PHP_BIN') or shutil.which('php')
+        self.assertTrue(php, 'php CLI is required for the NEL writer contract test')
         result = subprocess.run([php, str(Path(__file__).with_name('fundamentals_nel_q2.php'))],
                                 input=json.dumps(plan), text=True, capture_output=True,
                                 cwd=Path(__file__).resolve().parents[1])
@@ -95,6 +99,20 @@ class NelQ2Tests(unittest.TestCase):
         self.assertEqual(selected[0]['preserve_assets'][0]['observations'], 6)
         self.assertEqual(selected[0]['preserve_assets'][0]['current'], 3)
         self.assertEqual(selected[0]['periods'], [('fq', '2026-04-01', '2026-06-30')])
+
+    def test_registered_nel_execution_matches_both_reservation_lists(self):
+        execution = reports.REPORTS['nel-q2-2026']['execution']
+        source = (Path(__file__).resolve().parents[1] / 'scripts/fundamentals/archive_remote.py').read_text(encoding='utf-8')
+        tree = ast.parse(source)
+        values = {}
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                if node.targets[0].id in {'EXECUTIONS', 'EVIDENCE_EXECUTIONS'}:
+                    values[node.targets[0].id] = ast.literal_eval(node.value)
+        self.assertIn(execution, values['EXECUTIONS'])
+        self.assertIn(execution, values['EVIDENCE_EXECUTIONS'])
+        self.assertLess(source.index("need(data['execution'] in EXECUTIONS"),
+                        source.index("create_file(locks, ONCE+'.consumed'"))
 
     def test_wrong_report_period_or_identity_stops(self):
         with patch.object(nel_q2, 'read_pdf', return_value=PAGES):

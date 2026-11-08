@@ -57,3 +57,11 @@ Alle drei Commits sind nach `main` gepusht. Es wurden keine Webseiten, keine Tab
 
 Die bestehende Remote-Reservierung liefert nach dem Allowlist-Fix weiterhin nur den absichtlich gekürzten Fehlerzustand `PRIVATE_RESERVATION`. Die interne Ursache wird durch den bestehenden sicheren Remote-Reader nicht in die Actions-Logs ausgegeben. Ein Umgehen oder Löschen eines möglichen One-shot-Locks sowie ein weiterer Importlauf wären ohne erneute gezielte Freigabe nicht vertretbar.
 
+## Zwischenziel 7A – korrigierte Execution-Kennung
+
+Die konkrete Blockade lag in einer abweichenden Reservierungskennung: `scripts/fundamentals/reports.py` registriert `fundamentals-nel-q2-2026-20261108-01`, während `scripts/fundamentals/archive_remote.py` zuvor den verkürzten Wert `fundamentals-nel-q2-20261108-01` in `EXECUTIONS` und `EVIDENCE_EXECUTIONS` enthielt. Beide Allowlist-Einträge verwenden jetzt exakt die registrierte Kennung.
+
+Der gezielte Regressionstest `test_registered_nel_execution_matches_both_reservation_lists` vergleicht die tatsächliche Registry-Kennung mit beiden Reservierungslisten und bestätigt zusätzlich, dass die Kennungsprüfung vor `create_file(...consumed)` erfolgt. Der NEL-Test läuft ohne fest codierten Windows-PHP-Pfad; der Linux-Workflow `fundamentals-reports.yml` führt ihn gezielt mit dem dort eingerichteten `php` aus. Die NEL-Tests und die fokussierten Offline-Reservierungstests bestanden lokal.
+
+Der exakte Remote-Reservierungsmarker `fundamentals-nel-q2-2026-20261108-01.consumed` wurde am 08.11.2026 im bestehenden privaten Collectorpfad `/private/mosa2-collector/locks` über den autorisierten Dogado/Plesk-Readback nicht gefunden. Es wurden ausschließlich die vorhandenen Einträge dieses Locks-Verzeichnisses gelesen; der Marker ist damit aktuell nicht vorhanden. Es wurde kein Marker verändert, kein Import gestartet und keine Datenbank- oder Provideroperation ausgeführt.
+
