@@ -66,7 +66,7 @@ function apply(array $state, array $events): array {
             continue;
         }
         $targets=[];
-        if ($type==='SessionEnd' || ($type==='Stop' && $e['turn']==='unknown') ||
+        if ($type==='SessionEnd' || ($type==='Stop' && ($e['turn']==='unknown' || !isset($runs[$key]))) ||
             ($e['turn']==='unknown' && $type!=='Stop')) {
             foreach ($runs as $candidate=>$run) {
                 if (str_starts_with($candidate,$e['session'].':') && $run['state']==='running') $targets[]=$candidate;

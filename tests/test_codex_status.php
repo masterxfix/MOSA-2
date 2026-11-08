@@ -49,6 +49,9 @@ $check(state($s,$now+25)==='idle','session end finishes remaining task');
 $s=apply($s,[event($event('UserPromptSubmit','abcd1234','third123',26,11),$now+26)]);
 $s=apply($s,[event($event('Stop','abcd1234','unknown',27,12),$now+27)]);
 $check(state($s,$now+27)==='idle','unknown turn on native Stop closes session');
+$s=apply($s,[event($event('UserPromptSubmit','abcd1234','start567',28,13),$now+28)]);
+$s=apply($s,[event($event('Stop','abcd1234','newturn1',29,14),$now+29)]);
+$check(state($s,$now+29)==='idle','native Stop with a new processing turn closes session');
 $temp=sys_get_temp_dir().'/mosa2-codex-fixture-'.bin2hex(random_bytes(5));
 mkdir($temp,0700);
 try {
@@ -56,7 +59,9 @@ try {
     $check(readFile($path)===null,'missing store is unavailable');
     appendFile($path,[$start]);
     $check(state(readFile($path),$now)==='running','private store roundtrip');
-    $check((fileperms($path)&0077)===0,'private store permissions');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        $check((fileperms($path)&0077)===0,'private store permissions');
+    }
 } finally {
     @unlink($temp.'/status.json');
     @rmdir($temp);
