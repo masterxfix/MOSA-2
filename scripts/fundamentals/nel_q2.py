@@ -13,6 +13,7 @@ PUBLICATION = '2026-07-15'
 PARSER = 'nel_q2_2026_pdf_v1'
 VERSION = '1'
 CONTENT_TYPE = 'application/pdf'
+ORIGINAL_SHA256 = '60336ebdbcba904234ea9c40a759eb22baf9892fab571651b78e3c319f89a116'
 SOURCE = dict(source_key='nel_official_quarterly_reports', source_type='issuer_quarterly_report',
               display_name='NEL ASA official quarterly reports',
               base_url='https://mb.cision.com/Public/115/4374557/', enabled='0')
@@ -28,14 +29,18 @@ DEFINITIONS = {
 ROW_PATTERNS = {
     'revenue': re.compile(r'\brevenue\s+from\s+contracts\s+with\s+customers\b', re.I),
     'ifrs_operating_profit': re.compile(r'\boperating\s+(?:loss|profit)\b', re.I),
-    'profit_after_tax': re.compile(r'\bnet\s+income\s+\(\s*loss\s*\)\s+for\s+period\b', re.I),
+    'profit_after_tax': re.compile(r'\bnet\s+income\s+\(\s*loss\s*\)\s+for\s+(?:the\s+)?period\b', re.I),
     'operating_cashflow': re.compile(r'\bnet\s+cash\s+flow\s+from\s+operating\s+activities\b', re.I),
-    'ebitda': re.compile(r'\btotal\s+ebitda\b', re.I),
+    'ebitda': re.compile(r'^total$', re.I),
 }
+# Fixed single-document import: reject unexpected values instead of accepting
+# a shifted Q2 column, a note number, or a different subsection's Total.
+EXPECTED_Q2_VALUES = dict(revenue='153407', ebitda='-155337', ifrs_operating_profit='-205220',
+                          profit_after_tax='-188571', operating_cashflow='1673')
 TABLE_PATTERNS = {
     'income': re.compile(r'consolidated\s+statement\s+of\s+comprehensive\s+income', re.I),
     'cashflow': re.compile(r'consolidated\s+statement\s+of\s+cash\s+flows?', re.I),
-    'segments': re.compile(r'\bsegment\s+information\b', re.I),
+    'segments': re.compile(r'\bthe\s+following\s+table\s+includes\s+information\s+about\s+Nel.s\s+operating\s+segments\b', re.I),
 }
 
 
@@ -45,7 +50,12 @@ def _need(condition, code):
 
 
 def _normal(text):
-    return re.sub(r'\s+', ' ', text.replace('\u2212', '-').replace('\u2013', '-')).strip()
+    text = re.sub(r'\s+', ' ', text.replace('\u2212', '-').replace('\u2013', '-')).strip()
+    # pdfplumber separates the first bold glyph of some NEL table labels,
+    # e.g. "O perating loss" and "N et income". Repair only known labels.
+    for spaced, intact in (('O perating', 'Operating'), ('N et', 'Net'), ('T otal', 'Total')):
+        text = re.sub(r'\b' + re.escape(spaced) + r'\b', intact, text, flags=re.I)
+    return text
 
 
 def _number(text):
@@ -100,9 +110,11 @@ def _tables(pages, title_pattern, table_name):
             if header_index is None:
                 continue
             first, second = centers
-            left = first - 72
+            # Exclude the Note column (where present) from the Q2 2026 value.
+            left = first - 32
             middle = (first + second) / 2
             pending = []
+            section = None
             for row_index in range(header_index + 1, len(lines)):
                 line = lines[row_index]
                 label = _normal(' '.join(w['text'] for w in line['words']
@@ -111,6 +123,13 @@ def _tables(pages, title_pattern, table_name):
                               if left <= (float(w['x0']) + float(w['x1'])) / 2 < middle]
                 value = _number(' '.join(cell_words))
                 if value is None:
+                    if table_name == 'Note 3 Segment information':
+                        heading = _normal(label)
+                        if re.fullmatch(r'(?:Revenue|EBITDA|Investments(?:\s*\d+\))?|Total assets(?:\s*\d+\))?)', heading, re.I):
+                            # The original note has separate Total rows for each section.
+                            section = heading.casefold().split()[0]
+                            pending = []
+                            continue
                     if label:
                         pending.append(label)
                     continue
@@ -119,12 +138,16 @@ def _tables(pages, title_pattern, table_name):
                 found.append(dict(page=page['number'], table=table_name, row=full_label,
                                    column='Q2 2026', value=value,
                                    x0=min((float(w['x0']) for w in line['words']), default=0.0),
-                                   y0=float(line['bottom'])))
+                                   y0=float(line['bottom']), section=section))
     return found
 
 
 def _select(rows, metric):
-    matches = [row for row in rows if ROW_PATTERNS[metric].search(re.sub(r'^\d+\s+', '', row['row']))]
+    if metric == 'ebitda':
+        matches = [row for row in rows if row.get('section') == 'ebitda'
+                   and ROW_PATTERNS[metric].fullmatch(_normal(row['row']))]
+    else:
+        matches = [row for row in rows if ROW_PATTERNS[metric].search(re.sub(r'^\d+\s+', '', row['row']))]
     _need(len(matches) == 1, 'NEL_' + metric.upper() + '_AMBIGUOUS')
     return matches[0]
 
@@ -143,6 +166,7 @@ def parse(raw, metadata, identity):
     _need(metadata['url'] == URL and metadata['http_status'] == 200, 'NEL_RESPONSE_BINDING')
     _need(metadata['content_type'].lower().startswith(CONTENT_TYPE), 'NEL_RESPONSE_MIME')
     _need(metadata['bytes'] == len(raw) and metadata['sha256'] == hashlib.sha256(raw).hexdigest(), 'NEL_RESPONSE_HASH')
+    _need(metadata['sha256'] == ORIGINAL_SHA256, 'NEL_DOCUMENT_HASH')
     pages = read_pdf(raw, max_bytes=16 * 1024 * 1024, max_pages=40, max_characters=1000000)
     _need(pages, 'NEL_PDF_EMPTY')
     all_text = ' '.join(page['text'] for page in pages)
@@ -159,6 +183,8 @@ def parse(raw, metadata, identity):
         'operating_cashflow': _select(cashflow, 'operating_cashflow'),
         'ebitda': _select(segments, 'ebitda'),
     }
+    _need(all(rows[metric]['value'] == value for metric, value in EXPECTED_Q2_VALUES.items()),
+          'NEL_Q2_VALUE_MISMATCH')
     _need(re.search(r'Iwatani', all_text, re.I), 'NEL_IWATANI_EVIDENCE')
     iwatani = re.search(r'.{0,140}Iwatani.{0,220}', all_text, re.I | re.S)
     special_effect = _normal(iwatani.group(0))[:512]
