@@ -19,6 +19,68 @@
   const forms = [...document.querySelectorAll("[data-isin-form]")];
   if (!forms.length) return;
   const detailsToggle = document.querySelector("[data-isin-details-toggle]");
+  const automationRoot = document.querySelector("[data-isin-automation]");
+  const automationInterval = automationRoot?.querySelector("[data-isin-automation-interval]");
+  const automationToggle = automationRoot?.querySelector("[data-isin-automation-toggle]");
+  const automationStatus = automationRoot?.querySelector("[data-isin-automation-status]");
+  const AUTOMATION_KEY = "mosa2-isin-automation-v1";
+  const DEFAULT_INTERVAL_SECONDS = 60;
+  const WEEKEND_INTERVAL_SECONDS = 3600;
+  const clampInterval = value => Math.min(300, Math.max(5, Math.round(Number(value) || DEFAULT_INTERVAL_SECONDS)));
+  function berlinDateParts(value = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/Berlin", year:"numeric", month:"2-digit", day:"2-digit"})
+      .formatToParts(value).reduce((result, part) => { if (part.type !== "literal") result[part.type] = part.value; return result; }, {});
+    return {year:Number(parts.year), month:Number(parts.month), day:Number(parts.day)};
+  }
+  function dateKey(year, month, day) { return year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0"); }
+  function utcDateKey(value) { return dateKey(value.getUTCFullYear(), value.getUTCMonth()+1, value.getUTCDate()); }
+  function addUtcDays(value, days) { return new Date(value.getTime() + days*86400000); }
+  function easterSunday(year) {
+    const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+    const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+    const month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;
+    return new Date(Date.UTC(year,month-1,day));
+  }
+  function bwHolidayKeys(year) {
+    const easter=easterSunday(year), keys=new Set([
+      dateKey(year,1,1), dateKey(year,1,6), dateKey(year,5,1), dateKey(year,10,3), dateKey(year,11,1),
+      dateKey(year,12,25), dateKey(year,12,26)
+    ]);
+    for (const days of [-2,1,39,50,60]) keys.add(utcDateKey(addUtcDays(easter,days)));
+    return keys;
+  }
+  function isBadenWuerttembergHoliday(value = new Date()) {
+    const parts=berlinDateParts(value);
+    return bwHolidayKeys(parts.year).has(dateKey(parts.year,parts.month,parts.day));
+  }
+  function dayMode(value = new Date()) {
+    if (isBadenWuerttembergHoliday(value)) return "Feiertag Baden-Württemberg";
+    const parts=berlinDateParts(value), weekday=new Date(Date.UTC(parts.year,parts.month-1,parts.day)).getUTCDay();
+    return weekday===0 || weekday===6 ? "Wochenende" : "Werktag";
+  }
+  function intervalFor(value = new Date(), configuredSeconds = DEFAULT_INTERVAL_SECONDS) {
+    return dayMode(value) === "Werktag" ? clampInterval(configuredSeconds) : WEEKEND_INTERVAL_SECONDS;
+  }
+  function berlinOffsetMs(value) {
+    const zone=new Intl.DateTimeFormat("en-US", {timeZone:"Europe/Berlin", timeZoneName:"longOffset", hour:"2-digit", minute:"2-digit", hour12:false})
+      .formatToParts(value).find(part => part.type === "timeZoneName")?.value || "GMT+01:00";
+    const match=zone.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/);
+    if (!match) return 3600000;
+    return (match[1] === "-" ? -1 : 1) * (Number(match[2])*60 + Number(match[3] || 0))*60000;
+  }
+  function nextBerlinMidnight(value = new Date()) {
+    const parts=berlinDateParts(value), utcMidnight=Date.UTC(parts.year,parts.month-1,parts.day+1,0,0,0);
+    return utcMidnight-berlinOffsetMs(new Date(utcMidnight));
+  }
+  function restoreAutomation() {
+    if (!automationRoot) return {intervalSeconds:DEFAULT_INTERVAL_SECONDS,enabled:false,lastUpdatedAt:null};
+    try {
+      const saved=JSON.parse(localStorage.getItem(AUTOMATION_KEY) || "{}");
+      return {intervalSeconds:clampInterval(saved.intervalSeconds),enabled:saved.enabled === true,
+        lastUpdatedAt:typeof saved.lastUpdatedAt === "string" && Number.isFinite(Date.parse(saved.lastUpdatedAt)) ? saved.lastUpdatedAt : null};
+    } catch { return {intervalSeconds:DEFAULT_INTERVAL_SECONDS,enabled:false,lastUpdatedAt:null}; }
+  }
+  let automation=restoreAutomation(), automationTimer=null;
   function restore() {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -41,6 +103,46 @@
     if (entries.length) localStorage.setItem(KEY, JSON.stringify(entries));
     else localStorage.removeItem(KEY);
   } catch { /* Browser storage is optional. */ }};
+  function saveAutomation() {
+    if (!automationRoot) return;
+    try { localStorage.setItem(AUTOMATION_KEY, JSON.stringify(automation)); } catch { /* Browser storage is optional. */ }
+  }
+  function formatAutomationInterval(seconds) {
+    return seconds >= 3600 ? String(Math.round(seconds/60))+" Min." : String(seconds)+" Sek.";
+  }
+  function formatAutomationTimestamp(value) { return value ? date(value) : "—"; }
+  function updateAutomationStatus() {
+    if (!automationRoot) return;
+    const activeInterval=intervalFor(new Date(),automation.intervalSeconds), mode=dayMode(new Date());
+    if (automationInterval && automationInterval.value !== String(automation.intervalSeconds)) automationInterval.value=String(automation.intervalSeconds);
+    if (automationToggle) {
+      automationToggle.textContent=automation.enabled ? "Automatik stoppen" : "Automatik starten";
+      automationToggle.setAttribute("aria-pressed",String(automation.enabled));
+      automationToggle.disabled=busy;
+    }
+    if (automationStatus) automationStatus.textContent=(automation.enabled ? "Automatik aktiv" : "Automatik inaktiv")+
+      " · Aktives Intervall: "+formatAutomationInterval(activeInterval)+(automation.enabled ? "" : " (inaktiv)")+" · Modus: "+mode+
+      " · Letzte Aktualisierung: "+formatAutomationTimestamp(automation.lastUpdatedAt);
+  }
+  function clearAutomationTimer() {
+    if (automationTimer !== null) { clearTimeout(automationTimer); automationTimer=null; }
+  }
+  function scheduleAutomation(value = new Date()) {
+    clearAutomationTimer();
+    updateAutomationStatus();
+    if (!automationRoot || !automation.enabled || document.visibilityState === "hidden" || busy || !entries.length) return;
+    const interval=intervalFor(value,automation.intervalSeconds), last=Date.parse(automation.lastUpdatedAt || ""),
+      due=Number.isFinite(last) ? last+interval*1000 : value.getTime()+interval*1000,
+      next=Math.min(due,nextBerlinMidnight(value)), delay=Math.max(250,Math.min(2147483647,next-value.getTime()));
+    automationTimer=setTimeout(runAutomaticCycle,delay);
+  }
+  async function runAutomaticCycle() {
+    automationTimer=null;
+    if (!automationRoot || !automation.enabled || document.visibilityState === "hidden" || busy || !entries.length) { scheduleAutomation(); return; }
+    const now=new Date(), last=Date.parse(automation.lastUpdatedAt || "");
+    if (Number.isFinite(last) && now.getTime() < last+intervalFor(now,automation.intervalSeconds)*1000) { scheduleAutomation(now); return; }
+    await refreshAll(null,true);
+  }
   const fmtPrice = p => {
     const num=Number(p);
     return typeof p==="string" && /^\d+(?:\.\d{1,12})?$/.test(p) && Number.isFinite(num)
@@ -103,6 +205,7 @@
     if(detailsToggle){detailsToggle.disabled=busy;detailsToggle.textContent=detailsOpen?"Weniger anzeigen":"Alle Details anzeigen";detailsToggle.setAttribute("aria-expanded",String(detailsOpen));}
     for (const label of document.querySelectorAll("[data-isin-summary]")) label.textContent=entries.length+" ISIN"+(entries.length===1?"":"s")+" · Manuell abgefragte Kurse";
     syncDeleteButtons();
+    updateAutomationStatus();
   }
   function renderQuoteRow(fragment,entry,quote) {
     const tr=document.createElement("tr");tr.dataset.status=old(quote)?"stale":"stored";
@@ -240,6 +343,7 @@
     for(const form of forms){const button=form.querySelector("button[type=submit]");if(button)button.disabled=value;}
     for(const button of document.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
     if(detailsToggle) detailsToggle.disabled=value;
+    if(automationToggle) automationToggle.disabled=value;
     syncDeleteButtons();
   }
   async function submit(form) {
@@ -268,15 +372,17 @@
       progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
     }finally{
       setBusy(false);
+      if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
       save();paint();
+      scheduleAutomation();
     }
   }
-  async function refreshAll(button) {
-    if(busy)return;
+  async function refreshAll(button, automatic=false) {
+    if(busy)return false;
     entries=restore();paint();
     const form=forms[0],list=form.parentElement.querySelector("[data-isin-steps]");
     if(list)list.replaceChildren();
-    if(!entries.length){progress(form,"Keine gespeicherten ISINs. Es wurde keine Abfrage ausgelöst.");return;}
+    if(!entries.length){progress(form,"Keine gespeicherten ISINs. Es wurde keine Abfrage ausgelöst.");scheduleAutomation();return false;}
     const snapshot=entries.slice();let successful=0,failed=0;
     setBusy(true);progress(form,"Aktualisierung gestartet: "+snapshot.length+" ISIN"+(snapshot.length===1?"":"s")+".");
     try{
@@ -302,8 +408,11 @@
       }
       progress(form,"Aktualisierung abgeschlossen: "+successful+" erfolgreich, "+failed+" fehlgeschlagen.",failed?"error":"success");
     }finally{
-      setBusy(false);save();paint();
+      setBusy(false);save();
+      if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
+      paint();scheduleAutomation();
     }
+    return true;
   }
   for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);});
   for(const button of document.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",()=>refreshAll(button));
@@ -313,6 +422,24 @@
   });
   for(const button of document.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries);
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();});
+  if (automationRoot) {
+    automationInterval.addEventListener("change",()=>{
+      automation.intervalSeconds=clampInterval(automationInterval.value);
+      automationInterval.value=String(automation.intervalSeconds);
+      saveAutomation();paint();scheduleAutomation();
+    });
+    automationToggle.addEventListener("click",()=>{
+      if (busy) return;
+      automation.enabled=!automation.enabled;saveAutomation();paint();
+      if (automation.enabled) runAutomaticCycle(); else clearAutomationTimer();
+    });
+    document.addEventListener("visibilitychange",()=>{
+      if (document.visibilityState === "hidden") clearAutomationTimer();
+      else { paint();scheduleAutomation(); }
+    });
+  }
   paint();
+  if (automationRoot) scheduleAutomation();
   globalThis.MosaIsinLookup=Object.freeze({valid});
+  globalThis.MosaIsinAutomation=Object.freeze({clampInterval,intervalFor,isBadenWuerttembergHoliday,dayMode});
 }());

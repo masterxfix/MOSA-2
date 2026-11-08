@@ -10,7 +10,7 @@
   <script src="assets/js/page_load_time.js" defer></script>
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/market.js" defer></script>
-  <script src="assets/js/isin_quotes.js?v=isin-20261108-l1-detail" defer></script>
+  <script src="assets/js/isin_quotes.js?v=isin-20261108-automation" defer></script>
 </head>
 <body class="market-page">
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -23,17 +23,22 @@
     <section class="hero" aria-labelledby="markt-titel">
       <div class="eyebrow">Der gespeicherte Marktstand · MOSA 2</div>
       <h1 id="markt-titel">Marktdaten.<br><em>Mit Herkunft.</em></h1>
-      <p class="intro">Ihre ISINs. Klare Quellen. Der Kursabruf startet ausschließlich nach OK. Marktzeit und Abrufzeit werden getrennt angezeigt.</p>
+    <p class="intro">Ihre ISINs. Klare Quellen. Der Kursabruf startet nach OK oder aktivierter Browser-Automatik. Marktzeit und Abrufzeit werden getrennt angezeigt.</p>
     </section>
 
     <section class="market-section observation-section" aria-labelledby="observations-titel" data-isin-market-view>
       <div class="section-heading"><div><p class="eyebrow">01 / Observations</p><h2 id="observations-titel">Meine ISIN-Kursabfragen</h2></div>
         <span class="snapshot" data-isin-summary role="status">Noch keine ISIN eingegeben.</span></div>
-      <p class="context-note">Nur die von Ihnen eingegebenen ISINs. Tradegate Mid und Börse Frankfurt Last werden separat angefragt. Ältere Kurse sind ausdrücklich als veraltet gekennzeichnet; kein automatischer Abruf.</p>
+      <p class="context-note">Nur die von Ihnen eingegebenen ISINs. Tradegate Mid und Börse Frankfurt Last werden separat angefragt. Ältere Kurse sind ausdrücklich als veraltet gekennzeichnet; die Automatik läuft nur browserlokal.</p>
       <form class="isin-form" data-isin-form autocomplete="off">
         <label for="isin-market">ISIN eingeben</label>
         <div class="isin-form-row"><input id="isin-market" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE0005313704" spellcheck="false" required><button type="submit">OK</button><button type="button" data-isin-refresh>Aktualisieren</button></div>
       </form>
+      <div class="isin-form" data-isin-automation>
+        <label for="isin-automation-interval">Automatikintervall (5–300 Sekunden)</label>
+        <div class="isin-form-row"><input id="isin-automation-interval" data-isin-automation-interval type="number" min="5" max="300" step="1" value="60" inputmode="numeric"><button type="button" data-isin-automation-toggle aria-pressed="false">Automatik starten</button></div>
+        <p class="context-note" data-isin-automation-status>Automatik inaktiv · Aktives Intervall: 60 Sek. (inaktiv) · Modus: wird ermittelt · Letzte Aktualisierung: —</p>
+      </div>
       <ol class="isin-steps" data-isin-steps aria-label="Schritte der Kursabfrage" aria-live="polite"></ol>
       <p><button class="observation-refresh" type="button" data-isin-details-toggle aria-expanded="false">Alle Details anzeigen</button></p>
       <div class="observation-table-wrap" aria-busy="false" data-observation-region>

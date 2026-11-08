@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261108-l1-detail';
+const cacheVersion='isin-20261108-automation';
 for(const file of ['marktdaten.html','index.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
