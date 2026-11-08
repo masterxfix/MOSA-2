@@ -20,6 +20,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 7. **Übersichtlich anzeigen:** In Übersichten die letzten brauchbaren Informationen zuerst zeigen; weitere Details nur bei Bedarf und veraltete Daten klar kennzeichnen.
 
 ### ChatGPT
+- **Fakten statt Annahmen:** ChatGPT beantwortet Nutzerfragen mit überprüften Fakten; Unbekanntes oder nicht Verifiziertes wird ausdrücklich als solches benannt und niemals als Tatsache dargestellt.
 - **Eigenständig abschließen:** ChatGPT führt beauftragte Arbeiten eigenständig bis zur nachgewiesenen Abnahme aus und stoppt nur bei einer tatsächlich nicht selbst lösbaren Sperre.
 - **Codex-Übergabe:** Kann ChatGPT einen Auftrag nicht selbst zu Ende führen, muss es ohne Rückfrage einen verfügbaren Übergabeweg an Codex nutzen und dessen Ergebnis prüfen, statt beim ersten Werkzeughindernis zu stoppen.
 - **Codex-Nacharbeit:** ChatGPT akzeptiert keinen unvollständigen Codex-Abschluss, sondern liefert sofort einen konkreten Folgeauftrag zur eigenständigen Behebung offener Konfigurations- und Live-Testschritte über vorhandene autorisierte Zugänge.
