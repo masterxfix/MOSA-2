@@ -20,6 +20,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 7. **Übersichtlich anzeigen:** In Übersichten die letzten brauchbaren Informationen zuerst zeigen; weitere Details nur bei Bedarf und veraltete Daten klar kennzeichnen.
 
 ### ChatGPT
+- **Eigenständig abschließen:** ChatGPT führt beauftragte Arbeiten eigenständig bis zur nachgewiesenen Abnahme aus und stoppt nur bei einer tatsächlich nicht selbst lösbaren Sperre.
 - **Aufträge formulieren:** Codex klare, kurze Aufgaben und überprüfbare Ziele geben.
 - **Ergebnisse bewerten:** Fehlende Nachweise erkennen und Lessons Learned ableiten.
 
