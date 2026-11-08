@@ -1,0 +1,35 @@
+name: Codex status UI regression
+on:
+  pull_request:
+    paths:
+      - 'api/codex_status*.php'
+      - 'assets/js/codex_status.js'
+      - 'tests/test_codex_status*'
+      - '.github/workflows/codex-status-review.yml'
+  push:
+    branches:
+      - 'feature/codex-status-dot-20261108'
+permissions:
+  contents: read
+jobs:
+  status-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: PHP native event reducer and API syntax
+        run: |
+          php -v
+          php -l api/codex_status_model.php
+          php -l api/codex_status.php
+          php -l api/codex_status_ingest.php
+          php tests/test_codex_status.php
+          php -l tests/test_codex_status_secret.php
+          php tests/test_codex_status_secret.php
+      - name: Browser state transitions
+        run: |
+          node --version
+          node --check assets/js/codex_status.js
+          node tests/test_codex_status_ui.js
