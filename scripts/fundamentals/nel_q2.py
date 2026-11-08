@@ -28,14 +28,18 @@ DEFINITIONS = {
 ROW_PATTERNS = {
     'revenue': re.compile(r'\brevenue\s+from\s+contracts\s+with\s+customers\b', re.I),
     'ifrs_operating_profit': re.compile(r'\boperating\s+(?:loss|profit)\b', re.I),
-    'profit_after_tax': re.compile(r'\bnet\s+income\s+\(\s*loss\s*\)\s+for\s+period\b', re.I),
+    'profit_after_tax': re.compile(r'\bnet\s+income\s+\(\s*loss\s*\)\s+for\s+(?:the\s+)?period\b', re.I),
     'operating_cashflow': re.compile(r'\bnet\s+cash\s+flow\s+from\s+operating\s+activities\b', re.I),
-    'ebitda': re.compile(r'\btotal\s+ebitda\b', re.I),
+    'ebitda': re.compile(r'^total$', re.I),
 }
+# Fixed single-document import: reject unexpected values instead of accepting
+# a shifted Q2 column, a note number, or a different subsection's Total.
+EXPECTED_Q2_VALUES = dict(revenue='153407', ebitda='-155337', ifrs_operating_profit='-205220',
+                          profit_after_tax='-188571', operating_cashflow='1673')
 TABLE_PATTERNS = {
     'income': re.compile(r'consolidated\s+statement\s+of\s+comprehensive\s+income', re.I),
     'cashflow': re.compile(r'consolidated\s+statement\s+of\s+cash\s+flows?', re.I),
-    'segments': re.compile(r'\bsegment\s+information\b', re.I),
+    'segments': re.compile(r'\bthe\s+following\s+table\s+includes\s+information\s+about\s+Nel.s\s+operating\s+segments\b', re.I),
 }
 
 
@@ -100,9 +104,11 @@ def _tables(pages, title_pattern, table_name):
             if header_index is None:
                 continue
             first, second = centers
-            left = first - 72
+            # Exclude the Note column (where present) from the Q2 2026 value.
+            left = first - 32
             middle = (first + second) / 2
             pending = []
+            section = None
             for row_index in range(header_index + 1, len(lines)):
                 line = lines[row_index]
                 label = _normal(' '.join(w['text'] for w in line['words']
@@ -111,6 +117,13 @@ def _tables(pages, title_pattern, table_name):
                               if left <= (float(w['x0']) + float(w['x1'])) / 2 < middle]
                 value = _number(' '.join(cell_words))
                 if value is None:
+                    if table_name == 'Note 3 Segment information':
+                        heading = _normal(label)
+                        if re.fullmatch(r'(?:Revenue|EBITDA|Investments(?:\s*\d+\))?|Total assets(?:\s*\d+\))?)', heading, re.I):
+                            # The original note has separate Total rows for each section.
+                            section = heading.casefold().split()[0]
+                            pending = []
+                            continue
                     if label:
                         pending.append(label)
                     continue
@@ -119,12 +132,16 @@ def _tables(pages, title_pattern, table_name):
                 found.append(dict(page=page['number'], table=table_name, row=full_label,
                                    column='Q2 2026', value=value,
                                    x0=min((float(w['x0']) for w in line['words']), default=0.0),
-                                   y0=float(line['bottom'])))
+                                   y0=float(line['bottom']), section=section))
     return found
 
 
 def _select(rows, metric):
-    matches = [row for row in rows if ROW_PATTERNS[metric].search(re.sub(r'^\d+\s+', '', row['row']))]
+    if metric == 'ebitda':
+        matches = [row for row in rows if row.get('section') == 'ebitda'
+                   and ROW_PATTERNS[metric].fullmatch(_normal(row['row']))]
+    else:
+        matches = [row for row in rows if ROW_PATTERNS[metric].search(re.sub(r'^\d+\s+', '', row['row']))]
     _need(len(matches) == 1, 'NEL_' + metric.upper() + '_AMBIGUOUS')
     return matches[0]
 
@@ -159,6 +176,8 @@ def parse(raw, metadata, identity):
         'operating_cashflow': _select(cashflow, 'operating_cashflow'),
         'ebitda': _select(segments, 'ebitda'),
     }
+    _need(all(rows[metric]['value'] == value for metric, value in EXPECTED_Q2_VALUES.items()),
+          'NEL_Q2_VALUE_MISMATCH')
     _need(re.search(r'Iwatani', all_text, re.I), 'NEL_IWATANI_EVIDENCE')
     iwatani = re.search(r'.{0,140}Iwatani.{0,220}', all_text, re.I | re.S)
     special_effect = _normal(iwatani.group(0))[:512]
