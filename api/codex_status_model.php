@@ -5,6 +5,7 @@ namespace Mosa2\CodexStatus;
 
 const VERSION = 'mosa2_codex_status_v1';
 const SOURCE_VERSION = 'mosa_ai_control_telemetry_v1';
+const SOURCE_PRESENCE_VERSION = 'mosa2_mosa_presence_v1';
 const STALE_AFTER_SECONDS = 180;
 const MAX_STORE_BYTES = 131072;
 
@@ -58,6 +59,11 @@ function validStore(mixed $data): bool {
             !is_int($run['at']??null) || ($run['at']??0)<1 ||
             !is_string($run['event_id']??null) || !preg_match('/^[a-f0-9]{32}$/D',$run['event_id'])) return false;
     }
+    if (array_key_exists('presence',$data)) {
+        $p=$data['presence'];
+        if (!is_array($p) || !in_array($p['state']??null,['running','idle','unavailable'],true) ||
+            !is_int($p['at']??null) || $p['at']<1) return false;
+    }
     return true;
 }
 
@@ -81,6 +87,24 @@ function event(mixed $value, int $now): ?array {
         if ($at>($now+120)*1000000 || $at<($now-86400)*1000000) return null;
     } catch (\Throwable) { return null; }
     return ['type'=>$value['event_type'], 'session'=>$session, 'turn'=>$turn, 'at'=>$at, 'id'=>$id];
+}
+
+/**
+ * Status evaluated by the original MOSA server, transported only through
+ * the already authenticated native mirror. MOSA 2 does not recompute it.
+ */
+function sourcePresence(mixed $value, int $now): ?array {
+    if (!is_array($value) || ($value['contract_version']??null)!==SOURCE_PRESENCE_VERSION ||
+        !in_array($value['state']??null,['running','idle','unavailable'],true) ||
+        !is_string($value['observed_at_utc']??null) ||
+        !preg_match('/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/D',$value['observed_at_utc'])) return null;
+    try {
+        $time=new \\DateTimeImmutable($value['observed_at_utc']);
+        if ($time->getOffset()!==0 ||
+            $time->format('Y-m-d\\TH:i:s\\Z')!==$value['observed_at_utc']) return null;
+        $at=$time->getTimestamp();
+        return $at>$now+120 || $at<$now-600 ? null : ['state'=>$value['state'],'at'=>$at];
+    } catch (\\Throwable) { return null; }
 }
 
 function apply(array $state, array $events): array {
@@ -123,6 +147,17 @@ function apply(array $state, array $events): array {
 
 function state(?array $data, int $now): string {
     if (!validStore($data) || !$data['ever_seen']) return 'unavailable';
+    if (isset($data['presence'])) {
+        $p=$data['presence'];
+        $latestEvent=0;
+        foreach ($data['runs'] as $run) $latestEvent=max($latestEvent,$run['at']);
+        // MOSA is authoritative if it observed at least the latest stored native event.
+        // Newer legacy events without a source snapshot keep the prior working path.
+        if ($p['at']*1000000 >= $latestEvent) {
+            if ($p['at']<$now-STALE_AFTER_SECONDS || $p['at']>$now+120) return 'unavailable';
+            return $p['state'];
+        }
+    }
     $fresh=false; $stale=false;
     foreach ($data['runs'] as $run) {
         if ($run['state']!=='running') continue;
@@ -146,7 +181,7 @@ function readFile(string $path): ?array {
     } finally { flock($handle,LOCK_UN); fclose($handle); }
 }
 
-function appendFile(string $path, array $events): void {
+function appendFile(string $path, array $events, ?array $presence=null): void {
     $dir=dirname($path);
     if (!is_dir($dir) || is_link($dir) || is_link($path)) throw new \RuntimeException('private_store_unavailable');
     $umask=umask(0077);
@@ -158,7 +193,13 @@ function appendFile(string $path, array $events): void {
         if (!is_string($raw) || strlen($raw)>MAX_STORE_BYTES) throw new \RuntimeException('invalid_store');
         $data=$raw===''?initial():json_decode($raw,true);
         if (!validStore($data)) throw new \RuntimeException('invalid_store');
-        $next=json_encode(apply($data,$events),JSON_THROW_ON_ERROR);
+        $updated=apply($data,$events);
+        if ($presence!==null) {
+            if (!isset($updated['presence']) || $presence['at'] >= $updated['presence']['at']) {
+                $updated['presence']=$presence;
+            }
+        }
+        $next=json_encode($updated,JSON_THROW_ON_ERROR);
         if (strlen($next)>MAX_STORE_BYTES) throw new \RuntimeException('store_full');
         rewind($handle);
         if (!ftruncate($handle,0) || fwrite($handle,$next)!==strlen($next) || !fflush($handle))
