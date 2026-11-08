@@ -21,3 +21,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 ## 3. Lessons Learned
 
 Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funktioniert hat und welche Fehler aufgetreten sind. Daraus leiten wir konkrete Verbesserungen ab und aktualisieren `AGENTS.md`, damit sich Fehler nicht wiederholen. Die Zwischenziele bestimmen wir im weiteren Projektverlauf gemeinsam.
+
+**Änderungen klein prüfen:** Nur passende Tests durchführen; Deployment-Workflows für kleine HTML-Änderungen von unnötigen Kompletttests entlasten.
+
+**Browserzugang früh prüfen:** Vor einem verpflichtenden Live-Test zuerst sicherstellen, dass Codex eine authentifizierte Chrome-Sitzung tatsächlich steuern kann. Bei Hostfehler einen verfügbaren Alternativweg nutzen oder die Prüfung offen melden, statt erfolglose Versuche zu wiederholen. HTTP 401 zählt nicht als Ladezeitmessung.
