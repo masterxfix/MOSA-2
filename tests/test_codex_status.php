@@ -7,6 +7,7 @@ use function Mosa2\CodexStatus\event;
 use function Mosa2\CodexStatus\apply;
 use function Mosa2\CodexStatus\state;
 use function Mosa2\CodexStatus\appendFile;
+use function Mosa2\CodexStatus\sourcePresence;
 use function Mosa2\CodexStatus\readFile;
 
 $now=(new DateTimeImmutable('2026-11-08T14:00:00Z'))->getTimestamp();
@@ -52,6 +53,36 @@ $check(state($s,$now+27)==='idle','unknown turn on native Stop closes session');
 $s=apply($s,[event($event('UserPromptSubmit','abcd1234','start567',28,13),$now+28)]);
 $s=apply($s,[event($event('Stop','abcd1234','newturn1',29,14),$now+29)]);
 $check(state($s,$now+29)==='idle','native Stop with a new processing turn closes session');
+// The existing MOSA source may provide its own reduced three-state value.
+// It is authoritative when newer than or equal to the last native event.
+$sourceEnvelope=static fn(string $state,int $at):array=>[
+    'contract_version'=>'mosa2_mosa_presence_v1','state'=>$state,
+    'observed_at_utc'=>gmdate('Y-m-d\TH:i:s\Z',$at)
+];
+$check(sourcePresence($sourceEnvelope('running',$now),$now)===['state'=>'running','at'=>$now],
+    'canonical MOSA presence accepted');
+$check(sourcePresence($sourceEnvelope('idle',$now-601),$now)===null,
+    'expired canonical snapshot rejected');
+$check(sourcePresence($sourceEnvelope('idle',$now+121),$now)===null,
+    'future snapshot rejected');
+$check(sourcePresence($sourceEnvelope('fake',$now),$now)===null,
+    'invalid source state rejected');
+$sourceRun=apply(initial(),[$start]);
+$sourceRun['presence']=sourcePresence($sourceEnvelope('idle',$now),$now);
+$check(state($sourceRun,$now)==='idle','MOSA source state overrides local active reducer');
+$subsecond=$event('UserPromptSubmit','subsecond','turn9876',0,16);
+$subsecond['recorded_at_utc']=gmdate('Y-m-d\TH:i:s',$now).'.800Z';
+$parsedSubsecond=event($subsecond,$now);
+$check($parsedSubsecond!==null,'native fractional timestamp accepted');
+$latest=apply(initial(),[$parsedSubsecond]);
+$latest['presence']=sourcePresence($sourceEnvelope('idle',$now),$now);
+$check(state($latest,$now)==='idle','MOSA source within same UTC second overrides fractional native event');
+
+$check(state($sourceRun,$now+181)==='unavailable','stale source is not presented as idle');
+$eventAfter=event($event('UserPromptSubmit','newabc12','newturn1',35,15),$now+35);
+$sourceRun=apply($sourceRun,[$eventAfter]);
+$check(state($sourceRun,$now+35)==='running','new native event can recover from stale source snapshot');
+
 $temp=sys_get_temp_dir().'/mosa2-codex-fixture-'.bin2hex(random_bytes(5));
 mkdir($temp,0700);
 try {
@@ -59,6 +90,8 @@ try {
     $check(readFile($path)===null,'missing store is unavailable');
     appendFile($path,[$start]);
     $check(state(readFile($path),$now)==='running','private store roundtrip');
+    appendFile($path,[],sourcePresence($sourceEnvelope('idle',$now),$now));
+    $check(state(readFile($path),$now)==='idle','MOSA source snapshot persisted in existing private store');
     if (DIRECTORY_SEPARATOR !== '\\') {
         $check((fileperms($path)&0077)===0,'private store permissions');
     }
