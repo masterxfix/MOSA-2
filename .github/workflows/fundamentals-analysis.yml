@@ -19,6 +19,11 @@ on:
         options:
           - standard
           - hkex
+      isin:
+        description: Optional uppercase ISIN for a single-asset read-only analysis
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
   actions: read
@@ -70,6 +75,7 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           AUTHORIZATION: ${{ inputs.authorization }}
           MOSA_ANALYSIS_SCOPE: ${{ inputs.scope }}
+          MOSA_ANALYSIS_ISIN: ${{ inputs.isin }}
           GH_TOKEN: ${{ github.token }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
