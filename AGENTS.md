@@ -28,6 +28,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 - **Ergebnisse bewerten:** Fehlende Nachweise erkennen und Lessons Learned ableiten.
 
 ### Codex
+- **PC-Steuerung nur mit Freigabe:** Vor jedem Start einer interaktiven Steuerung meines PCs durch Codex (Bildschirm, Maus, Tastatur, Browser oder Computer Use) ist meine ausdrückliche Zustimmung einzuholen; ein allgemeiner Auftrag oder eine frühere Freigabe genügt nicht.
 **Bekannter Browserfehler:** Der Computer-Use-Start scheitert bei gesperrtem `E:` mit `0x8007000F`. Keine erneute Ursachen-Testreihe; Chrome nur über einen E:-freien Zugangsweg nutzen.
 - **Aufträge umsetzen:** Änderungen eigenständig durchführen und gezielt testen.
 - **Ende statt Editor:** Codex nutzt zuerst bewährte MOSA-Funktionen und beendet Browser- und Serverarbeiten nur nach nachweislich gespeichertem, sicher geprüftem und live getestetem Ergebnis; offene Editoren und unfertige Konfigurationen sind kein Abschluss.
