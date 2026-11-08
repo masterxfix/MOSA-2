@@ -16,12 +16,14 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 3. **Einfach entwickeln:** Vorhandene Funktionen nutzen und Komplexität vermeiden.
 4. **Fehler beheben:** Ursachen ermitteln, korrigieren und Ergebnisse nachweisen.
 5. **Grenzen einhalten:** Nur notwendige Prüfungen und Änderungen im Auftragsumfang.
+6. **Laufwerk E: ist tabu:** ChatGPT und Codex dürfen `E:` niemals lesen, öffnen, aufrufen oder prüfen – auch nicht, wenn es entsperrt ist. Werkzeuge, die darauf zugreifen würden, nicht starten.
 
 ### ChatGPT
 - **Aufträge formulieren:** Codex klare, kurze Aufgaben und überprüfbare Ziele geben.
 - **Ergebnisse bewerten:** Fehlende Nachweise erkennen und Lessons Learned ableiten.
 
 ### Codex
+**Bekannter Browserfehler:** Der Computer-Use-Start scheitert bei gesperrtem `E:` mit `0x8007000F`. Keine erneute Ursachen-Testreihe; Chrome nur über einen E:-freien Zugangsweg nutzen.
 - **Aufträge umsetzen:** Änderungen eigenständig durchführen und gezielt testen.
 - **Chrome nutzen:** Google Chrome ist Standard; den vom Nutzer stets bereitgestellten Zugang zuerst prüfen und verwenden.
 
