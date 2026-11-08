@@ -49,7 +49,12 @@ def _need(condition, code):
 
 
 def _normal(text):
-    return re.sub(r'\s+', ' ', text.replace('\u2212', '-').replace('\u2013', '-')).strip()
+    text = re.sub(r'\s+', ' ', text.replace('\u2212', '-').replace('\u2013', '-')).strip()
+    # pdfplumber separates the first bold glyph of some NEL table labels,
+    # e.g. "O perating loss" and "N et income". Repair only known labels.
+    for spaced, intact in (('O perating', 'Operating'), ('N et', 'Net'), ('T otal', 'Total')):
+        text = re.sub(r'\b' + re.escape(spaced) + r'\b', intact, text, flags=re.I)
+    return text
 
 
 def _number(text):
