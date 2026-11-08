@@ -47,3 +47,5 @@ Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funkti
 **Zeit und Status ehrlich melden:** Unnötige Wartezeiten vermeiden; fehlende Live-Prüfungen als offen kennzeichnen, niemals als Erfolg.
 
 **Automatik zuverlässig entwickeln:** Nur auf der vorgesehenen Seite ausführen, parallele Abrufe verhindern und Zeit-/Feiertagslogik mit simulierter Zeit testen.
+
+**Migrationsinventare sauber abgrenzen:** HTTP 401 oder fehlende DB-Konfiguration niemals als leeren Bestand deuten. Kandidaten- und Evidenzdateien sind keine gespeicherten Observations/Current-Werte; ohne authentifizierten Ziel-Readback keine Importfreigabe.
