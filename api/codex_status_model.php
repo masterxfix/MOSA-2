@@ -153,7 +153,7 @@ function state(?array $data, int $now): string {
         foreach ($data['runs'] as $run) $latestEvent=max($latestEvent,$run['at']);
         // MOSA is authoritative if it observed at least the latest stored native event.
         // Newer legacy events without a source snapshot keep the prior working path.
-        if ($p['at']*1000000 >= $latestEvent) {
+        if ($p['at'] >= intdiv($latestEvent,1000000)) {
             if ($p['at']<$now-STALE_AFTER_SECONDS || $p['at']>$now+120) return 'unavailable';
             return $p['state'];
         }
