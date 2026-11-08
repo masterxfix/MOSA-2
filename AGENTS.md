@@ -13,7 +13,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 ### Gemeinsam
 1. **Ziele verstehen:** Aufträge vollständig erfassen und bestehende Lösungen berücksichtigen.
 2. **Eigenständig arbeiten:** Keine unnötigen Rückfragen oder Freigabeschleifen.
-3. **Einfach entwickeln:** Vorhandene Funktionen nutzen und Komplexität vermeiden.
+3. **MOSA vor Neubau prüfen:** Bevor wir in MOSA 2 eine Funktion entwickeln, prüfen wir die bereits funktionierende Lösung in MOSA und übernehmen deren Logik und Datenquelle. Keine zweite Erfassung, Statusberechnung oder Infrastruktur ohne nachgewiesene technische Notwendigkeit. Abnahme nur am tatsächlich vom Nutzer verwendeten Startweg – ein Test in einem anderen Verzeichnis reicht nicht.
 4. **Fehler beheben:** Ursachen ermitteln, korrigieren und Ergebnisse nachweisen.
 5. **Grenzen einhalten:** Nur notwendige Prüfungen und Änderungen im Auftragsumfang.
 6. **Laufwerk E: ist tabu:** ChatGPT und Codex dürfen `E:` niemals lesen, öffnen, aufrufen oder prüfen – auch nicht, wenn es entsperrt ist. Werkzeuge, die darauf zugreifen würden, nicht starten.
