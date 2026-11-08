@@ -22,6 +22,7 @@ on:
       - 'scripts/fundamentals/pdf_document.py'
       - 'scripts/fundamentals/reports.py'
       - 'tests/test_fundamentals_nel_q2.py'
+      - 'tests/nel_q2_original_readonly.py'
       - '.github/workflows/fundamentals-reports.yml'
 permissions:
   contents: read
@@ -56,6 +57,11 @@ jobs:
           php -l scripts/fundamentals/core.php
           php -l tests/fundamentals_nel_q2.php
           "$RUNNER_TEMP/nel-q2-offline/bin/python" -B -m unittest discover -s tests -p test_fundamentals_nel_q2.py -v
+      - name: One bounded GET and actual NEL Q2 PDF parsing, strictly read-only
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE" "$RUNNER_TEMP/nel-q2-offline/bin/python" -B tests/nel_q2_original_readonly.py
   pilot:
     if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-24.04
