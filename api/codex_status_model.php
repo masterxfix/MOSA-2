@@ -97,14 +97,14 @@ function sourcePresence(mixed $value, int $now): ?array {
     if (!is_array($value) || ($value['contract_version']??null)!==SOURCE_PRESENCE_VERSION ||
         !in_array($value['state']??null,['running','idle','unavailable'],true) ||
         !is_string($value['observed_at_utc']??null) ||
-        !preg_match('/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/D',$value['observed_at_utc'])) return null;
+        !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/D',$value['observed_at_utc'])) return null;
     try {
-        $time=new \\DateTimeImmutable($value['observed_at_utc']);
+        $time=new \DateTimeImmutable($value['observed_at_utc']);
         if ($time->getOffset()!==0 ||
-            $time->format('Y-m-d\\TH:i:s\\Z')!==$value['observed_at_utc']) return null;
+            $time->format('Y-m-d\TH:i:s\Z')!==$value['observed_at_utc']) return null;
         $at=$time->getTimestamp();
         return $at>$now+120 || $at<$now-600 ? null : ['state'=>$value['state'],'at'=>$at];
-    } catch (\\Throwable) { return null; }
+    } catch (\Throwable) { return null; }
 }
 
 function apply(array $state, array $events): array {
