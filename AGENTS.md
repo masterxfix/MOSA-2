@@ -45,3 +45,5 @@ Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funkti
 **Live-Erfolg belegen:** Nach Änderungen die ausgelieferte Seite prüfen; nur vollständig geladene Seiten zählen für die 2-Sekunden-Grenze, keine HTTP-401-Antworten.
 
 **Zeit und Status ehrlich melden:** Unnötige Wartezeiten vermeiden; fehlende Live-Prüfungen als offen kennzeichnen, niemals als Erfolg.
+
+**Automatik zuverlässig entwickeln:** Nur auf der vorgesehenen Seite ausführen, parallele Abrufe verhindern und Zeit-/Feiertagslogik mit simulierter Zeit testen.
