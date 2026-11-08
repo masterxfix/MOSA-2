@@ -28,6 +28,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 - **Chrome nutzen:** Google Chrome ist Standard; den vom Nutzer stets bereitgestellten Zugang zuerst prüfen und verwenden.
 - **Tokens sparen:** Nur benötigte Dateien und Informationen lesen; vorhandene Ergebnisse nutzen und unnötige Vollscans, Wiederholungen und lange Protokolle vermeiden – ohne notwendige Prüfungen auszulassen.
 - **Live-Prüfung nach Seitenänderungen:** Jede geänderte MOSA-2-Seite anschließend in Chrome live prüfen, die korrekte Umsetzung bestätigen und die gemessene Seitenladezeit melden. Ohne erfolgreichen Live-Test keinen Abschluss als erfolgreich melden.
+- **Browserdaten schützen:** Lösch- und Speicherfunktionen nur mit isolierten Testdaten prüfen; bestehende Nutzerdaten unverändert lassen.
 
 **Grundsatz:** Das funktionierende Ergebnis zählt, nicht die Anzahl der Arbeitsschritte, Tests oder Dokumentationen.
 
