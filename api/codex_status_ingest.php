@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/codex_status_model.php';
 
 use function Mosa2\CodexStatus\event;
+use function Mosa2\CodexStatus\sourcePresence;
 use function Mosa2\CodexStatus\appendFile;
 use function Mosa2\CodexStatus\storePath;
 
@@ -31,7 +32,7 @@ try {
     $batch=$payload['events']??null;
     if (!is_array($batch) || !array_is_list($batch) || $batch===[] || count($batch)>50)
         $reply(422);
-    $parsed=[]; $now=time();
+    $parsed=[]; $now=time(); $presence=null;
     foreach ($batch as $item) {
         if (!is_array($item)) $reply(422);
         // A mirror of the existing MOSA batch may contain WORK or WinSCP events.
@@ -41,8 +42,13 @@ try {
         $value=event($item,$now);
         if ($value===null) $reply(422);
         $parsed[]=$value;
+        if (array_key_exists('mosa_source_presence',$item)) {
+            $candidate=sourcePresence($item['mosa_source_presence'],$now);
+            if ($candidate!==null && ($presence===null || $candidate['at'] >= $presence['at']))
+                $presence=$candidate;
+        }
     }
-    if ($parsed!==[]) appendFile(storePath(),$parsed);
+    if ($parsed!==[]) appendFile(storePath(),$parsed,$presence);
     $reply(202,count($parsed));
 } catch (Throwable) {
     $reply(503);
