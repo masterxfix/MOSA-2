@@ -23,6 +23,10 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 
 Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funktioniert hat und welche Fehler aufgetreten sind. Daraus leiten wir konkrete Verbesserungen ab und aktualisieren `AGENTS.md`, damit sich Fehler nicht wiederholen. Die Zwischenziele bestimmen wir im weiteren Projektverlauf gemeinsam.
 
-**Änderungen klein prüfen:** Nur passende Tests durchführen; Deployment-Workflows für kleine HTML-Änderungen von unnötigen Kompletttests entlasten.
+**Kleine Änderung, kleine Prüfung:** Nur betroffene Funktionen testen; keine unnötigen Kompletttests oder Actions-Läufe.
 
-**Browserzugang früh prüfen:** Vor einem verpflichtenden Live-Test zuerst sicherstellen, dass Codex eine authentifizierte Chrome-Sitzung tatsächlich steuern kann. Bei Hostfehler einen verfügbaren Alternativweg nutzen oder die Prüfung offen melden, statt erfolglose Versuche zu wiederholen. HTTP 401 zählt nicht als Ladezeitmessung.
+**Chrome früh prüfen:** Vor Browseraufträgen die bereitgestellte Chrome-Sitzung testen; bei Hostfehler einen verfügbaren Alternativweg nutzen, keine Fehlerschleifen.
+
+**Live-Erfolg belegen:** Nach Änderungen die ausgelieferte Seite prüfen; nur vollständig geladene Seiten zählen für die 2-Sekunden-Grenze, keine HTTP-401-Antworten.
+
+**Zeit und Status ehrlich melden:** Unnötige Wartezeiten vermeiden; fehlende Live-Prüfungen als offen kennzeichnen, niemals als Erfolg.
