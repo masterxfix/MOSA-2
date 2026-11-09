@@ -57,3 +57,20 @@ bestätigten Read-only-Modus besitzen. Fehler nach Commit bleiben ohne Retry.
 Die Testsite zeigt Stichtage ausdrücklich als Datum an und trennt sie von
 FY/FQ. Eine Abnahme erfolgt erst nach den unabhängigen Ziel-Readbacks und
 der Prüfung im verbundenen Chrome.
+
+## Prüfstand vor dem Merge
+
+- Implementierung: `08ff5b164d4ef0f46c53a5987d5da4d920ab207c`,
+  [PR #53](https://github.com/masterxfix/MOSA-2/pull/53).
+- 61 fokussierte Tests bestanden auf bytegetreu ausgechecktem Indexstand,
+  einschließlich unveränderter SQL-Migrationshashes. PHP- und JS-Syntax
+  geprüft. Die Tests sind kein Produktions- oder DB-Schreibnachweis.
+- Verbundener Chrome, realer Startweg Testsite → Fundamentaldaten → NEL ASA:
+  **11 Observations / 8 Current** sichtbar; Footer meldete 157 ms für
+  den Seitenaufbau. Das ist kein End-to-End-Messwert inklusive Daten-API
+  und keine Sichtabnahme des neuen Stands.
+- Die neuen Schreibläufe, unabhängigen Vor-/Nachvergleiche mit
+  Fremdasset-/Marktdaten-Fingerprints und das SFTP-Testsite-Deployment
+  stehen aus. Die relevanten Workflows akzeptieren Live-Importe nur auf
+  `main`. [Issue #47](https://github.com/masterxfix/MOSA-2/issues/47) bleibt
+  bis zu den Abschlussnachweisen offen.
