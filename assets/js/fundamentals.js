@@ -4,6 +4,17 @@
   const root = document.querySelector("[data-fundamentals-view]");
   if (!root) return;
   const state = { items: [], selected: null, jobs: new Map() };
+  const officialReports = new Map([
+    ["AU000000DRO2", "https://www.droneshield.com/investor-relations"],
+    ["CNE100000296", "https://www.bydglobal.com/cn/investor-relations"],
+    ["CNE100006CQ4", "https://www.ubtrobot.com/en/financial"],
+    ["DE0005313704", "https://www.zeiss.com/meditec-ag/de/investor-relations/finanzpublikationen.html"],
+    ["DE000A0JBPG2", "https://www.pnegroup.com/en/investor-relations/publications/"],
+    ["DK0060252690", "https://www.pandoragroup.com/investor/reports-and-presentations"],
+    ["NO0010081235", "https://nelhydrogen.com/reports-and-presentations/"],
+    ["US67066G1040", "https://investor.nvidia.com/financial-info/financial-reports/"],
+    ["US76655K1034", "https://investors.rigetti.com/financial-information/quarterly-results"]
+  ]);
   const elements = {
     assets: root.querySelector("[data-fundamental-assets]"),
     detail: root.querySelector("[data-fundamental-detail]"),
@@ -95,7 +106,18 @@
     const fragment = document.createDocumentFragment();
     const header = document.createElement("div");header.className = "fundamental-detail-heading";
     const title = document.createElement("h2");title.textContent = item.name;header.append(title);
-    const identity = document.createElement("p");identity.className = "fundamental-identity";identity.textContent = "ISIN " + item.isin + " · " + item.observations.length + " Observations · " + item.current.length + " Current";header.append(identity);
+    const identity = document.createElement("p");
+    identity.className = "fundamental-identity";
+    identity.textContent = "ISIN " + item.isin + " · " + item.observations.length + " Observations · " + item.current.length + " Current";
+    const reportsUrl = officialReports.get(item.isin);
+    if (reportsUrl) {
+      const link = document.createElement("a");
+      link.href = reportsUrl;
+      link.textContent = "Offizielle Finanzberichte";
+      identity.textContent += " · ";
+      identity.append(link);
+    }
+    header.append(identity);
     const timing = document.createElement("p");timing.className = "fundamental-capture";const latest = item.observations.map((row) => row.captured_at).sort().at(-1);timing.textContent = "Erfasst bis " + date(latest) + ". Gespeicherter Datenbankstand, kein Live-Abruf.";header.append(timing);fragment.append(header);
     const scope = elements.history ? historyScope() : null;
     const visible = scope ? item.observations.filter((row) => {
