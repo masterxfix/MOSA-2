@@ -1,6 +1,12 @@
 name: MOSA-2 testsite historical fundamentals
-run-name: History ${{ inputs.operation || 'queue' }} ${{ inputs.request_id }}
+run-name: History ${{ github.event_name == 'pull_request' && 'offline checks' || inputs.operation || 'queue' }} ${{ inputs.request_id }}
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/fundamentals-history.yml'
+      - 'scripts/fundamentals_history.py'
+      - 'scripts/fundamentals/history_queue_remote.py'
+      - 'tests/test_fundamentals_history.py'
   schedule:
     - cron: '12,42 * * * *'
   workflow_dispatch:
@@ -29,7 +35,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   history:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && (github.event_name == 'workflow_dispatch' || vars.MOSA2_HISTORY_ENABLED == 'true')
+    if: github.repository == 'masterxfix/MOSA-2' && github.run_attempt == 1 && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MOSA2_HISTORY_ENABLED == 'true')))
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
@@ -53,6 +59,7 @@ jobs:
           php -l api/fundamentals_history.php
           PYTHONPATH=.:tests "$RUNNER_TEMP/history/bin/python" -B -m unittest -v test_fundamentals_history test_fundamentals_generic test_fundamentals_web
       - name: Set up or process the private testsite queue
+        if: github.event_name != 'pull_request'
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           AUTHORIZATION: ${{ inputs.authorization }}
