@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
+from types import ModuleType
 import unittest
 from unittest.mock import patch
 from scripts import fundamentals_curated as runner
@@ -108,7 +110,8 @@ class CuratedTests(unittest.TestCase):
             calls.append(action)
             if action=='inspect':return dict(asset_id='103',baseline={},protected={}),0
             self.assertIsNone(kwargs['plan']['metadata']['http_status']);return dict(ok=True,readback='PASS'),0
-        with patch.object(runner.shared,'no_other_runs'),patch.object(runner.shared.access,'configuration'), \
+        with patch.dict(sys.modules,{'paramiko':ModuleType('paramiko')}), \
+            patch.object(runner.shared,'no_other_runs'),patch.object(runner.shared.access,'configuration'), \
             patch.object(runner.shared.access,'ssh_client',return_value=nullcontext(object())),patch.object(runner.shared.access,'tunnel',return_value=nullcontext(3306)), \
             patch.object(runner.shared,'archive',side_effect=archive),patch.object(runner.shared,'database',side_effect=database), \
             patch.object(runner.shared.ReadOnlyHttpTransport,'fetch',side_effect=AssertionError('provider prohibited')) as http, \
@@ -117,5 +120,15 @@ class CuratedTests(unittest.TestCase):
             self.assertEqual(result['provider_requests'],0);self.assertEqual(calls,['inspect','reserve','archive','verify','apply','verify'])
             calls.clear();result=runner.execute(env|dict(GITHUB_RUN_ATTEMPT='2'))
             self.assertFalse(result['ok']);self.assertEqual(calls,[])
-            with patch.object(runner.shared,'database',side_effect=RuntimeError('COMMIT')):
-                result=runner.execute(env);self.assertFalse(result['ok']);self.assertEqual(result['provider_requests'],0)
+            def fail_after_commit(env,port,action,**kwargs):
+                if action=='apply':
+                    calls.append(action)
+                    raise RuntimeError('INDEPENDENT_READBACK')
+                return database(env,port,action,**kwargs)
+            with patch.object(runner.shared,'database',side_effect=fail_after_commit):
+                result=runner.execute(env)
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['db_stage'],'INDEPENDENT_READBACK')
+                self.assertEqual(result['outcome'],'UNKNOWN_NO_RETRY')
+                self.assertEqual(calls,['inspect','reserve','archive','verify','apply'])
+                self.assertEqual(result['provider_requests'],0)
