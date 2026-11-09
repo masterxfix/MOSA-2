@@ -411,6 +411,7 @@
       setBusy(false);save();
       if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
       paint();scheduleAutomation();
+      if(list)list.replaceChildren();
     }
     return true;
   }

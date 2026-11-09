@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261108-automation';
+const cacheVersion='isin-20261109-clear-steps';
 for(const file of ['marktdaten.html','index.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
@@ -67,8 +67,7 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   assert.equal(retained.captured_at,oldEtf.captured_at,'Failed refresh keeps the old capture timestamp');
   assert.ok(retained.refresh_failed_at,'Failed refresh marks the retained quote as stale');
   assert.equal(stored[1].errors[0].code,'SOURCE_TIMEOUT','The actual provider error is stored');
-  assert.ok(steps.children.some(item=>item.textContent.includes('Aktualisiere 1 von 2: DroneShield')),'Progress names the first ISIN');
-  assert.ok(steps.children.some(item=>item.textContent.includes('Aktualisierung abgeschlossen: 1 erfolgreich, 1 fehlgeschlagen.')),'Final summary is shown');
+  assert.equal(steps.children.length,0,'All temporary progress is removed after completion, including partial failures');
 
   const callsBeforeDelete=calls.length;
   const firstRemove=assetList.children[0].children[2];

@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261108-automation';
+const cacheVersion='isin-20261109-clear-steps';
 const html=fs.readFileSync(__dirname+'/../marktdaten.html','utf8');
 const indexHtml=fs.readFileSync(__dirname+'/../index.html','utf8');
 assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),'marktdaten.html uses the automation cache version');
@@ -60,6 +60,7 @@ assert.equal(calendar.intervalFor(new Date('2026-05-15T10:00:00+02:00'),300),300
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(JSON.parse(storage.get('mosa2-isin-automation-v1')).enabled,true,'Start persists activation');
   assert.equal(calls,1,'Start performs one automatic cycle for saved ISINs');
+  assert.equal(steps.children.length,0,'Automatic cycle removes temporary progress after completion');
   assert.equal(maxActive,1,'Automatic cycle has no overlapping provider request');
   assert.ok(JSON.parse(storage.get('mosa2-isin-automation-v1')).lastUpdatedAt,'Automatic cycle persists last update');
   const scheduled=[...timers.values()].find(timer=>timer.delay>=5000);
