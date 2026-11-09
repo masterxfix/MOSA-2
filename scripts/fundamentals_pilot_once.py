@@ -72,6 +72,8 @@ def database(env,port,action,selected=None,**extra):
     request=dict(action=action,password=env['MOSA_TEST_DB_PASSWORD'],port=port,identity=selected['identity'],preserve_assets=selected['preserve_assets'],
         execution=selected.get('execution'),
         expected_baseline_counts={'m2_market_current':5,'m2_market_observations':28},**extra)
+    if 'history_scope' in extra:
+        request.pop('expected_baseline_counts')
     child={k:env[k] for k in ('PATH','HOME','LANG','SYSTEMROOT','TEMP','TMP') if k in env}
     start=time.monotonic()
     result=subprocess.run(['php',str(ROOT/'scripts/fundamentals/core.php')],input=json.dumps(request),text=True,

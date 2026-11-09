@@ -1,0 +1,13 @@
+[
+  {
+    "isin": "NO0010081235", "names": ["NEL ASA", "Nel ASA"],
+    "lei": "549300G6XN5IXMRKEG37",
+    "identity_reference": "https://mb.cision.com/Public/115/3938728/8e35de89d84f4a27.pdf",
+    "reference": "https://nelhydrogen.com/press-release/nel-asa-annual-report-2023/",
+    "url": "https://mb.cision.com/Main/115/3936356/2633586.zip",
+    "download_domains": ["mb.cision.com"],
+    "years": [2022, 2023], "report_end": "2023-12-31",
+    "expected_currency": "NOK", "currency_name": "Norwegian kroner",
+    "source": {"source_key": "nel_official_esef", "source_type": "issuer_annual_report", "display_name": "NEL official ESEF reports", "base_url": "https://nelhydrogen.com/", "enabled": "0"}
+  }
+]

@@ -90,6 +90,35 @@ function validate(array $plan): array {
 function executionBinding(array $plan,mixed $execution): void {
     if(array_key_exists('execution',$plan['metadata']??[]))same($execution,$plan['metadata']['execution'],'execution_binding');
 }
+function historicalScope(array $scope): void {
+    check(is_int($scope['start'])&&is_int($scope['end'])&&$scope['start']>=1900&&
+        $scope['end']<=(int)gmdate('Y')&&$scope['end']>=$scope['start']&&$scope['end']-$scope['start']<=9,'history_years');
+    check(in_array($scope['kind'],['fy','fq','both'],true),'history_kind');
+}
+function historicalInventory(PDO $p,string $assetId,array $scope): array {
+    historicalScope($scope);
+    $rows=query($p,"SELECT o.metric_key,o.period_type,o.fiscal_year,o.fiscal_quarter,o.period_start,o.period_end,
+        o.as_of_at,o.value_decimal,o.unit_key,u.monetary_currency_code,u.scale_numerator,u.scale_denominator
+        FROM m2_fundamental_observations o JOIN m2_fundamental_units u
+          ON u.unit_key=o.unit_key AND u.unit_version=o.unit_version
+        WHERE o.asset_id=? AND (o.fiscal_year BETWEEN ? AND ? OR
+          (o.period_type='snapshot' AND o.as_of_at>=? AND o.as_of_at<?)) LIMIT 513",
+        [$assetId,$scope['start'],$scope['end'],$scope['start'].'-01-01',($scope['end']+1).'-01-01']);
+    check(count($rows)<=512,'history_inventory_bound');
+    return $rows;
+}
+function historicalPlan(array $plan): void {
+    $scope=$plan['history_scope'];historicalScope($scope);
+    same($plan['publish_current'],false,'history_current');
+    check(preg_match('/\Afundamentals-history-[a-f0-9]{32}\z/',$plan['metadata']['execution']??'')===1,'history_execution');
+    check(in_array($plan['source']['source_type'],['issuer_annual_report','issuer_release','issuer_quarterly_report','exchange_announcement','exchange_annual_report','regulator_xbrl'],true),
+        'history_official_source');
+    foreach($plan['observations'] as $row){
+        $type=$row['period_type'];$year=(int)($row['fiscal_year']??substr($row['as_of_at'],0,4));
+        check($year>=$scope['start']&&$year<=$scope['end'],'history_year');
+        check($type==='snapshot'||($scope['kind']==='both'&&in_array($type,['fy','fq'],true))||$type===$scope['kind'],'history_period');
+    }
+}
 function query(PDO $p,string $sql,array $args=[]): array {$q=$p->prepare($sql);$q->execute($args);return $q->fetchAll(PDO::FETCH_ASSOC);}
 function insert(PDO $p,string $table,array $row): string {
     $sql='INSERT INTO '.qi($table).' ('.implode(',',array_map('Mosa2\\Phase2\\qi',array_keys($row))).') VALUES ('.implode(',',array_fill(0,count($row),'?')).')';
@@ -100,7 +129,7 @@ function equalRow(array $actual,array $expected): void {
         if($k==='value_decimal'&&$v!==null)same(decimal((string)$a),decimal((string)$v),'readback_decimal');
         else same($a===null?null:(string)$a,$v===null?null:(string)$v,'readback_value');}
 }
-function original(PDO $p,?array $before=null): array {
+function original(PDO $p,?array $before=null,int $fileLimit=128): array {
     $out=[];
     foreach(\Mosa2\CollectorSchema5\envelope(5)['tables'] as $t){
         $where='';$max=null;
@@ -108,7 +137,8 @@ function original(PDO $p,?array $before=null): array {
             $max=$before[$t]['max_id']??(string)$p->query('SELECT COALESCE(MAX(id),0) FROM '.qi($t))->fetchColumn();
             check(preg_match('/\A[0-9]+\z/',$max)===1,'max_id');$where=' WHERE id<='.$max;
         }
-        $rows=query($p,'SELECT * FROM '.qi($t).$where.' LIMIT 129');check(count($rows)<=128,'baseline_bound');$encoded=[];
+        $limit=$max===null?128:$fileLimit;
+        $rows=query($p,'SELECT * FROM '.qi($t).$where.' LIMIT '.($limit+1));check(count($rows)<=$limit,'baseline_bound');$encoded=[];
         foreach($rows as $row){foreach($row as &$v)$v=$v===null?null:bin2hex((string)$v);unset($v);$encoded[]=canonical($row);}sort($encoded,SORT_STRING);
         $out[$t]=['count'=>count($rows),'sha256'=>hash('sha256',canonical($encoded)),'max_id'=>$max];
     }
@@ -157,10 +187,10 @@ function rowKey(string $table,array $row): string {
     return canonical(array_map(static fn($k)=>(string)$row[$k],receiptKeys($table)));
 }
 /** Bounded row fingerprints keyed by primary identity; hashes only cross the runner boundary. */
-function fundamentalBaseline(PDO $p): array {
+function fundamentalBaseline(PDO $p,int $limit=256): array {
     $baseline=[];
     foreach(['m2_sources','m2_files',...\Mosa2\CollectorSchema5\FUNDAMENTALS] as $table){
-        $rows=query($p,'SELECT * FROM '.qi($table).' LIMIT 257');check(count($rows)<=256,'fundamental_baseline_bound');
+        $rows=query($p,'SELECT * FROM '.qi($table).' LIMIT '.($limit+1));check(count($rows)<=$limit,'fundamental_baseline_bound');
         $map=[];
         foreach($rows as $row){
             $key=rowKey($table,$row);check(!isset($map[$key]),'fundamental_baseline_unique');
@@ -174,8 +204,8 @@ function rowFingerprint(array $row): string {
     return hash('sha256',canonical(array_map(static fn($v)=>$v===null?null:bin2hex((string)$v),$row)));
 }
 /** Verify the exact rows first, then remove only receipt-authorized inserts/replacements. */
-function assertFundamentalDelta(PDO $p,array $baseline,array $receipt): void {
-    $after=fundamentalBaseline($p);
+function assertFundamentalDelta(PDO $p,array $baseline,array $receipt,int $limit=256): void {
+    $after=fundamentalBaseline($p,$limit);
     foreach($receipt['mutations'] as [$table,$row,$previous]){
         $key=rowKey($table,$row);
         check(isset($after[$table][$key]),'delta_missing_row');
@@ -241,7 +271,8 @@ function storedFile(array $plan): array {
 }
 function persist(PDO $p,array $plan,string $assetId): array {
     $stored=storedFile($plan);
-    if(($plan['publish_current']??true)!==true)
+    if(isset($plan['history_scope']))historicalPlan($plan);
+    elseif(($plan['publish_current']??true)!==true)
         check(($plan['stored_evidence']['kind']??null)==='curated_evidence'&&$plan['parser_version']==='2','projection_contract');
     $v=validate($plan);$now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');check($now>=$plan['metadata']['observed_at'],'clock');$expected=[];$mutations=[];$beforeCounts=counts($p);$inserted=array_fill_keys(array_keys($beforeCounts),0);$updates=0;
     $record=function(string $table,array $row,string $idColumn='id')use($p,&$expected,&$mutations,&$inserted):array{
@@ -306,7 +337,7 @@ function persist(PDO $p,array $plan,string $assetId): array {
         'facts_reused'=>count($observations)-$inserted['m2_fundamental_observations'],
         'source_id'=>$sourceId,'metric_keys'=>array_keys($v['metrics'])];
 }
-function readback(PDO $p,array $receipt,?array $baseline=null): array {
+function readback(PDO $p,array $receipt,?array $baseline=null,int $limit=256): array {
     $facts=[];
     foreach($receipt['expected'] as [$table,$row]){
         $keys=receiptKeys($table);
@@ -315,13 +346,13 @@ function readback(PDO $p,array $receipt,?array $baseline=null): array {
         if($table==='m2_fundamental_observations')$facts[]=array_intersect_key($rows[0],array_flip(['id','source_id','fetch_id','metric_key','value_decimal','unit_key','period_type','fiscal_year','period_start','period_end','as_of_at','field_path']));
     }
     same(counts($p),$receipt['counts'],'exact_row_deltas');
-    if($baseline!==null)assertFundamentalDelta($p,$baseline,$receipt);
+    if($baseline!==null)assertFundamentalDelta($p,$baseline,$receipt,$limit);
     return $facts;
 }
-function transaction(PDO $p,array $plan,string $assetId,callable $committing,?array $baseline=null): array {
+function transaction(PDO $p,array $plan,string $assetId,callable $committing,?array $baseline=null,int $limit=256): array {
     validate($plan);check($p->beginTransaction(),'begin');$commitStarted=false;
-    try{if($baseline!==null)same(fundamentalBaseline($p),$baseline,'transaction_baseline_drift');
-        $receipt=persist($p,$plan,$assetId);readback($p,$receipt,$baseline);$committing();$commitStarted=true;
+    try{if($baseline!==null)same(fundamentalBaseline($p,$limit),$baseline,'transaction_baseline_drift');
+        $receipt=persist($p,$plan,$assetId);readback($p,$receipt,$baseline,$limit);$committing();$commitStarted=true;
         check($p->commit(),'commit');return $receipt;
     }catch(\Throwable $e){if(!$commitStarted&&$p->inTransaction())$p->rollBack();throw $e;}
 }
@@ -388,25 +419,30 @@ function main(): int {
         check(in_array($input['action'],['inspect','apply'],true),'action');$stage='IDENTITY';
         $p=connection($input['password'],'127.0.0.1',$input['port']);\Mosa2\Phase2\preflight($p,false);locks($p);
         $stage='SCHEMA6';schema($p,$input['action']==='inspect');
-        $assetId=asset($p,$input['identity']);$before=original($p);$fundamentalBefore=fundamentalBaseline($p);$baseline=$before+['fundamentals'=>$fundamentalBefore];$protected=protectedAssets($p,$input['preserve_assets']??[]);
+        $history=isset($input['history_scope']);$limit=$history?4096:256;
+        $assetId=asset($p,$input['identity']);$before=original($p,null,$history?$limit:128);$fundamentalBefore=fundamentalBaseline($p,$limit);
+        $baseline=$before+['fundamentals'=>$history?bin2hex(digest($fundamentalBefore)):$fundamentalBefore];
+        $protected=protectedAssets($p,$input['preserve_assets']??[]);
         $newScope=$input['new_scope']??null;if($newScope!==null)newSlots($p,$assetId,$newScope);
         foreach($input['expected_baseline_counts']??[] as $t=>$n)same($before[$t]['count'],$n,'baseline_count');\Mosa2\Schema6Apply\provenance($p);
         if($input['action']==='inspect'){
             if($newScope!==null)inspectPlanCatalog($p,$input['catalog_plan']);
             $result=['ok'=>true,'asset_id'=>$assetId,'baseline'=>$baseline,'protected'=>$protected,'schema'=>6,'tables'=>26];
+            if(isset($input['history_scope']))$result['inventory']=historicalInventory($p,$assetId,$input['history_scope']);
         }
         else{
             $stage='PLAN';same($baseline,$input['baseline'],'baseline_drift');same($protected,$input['protected'],'protected_drift');same($assetId,$input['asset_id'],'asset_drift');
             $plan=$input['plan'];executionBinding($plan,$input['execution']??null);validate($plan);storedFile($plan);
+            same($plan['history_scope']??null,$input['history_scope']??null,'history_scope_binding');
             if($newScope!==null){
                 $slots=array_map(static fn($r)=>$r['metric_key'].':'.$r['period_type'],$plan['observations']);
                 sort($slots,SORT_STRING);same($slots,$newScope['slots'],'target_plan_scope');
             }
             if(isset($plan['stored_evidence']))same(canonical(json_decode($plan['evidence_json'],true)['issuer']),canonical($input['identity']),'evidence_issuer');
-            $stage='TRANSACTION';$receipt=transaction($p,$plan,$assetId,static function()use(&$stage,&$commitStarted){$stage='COMMIT';$commitStarted=true;},$fundamentalBefore);
+            $stage='TRANSACTION';$receipt=transaction($p,$plan,$assetId,static function()use(&$stage,&$commitStarted){$stage='COMMIT';$commitStarted=true;},$fundamentalBefore,$limit);
             $stage='INDEPENDENT_READBACK';$read=connection($input['password'],'127.0.0.1',$input['port']);
             beginIndependentReadback($p,$read);
-            schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');$verifiedFacts=readback($read,$receipt,$fundamentalBefore);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
+            schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');$verifiedFacts=readback($read,$receipt,$fundamentalBefore,$limit);same(original($read,$before,$history?$limit:128),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
             $sample=$plan['observations'][0];
             $years=array_column($plan['observations'],'fiscal_year');
             $performance=timings($read,$assetId,$sample['metric_key'],$sample['period_type'],

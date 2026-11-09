@@ -13,6 +13,8 @@ function esefEvidence(array $plan,array $doc):void {
     same(canonical($doc['source_response']),canonical($plan['metadata']+['retained'=>false]),'esef_response');
     same(canonical($doc['reported_periods']),canonical($plan['reported_periods']),'esef_periods');
     $profile=$doc['identity_mapping'];$profiles=json_decode(file_get_contents(__DIR__.'/esef_profiles.json'),true,32,JSON_THROW_ON_ERROR);
+    if(isset($plan['history_scope']))$profiles=array_merge($profiles,
+        json_decode(file_get_contents(__DIR__.'/esef_history_profiles.json'),true,32,JSON_THROW_ON_ERROR));
     check(count(array_filter($profiles,fn($p)=>canonical($p)===canonical($profile)))===1,'esef_reviewed_profile');
     same($doc['issuer']['isin'],$profile['isin'],'esef_isin');check(in_array($doc['issuer']['name'],$profile['names'],true),'esef_name');
     same(canonical($plan['source']),canonical($profile['source']),'esef_source');

@@ -6,11 +6,10 @@
   <meta name="description" content="MOSA 2: gespeicherte Fundamentaldaten mit Jahresvergleich, Quellen und nachvollziehbaren Referenzen.">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Fundamentaldaten</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=codex-status-20261108">
-  <script src="assets/js/page_load_time.js" defer></script>
+  <link rel="stylesheet" href="assets/css/main.css?v=history-20261109">
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/codex_status.js?v=20261108" defer></script>
-  <script src="assets/js/fundamentals.js?v=as-of-20261109" defer></script>
+  <script src="assets/js/fundamentals.js?v=history-20261109" defer></script>
 </head>
 <body class="fundamentals-page">
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -23,24 +22,37 @@
     <section class="hero fundamentals-hero" aria-labelledby="fundamentals-titel">
       <div class="eyebrow">Gespeicherte Fundamentaldaten · MOSA 2</div>
       <h1 id="fundamentals-titel">Fundamentaldaten.<br><em>Mit Vergleich.</em></h1>
-      <p class="intro">Neun Aktien. Gespeicherte Berichtskennzahlen. Ein nachvollziehbarer Datenstand mit echten Werten aus der MOSA-2-Testdatenbank.</p>
+      <p class="intro">Gespeicherte Berichtskennzahlen aus der MOSA-2-Testdatenbank. Der Standardbestand beginnt 2025. Ältere Werte lassen sich anzeigen und bei Bedarf anfordern.</p>
       <p class="fundamental-snapshot" data-fundamental-summary>Fundamentaldaten werden geladen …</p>
     </section>
     <section class="fundamentals-section" aria-labelledby="auswahl-titel">
       <div class="section-heading"><div><p class="eyebrow">01 / Unternehmen</p><h2 id="auswahl-titel">Ein Unternehmen auswählen.</h2></div><span class="snapshot" data-fundamental-status role="status">Wird geladen …</span></div>
       <div class="fundamentals-layout">
-        <aside class="fundamental-assets" aria-label="Unternehmen"><p class="fundamental-total"><span data-fundamental-total>09</span> Aktien mit Fundamentaldaten</p><div data-fundamental-assets></div></aside>
-        <div class="fundamental-detail" data-fundamental-detail aria-live="polite"><p class="fundamental-placeholder">Gespeicherte Kennzahlen werden geladen …</p></div>
+        <aside class="fundamental-assets" aria-label="Unternehmen"><p class="fundamental-total"><span data-fundamental-total>—</span> Aktien</p><div data-fundamental-assets></div></aside>
+        <div class="fundamental-detail">
+          <form data-history-form hidden>
+            <fieldset>
+              <legend>Historische Berichte</legend>
+              <label>Startjahr <input name="start" type="number" min="1900" value="2025" required></label>
+              <label>Endjahr <input name="end" type="number" min="1900" value="2025" required></label>
+              <label>Datenart <select name="kind"><option value="both">Jahre und Quartale</option><option value="fy">Jahresdaten</option><option value="fq">Quartalsdaten</option></select></label>
+              <button type="submit">Fehlende Berichte anfordern</button>
+              <p data-history-status role="status"></p>
+              <p class="fundamental-identity" data-history-receipt></p>
+            </fieldset>
+          </form>
+          <div data-fundamental-detail aria-live="polite"><p class="fundamental-placeholder">Gespeicherte Kennzahlen werden geladen …</p></div>
+        </div>
       </div>
     </section>
     <section class="fundamentals-note" aria-labelledby="einordnung-titel">
       <div><p class="eyebrow">02 / Einordnung</p><h2 id="einordnung-titel">Berichtswerte und Marktdaten bleiben getrennt.</h2></div>
-      <p class="intro">Diese Seite zeigt historische Berichtskennzahlen und ihre gespeicherten Quellen. Aktuelle Marktkurse gehören in die separate <a class="text-link" href="marktdaten.html">Marktdatenansicht <span aria-hidden="true">↗</span></a>. Es werden keine Vorhersagen, Währungsumrechnungen oder Hintergrundimporte ausgeführt.</p>
+      <p class="intro">Die Ansicht liest gespeicherte Berichtskennzahlen. Ein Abruf erfolgt nur auf Anfrage als eigener Job. Aktuelle Marktkurse findest du in der <a class="text-link" href="marktdaten.html">Marktdatenansicht <span aria-hidden="true">↗</span></a>.</p>
     </section>
   </main>
   <footer class="wrap footer">
     <span>MOSA 2 · Auf verlässlichen Grundlagen aufgebaut.</span>
-    <span class="footer-latency">Seitenladezeit · <span data-page-load-time aria-label="Seitenladezeit wird gemessen">— ms</span></span>
+    <span class="footer-latency">Seitenladezeit inkl. Daten · <span data-fundamentals-load-time>— ms</span></span>
     <span class="footer-release">Entwicklung · Keine Produktivfreigabe</span>
   </footer>
 </body>

@@ -206,6 +206,13 @@ dd { color: var(--muted); font-size: .8rem; margin: 6px 0 0 28px; }
 .fundamental-asset-name { font-size: .92rem; }
 .fundamental-asset-arrow { color: var(--accent); font-size: 1rem; text-align: right; }
 .fundamental-detail { min-width: 0; }
+[data-history-form] { margin-bottom: 1.25rem; }
+[data-history-form] fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .85rem; min-width: 0; }
+[data-history-form] label { display: inline-flex; flex-direction: column; gap: .25rem; margin: 0 .55rem .55rem 0; }
+[data-history-form] :is(input, select, button) { font: inherit; padding: .35rem .5rem; }
+[data-history-form] input { width: 8ch; }
+[data-history-form] p { margin: .3rem 0 0; overflow-wrap: anywhere; }
+[data-history-form] p:empty { display: none; }
 .fundamental-detail-heading { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 28px; }
 .fundamental-detail-heading h2 { margin-bottom: 12px; }
 .fundamental-identity, .fundamental-capture, .fundamental-reference-note { color: var(--muted); font-size: .76rem; margin: 0; }
