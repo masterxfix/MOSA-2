@@ -51,8 +51,12 @@ bleiben als Stichtagswerte erkennbar. Unbelegte Werte bleiben offen.
 Die Anfrage akzeptiert alle aktiven Aktien. Automatische Berichtsabrufe sind
 auf qualifizierte offizielle Profile begrenzt. Für ungeprüfte Publikationsorte,
 unbekannte Formate und zusätzliche Quartale wird eine Quellenlücke gemeldet.
-Das gilt derzeit auch für OHB, dessen offizielles Archiv PDFs bereitstellt.
-Neue qualifizierte Profile erweitern denselben Weg.
+Der vorhandene HTML-Tabellen- und Evidence-Weg kann auch offizielle
+Ergebnismeldungen mit explizitem Spaltenvertrag nutzen. OHB liefert damit
+FY 2023–2025 und die separat bezeichneten ersten Quartale 2025 und 2026.
+In der Q1-2026-Meldung angepasste Q1-2025-Vergleichswerte ersetzen den
+ursprünglichen Q1-2025-Bericht nicht. Neue qualifizierte Profile erweitern
+denselben Weg.
 
 ## Nachprüfung
 
@@ -68,3 +72,25 @@ YTD, Current-Schutz, einen manipulierten Readback und Fehler nach Commit ab.
 Die Seitenladezeit in der Ansicht umfasst Navigation und Darstellung der
 gespeicherten Daten. Die Dauer eines separat angeforderten Jobs ist davon
 unabhängig.
+
+## Testsite-Nachweise vom 09.11.2026
+
+- [PR #55](https://github.com/masterxfix/MOSA-2/pull/55) enthält den Worker,
+  die Ansicht und die Quellenprofile. Der fokussierte Testlauf nach der
+  OHB-Erweiterung umfasst 92 erfolgreiche Tests.
+- Das [erste Web-Deployment](https://github.com/masterxfix/MOSA-2/actions/runs/42658515269)
+  von `0c22044` verifizierte alle vier Testsite-Dateien per SHA-256. Chrome
+  zeigte auf dem regulären Startweg 156 ms einschließlich Datenabruf und
+  bei NEL 17 Observations und 13 Current-Zuordnungen.
+- NEL FY2023 war im Browser leer. Die authentifizierte Anfrage erreichte
+  den Endpunkt. Der Worker war auf diesem Stand noch nicht eingerichtet,
+  weshalb die Anfrage nicht gespeichert wurde. Das ist kein Importnachweis.
+- Das [offizielle NEL-ESEF-Paket](https://nelhydrogen.com/press-release/nel-asa-annual-report-2023/)
+  mit SHA-256 `42cb2ff57f8614ba840d668584dd4f584fc0b9ab7ea427a28232d472e003dcd0`
+  lieferte isoliert drei belegte FY2023-Flusswerte. Der PHP-Evidence-Vertrag
+  und der transaktionale Test ohne Current-Schreibvorgang bestanden.
+- Für die Live-Abnahme sind der reguläre Merge, die einmalige private
+  Einrichtung, eine authentifizierte FY2023-Anfrage und der unabhängige
+  Read-only-Vergleich gegen den [vorigen NEL-Readback](https://github.com/masterxfix/MOSA-2/actions/runs/42652866710)
+  erforderlich. Erwartet werden drei zusätzliche FY2023-Observations bei
+  unverändert 13 Current-Zuordnungen sowie unveränderte Fremd- und Marktdaten.

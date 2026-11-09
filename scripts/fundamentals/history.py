@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from . import esef
+from . import esef, issuer_tables
 
 ROOT = Path(__file__).resolve().parent
 
@@ -48,6 +48,17 @@ def catalog(isin):
             end = date.fromisoformat(end)
             quarter = (end.month - 1) // 3 + 1 if kind == 'fq' else None
             yield Report(key, (kind, end.year, quarter), frozenset(entry['history_metrics']), entry, adapter)
+
+    for issuer in issuer_tables.PROFILES:
+        if issuer['isin'] != isin:
+            continue
+        for release in issuer['releases']:
+            adapter = issuer_tables.IssuerTable(issuer, release)
+            kind, start, _ = release['period']
+            date_start = date.fromisoformat(start)
+            quarter = (date_start.month - 1) // 3 + 1 if kind == 'fq' else None
+            yield Report('issuer-table:' + adapter.URL, (kind, date_start.year, quarter),
+                         frozenset(issuer['labels'].values()), {'retention': 'derived_evidence'}, adapter)
 
 
 def slot(row):

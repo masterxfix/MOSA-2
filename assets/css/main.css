@@ -211,6 +211,8 @@ dd { color: var(--muted); font-size: .8rem; margin: 6px 0 0 28px; }
 [data-history-form] label { display: inline-flex; flex-direction: column; gap: .25rem; margin: 0 .55rem .55rem 0; }
 [data-history-form] :is(input, select, button) { font: inherit; padding: .35rem .5rem; }
 [data-history-form] input { width: 8ch; }
+[data-history-form] label, [data-history-form] button { vertical-align: bottom; }
+[data-history-form] button { margin-bottom: .55rem; }
 [data-history-form] p { margin: .3rem 0 0; overflow-wrap: anywhere; }
 [data-history-form] p:empty { display: none; }
 .fundamental-detail-heading { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 28px; }

@@ -253,6 +253,19 @@ function storedFile(array $plan): array {
         same(canonical($doc['source_response']),canonical($meta+['retained'=>false]),'response_binding');
         same($doc['parser'],['key'=>$plan['parser_key'],'version'=>$plan['parser_version']],'parser_binding');
         same(count($doc['facts']),count($plan['observations']),'evidence_count');
+        $issuerTable=$plan['parser_key']==='official_issuer_results_table_v1';
+        if($issuerTable){
+            same($doc['source_classification'],'official_issuer_release','issuer_table_classification');
+            $matches=[];
+            $profiles=json_decode(file_get_contents(__DIR__.'/issuer_table_profiles.json'),true,32,JSON_THROW_ON_ERROR);
+            foreach($profiles as $profile){
+                if($profile['isin']!==$doc['issuer']['isin'])continue;
+                foreach($profile['releases'] as $release)if($release['url']===$meta['url'])$matches[]=[$profile,$release];
+            }
+            same(count($matches),1,'issuer_table_profile');[$profile,$release]=$matches[0];
+            same(canonical($plan['source']),canonical($profile['source']),'issuer_table_source');
+            same(canonical($plan['units']),canonical([$profile['unit']]),'issuer_table_unit');
+        }
         foreach($plan['observations'] as $i=>$row){$fact=$doc['facts'][$i];
             foreach(['metric_key','period_start','period_end'] as $key)same($fact[$key],$row[$key],'evidence_fact');
             same($fact['normalized_value'],$row['value_decimal'],'evidence_value');same($fact['normalized_unit'],$row['unit_key'],'evidence_unit');
@@ -260,6 +273,16 @@ function storedFile(array $plan): array {
             check(preg_match('/\Ahtml:table=[1-9][0-9]*;row=[1-9][0-9]*;column=[1-9][0-9]*\z/',$fact['position'])===1,'evidence_locator');
             foreach(['original_label','original_value','original_unit'] as $key)check(is_string($fact[$key])&&strlen($fact[$key])>0&&strlen($fact[$key])<=512,'evidence_original');
             same($row['field_path'],'evidence:facts/'.$i.';source='.$fact['position'],'evidence_path');
+            if($issuerTable){
+                same([$row['period_type'],$row['period_start'],$row['period_end']],$release['period'],'issuer_table_period');
+                same($fact['original_period'],$release['column'],'issuer_table_column');
+                same($fact['original_unit'],$profile['unit_header'],'issuer_table_original_unit');
+                same($profile['labels'][$fact['original_label']]??null,$row['metric_key'],'issuer_table_metric');
+                $original=str_replace('−','-',$fact['original_value']);
+                $separator=preg_quote($release['thousands_separator'],'~');
+                check(preg_match('~\A-?(?:[0-9]+|[0-9]{1,3}(?:'.$separator.'[0-9]{3})+)\z~',$original)===1,'issuer_table_original');
+                same(decimal(str_replace($release['thousands_separator'],'',$original)),decimal($row['value_decimal']),'issuer_table_value');
+            }
         }
         }
         same($doc['parser'],['key'=>$plan['parser_key'],'version'=>$plan['parser_version']],'parser_binding');

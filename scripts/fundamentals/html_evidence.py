@@ -52,7 +52,7 @@ class Tables(HTMLParser):
         elif tag == 'table': self.stack.pop()
 
 
-def evidence(plan, metadata, identity):
+def evidence(plan, metadata, identity, *, official=False):
     facts = plan.pop('evidence_facts')
     if not 1 <= len(facts) == len(plan['observations']) <= 256: raise ValueError('EVIDENCE_BINDING')
     doc = dict(format='mosa2-fundamental-evidence-v1', kind='derived_evidence',
@@ -60,6 +60,9 @@ def evidence(plan, metadata, identity):
                source_classification='independent_third_party_report_reproduction',
                verification='adapter_qualified_not_independently_verified_against_issuer',
                parser=dict(key=plan['parser_key'], version=plan['parser_version']), facts=facts)
+    if official:
+        doc.update(source_classification='official_issuer_release',
+                   verification='reviewed_official_issuer_table')
     for i, (fact, row) in enumerate(zip(facts, plan['observations'])):
         fact.update(metric_key=row['metric_key'], period_start=row['period_start'], period_end=row['period_end'],
                     normalized_value=row['value_decimal'], normalized_unit=row['unit_key'], validation_status='qualified')

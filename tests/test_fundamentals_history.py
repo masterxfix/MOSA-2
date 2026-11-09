@@ -55,7 +55,7 @@ class HistoryTests(unittest.TestCase):
             history.candidates(SCOPE, [REPORT, REPORT], {})
 
     def test_no_get_for_repeats_or_absent_sources(self):
-        for job, rows, status in [(JOB, self.facts, 'complete'), (dict(JOB, isin='DE0005936124'), [], 'unavailable')]:
+        for job, rows, status in [(JOB, self.facts, 'complete'), (dict(JOB, isin='DE0000000001'), [], 'unavailable')]:
             with patch.object(worker.shared, 'database', return_value=({'inventory': rows}, 0)), \
                  patch.object(worker, 'qualify', side_effect=AssertionError('unexpected provider call')) as fetch:
                 result = worker.process(ENV, None, 0, job)
@@ -103,6 +103,36 @@ class HistoryTests(unittest.TestCase):
         snapshot = {'period_type': 'snapshot', 'as_of_at': '2025-03-25 00:00:00.000000'}
         self.assertEqual(history.slot(snapshot), ('snapshot', snapshot['as_of_at'], None))
         self.assertNotIn(('ytd', 2025, 1), set(history.periods(dict(SCOPE, kind='fq'))))
+
+    def test_issuer_table_qualifies_exact_quarter_and_ignores_adjusted_values(self):
+        report = next(r for r in history.catalog('DE0005936124') if r.period == ('fq', 2025, 1))
+        adapter = report.adapter
+        html = b'''<h1>OHB SE Releases Its 2025 Quarterly Report</h1>
+        <p>The OHB Group (ISIN: DE0005936124, Prime Standard)</p>
+        <h2>Key performance indicators at a glance</h2>
+        <table><tr><th>in EUR 000</th><th>Q1 2024</th><th>Q1 2025</th></tr>
+        <tr><td>Revenue</td><td>5,000</td><td>7,500</td></tr>
+        <tr><td>Adjusted EBITDA</td><td>8,000</td><td>9,000</td></tr>
+        <tr><td>EBIT</td><td>1,000</td><td>-50</td></tr>
+        <tr><td>EBITDA</td><td>2,000</td><td></td></tr></table>'''
+        identity = {'name': 'OHB SE', 'isin': adapter.ISIN}
+        metadata = dict(self.report_plan['metadata'], url=adapter.URL, content_type='text/html')
+        parsed = adapter.parse(html, metadata, identity)
+        rows = parsed['observations']
+        self.assertEqual([(r['metric_key'], r['value_decimal']) for r in rows], [('revenue', '7500'), ('ebit', '-50')])
+        self.assertTrue(all(r['period_end'] == '2025-03-31' and r['period_type'] == 'fq' for r in rows))
+        raw, evidence = adapter.evidence(parsed, metadata, identity)
+        self.assertIn(b'official_issuer_release', raw)
+        parsed.update(metadata=metadata, stored_evidence=evidence,
+                      archive=dict(storage_key='/private/synthetic/evidence.json', durable=True,
+                                   sha256=evidence['sha256'], bytes=evidence['bytes']))
+        filtered = history.select_facts(parsed, report, {}, dict(SCOPE, kind='fq'))
+        result = subprocess.run(['php', '-r', "require 'scripts/fundamentals/core.php'; "
+                                 "\\Mosa2\\Fundamentals\\storedFile(json_decode(stream_get_contents(STDIN),true));"],
+                                input=json.dumps(filtered), text=True, capture_output=True, cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with self.assertRaisesRegex(ValueError, 'ISSUER_TABLE_STRUCTURE'):
+            adapter.parse(html.replace(b'Q1 2025', b'YTD 2025'), metadata, identity)
 
     def test_worker_requires_exact_main_and_fresh_execution(self):
         env = dict(ENV, GITHUB_REPOSITORY='masterxfix/MOSA-2', GITHUB_REF='refs/heads/main',

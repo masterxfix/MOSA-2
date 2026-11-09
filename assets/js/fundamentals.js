@@ -184,7 +184,10 @@
     elements.history.elements.end.value = year;
     elements.history.elements.start.max = year;
     elements.history.elements.end.max = year;
-    elements.history.addEventListener("change", () => select(state.selected));
+    elements.history.addEventListener("input", () => {
+      const {start, end} = historyScope();
+      if (start >= 1900 && end >= start && end <= year) select(state.selected);
+    });
     elements.history.addEventListener("submit", async (event) => {
       event.preventDefault();
       const isin = state.selected;

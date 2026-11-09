@@ -65,7 +65,7 @@ try {
     $directory = dirname(__DIR__, 2).'/private/mosa2-collector/history';
     if (realpath($directory) !== $directory || !is_dir($directory) ||
         (fileperms($directory) & 0777) !== 0700)
-        throw new RuntimeException('queue');
+        historyReply(503, ['message' => 'Der Importjob ist noch nicht eingerichtet. Gespeicherte Werte bleiben verfügbar.']);
     if ($method === 'GET') {
         $id = $_GET['id'] ?? '';
         if (!is_string($id) || preg_match('/\A[0-9a-f]{64}\z/', $id) !== 1)
