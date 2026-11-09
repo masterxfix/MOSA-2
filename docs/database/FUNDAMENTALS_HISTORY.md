@@ -22,6 +22,17 @@ Anfrage-ID. Beide manuellen Operationen binden die Autorisierung an den exakten
 Main-Commit nach dem Muster `MOSA2-HISTORY-<operation>:<commit>:<request_id>`.
 Für `setup` bleibt der Teil nach dem letzten Doppelpunkt leer.
 
+Die früheren Setup-Läufe stoppten im Pfadschutz, weil der Dogado-Basispfad
+die Gerätekennung gewechselt hatte. Der lesende
+[Pfadnachweis](https://github.com/masterxfix/MOSA-2/actions/runs/42664342326)
+zeigt `64769:5248112` gegenüber dem alten Fixwert `64768:5248112`.
+Die Queue bindet die nach Host-Key-, Pfad-, Eigentümer- und Modusprüfung
+gemessene Kennung für den laufenden Vorgang. Der Setup-Readback bestätigt
+Verzeichnis `0700`, Sperrdatei `0600`, Eigentümer, Gruppe und Dateityp.
+Fehler nennen die Phase und einen freigegebenen Fehlercode ohne Rohdaten aus
+SSH-Standardfehler oder Ausnahmen. Setup benötigt ausschließlich den
+gepinnten Testsite-SSH-Zugang und setzt eine deaktivierte Automatik voraus.
+
 Die optionale Repository-Variable `MOSA2_HISTORY_ENABLED=true` lässt denselben
 Workflow zweimal pro Stunde höchstens eine authentifizierte Anfrage übernehmen.
 Der Takt startet bei leerer Warteschlange weder einen DB-Import noch einen

@@ -17,6 +17,39 @@ from scripts.market_collector.http_transport import HttpGet, ReadOnlyHttpTranspo
 
 WORKFLOW = 'masterxfix/MOSA-2/.github/workflows/fundamentals-history.yml@refs/heads/main'
 MAX_REPORTS = 8
+QUEUE_ERRORS = {
+    'ACCOUNT': 'The SSH process does not have the expected account identity.',
+    'BASE_IDENTITY_CHANGED': 'The Dogado base directory changed during the operation.',
+    'QUEUE_PARENT_CHANGED': 'The queue parent was replaced during setup.',
+    'QUEUE_DIRECTORY_CHANGED': 'The queue directory was replaced during setup.',
+    'BASE_OWNER_OR_MODE_CHANGED': 'The Dogado base directory owner or mode is unexpected.',
+    'PRIVATE_OWNER_OR_MODE': 'A private directory does not have the expected owner and mode 0700.',
+    'SYSTEM_ANCESTOR_CHANGED': 'A system directory has an unexpected owner or mode.',
+    'PATH_TYPE_OR_SYMLINK': 'A directory component is a symlink or has the wrong type.',
+    'PATH_CHANGED': 'A directory component changed while it was opened.',
+    'CANONICAL_PATH_MISMATCH': 'The resolved path differs from the allowed path.',
+    'QUEUE_FILE': 'A queue file failed its owner, mode, type, link or size check.',
+    'QUEUE_LOCK_CONTENT': 'The lock file has unexpected contents.',
+    'EACCES': 'Dogado denied filesystem access.',
+    'EPERM': 'Dogado rejected the filesystem operation.',
+    'ENOENT': 'A required directory or file is missing.',
+    'ELOOP': 'A symlink blocked a no-follow open.',
+    'ENOTDIR': 'A required directory component is not a directory.',
+    'ENOSPC': 'Dogado has no space left for the queue operation.',
+    'EDQUOT': 'The Dogado account storage quota was exceeded.',
+    'EROFS': 'The Dogado filesystem is read-only.',
+    'EOPNOTSUPP': 'The Dogado filesystem does not support the requested operation.',
+    'QUEUE_PROTOCOL': 'Dogado did not return a valid queue reply.',
+    'QUEUE_SETUP_READBACK': 'The setup reply did not confirm the expected directory and lock permissions.',
+    'SSH_SESSION_CHANNEL_REJECTED': 'Dogado refused to open the SSH session channel.',
+    'SSH_EXEC_REQUEST_REJECTED': 'Dogado rejected the SSH command.',
+    'SSH_COMMAND_TIMEOUT': 'The Dogado queue command timed out.',
+    'HISTORY_QUEUE_STOP': 'The Dogado queue command stopped unexpectedly.',
+}
+
+
+class QueueError(ValueError):
+    pass
 
 
 def guard(env):
@@ -38,6 +71,8 @@ def guard(env):
         (operation == 'setup' and job_id) or
         env.get('AUTHORIZATION') != f'MOSA2-HISTORY-{operation}:{sha}:{job_id}'):
         raise ValueError('AUTHORIZATION')
+    if operation == 'setup' and env.get('HISTORY_ENABLED') == 'true':
+        raise ValueError('BACKGROUND_ENABLED')
     return operation, job_id
 
 
@@ -45,13 +80,21 @@ def queue(transport, action, **data):
     library = shared.directories.REMOTE_SOURCE.split('\nif __name__=="__main__":')[0]
     source = library + '\n' + (history.ROOT / 'history_queue_remote.py').read_text(encoding='utf-8')
     cmd = shlex.join([shared.directories.PYTHON, '-I', '-B', '-c', source])
-    code, out, err, _ = shared.remote.remote_call(
-        transport, cmd, json.dumps(dict(data, action=action)).encode(), timeout=30)
-    if code or err:
-        raise ValueError('QUEUE')
-    reply = json.loads(out)
-    if reply.get('ok') is not True:
-        raise ValueError('QUEUE')
+    try:
+        code, out, err, _ = shared.remote.remote_call(
+            transport, cmd, json.dumps(dict(data, action=action)).encode(), timeout=30)
+    except shared.remote.ProbeError as error:
+        reason = str(error)
+        raise QueueError(reason if reason in QUEUE_ERRORS else 'QUEUE_PROTOCOL') from None
+    try:
+        reply = json.loads(out)
+    except (UnicodeError, ValueError):
+        raise QueueError('QUEUE_PROTOCOL') from None
+    if isinstance(reply, dict) and reply.get('ok') is False:
+        reason = reply.get('code')
+        raise QueueError(reason if isinstance(reason, str) and reason in QUEUE_ERRORS else 'HISTORY_QUEUE_STOP')
+    if code or err or not isinstance(reply, dict) or reply.get('ok') is not True or not isinstance(reply.get('result'), dict):
+        raise QueueError('QUEUE_PROTOCOL')
     return reply['result']
 
 
@@ -159,30 +202,60 @@ def process(env, transport, port, job):
 
 
 def execute(env):
-    operation, job_id = guard(env)
-    shared.no_other_runs(env)
-    import paramiko
-    logging.getLogger('paramiko').disabled = True
-    with shared.access.ssh_client(shared.access.configuration(env), {}, paramiko) as transport:
-        if operation == 'setup':
-            return queue(transport, 'setup')
-        job = queue(transport, 'claim', id=job_id, run=env['GITHUB_RUN_ID'])['job']
-        if job is None:
-            return {'status': 'empty'}
-        try:
-            with shared.access.tunnel(transport, {}) as port:
-                result = process(env, transport, port, job)
-        except Exception as error:
-            result = {'status': 'conflict' if str(error) == 'HISTORY_CONFLICT' else 'failed', 'inserted': 0}
-        queue(transport, 'finish', id=job['id'], run=env['GITHUB_RUN_ID'],
-              result={k: result[k] for k in ('status', 'inserted')})
-        return dict(result, request_id=job['id'], isin=job['isin'], scope=request_scope(job))
+    stage = 'WORKFLOW_GUARD'
+    ssh = {}
+    try:
+        operation, job_id = guard(env)
+        stage = 'CONCURRENT_RUN_CHECK'
+        shared.no_other_runs(env)
+        stage = 'TESTSITE_CONFIGURATION'
+        config = shared.access.profile.configuration(env) if operation == 'setup' else shared.access.configuration(env)
+        stage = 'SSH_CONNECT'
+        import paramiko
+        logging.getLogger('paramiko').disabled = True
+        with shared.access.ssh_client(config, ssh, paramiko) as transport:
+            if operation == 'setup':
+                stage = 'QUEUE_SETUP'
+                result = queue(transport, 'setup')
+                if (result.get('ready') is not True or result.get('owner_group_verified') is not True
+                        or result.get('directory_mode') != '0700' or result.get('lock_mode') != '0600'):
+                    raise QueueError('QUEUE_SETUP_READBACK')
+                return result
+            stage = 'QUEUE_CLAIM'
+            job = queue(transport, 'claim', id=job_id, run=env['GITHUB_RUN_ID'])['job']
+            if job is None:
+                return {'status': 'empty'}
+            try:
+                with shared.access.tunnel(transport, {}) as port:
+                    result = process(env, transport, port, job)
+            except Exception as error:
+                result = {'status': 'conflict' if str(error) == 'HISTORY_CONFLICT' else 'failed', 'inserted': 0}
+            stage = 'QUEUE_FINISH'
+            queue(transport, 'finish', id=job['id'], run=env['GITHUB_RUN_ID'],
+                  result={k: result[k] for k in ('status', 'inserted')})
+            return dict(result, request_id=job['id'], isin=job['isin'], scope=request_scope(job))
+    except Exception as error:
+        if isinstance(error, QueueError) and str(error) in QUEUE_ERRORS:
+            code = str(error)
+            message = QUEUE_ERRORS[code]
+        else:
+            code = 'STAGE_FAILED'
+            message = {
+                'WORKFLOW_GUARD': 'Check the operation, main commit, authorization and run attempt.',
+                'CONCURRENT_RUN_CHECK': 'Check whether another Actions run is active or the GitHub API is unavailable.',
+                'TESTSITE_CONFIGURATION': 'Check the required testsite connection settings and credentials.',
+                'SSH_CONNECT': 'Check the Dogado SSH connection and authentication.',
+            }.get(stage, 'The queue operation returned an unexpected result.')
+            if stage == 'SSH_CONNECT' and ssh.get('host_key') == 'FAIL':
+                code, message = 'SSH_HOST_KEY', 'The Dogado SSH host key did not match the configured pin.'
+            elif stage == 'WORKFLOW_GUARD' and str(error) == 'BACKGROUND_ENABLED':
+                code, message = 'BACKGROUND_ENABLED', 'Disable scheduled history processing before setup.'
+            elif stage == 'CONCURRENT_RUN_CHECK' and str(error) == 'OTHER_ACTIONS_ACTIVE':
+                code, message = 'OTHER_ACTIONS_ACTIVE', 'Another Actions run is active. Wait for it to finish.'
+        return dict(status='failed', stage=stage, code=code, message=message)
 
 
 if __name__ == '__main__':
-    try:
-        result = execute(os.environ)
-    except Exception:
-        result = {'status': 'failed', 'stage': 'GUARDS_OR_QUEUE'}
+    result = execute(os.environ)
     print(shared.access.public_text(result, os.environ))
     sys.exit(1 if result.get('status') in ('conflict', 'unknown', 'failed') else 0)

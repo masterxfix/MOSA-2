@@ -1,11 +1,16 @@
+from contextlib import nullcontext
 import json
+import os
 from pathlib import Path
+import stat
 import subprocess
+import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from scripts import fundamentals_history as worker
 from scripts.fundamentals import history
+from test_collector_private_directories import FakeOS
 from test_fundamentals_esef import plan
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +23,93 @@ ENV = {'GITHUB_SHA': 'a' * 40}
 
 def stored(row, source_unit):
     return dict(row, **{k: source_unit[k] for k in ('monetary_currency_code', 'scale_numerator', 'scale_denominator')})
+
+
+def setup_env():
+    return dict(ENV, GITHUB_REPOSITORY='masterxfix/MOSA-2', GITHUB_REF='refs/heads/main',
+                GITHUB_WORKFLOW_REF=worker.WORKFLOW, GITHUB_RUN_ATTEMPT='1', GITHUB_EVENT_NAME='workflow_dispatch',
+                HISTORY_OPERATION='setup', HISTORY_REQUEST_ID='', EXPECTED_COMMIT=ENV['GITHUB_SHA'],
+                AUTHORIZATION=f"MOSA2-HISTORY-setup:{ENV['GITHUB_SHA']}:")
+
+
+class QueueSetupTests(unittest.TestCase):
+    def remote_library(self):
+        library = worker.shared.directories.REMOTE_SOURCE.split('\nif __name__=="__main__":')[0]
+        source = (history.ROOT / 'history_queue_remote.py').read_text(encoding='utf-8')
+        scope = {'__name__': 'fixture'}
+        exec(compile(library + '\n' + source, '<history-queue>', 'exec'), scope)
+        return scope
+
+    def test_current_device_is_bound_and_a_change_during_open_is_rejected(self):
+        remote = self.remote_library()
+        api = FakeOS(remote)
+        api.umask(0o077)
+        for path in (remote['TARGETS'][0], remote['PARENT'], remote['QUEUE']):
+            parent, name = path.rsplit('/', 1)
+            fd = api.open(parent, api.O_DIRECTORY | api.O_NOFOLLOW)
+            try:
+                api.mkdir(name, 0o700, dir_fd=fd)
+            finally:
+                api.close(fd)
+        for row in api.nodes.values():
+            row.st_dev = 64769
+        api.writes.clear()
+        api.listdir = lambda fd: []
+        remote['os'] = api
+        with self.assertRaisesRegex(remote['Stop'], 'BASE_IDENTITY_CHANGED'):
+            remote['checked_fd'](api, remote['PARENT'])
+        self.assertEqual(remote['queue_operation']({'action': 'claim', 'run': '1', 'id': None}), {'job': None})
+        self.assertEqual(api.writes, [])
+        api.mutate_inode = True
+        with self.assertRaisesRegex(remote['Stop'], 'PATH_CHANGED'):
+            remote['queue_operation']({'action': 'claim', 'run': '1', 'id': None})
+
+    @unittest.skipUnless(os.name == 'posix', 'Requires POSIX modes and directory descriptors')
+    def test_setup_creates_and_reads_back_permissions_then_rejects_unsafe_lock(self):
+        remote = self.remote_library()
+        # Use the real POSIX operations in a temporary tree. The production
+        # no-follow ancestor checker is covered separately by the FakeOS test.
+        uid, gid = os.getuid(), os.getgid()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / 'history'
+            remote.update(BASE=tmp, PARENT=tmp, QUEUE=str(directory), UID=uid, GID=gid)
+            remote['checked_fd'] = lambda api, path, **kw: api.open(path, api.O_RDONLY | api.O_DIRECTORY | api.O_NOFOLLOW)
+            old_mask = os.umask(0o077)
+            try:
+                first = remote['queue_operation']({'action': 'setup'})
+                self.assertTrue(first['ready'] and first['directory_created'] and first['lock_created'])
+                lock = directory / '.queue-lock'
+                self.assertEqual((stat.S_IMODE(directory.stat().st_mode), stat.S_IMODE(lock.stat().st_mode)), (0o700, 0o600))
+                second = remote['queue_operation']({'action': 'setup'})
+                self.assertTrue(second['owner_group_verified'])
+                self.assertFalse(second['directory_created'] or second['lock_created'])
+                lock.chmod(0o640)
+                with self.assertRaisesRegex(remote['Stop'], 'QUEUE_FILE'):
+                    remote['queue_operation']({'action': 'setup'})
+            finally:
+                os.umask(old_mask)
+
+    def test_setup_has_no_db_dependency_and_redacts_remote_error_details(self):
+        setup = setup_env()
+        with patch.object(worker.shared, 'no_other_runs'), \
+             patch.object(worker.shared.access.profile, 'configuration', return_value={}), \
+             patch.object(worker.shared.access, 'configuration', side_effect=AssertionError('database configuration')), \
+             patch.object(worker.shared.access, 'tunnel', side_effect=AssertionError('database tunnel')), \
+             patch.object(worker.shared.access, 'ssh_client', return_value=nullcontext(Mock())), \
+             patch.object(worker.shared.remote, 'remote_call') as call:
+            receipt = dict(ready=True, directory_mode='0700', lock_mode='0600', owner_group_verified=True)
+            call.return_value = (0, json.dumps(dict(ok=True, result=receipt)).encode(), False, 1)
+            self.assertEqual(worker.execute(setup), receipt)
+            call.return_value = (0, b'{"ok":true,"result":{"ready":true}}', False, 1)
+            self.assertEqual(worker.execute(setup)['code'], 'QUEUE_SETUP_READBACK')
+            call.return_value = (1, b'{"ok":false,"code":"EACCES","details":"private-token"}', True, 1)
+            self.assertEqual(worker.execute(setup), dict(status='failed', stage='QUEUE_SETUP', code='EACCES',
+                                                        message='Dogado denied filesystem access.'))
+            call.return_value = (1, b'{"ok":false,"code":"private-token"}', True, 1)
+            self.assertNotIn('private-token', json.dumps(worker.execute(setup)))
+            call.reset_mock()
+            self.assertEqual(worker.execute(dict(setup, HISTORY_ENABLED='true'))['code'], 'BACKGROUND_ENABLED')
+            call.assert_not_called()
 
 
 class HistoryTests(unittest.TestCase):
