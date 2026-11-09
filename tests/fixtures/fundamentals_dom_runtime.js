@@ -20,6 +20,10 @@ const data={status:'ok',as_of:'2026-11-02 12:30:00.000000',totals:{assets:2,fund
   {name:'BYD',isin:'CNE100000296',observations:[fact('revenue','Umsatz','803964958',2025,true),fact('revenue','Umsatz','777102455',2024)],current:[{metric_key:'revenue',period_type:'fy',fiscal_year:'2025',fiscal_quarter:null,period_start:'2025-01-01',period_end:'2025-12-31',observation_id:'revenue2025',value:'803964958',unit_key:'CNY_THOUSAND',unit_version:'1',updated_at:'2026-11-02 12:00:00.000000Z'}]},
   {name:'Ubtech Robotics',isin:'CNE100006CQ4',observations:[fact('revenue','Umsatz','2000999',2025,true),fact('revenue','Umsatz','1305361',2024)],current:[{metric_key:'revenue',period_type:'fy',fiscal_year:'2025',fiscal_quarter:null,period_start:'2025-01-01',period_end:'2025-12-31',observation_id:'revenue2025',value:'2000999',unit_key:'CNY_THOUSAND',unit_version:'1',updated_at:'2026-11-02 12:00:00.000000Z'}]}
 ]};
+if(scenario==='snapshot')data.items[0].observations.push({
+  ...fact('shares_issued','Registrierte Aktien','1838457834',2025),period_type:'snapshot',
+  fiscal_year:null,period_start:null,period_end:null,as_of_at:'2025-03-25 00:00:00.000000',unit_key:'SHARE_COUNT'
+});
 if(scenario==='error')reject(Error('offline'));else resolve({ok:true,json:async()=>data});
 function tree(node,tag=[]){const result=[];if(node.tag==='td')result.push(node.textContent);node.children.forEach(child=>result.push(...tree(child,tag)));return result;}
 setImmediate(()=>{const byd=tree(detail);let ubtech=[];if(scenario!=='error')assets.querySelectorAll('button')[1].click(),ubtech=tree(detail);process.stdout.write(JSON.stringify({loading:status.textContent,summary:summary.textContent,total:total.textContent,assets:assets.querySelectorAll('button').map(button=>button.children[1].textContent),byd,ubtech,error:scenario==='error'?status.textContent:null}));});

@@ -1,6 +1,6 @@
 """On-demand deterministic AI input. No model, provider or persistence."""
 from decimal import Decimal as D, InvalidOperation
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 IMPORTANT=('revenue','ebit','ebitda','profit_after_tax','operating_cashflow')
 class SnapshotError(ValueError):
     pass
@@ -20,10 +20,14 @@ def validate_input(asset,sources):
         ids.add(str(r['id']))
         if str(r['source_id']) not in source_ids or not r['fetch_id'] or not r['field_path'] or not isinstance(r['evidence_sha256'],str) or len(r['evidence_sha256'])!=64:raise SnapshotError('SOURCE_REFERENCE')
         try:
-            start=date.fromisoformat(r['period_start']);end=date.fromisoformat(r['period_end'])
-            if start>=end or r['period_type'] not in ('fy','fq') or abs(int(r['fiscal_year'])-end.year)>1:raise ValueError()
-            if r['period_type']=='fy' and r['fiscal_quarter'] is not None:raise ValueError()
-            if r['period_type']=='fq' and str(r['fiscal_quarter']) not in ('1','2','3','4'):raise ValueError()
+            if r['period_type']=='snapshot':
+                stamp=r.get('as_of_at')
+                if any(r[k] is not None for k in ('fiscal_year','fiscal_quarter','period_start','period_end')) or datetime.strptime(stamp,'%Y-%m-%d %H:%M:%S.%f').strftime('%Y-%m-%d %H:%M:%S.%f')!=stamp:raise ValueError()
+            else:
+                start=date.fromisoformat(r['period_start']);end=date.fromisoformat(r['period_end'])
+                if start>=end or r['period_type'] not in ('fy','fq') or abs(int(r['fiscal_year'])-end.year)>1:raise ValueError()
+                if r['period_type']=='fy' and r['fiscal_quarter'] is not None:raise ValueError()
+                if r['period_type']=='fq' and str(r['fiscal_quarter']) not in ('1','2','3','4'):raise ValueError()
         except (ValueError,TypeError):raise SnapshotError('PERIOD_INVALID') from None
         try:
             for k in ('value_decimal','scale_numerator','scale_denominator'):
@@ -53,12 +57,15 @@ def _build(asset,sources):
     out=dict(contract='mosa2-ai-analysis-input-v1',identity=dict(id=asset['id'],name=asset['name'],isin=[x['normalized_value'] for x in asset['identifiers']]),
         facts=[],calculations=[],interpretations=[],current_observation_ids=current,
         sources=[s for s in sources if str(s['id']) in source_ids],market_source_ids=[str(s['source_id']) for s in asset['market_sources']],
-        missing_metrics=sorted(set(IMPORTANT)-{r['metric_key'] for r in facts}),warnings=[],periods=sorted({r['period_start']+'/'+r['period_end'] for r in facts}))
+        missing_metrics=sorted(set(IMPORTANT)-{r['metric_key'] for r in facts}),warnings=[],periods=sorted({r['period_start']+'/'+r['period_end'] for r in facts if r['period_type']!='snapshot'}))
     groups={}
     for r in facts:
         curated=r['parser_key']=='curated_public_facts_v1'
         if D(r['value_decimal'])<0:out['warnings'].append(dict(code='NEGATIVE_VALUE',observation_ids=[str(r['id'])]))
-        out['facts'].append(dict(observation_id=str(r['id']),metric=r['metric_key'],value=r['value_decimal'],unit=r['unit_key'],currency=r['monetary_currency_code'],period_type=r['period_type'],start=r['period_start'],end=r['period_end'],source_id=str(r['source_id']),fetch_id=str(r['fetch_id']),field_path=r['field_path'],evidence_sha256=r['evidence_sha256'],origin='manually_reviewed_public_facts' if curated else next((s['source_type'] for s in sources if str(s['id'])==str(r['source_id'])),'unknown'),rounded=True if curated else None,parser_status=r['parse_status']))
+        out['facts'].append(dict(observation_id=str(r['id']),metric=r['metric_key'],value=r['value_decimal'],unit=r['unit_key'],currency=r['monetary_currency_code'],period_type=r['period_type'],start=r['period_start'],end=r['period_end'],source_id=str(r['source_id']),fetch_id=str(r['fetch_id']),field_path=r['field_path'],evidence_sha256=r['evidence_sha256'],origin='manually_reviewed_public_facts' if curated else next((s['source_type'] for s in sources if str(s['id'])==str(r['source_id'])),'unknown'),rounded=True if curated and str(r.get('parser_version','1'))=='1' else None,parser_status=r['parse_status']))
+        if r['period_type']=='snapshot':
+            out['facts'][-1]['as_of_at']=r['as_of_at']
+            continue
         # Exact source/unit/calendar/quarter cohorts; FY cannot mix with FQ.
         start=date.fromisoformat(r['period_start']);end=date.fromisoformat(r['period_end'])
         k=(r['metric_key'],r['period_type'],str(r['fiscal_quarter']),r['unit_key'],str(r['unit_version']),str(r['source_id']),*([] if r['period_type']=='fy' else [start.month,start.day,end.month,end.day]))
@@ -80,7 +87,7 @@ def _build(asset,sources):
             else:out['warnings'].append(dict(code='NONPOSITIVE_BASE_NO_GROWTH_PERCENT',observation_ids=[str(a['id']),str(b['id'])]))
             if av<0<=bv:out['warnings'].append(dict(code='LOSS_TO_NONNEGATIVE',observation_ids=[str(a['id']),str(b['id'])]))
     def compatible(a,b):
-        return all(str(a[k])==str(b[k]) for k in ('period_type','period_start','period_end','monetary_currency_code','source_id'))
+        return a['period_type']!='snapshot' and all(str(a[k])==str(b[k]) for k in ('period_type','period_start','period_end','monetary_currency_code','source_id'))
     def base(r):return D(r['value_decimal'])*D(r['scale_numerator'])/D(r['scale_denominator'])
     for a in facts:
         if a['metric_key'] in ('ebit','ebitda','ebitda_underlying'):

@@ -1,0 +1,82 @@
+{
+  "format": "mosa2-curated-facts-v2",
+  "manifest_id": "nel-registered-shares-2025-v1",
+  "input_method": "manually_reviewed_public_facts",
+  "issuer": {
+    "isin": "NO0010081235",
+    "name": "NEL ASA"
+  },
+  "fiscal_year_start_month": 1,
+  "primary_url": "https://nelhydrogen.com/press-release/nel-asa-share-capital-increase-registered-23/",
+  "source_classification": "issuer_primary_document",
+  "source": {
+    "source_key": "nel_issuer_notices_manually_reviewed",
+    "source_type": "manually_reviewed_public_facts",
+    "display_name": "Nel ASA issuer notices (manually reviewed)",
+    "base_url": "https://nelhydrogen.com/",
+    "enabled": "0"
+  },
+  "research": {
+    "researched_at": "2026-11-09 15:02:45.000000",
+    "time_status": "known_utc",
+    "review_status": "primary_document_manually_verified",
+    "independently_refetched_by_runner": false
+  },
+  "comparison_sources": [
+    {
+      "url": "https://live.euronext.com/en/products/equities/company-news/2025-03-25-nel-asa-share-capital-increase-registered",
+      "role": "user_reported_comparison_only"
+    }
+  ],
+  "metrics": [
+    {
+      "metric_key": "shares_issued",
+      "display_name": "Registrierte Aktien",
+      "category": "capital",
+      "value_semantics": "Shares represented by registered share capital on the effective date; may include treasury shares.",
+      "dimension_key": "share_count",
+      "status": "active",
+      "value_type": "decimal"
+    }
+  ],
+  "units": [
+    {
+      "unit_key": "SHARE_COUNT",
+      "display_name": "shares",
+      "scale_numerator": "1",
+      "monetary_currency_code": null,
+      "dimension_key": "share_count",
+      "unit_version": "1",
+      "scale_denominator": "1",
+      "status": "frozen"
+    }
+  ],
+  "periods": {
+    "2025-03-25": {
+      "period_type": "snapshot",
+      "fiscal_year": null,
+      "fiscal_quarter": null,
+      "period_start": null,
+      "period_end": null,
+      "as_of_at": "2025-03-25 00:00:00.000000"
+    }
+  },
+  "facts": [
+    {
+      "metric_key": "shares_issued",
+      "value": "1838457834",
+      "original_label": "New registered share capital divided on shares",
+      "section": "Share capital increase registered",
+      "column": "Registered share capital",
+      "locator": "Issuer announcement, 25 March 2025, registration paragraph",
+      "period": "2025-03-25",
+      "unit_key": "SHARE_COUNT",
+      "original_unit": "shares",
+      "rounded": false,
+      "decimal_places": 0,
+      "validation_status": "manually_reviewed",
+      "qualifier": "Historical registered count; not a treasury-adjusted count or a current share count."
+    }
+  ],
+  "publish_current": false
+}
