@@ -355,12 +355,13 @@ function inspectPlanCatalog(PDO $p,array $plan): void {
         }
     }
 }
-function timings(PDO $p,string $assetId,string $metric,string $period='fy',?array $years=null,bool $roundtripProbe=false): array {
+function timings(PDO $p,string $assetId,string $metric,string $period='fy',?array $years=null,bool $roundtripProbe=false,bool $requireCurrent=true): array {
     check(in_array($period,['fy','fq','snapshot'],true),'timing_period');
     $snapshot=$period==='snapshot';$index=$snapshot?'ix_fund_obs_timeline':'ix_fund_obs_period';
     $order=$snapshot?'as_of_at DESC,id DESC':'fiscal_year DESC,fiscal_quarter DESC,period_end DESC,id DESC';
     $queries=['current'=>'SELECT value_decimal,unit_key,unit_version,fiscal_year,period_start,period_end,source_id,observation_id FROM m2_fundamental_current WHERE asset_id=? AND metric_key=? AND period_type=?',
         'history'=>'SELECT id,value_decimal,unit_key,unit_version,fiscal_year,period_start,period_end,as_of_at,source_id FROM m2_fundamental_observations FORCE INDEX ('.$index.') WHERE asset_id=? AND metric_key=? AND period_type=? ORDER BY '.$order.' LIMIT 20'];
+    if(!$requireCurrent)unset($queries['current']);
     $out=[];
     if($roundtripProbe){$start=hrtime(true);same((int)query($p,'SELECT 1 AS probe')[0]['probe'],1,'roundtrip_probe');$out['select_one']=['client_with_tunnel_ms'=>(hrtime(true)-$start)/1e6];
         $explain=query($p,'EXPLAIN ANALYZE SELECT 1');$tree=implode(' ',array_map(fn($r)=>implode(' ',array_values($r)),$explain));
@@ -368,6 +369,10 @@ function timings(PDO $p,string $assetId,string $metric,string $period='fy',?arra
     if($snapshot)$years=null;
     if($years!==null){check(count($years)===2&&$years[0]<=$years[1],'timing_years');$queries['history']=str_replace(' ORDER BY',' AND fiscal_year BETWEEN ? AND ? ORDER BY',$queries['history']);}
     foreach($queries as $key=>$sql){$args=[$assetId,$metric,$period];if($key==='history'&&$years!==null)$args=[...$args,...$years];$start=hrtime(true);$rows=query($p,$sql,$args);$client=(hrtime(true)-$start)/1e6;
+        if($key==='current'){
+            check($rows!==[],'current_projection_missing');
+            same(count($rows),1,'current_projection_duplicate');
+        }
         $access=query($p,'EXPLAIN '.$sql,$args);
         check(count($access)===1,'explain_access');check($key==='current'?$access[0]['key']==='PRIMARY':$access[0]['key']===$index,'required_index');
         $explain=query($p,'EXPLAIN ANALYZE '.$sql,$args);$tree=implode("\n",array_map(fn($r)=>implode(' ',array_values($r)),$explain));
@@ -402,7 +407,12 @@ function main(): int {
             $stage='INDEPENDENT_READBACK';$read=connection($input['password'],'127.0.0.1',$input['port']);
             beginIndependentReadback($p,$read);
             schema($read,false);same(protectedAssets($read,$input['preserve_assets']??[]),$protected,'protected_unchanged');$verifiedFacts=readback($read,$receipt,$fundamentalBefore);same(original($read,$before),$before,'original_unchanged');\Mosa2\Schema6Apply\provenance($read);
-            $performance=timings($read,$assetId,$plan['observations'][0]['metric_key'],$plan['observations'][0]['period_type'],[min(array_column($plan['observations'],'fiscal_year')),max(array_column($plan['observations'],'fiscal_year'))],$plan['roundtrip_probe']??false);check($read->commit(),'read_end');
+            $sample=$plan['observations'][0];
+            $years=array_column($plan['observations'],'fiscal_year');
+            $performance=timings($read,$assetId,$sample['metric_key'],$sample['period_type'],
+                [min($years),max($years)],$plan['roundtrip_probe']??false,
+                requireCurrent:($plan['publish_current']??true)!==false);
+            check($read->commit(),'read_end');
             $result=['ok'=>true,'stage'=>'SUCCESS','metrics'=>$receipt['metrics'],'observations'=>$receipt['observations'],'current'=>$receipt['current'],
                 'metric_keys'=>$receipt['metric_keys'],'facts_reused'=>$receipt['facts_reused'],'current_updates'=>$receipt['current_updates'],'protected_assets_unchanged'=>true,'fiscal_periods_validated'=>true,'market_unchanged'=>true,'collector_locked'=>true,'readback'=>'PASS','performance'=>$performance];
             if(isset($plan['stored_evidence']))$result['verified_facts']=$verifiedFacts;

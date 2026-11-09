@@ -54,9 +54,21 @@ werden im Vergleich berücksichtigt. Alle übrigen Zeilen müssen unverändert
 bleiben. Der zweite DB-Anschluss muss eine andere Verbindungs-ID und
 bestätigten Read-only-Modus besitzen. Fehler nach Commit bleiben ohne Retry.
 
-Die Testsite zeigt Stichtage ausdrücklich als Datum an und trennt sie von
-FY/FQ. Eine Abnahme erfolgt erst nach den unabhängigen Ziel-Readbacks und
-der Prüfung im verbundenen Chrome.
+Der isolierte Regressionstest reproduziert einen Fehler in der
+Performanceprüfung nach dem Commit. Mit `publish_current=false` bleibt der
+Current-Slot absichtlich leer. Der alte Code prüft ihn trotzdem und scheitert
+im Test an `required_index`, weil der leere Current-Lookup keinen
+`PRIMARY`-Index meldet. Der Lauf [42644523776](https://github.com/masterxfix/MOSA-2/actions/runs/42644523776)
+protokollierte nur `INDEPENDENT_READBACK / UNKNOWN_NO_RETRY`. Welcher
+Untercheck dort zuerst fehlschlug, lässt sich daraus nicht ableiten.
+
+Die Korrektur überspringt die Current-Abfrage und ihre Performanceprüfung
+gezielt für `publish_current=false`. History-Index und History-Timing
+bleiben Pflicht. Reguläre Importe verlangen weiterhin genau eine
+Current-Zeile und den `PRIMARY`-Index. Receipt, Herkunft, unabhängige
+Verbindung, Dedupe und Bestands-Fingerprints werden unverändert geprüft.
+Der isolierte Test deckt auch falsche oder leere Ausführungspläne, fehlendes
+History-Timing und einen Abfragefehler nach Commit ab.
 
 ## Prüfstand vor dem Merge
 
@@ -69,8 +81,23 @@ der Prüfung im verbundenen Chrome.
   **11 Observations / 8 Current** sichtbar; Footer meldete 157 ms für
   den Seitenaufbau. Das ist kein End-to-End-Messwert inklusive Daten-API
   und keine Sichtabnahme des neuen Stands.
-- Die neuen Schreibläufe, unabhängigen Vor-/Nachvergleiche mit
-  Fremdasset-/Marktdaten-Fingerprints und das SFTP-Testsite-Deployment
-  stehen aus. Die relevanten Workflows akzeptieren Live-Importe nur auf
-  `main`. [Issue #47](https://github.com/masterxfix/MOSA-2/issues/47) bleibt
-  bis zu den Abschlussnachweisen offen.
+
+## Migrationsnachweis und Endabnahme
+
+Der erste [Schreiblauf](https://github.com/masterxfix/MOSA-2/actions/runs/42643426332)
+und der getrennte [Readback](https://github.com/masterxfix/MOSA-2/actions/runs/42644352056)
+bestätigten 16 Observations und 13 Current-Zuordnungen. Der abschließende
+[Read-only-Readback](https://github.com/masterxfix/MOSA-2/actions/runs/42645258426)
+bestätigte **17 Observations und 13 Current-Zuordnungen**. Er enthält die
+historische `shares_issued`-Observation 110 zum 25.03.2025 ohne Current,
+die unveränderten Q2-Observations 100–104 und dieselben Fingerprints für
+Fremdassets und Marktdaten. Der historische Schreiblauf wurde einmal
+ausgeführt und blieb ohne Retry.
+
+Das [Testsite-Deployment](https://github.com/masterxfix/MOSA-2/actions/runs/42645406183)
+lieferte die datierte Darstellung aus. Im verbundenen Chrome wurde die
+Fundamentaldatenansicht über die reguläre Navigation einschließlich API
+in 386 ms geladen. Der History-only-Fix betrifft den Import und seine
+isolierten Tests. Die abschließenden PR-, Merge-, Datenbank- und
+Chrome-Nachweise sind in [Issue #47](https://github.com/masterxfix/MOSA-2/issues/47)
+festgehalten.
