@@ -82,6 +82,10 @@ unabhängig.
   von `0c22044` verifizierte alle vier Testsite-Dateien per SHA-256. Chrome
   zeigte auf dem regulären Startweg 156 ms einschließlich Datenabruf und
   bei NEL 17 Observations und 13 Current-Zuordnungen.
+- Das [zweite Web-Deployment](https://github.com/masterxfix/MOSA-2/actions/runs/42659513043)
+  verifizierte die vier korrigierten Dateien erneut per SHA-256. Chrome zeigte
+  **173 ms einschließlich Datenabruf**. Die Auswahl FY2024 machte die drei
+  gespeicherten NEL-Jahreswerte unmittelbar sichtbar.
 - NEL FY2023 war im Browser leer. Die authentifizierte Anfrage erreichte
   den Endpunkt. Der Worker war auf diesem Stand noch nicht eingerichtet,
   weshalb die Anfrage nicht gespeichert wurde. Das ist kein Importnachweis.
@@ -89,6 +93,15 @@ unabhängig.
   mit SHA-256 `42cb2ff57f8614ba840d668584dd4f584fc0b9ab7ea427a28232d472e003dcd0`
   lieferte isoliert drei belegte FY2023-Flusswerte. Der PHP-Evidence-Vertrag
   und der transaktionale Test ohne Current-Schreibvorgang bestanden.
+- Der vorhandene Einmaltransport und der isolierte PHP-Evidence-Test
+  bestätigten fünf offizielle OHB-Tabellen. OHB erschien nicht unter den
+  neun aktiven Aktien der Testsite. Die Qualifikation war ein Offline-Test
+  des Schreibpfads mit echten öffentlichen Berichten.
+- Der [unabhängige Read-only-Lauf](https://github.com/masterxfix/MOSA-2/actions/runs/42659760276)
+  bestätigte den unveränderten Testbestand von 17 NEL-Observations und
+  13 Current-Zuordnungen. Jede vorhandene NEL-Zeile und alle Fingerprints
+  der Fremd- und Marktdaten stimmten mit dem vorherigen Readback überein.
+  Es gab keine FY2023-Observation, keinen Providerabruf und keinen DB-Write.
 - Für die Live-Abnahme sind der reguläre Merge, die einmalige private
   Einrichtung, eine authentifizierte FY2023-Anfrage und der unabhängige
   Read-only-Vergleich gegen den [vorigen NEL-Readback](https://github.com/masterxfix/MOSA-2/actions/runs/42652866710)

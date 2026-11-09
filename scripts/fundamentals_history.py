@@ -74,11 +74,12 @@ def qualify(report, identity, meta, item):
 
     adapter = report.adapter
     mime = getattr(adapter, 'CONTENT_TYPE', 'text/html')
-    transport = ReadOnlyHttpTransport(HttpGet(None, adapter.URL, (('Accept', mime), ('Accept-Encoding', 'identity'))), timeout=30)
+    transport = ReadOnlyHttpTransport(HttpGet(None, adapter.URL, (('Accept', mime), ('Accept-Encoding', 'identity'))),
+                                      timeout=30, max_bytes=8 * 1024 * 1024)
     item['provider_requests'] = 1
     response = transport.fetch(None)
     raw = response.payload_bytes
-    if response.http_status != 200 or response.content_type.split(';', 1)[0].strip().lower() != mime or not 0 < len(raw) <= 8 * 1024 * 1024:
+    if response.http_status != 200 or response.content_type.split(';', 1)[0].strip().lower() != mime or not raw:
         raise ValueError('SOURCE_RESPONSE')
     meta.update(url=adapter.URL, request_started_at=transport.request_started_at, observed_at=response.collected_at,
                 http_status=response.http_status, content_type=response.content_type, sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw))
