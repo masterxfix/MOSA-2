@@ -1,0 +1,29 @@
+[
+  {
+    "isin": "DE0005936124",
+    "identity_anchor": "The OHB Group (ISIN: DE0005936124, Prime Standard)",
+    "source": {"source_key": "ohb_official_ir_reports", "source_type": "issuer_release", "display_name": "OHB official investor relations", "base_url": "https://www.ohb.de/", "enabled": "0"},
+    "table_heading": "Key performance indicators at a glance",
+    "unit_header": "in EUR 000",
+    "unit": {"unit_key": "EUR_THOUSAND", "unit_version": "1", "display_name": "Tausend Euro", "dimension_key": "monetary", "monetary_currency_code": "EUR", "scale_numerator": "1000", "scale_denominator": "1", "status": "frozen"},
+    "labels": {
+      "Revenue": "revenue",
+      "Total operating performance": "total_output",
+      "EBITDA": "ebitda",
+      "EBIT": "ebit",
+      "EBT": "profit_before_tax",
+      "Consolidated net income": "profit_after_tax",
+      "Net profit for the period": "profit_after_tax",
+      "Share of OHB SE shareholders in net income": "profit_attributable_to_owners",
+      "Net income after minority interests": "profit_attributable_to_owners",
+      "Share of OHB SE shareholders in net profit for the period": "profit_attributable_to_owners"
+    },
+    "releases": [
+      {"url": "https://www.ohb.de/en/ir-announcements/ohb-konzernabschluss-2023", "title_anchor": "OHB Consolidated Financial Statements 2023", "period": ["fy", "2023-01-01", "2023-12-31"], "column": "2023", "thousands_separator": ","},
+      {"url": "https://www.ohb.de/en/ir-announcements/ohb-konzernabschluss-2024", "title_anchor": "OHB Consolidated Financial Statements 2024", "period": ["fy", "2024-01-01", "2024-12-31"], "column": "2024", "thousands_separator": ","},
+      {"url": "https://www.ohb.de/en/ir-announcements/ohb-konzernabschluss-2025", "title_anchor": "OHB Consolidated Financial Statements 2025", "period": ["fy", "2025-01-01", "2025-12-31"], "column": "2025", "thousands_separator": ","},
+      {"url": "https://www.ohb.de/en/ir-announcements/ohb-se-legt-3-monats-zwischenbericht-2025", "title_anchor": "OHB SE Releases Its 2025 Quarterly Report", "period": ["fq", "2025-01-01", "2025-03-31"], "column": "Q1 2025", "thousands_separator": ","},
+      {"url": "https://www.ohb.de/en/ir-announcements/finanzergebnisse-q1-2026-starkes-profitables-wachstum", "title_anchor": "Q1 2026 Financial Results", "period": ["fq", "2026-01-01", "2026-03-31"], "column": "Q1 2026", "thousands_separator": ","}
+    ]
+  }
+]

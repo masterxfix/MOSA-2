@@ -13,7 +13,11 @@ EXECUTIONS |= EVIDENCE_EXECUTIONS | CURATED_EXECUTIONS
 ROOT = BASE + '/private/mosa2-collector'
 
 def checked(data):
-    need(data['execution'] in EXECUTIONS and re.fullmatch('[0-9a-f]{40}', data['commit']), 'AUTHORIZATION')
+    if data['execution'].startswith('fundamentals-history-'):
+        need(re.fullmatch('fundamentals-history-[a-f0-9]{32}', data['execution']) is not None, 'AUTHORIZATION')
+    else:
+        need(data['execution'] in EXECUTIONS, 'AUTHORIZATION')
+    need(re.fullmatch('[0-9a-f]{40}', data['commit']), 'AUTHORIZATION')
     need((os.getuid(), os.geteuid(), os.getgid(), os.getegid()) == (UID, UID, GID, GID), 'ACCOUNT')
     paths = (BASE, BASE+'/private', ROOT, ROOT+'/runs', ROOT+'/locks')
     measured = {}
@@ -74,7 +78,8 @@ def operation(data):
             need((s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode))==(UID,GID,0o700), 'ARCHIVE_DIRECTORY')
             metadata = data['metadata']
             curated = ONCE in CURATED_EXECUTIONS
-            derived = ONCE in EVIDENCE_EXECUTIONS or curated
+            derived = ONCE in EVIDENCE_EXECUTIONS or curated or (
+                ONCE.startswith('fundamentals-history-') and metadata.get('kind') == 'derived_evidence')
             need(metadata.get('kind') == ('curated_evidence' if curated else 'derived_evidence') if derived else metadata.get('kind') is None, 'STORAGE_KIND')
             body_name = 'evidence.json' if derived else 'response.body'
             meta_name = 'evidence-metadata.json' if derived else 'response.json'
