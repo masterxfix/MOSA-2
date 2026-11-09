@@ -20,6 +20,8 @@ class MemoryPDO extends PDO {
     public function rollBack():bool{$this->data=$this->saved;$this->tx=false;$this->rollbacks++;return true;}
     public function commit():bool{$this->commits++;$this->tx=false;if($this->uncertainCommit)throw new RuntimeException('lost_confirmation');return true;}
     public function run(string $sql,array $args):array {
+        if(preg_match('/^SELECT \* FROM `([a-z0-9_]+)` LIMIT 257$/',$sql,$m))
+            return array_slice($this->data[$m[1]]??[],0,257);
         if(preg_match('/^INSERT INTO `([a-z0-9_]+)` \((.+)\) VALUES/',$sql,$m)){
             $this->writes++;if($this->writes===$this->failWrite)throw new RuntimeException('injected_write');
             $columns=array_map(fn($x)=>trim($x,'`'),explode(',',$m[2]));$r=array_combine($columns,$args);

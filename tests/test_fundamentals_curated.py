@@ -31,6 +31,22 @@ def plan(manifest=None):
 
 
 class CuratedTests(unittest.TestCase):
+    def test_snapshot_and_period_packets_with_independent_delta_and_history_only_projection(self):
+        profiles=[runner.PROFILES[k] for k in ('nel-q2-2026-balances-orders-v1','nel-registered-shares-2025-v1')]
+        plans=[]
+        for profile in profiles:
+            raw=(runner.shared.ROOT/profile['manifest']).read_bytes()
+            p,body,stored=load(raw,'2026-11-09 15:03:00.000000',profile['identity'])
+            p['archive']=dict(storage_key='/private/synthetic/evidence.json',sha256=stored['sha256'],bytes=len(body),durable=True)
+            plans.append(p)
+        self.assertEqual([(r['metric_key'],r['value_decimal'],r['period_type']) for r in plans[0]['observations']],[
+            ('cash_balance','1328048','snapshot'),('total_equity','3601586','snapshot'),('order_intake','230','fq'),
+            ('order_backlog','1213','snapshot'),('order_backlog_risk_amount','296','snapshot')])
+        self.assertFalse(plans[1]['publish_current'])
+        self.assertEqual(plans[1]['observations'][0]['as_of_at'],'2025-03-25 00:00:00.000000')
+        result=subprocess.run(['php','tests/fundamentals_snapshot_readback.php'],input=json.dumps([annual(),zeiss_plan(),*plans]),text=True,capture_output=True,cwd=runner.shared.ROOT)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
     def test_authorized_manifest_exact_rounded_values_and_provenance(self):
         raw=MANIFEST.read_bytes();p,body,stored=load(raw,OBSERVED,IDENTITY)
         self.assertEqual([(f['value_decimal']) for f in p['observations']],

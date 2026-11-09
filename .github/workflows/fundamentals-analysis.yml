@@ -24,6 +24,11 @@ on:
         required: false
         default: ''
         type: string
+      preservation_fingerprints:
+        description: Include bounded read-only hashes of foreign fundamentals and market tables (single ISIN only)
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
   actions: read
@@ -76,6 +81,7 @@ jobs:
           AUTHORIZATION: ${{ inputs.authorization }}
           MOSA_ANALYSIS_SCOPE: ${{ inputs.scope }}
           MOSA_ANALYSIS_ISIN: ${{ inputs.isin }}
+          MOSA_ANALYSIS_PRESERVATION: ${{ inputs.preservation_fingerprints }}
           GH_TOKEN: ${{ github.token }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}

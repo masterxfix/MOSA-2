@@ -49,6 +49,15 @@ class FundamentalsWebTests(unittest.TestCase):
         self.assertTrue(any('Current' in value for value in data['byd']))
 
     @unittest.skipUnless(shutil.which('node'), 'Node required')
+    def test_snapshot_shows_effective_date_without_current_badge(self):
+        result = subprocess.run(['node', str(ROOT / 'tests/fixtures/fundamentals_dom_runtime.js'),
+                                 str(ROOT / 'assets/js/fundamentals.js'), 'snapshot'],
+                                cwd=ROOT, capture_output=True, text=True, encoding='utf-8', check=True)
+        cells = json.loads(result.stdout)['byd']
+        start = cells.index('Registrierte Aktien')
+        self.assertEqual(cells[start:start+4], ['Registrierte Aktien','Stichtag 25.03.2025','1838457834','SHARE_COUNT'])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node required')
     def test_renderer_fails_closed_without_database_data(self):
         result = subprocess.run(['node', str(ROOT / 'tests/fixtures/fundamentals_dom_runtime.js'),
                                  str(ROOT / 'assets/js/fundamentals.js'), 'error'],

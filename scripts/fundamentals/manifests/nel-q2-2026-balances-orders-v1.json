@@ -1,0 +1,186 @@
+{
+  "format": "mosa2-curated-facts-v2",
+  "manifest_id": "nel-q2-2026-balances-orders-v1",
+  "input_method": "manually_reviewed_public_facts",
+  "issuer": {
+    "isin": "NO0010081235",
+    "name": "NEL ASA"
+  },
+  "fiscal_year_start_month": 1,
+  "primary_url": "https://mb.cision.com/Public/115/4374557/96afc9701633c3dd.pdf",
+  "source_classification": "issuer_primary_document",
+  "source": {
+    "source_key": "nel_issuer_reports_manually_reviewed",
+    "source_type": "manually_reviewed_public_facts",
+    "display_name": "Nel ASA issuer reports (manually reviewed)",
+    "base_url": "https://mb.cision.com/",
+    "enabled": "0"
+  },
+  "research": {
+    "researched_at": "2026-11-09 15:02:45.000000",
+    "time_status": "known_utc",
+    "review_status": "primary_document_manually_verified",
+    "independently_refetched_by_runner": false
+  },
+  "comparison_sources": [],
+  "metrics": [
+    {
+      "metric_key": "cash_balance",
+      "display_name": "Zahlungsmittel und Zahlungsmitteläquivalente",
+      "category": "balance_sheet",
+      "value_semantics": "Reported consolidated unrestricted cash and cash equivalents at the reporting date.",
+      "dimension_key": "monetary",
+      "status": "active",
+      "value_type": "decimal"
+    },
+    {
+      "metric_key": "total_equity",
+      "display_name": "Eigenkapital",
+      "category": "balance_sheet",
+      "value_semantics": "Reported consolidated total equity at the reporting date.",
+      "dimension_key": "monetary",
+      "status": "active",
+      "value_type": "decimal"
+    },
+    {
+      "metric_key": "order_intake",
+      "display_name": "Auftragseingang",
+      "category": "orders",
+      "value_semantics": "Reported consolidated order intake during the period under the issuer's definition.",
+      "dimension_key": "monetary",
+      "status": "active",
+      "value_type": "decimal"
+    },
+    {
+      "metric_key": "order_backlog",
+      "display_name": "Auftragsbestand",
+      "category": "orders",
+      "value_semantics": "Reported consolidated order backlog at the reporting date.",
+      "dimension_key": "monetary",
+      "status": "active",
+      "value_type": "decimal"
+    },
+    {
+      "metric_key": "order_backlog_risk_amount",
+      "display_name": "Davon mit Verzögerungs- oder Stornorisiko",
+      "category": "orders",
+      "value_semantics": "Reported amount of order backlog at significant risk of delay or cancellation; a subset, never the total.",
+      "dimension_key": "monetary",
+      "status": "active",
+      "value_type": "decimal"
+    }
+  ],
+  "units": [
+    {
+      "unit_key": "NOK_THOUSAND",
+      "display_name": "NOK thousand",
+      "scale_numerator": "1000",
+      "monetary_currency_code": "NOK",
+      "dimension_key": "monetary",
+      "unit_version": "1",
+      "scale_denominator": "1",
+      "status": "frozen"
+    },
+    {
+      "unit_key": "NOK_MILLION",
+      "display_name": "NOK million",
+      "scale_numerator": "1000000",
+      "monetary_currency_code": "NOK",
+      "dimension_key": "monetary",
+      "unit_version": "1",
+      "scale_denominator": "1",
+      "status": "frozen"
+    }
+  ],
+  "periods": {
+    "2026-Q2": {
+      "period_type": "fq",
+      "fiscal_year": "2026",
+      "fiscal_quarter": "2",
+      "period_start": "2026-04-01",
+      "period_end": "2026-06-30"
+    },
+    "2026-06-30": {
+      "period_type": "snapshot",
+      "fiscal_year": null,
+      "fiscal_quarter": null,
+      "period_start": null,
+      "period_end": null,
+      "as_of_at": "2026-06-30 00:00:00.000000"
+    }
+  },
+  "facts": [
+    {
+      "metric_key": "cash_balance",
+      "value": "1328048",
+      "original_label": "Cash and cash equivalents",
+      "section": "Consolidated statement of financial position",
+      "column": "30.06.2026",
+      "locator": "PDF page 13 (report page 12), current assets",
+      "period": "2026-06-30",
+      "unit_key": "NOK_THOUSAND",
+      "original_unit": "NOK thousand",
+      "rounded": false,
+      "decimal_places": 0,
+      "validation_status": "manually_reviewed"
+    },
+    {
+      "metric_key": "total_equity",
+      "value": "3601586",
+      "original_label": "Total equity",
+      "section": "Consolidated statement of financial position",
+      "column": "30.06.2026",
+      "locator": "PDF page 13 (report page 12), equity and liabilities",
+      "period": "2026-06-30",
+      "unit_key": "NOK_THOUSAND",
+      "original_unit": "NOK thousand",
+      "rounded": false,
+      "decimal_places": 0,
+      "validation_status": "manually_reviewed"
+    },
+    {
+      "metric_key": "order_intake",
+      "value": "230",
+      "original_label": "Order intake",
+      "section": "Group key figures",
+      "column": "Q2 2026",
+      "locator": "PDF page 5 (report page 4), Group",
+      "period": "2026-Q2",
+      "unit_key": "NOK_MILLION",
+      "original_unit": "NOK million",
+      "rounded": true,
+      "decimal_places": 0,
+      "validation_status": "manually_reviewed"
+    },
+    {
+      "metric_key": "order_backlog",
+      "value": "1213",
+      "original_label": "Order backlog as of 30.06.2026",
+      "section": "Alternative Performance Measures",
+      "column": "SUM",
+      "locator": "PDF page 21 (report page 20), order backlog table",
+      "period": "2026-06-30",
+      "unit_key": "NOK_MILLION",
+      "original_unit": "NOK million",
+      "rounded": true,
+      "decimal_places": 0,
+      "validation_status": "manually_reviewed"
+    },
+    {
+      "metric_key": "order_backlog_risk_amount",
+      "value": "296",
+      "original_label": "Significant risk of delay or cancellation",
+      "section": "Alternative Performance Measures",
+      "column": "SUM",
+      "locator": "PDF page 21 (report page 20), order backlog table",
+      "period": "2026-06-30",
+      "unit_key": "NOK_MILLION",
+      "original_unit": "NOK million",
+      "rounded": true,
+      "decimal_places": 0,
+      "validation_status": "manually_reviewed",
+      "qualifier": "All NOK 296 million of the group risk subset is in PEM (Alkaline 0, PEM 296, SUM 296)."
+    }
+  ],
+  "source_document_sha256": "60336ebdbcba904234ea9c40a759eb22baf9892fab571651b78e3c319f89a116"
+}

@@ -42,7 +42,7 @@ function read(PDO $p,?string $isin,string $asOf): array {
         $marks=implode(',',array_fill(0,count($ids),'?'));
         $facts=$p->prepare('SELECT o.asset_id,o.id AS observation_id,o.metric_key,m.display_name AS metric_name,
                 o.value_type,o.dimension_key,o.value_decimal,o.value_text,o.value_date,o.period_type,o.fiscal_year,o.fiscal_quarter,
-                o.period_start,o.period_end,o.unit_key,o.unit_version,u.display_name AS unit_name,u.monetary_currency_code,
+                o.period_start,o.period_end,o.as_of_at,o.unit_key,o.unit_version,u.display_name AS unit_name,u.monetary_currency_code,
                 o.source_id,s.display_name AS source_name,s.base_url AS source_url,o.fetch_id,o.field_path,
                 HEX(fi.sha256) AS evidence_sha256,f.observed_at AS captured_at
             FROM m2_fundamental_observations o
@@ -52,11 +52,11 @@ function read(PDO $p,?string $isin,string $asOf): array {
             JOIN m2_files fi ON fi.id=f.file_id
             JOIN m2_sources s ON s.id=o.source_id
             WHERE o.asset_id IN ('.$marks.')
-            ORDER BY o.asset_id,o.metric_key,o.period_type,o.fiscal_year,o.fiscal_quarter,o.period_end,o.id
+            ORDER BY o.asset_id,o.metric_key,o.period_type,o.fiscal_year,o.fiscal_quarter,o.period_end,o.as_of_at,o.id
             LIMIT 2304');
         $facts->execute($ids);$facts=$facts->fetchAll(PDO::FETCH_ASSOC);
         checked(count($facts)<=2304,'fundamentals_fact_bound');
-        $current=$p->prepare('SELECT asset_id,metric_key,period_type,fiscal_year,fiscal_quarter,period_start,period_end,
+        $current=$p->prepare('SELECT asset_id,metric_key,period_type,fiscal_year,fiscal_quarter,period_start,period_end,as_of_at,
                 observation_id,source_id,value_type,dimension_key,unit_key,unit_version,value_decimal,value_text,value_date,updated_at
             FROM m2_fundamental_current WHERE asset_id IN ('.$marks.')
             ORDER BY asset_id,metric_key,period_type LIMIT 2304');
@@ -74,13 +74,15 @@ function read(PDO $p,?string $isin,string $asOf): array {
             checked($fact!==null,'fundamentals_current_reference');
             foreach(['metric_key','period_type','source_id','unit_key','unit_version','value_type','dimension_key'] as $key)
                 checked((string)$row[$key]===(string)$fact[$key],'fundamentals_current_binding');
+            foreach(['fiscal_year','fiscal_quarter','period_start','period_end','as_of_at'] as $key)
+                checked(($row[$key]??null)===($fact[$key]??null),'fundamentals_current_period');
             checked(value($row)===value($fact),'fundamentals_current_value');
             $currentByObservation[$asset][$observation]=true;
             $currentItems[$asset][]=array(
                 'metric_key'=>(string)$row['metric_key'],'period_type'=>(string)$row['period_type'],
                 'fiscal_year'=>$row['fiscal_year']===null?null:(string)$row['fiscal_year'],
                 'fiscal_quarter'=>$row['fiscal_quarter']===null?null:(string)$row['fiscal_quarter'],
-                'period_start'=>$row['period_start'],'period_end'=>$row['period_end'],
+                'period_start'=>$row['period_start'],'period_end'=>$row['period_end'],'as_of_at'=>$row['as_of_at']??null,
                 'observation_id'=>$observation,'value'=>value($row),'unit_key'=>(string)$row['unit_key'],
                 'unit_version'=>(string)$row['unit_version'],'updated_at'=>(string)$row['updated_at'].'Z');
         }
@@ -94,7 +96,7 @@ function read(PDO $p,?string $isin,string $asOf): array {
                     'value'=>value($row),'period_type'=>(string)$row['period_type'],
                     'fiscal_year'=>$row['fiscal_year']===null?null:(string)$row['fiscal_year'],
                     'fiscal_quarter'=>$row['fiscal_quarter']===null?null:(string)$row['fiscal_quarter'],
-                    'period_start'=>$row['period_start'],'period_end'=>$row['period_end'],
+                    'period_start'=>$row['period_start'],'period_end'=>$row['period_end'],'as_of_at'=>$row['as_of_at']??null,
                     'unit_key'=>(string)$row['unit_key'],'unit_name'=>(string)$row['unit_name'],
                     'currency'=>$row['monetary_currency_code']===null?null:(string)$row['monetary_currency_code'],
                     'source'=>(string)$row['source_name'],'source_url'=>$row['source_url']===null?null:(string)$row['source_url'],

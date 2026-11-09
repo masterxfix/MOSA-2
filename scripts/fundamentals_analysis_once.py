@@ -84,6 +84,9 @@ def execute(env):
                 request_data=dict(password=env['MOSA_TEST_DB_PASSWORD'],port=port)
                 if scope=='hkex':request_data['expected_totals']=HKEX_TOTALS
                 if isin is not None:request_data['isin']=isin
+                if env.get('MOSA_ANALYSIS_PRESERVATION')=='true':
+                    if isin is None or scope!='standard':raise ValueError('PRESERVATION_SCOPE')
+                    request_data['preservation_fingerprints']=True
                 p=subprocess.run(['php',str(shared.ROOT/'scripts/fundamentals/analysis_read.php')],input=json.dumps(request_data),text=True,capture_output=True,timeout=600)
                 if p.stderr or len(p.stdout)>262144:raise ValueError('DB_PROCESS_FAILED')
                 stage='JSON_SERIALIZATION'
@@ -107,8 +110,10 @@ def execute(env):
         result=dict(ok=True,contract='mosa2-ai-analysis-input-v1',equities=len(snapshots),successful_snapshots=len(snapshots),with_fundamentals=sum(bool(s['facts']) for s in snapshots),without_fundamentals=sum(not s['facts'] for s in snapshots),excluded_etfs=data['excluded_etfs'],excluded_other=data['excluded_other'],db_unchanged=data['db_unchanged'],validated_totals=data['validated_totals'],fact_references='PASS',source_references='PASS',provider_requests=0,db_writes=0,model_calls=0,ssh_setup_ms=ssh_ms,performance=data['performance'],summary=summaries,read_only_confirmed=data.get('read_only_confirmed') is True,db_identity=data.get('db_identity'),market_data_read=data.get('market_data_read',True))
         if isin is not None:
             target=data['assets'][0]
-            result.update(target_isin=isin,target_asset_count=len(snapshots),target_observations=len(snapshots[0]['facts']),target_current=len(snapshots[0]['current_observation_ids']),target_observation_rows=[{k:row[k] for k in ('id','metric_key','value_decimal','unit_key','unit_version','period_type','fiscal_year','fiscal_quarter','period_start','period_end','source_id','fetch_id','field_path','monetary_currency_code','parser_key','parser_version','parse_status','http_status','storage_backend','evidence_sha256')} for row in target['facts']],target_current_rows=target['current'],target_sources=data['sources'])
+            result.update(target_isin=isin,target_asset_count=len(snapshots),target_observations=len(snapshots[0]['facts']),target_current=len(snapshots[0]['current_observation_ids']),target_observation_rows=[{k:row.get(k) for k in ('id','metric_key','value_decimal','unit_key','unit_version','period_type','fiscal_year','fiscal_quarter','period_start','period_end','as_of_at','source_id','fetch_id','file_id','field_path','monetary_currency_code','parser_key','parser_version','parse_status','http_status','storage_backend','evidence_sha256')} for row in target['facts']],target_current_rows=target['current'],target_sources=data['sources'])
         if scope=='hkex':result.update(hkex_summary)
+        if data.get('preservation_fingerprints') is not None:
+            result['preservation_fingerprints']=data['preservation_fingerprints']
         return result
     except ScopeValidationError as error:
         return dict(ok=False,stage='READBACK_VALIDATION',error_code='VALIDATION_FAILED',provider_requests=0,db_writes=0)

@@ -18,6 +18,9 @@
   function period(row) {
     if (row.period_type === "fy" && row.fiscal_year) return "FY" + row.fiscal_year;
     if (row.period_type === "fq" && row.fiscal_year && row.fiscal_quarter) return "Q" + row.fiscal_quarter + " " + row.fiscal_year;
+    if (row.period_type === "snapshot" && /^\d{4}-\d{2}-\d{2}/.test(row.as_of_at || "")) {
+      return "Stichtag " + row.as_of_at.slice(0, 10).split("-").reverse().join(".");
+    }
     if (row.period_start && row.period_end) return row.period_start + " – " + row.period_end;
     return text(row.period_type);
   }
@@ -78,7 +81,7 @@
   }
   function details(item) {
     const rows = item.observations.map((row) => [row.metric_name, period(row) + (row.current ? " · Current" : ""), row.value, row.unit_key, row.source]);
-    return table("Gespeicherte Kennzahlen", ["Kennzahl", "Berichtszeitraum", "Wert", "Einheit", "Quelle"], rows, "observation-table");
+    return table("Gespeicherte Kennzahlen", ["Kennzahl", "Zeitraum / Stichtag", "Wert", "Einheit", "Quelle"], rows, "observation-table");
   }
   function select(isin) {
     const item = state.items.find((candidate) => candidate.isin === isin);
