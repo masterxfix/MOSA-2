@@ -78,7 +78,10 @@ function routeAudit(string $isin,string $password): array {
         $routes=array_map(static fn($route)=>array_intersect_key($route,array_flip([
             'source_key','route_revision','route_type','enabled','qualification','manual_qualification','quote_unit_key','currency'
         ])),$asset['routes']??[]);
-        $result=['database'=>$coverage['database'],'database_connections'=>2,'provider_requests'=>0,'database_writes'=>0,
+        $count=$writer->prepare("SELECT COUNT(*) FROM m2_market_observations o
+            JOIN m2_sources s ON s.id=o.source_id WHERE o.asset_id=? AND s.source_key='provider:gettex_mund_delayed'");
+        $count->execute([$asset['asset_id']??null]);
+        $result=['gettex_observations'=>(int)$count->fetchColumn(),'database'=>$coverage['database'],'database_connections'=>2,'provider_requests'=>0,'database_writes'=>0,
             'schema'=>array_column($ledger,'migration_key'),'gettex_source'=>$source,'eur_unit'=>$unit,'jobs'=>$jobs,
             'reservations'=>$gates,'writer_direct_grants'=>$privileges,'matching_assets'=>count($assets),
             'asset_identity'=>$asset['identity_status']??null,'asset_routes'=>$routes,'current_status'=>$asset['current_status']??null];

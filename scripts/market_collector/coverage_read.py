@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import shlex
 from pathlib import Path
 import sys
 
@@ -25,6 +26,30 @@ def source():
     if not selection.startswith('<?php') or not reader.startswith('<?php'):
         raise remote.ProbeError('COVERAGE_SOURCE_INVALID')
     return selection[len('<?php'):].lstrip() + '\n' + reader[len('<?php'):].lstrip()
+
+
+# TCP/TLS only: no HTTP request, no archive data, no retries.
+GETTEX_TLS_PROBE = """
+import json, os, socket, ssl
+os.environ.pop('SSL_CERT_FILE',None)
+os.environ.pop('SSL_CERT_DIR',None)
+host='erdk.bayerische-boerse.de'
+try:
+    with socket.create_connection((host,8000),timeout=8) as connection:
+        with ssl.create_default_context().wrap_socket(connection,server_hostname=host) as tls:
+            result='TLS_VERIFIED'
+except socket.gaierror:
+    result='DNS_FAILED'
+except ssl.SSLCertVerificationError:
+    result='TLS_CERTIFICATE_REJECTED'
+except ssl.SSLError:
+    result='TLS_HANDSHAKE_FAILED'
+except TimeoutError:
+    result='CONNECTION_TIMEOUT'
+except OSError:
+    result='CONNECTION_FAILED'
+print(json.dumps({'tls':result,'provider_http_requests':0}))
+"""
 
 
 def execute(env, paramiko=None):
@@ -70,6 +95,13 @@ def execute(env, paramiko=None):
             report['remote_elapsed_ms'] = elapsed
             report['database_connections'] = coverage.get('database_connections', 0)
             report['ok'] = coverage.get('database', {}).get('rollback_confirmed') is True
+            if audit and coverage.get('gettex_source'):
+                command = shlex.join(['/opt/alt/python311/bin/python3.11','-I','-B','-c',GETTEX_TLS_PROBE])
+                code, output, errors, _ = remote.remote_call(transport,command,timeout=18)
+                result = json.loads(output) if code == 0 and not errors else {}
+                if result.get('provider_http_requests') != 0:
+                    raise remote.ProbeError('GETTEX_TLS_DIAGNOSTIC_FAILED')
+                report['gettex_transport'] = result
         report['stage'] = 'finished'
     except shared.ConfigurationError as error:
         report['failure'] = str(error)

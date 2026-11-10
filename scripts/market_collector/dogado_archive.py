@@ -73,11 +73,14 @@ def run_archive(data):
     items=batch.get('item_results',[])
     allowed={'qualification','batch','current','readback','complete'}
     failure=result.get('failure')
-    code=failure if isinstance(failure,str) and re.fullmatch('[a-z0-9_]{1,90}',failure) else None
+    item=items[0] if len(items)==1 else {}
+    def safe(value):
+        return value if isinstance(value,str) and re.fullmatch('[a-z0-9_]{1,90}',value) else None
+    code=safe(failure)
     return dict(ok=child.returncode==0 and result.get('ok') is True, stage=result.get('stage') if result.get('stage') in allowed else 'preflight',
                 failure=code, provider_requests=result.get('provider_requests'), database_writes=result.get('database_writes'), route_writes=result.get('route_writes'),
-                observation=(items[0].get('writer') if len(items)==1 else None),
-                observation_readback=(items[0].get('readback') if len(items)==1 else None),
+                item_failure=safe(item.get('failure_code')), item_stage=safe(item.get('failure_stage')),
+                observation=item.get('writer'), observation_readback=item.get('readback'),
                 current_readback=current.get('readback'), current_decisions=current.get('decisions'), protection=result.get('protection'))
 
 try:
