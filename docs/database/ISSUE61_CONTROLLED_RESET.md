@@ -20,35 +20,7 @@ und für das Ledger sind im Leselauf dokumentiert. Null DB-Events, Trigger
 oder Routinen, null aktivierte DB-Jobs und null laufende Jobzeilen. Die
 Sitzungsliste ist auf das geprüfte Datenbankkonto beschränkt.
 
-| Tabelle | Ausgangszeilen |
-| --- | ---: |
-| `m2_asset_identifiers` | 9 |
-| `m2_asset_source_routes` | 19 |
-| `m2_assets` | 9 |
-| `m2_collector_cycles` | 0 |
-| `m2_collector_days` | 0 |
-| `m2_collector_requests` | 0 |
-| `m2_collector_state` | 1 |
-| `m2_entities` | 9 |
-| `m2_events` | 0 |
-| `m2_files` | 16 |
-| `m2_fundamental_current` | 60 |
-| `m2_fundamental_metrics` | 27 |
-| `m2_fundamental_observations` | 113 |
-| `m2_fundamental_units` | 11 |
-| `m2_job_runs` | 0 |
-| `m2_jobs` | 1 |
-| `m2_market_bars` | 0 |
-| `m2_market_current` | 6 |
-| `m2_market_observations` | 29 |
-| `m2_module_state` | 1 |
-| `m2_provider_fetches` | 16 |
-| `m2_relationships` | 0 |
-| `m2_schema_migrations` | 6 |
-| `m2_sources` | 16 |
-| `m2_sync_checkpoints` | 5 |
-| `m2_units` | 4 |
-| **Summe** | **358** |
+TABLE_CONTENT
 
 ## Verriegelte Auslöser
 
@@ -80,9 +52,8 @@ GitHub-Readback am Ende: 53 Workflows im M2-Testumfang gesperrt, einschließlich
 des einmaligen Sicherungs-/Lesewegs und der CI-Auslöser. Null laufende und
 keine wartenden Läufe. Der separate Produktionsworkflow blieb unverändert.
 
-Bei fehlender vollständiger Inventur der M2-Schreiber oder fehlender
-verifizierter Sicherung darf kein Reset gestartet werden. `main` und
-PR #60 bleiben von diesem Arbeitsbranch getrennt.
+Diese Sperren galten auch für die spätere einmalige Reset-Ausführung.
+`main` und PR #60 blieben unverändert.
 
 ## Geprüfte Sicherung
 
@@ -103,7 +74,7 @@ Wiederherstellungsschlüssel ist getrennt im geschützten Windows-Benutzerkontex
 hinterlegt. Die Löschfrist ist im Manifest vermerkt; es gibt dafür keinen
 neuen automatischen Auslöser.
 
-## Unabhängiger Readback
+## Unabhängiger Readback vor dem Reset
 
 [Leselauf 42778982325](https://github.com/masterxfix/MOSA-2/actions/runs/42778982325)
 nach den Seitenaufrufen und der manuellen Abfrage: alle 26 Zeilenzahlen,
@@ -112,7 +83,25 @@ Ausgangsinventar überein. Es sind weiter 358 Zeilen vorhanden. Das Webkonto
 hat nur Leserechte auf die Testdatenbank. Die im Dogado-Konto sichtbare
 Prozessliste zeigte keinen M2-Schreiber.
 
-Es wurde kein Reset gestartet. Der abonnementsbezogene Zugang kann weder
-laufende systemd-Timer noch MySQL-Sitzungen aller anderen Konten vollständig
-einsehen. Ohne diese unabhängige, auf M2 begrenzte Stillstandsbescheinigung
-bleibt die Löschung gesperrt.
+## Ausführung und unabhängiger Readback nach dem Reset
+
+Der aktualisierte Auftrag vom 10.11.2026 ersetzte die frühere Sperre. Die
+vorhandene Sicherung wurde verwendet. Ein einziger [Resetlauf 42781660635](https://github.com/masterxfix/MOSA-2/actions/runs/42781660635)
+unter Commit `e1e9e0c62f802a66c532becc3558047a805ac790` hat 352 Zeilen gelöscht. Die Prüfungen in der
+isolierten Instanz bestanden vor der Live-Ausführung. Die Live-Transaktion
+wurde bestätigt; eine neu aufgebaute Read-only-Verbindung hat die
+Tabellenwerte oben und unveränderte Struktur bestätigt.
+
+- Schema SHA-256: `9070f22389cccb33c1fcde65c2105e17da0371e2b28af61534ebc44efaff1edc`
+- Ledger SHA-256: `8527723c195d78daec825e83397b2b7e5ebe35c4f7294fc42b62882d8597c018`
+- 25 Tabellen mit null Zeilen, Ledger mit genau sechs Zeilen; alle 11
+  Waisenprüfungen ergaben null. Der einmalige Reset-Auslöser ist wieder
+  bei GitHub deaktiviert und im Workflow hart gesperrt.
+
+Chrome nach dem Reset: Startseite 113 ms, Marktdaten 67 ms und beim
+abschließenden Aufruf 31 ms, inklusive Datenabruf. Ein manueller
+ISIN-Test lieferte einen Kurs. Nur die Test-ISIN wurde wieder entfernt.
+Der vorhandene Browser-Cache blieb erhalten. Der leere Fundamentalbestand
+führt im bestehenden Reader zu „Fundamentaldaten nicht verfügbar“; für
+diese Seite liegt keine erfolgreiche Ladezeitmessung vor. Es gab für den
+Reset keine Änderung der Webanwendung und kein Testsite-Deployment.

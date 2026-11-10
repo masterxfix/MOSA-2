@@ -1,5 +1,5 @@
-name: MOSA-2 one-time content reset (Issue 61)
-# New owner authorization is bound only to the Issue 61 branch and exact SHA.
+name: MOSA-2 one-time content reset completed (disabled)
+# Issue 61 was executed once in run 42781660635. Do not re-arm that authorization.
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   reset:
-    if: github.repository == 'masterxfix/MOSA-2' && github.actor == 'masterxfix' && github.ref == 'refs/heads/codex/issue-61-controlled-reset' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.expected_commit == github.sha && inputs.reset_authorization == format('MOSA2-ISSUE61-CONTENT-RESET:{0}', github.sha)
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
