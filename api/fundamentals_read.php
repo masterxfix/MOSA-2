@@ -36,7 +36,10 @@ function read(PDO $p,?string $isin,string $asOf): array {
         if($isin!==null){$sql.=' AND i.normalized_value=?';$args[]=$isin;}
         $sql.=' ORDER BY e.canonical_name,a.entity_id LIMIT 10';
         $assets=$p->prepare($sql);$assets->execute($args);$assets=$assets->fetchAll(PDO::FETCH_ASSOC);
-        checked(count($assets)>0,$isin===null?'fundamentals_empty':'fundamentals_not_found');
+        if ($assets===[]) {
+            checked($isin===null,'fundamentals_not_found');
+            return [];
+        }
         checked(count($assets)<=10,'fundamentals_asset_bound');
         $ids=array_map(static fn($row)=>(string)$row['asset_id'],$assets);
         $marks=implode(',',array_fill(0,count($ids),'?'));

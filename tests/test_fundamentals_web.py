@@ -58,13 +58,45 @@ class FundamentalsWebTests(unittest.TestCase):
         self.assertEqual(cells[start:start+4], ['Registrierte Aktien','Stichtag 25.03.2025','1838457834','SHARE_COUNT'])
 
     @unittest.skipUnless(shutil.which('node'), 'Node required')
-    def test_renderer_fails_closed_without_database_data(self):
+    def test_renderer_keeps_api_errors_and_invalid_empty_payloads_visible(self):
+        for scenario in ('error', 'invalid-empty'):
+            with self.subTest(scenario=scenario):
+                result = self.render_fixture(scenario)
+                self.assertEqual(result['error'], 'Fundamentaldaten nicht verfügbar')
+                self.assertNotIn('Noch keine Fundamentaldaten vorhanden.', result['detail'])
+
+    def render_fixture(self, scenario):
         result = subprocess.run(['node', str(ROOT / 'tests/fixtures/fundamentals_dom_runtime.js'),
-                                 str(ROOT / 'assets/js/fundamentals.js'), 'error'],
+                                 str(ROOT / 'assets/js/fundamentals.js'), scenario],
                                 cwd=ROOT, capture_output=True, text=True, encoding='utf-8', check=True)
-        data = json.loads(result.stdout)
-        self.assertEqual(data['error'], 'Fundamentaldaten nicht verfügbar')
         self.assertNotIn('password', result.stdout.lower())
+        return json.loads(result.stdout)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node required')
+    def test_renderer_displays_empty_list_with_only_one_get(self):
+        result = self.render_fixture('empty')
+        self.assertEqual(result['total'], '0')
+        self.assertEqual(result['assets'], [])
+        self.assertEqual(result['detail'], ['Noch keine Fundamentaldaten vorhanden.'])
+        self.assertIsNone(result['error'])
+        self.assertEqual(result['requests'], [['api/fundamentals.php', 'GET']])
+
+    def test_reader_distinguishes_empty_unknown_error_and_existing_asset(self):
+        def fixture(scenario):
+            result = subprocess.run([self.php_executable(), str(ROOT / 'tests/fixtures/fundamentals_read_runtime.php'), scenario],
+                                    cwd=ROOT, capture_output=True, text=True, encoding='utf-8', check=True)
+            return json.loads(result.stdout)
+
+        empty = fixture('empty')
+        self.assertEqual(empty, {'payload': {'status': 'ok', 'as_of': '2026-11-10 08:00:00.000000Z',
+                                             'totals': {'assets': 0, 'fundamental_observations': 0, 'fundamental_current': 0},
+                                             'items': []}, 'queries': 1, 'rolled_back': True})
+        self.assertEqual(fixture('unknown'), {'error': 'fundamentals_not_found', 'queries': 1, 'rolled_back': True})
+        self.assertEqual(fixture('error'), {'error': 'simulated_query_failure', 'queries': 1, 'rolled_back': True})
+        stored = fixture('stored')
+        self.assertEqual(stored['payload']['items'], [{'name': 'Beispiel AG', 'isin': 'DE0007164600', 'observations': [], 'current': []}])
+        self.assertEqual(stored['queries'], 3)
+        self.assertTrue(stored['rolled_back'])
 
     def test_page_and_navigation_expose_the_new_view_without_private_details(self):
         page = (ROOT / 'fundamentaldaten.html').read_text(encoding='utf-8')
