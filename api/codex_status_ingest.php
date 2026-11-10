@@ -19,9 +19,6 @@ if (($_SERVER['REQUEST_METHOD']??'GET')!=='POST') {
     header('Allow: POST');
     $reply(405);
 }
-// Issue #61: stop background writes to M2 only. The native sender is unchanged.
-if (strtolower($_SERVER['SERVER_NAME']??'')==='mosa2-test.scharwerk.de' ||
-    strtolower(explode(':',$_SERVER['HTTP_HOST']??'',2)[0])==='mosa2-test.scharwerk.de') $reply(403);
 if (strtolower(trim(explode(';',(string)($_SERVER['CONTENT_TYPE']??''),2)[0]))!=='application/json') $reply(415);
 $secret=\Mosa2\CodexStatus\ingestSecret();
 $given=(string)($_SERVER['HTTP_X_MOSA2_CODEX_TOKEN']??'');
@@ -35,7 +32,7 @@ try {
     $batch=$payload['events']??null;
     if (!is_array($batch) || !array_is_list($batch) || $batch===[] || count($batch)>50)
         $reply(422);
-    $parsed=[]; $now=time(); $presence=null;
+    $accepted=0; $latestEvent=0; $now=time(); $presence=null;
     foreach ($batch as $item) {
         if (!is_array($item)) $reply(422);
         // A mirror of the existing MOSA batch may contain WORK or WinSCP events.
@@ -44,15 +41,19 @@ try {
             ['UserPromptSubmit','Stop','SessionEnd','PreToolUse','PostToolUse','PermissionRequest','WorkStep'],true)) continue;
         $value=event($item,$now);
         if ($value===null) $reply(422);
-        $parsed[]=$value;
+        $accepted++;
+        $latestEvent=max($latestEvent,$value['at']);
         if (array_key_exists('mosa_source_presence',$item)) {
             $candidate=sourcePresence($item['mosa_source_presence'],$now);
-            if ($candidate!==null && ($presence===null || $candidate['at'] >= $presence['at']))
-                $presence=$candidate;
+            if ($candidate!==null && $candidate['at']>=intdiv($value['at'],1000000)) {
+                $candidate['event_at']=$value['at'];
+                if ($presence===null || [$candidate['at'],$candidate['event_at']]>=[$presence['at'],$presence['event_at']])
+                    $presence=$candidate;
+            }
         }
     }
-    if ($parsed!==[]) appendFile(storePath(),$parsed,$presence);
-    $reply(202,count($parsed));
+    if ($accepted>0) appendFile(storePath(),$latestEvent,$presence);
+    $reply(202,$accepted);
 } catch (Throwable) {
     $reply(503);
 }

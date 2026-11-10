@@ -9,12 +9,10 @@
   var interval = 5000;
 
   function display(state) {
-    var valid = state === "running" || state === "idle";
-    dot.dataset.state = valid ? state : "unavailable";
-    var label = state === "running" ? "Codex-Auftrag läuft" :
-      state === "idle" ? "Kein aktueller Codex-Auftrag" : "Codex-Status nicht verfügbar";
+    dot.dataset.state = state;
+    var label = state === "running" ? "Codex arbeitet" :
+      state === "idle" ? "Kein aktiver Codex-Auftrag" : "Codex-Status unbekannt";
     dot.setAttribute("aria-label", label);
-    dot.setAttribute("aria-hidden", valid ? "false" : "true");
     dot.title = label;
   }
 
@@ -45,6 +43,7 @@
         throw new Error("invalid_status");
       }
       display(data.state);
+      if (!dot.dataset.readyMs) dot.dataset.readyMs = String(Math.round(performance.now()));
     } catch (_) {
       display("unavailable");
     } finally {

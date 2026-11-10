@@ -46,25 +46,33 @@ function ingestSecret(): ?string {
 }
 
 function initial(): array {
-    return ['version'=>VERSION, 'ever_seen'=>false, 'runs'=>[]];
+    return ['version'=>VERSION, 'latest_event_at'=>0, 'presence'=>null];
 }
 
-function validStore(mixed $data): bool {
-    if (!is_array($data) || ($data['version']??null)!==VERSION ||
-        !is_bool($data['ever_seen']??null) || !is_array($data['runs']??null) ||
-        count($data['runs'])>128) return false;
-    foreach ($data['runs'] as $key=>$run) {
-        if (!is_string($key) || !preg_match('/^[A-Za-z0-9_-]{4,16}:[A-Za-z0-9_-]{4,16}$/D',$key) ||
-            !is_array($run) || !in_array($run['state']??null,['running','finished'],true) ||
-            !is_int($run['at']??null) || ($run['at']??0)<1 ||
-            !is_string($run['event_id']??null) || !preg_match('/^[a-f0-9]{32}$/D',$run['event_id'])) return false;
+function normalizeStore(mixed $data): ?array {
+    if (!is_array($data) || ($data['version']??null)!==VERSION) return null;
+    $latest=$data['latest_event_at']??null;
+    $legacy=!array_key_exists('latest_event_at',$data);
+    if ($legacy) {
+        // Keep the old file readable, but never derive a state from its runs.
+        if (!is_array($data['runs']??null) || count($data['runs'])>128) return null;
+        $latest=0;
+        foreach ($data['runs'] as $run) {
+            if (!is_int($run['at']??null) || $run['at']<1) return null;
+            $latest=max($latest,$run['at']);
+        }
     }
-    if (array_key_exists('presence',$data)) {
-        $p=$data['presence'];
+    if (!is_int($latest) || $latest<0) return null;
+    $p=$data['presence']??null;
+    if ($p!==null) {
         if (!is_array($p) || !in_array($p['state']??null,['running','idle','unavailable'],true) ||
-            !is_int($p['at']??null) || $p['at']<1) return false;
+            !is_int($p['at']??null) || $p['at']<1) return null;
+        $eventAt=$legacy ? min($latest,$p['at']*1000000+999999) : ($p['event_at']??null);
+        if (!is_int($eventAt) || $eventAt<0 || $eventAt>$latest ||
+            intdiv($eventAt,1000000)>$p['at']) return null;
+        $p=['state'=>$p['state'], 'at'=>$p['at'], 'event_at'=>$eventAt];
     }
-    return true;
+    return ['version'=>VERSION, 'latest_event_at'=>$latest, 'presence'=>$p];
 }
 
 function event(mixed $value, int $now): ?array {
@@ -107,65 +115,13 @@ function sourcePresence(mixed $value, int $now): ?array {
     } catch (\Throwable) { return null; }
 }
 
-function apply(array $state, array $events): array {
-    if (!validStore($state)) throw new \RuntimeException('invalid_store');
-    $runs=$state['runs'];
-    foreach ($events as $e) {
-        $key=$e['session'].':'.$e['turn'];
-        $type=$e['type'];
-        if ($type==='UserPromptSubmit') {
-            if (isset($runs[$key]) && ($e['at']<$runs[$key]['at'] ||
-                $e['id']===$runs[$key]['event_id'])) continue;
-            $runs[$key]=['state'=>'running','at'=>$e['at'],'event_id'=>$e['id']];
-            $state['ever_seen']=true;
-            continue;
-        }
-        $targets=[];
-        if ($type==='SessionEnd' || ($type==='Stop' && ($e['turn']==='unknown' || !isset($runs[$key]))) ||
-            ($e['turn']==='unknown' && $type!=='Stop')) {
-            foreach ($runs as $candidate=>$run) {
-                if (str_starts_with($candidate,$e['session'].':') && $run['state']==='running') $targets[]=$candidate;
-            }
-        } elseif (isset($runs[$key])) {
-            $targets[]=$key;
-        }
-        foreach ($targets as $target) {
-            if ($runs[$target]['state']!=='running' || $e['at']<$runs[$target]['at'] ||
-                $e['id']===$runs[$target]['event_id']) continue;
-            $runs[$target]=['state'=>in_array($type,['Stop','SessionEnd'],true)?'finished':'running',
-                'at'=>$e['at'],'event_id'=>$e['id']];
-        }
-    }
-    uasort($runs,static fn(array $a,array $b):int=>$b['at']<=>$a['at']);
-    // Never evict an unfinished task and thereby fabricate an idle state.
-    $active=array_filter($runs,static fn(array $run):bool=>$run['state']==='running');
-    if (count($active)>128) throw new \RuntimeException('too_many_active_tasks');
-    $finished=array_filter($runs,static fn(array $run):bool=>$run['state']==='finished');
-    $state['runs']=$active+array_slice($finished,0,128-count($active),true);
-    return $state;
-}
-
 function state(?array $data, int $now): string {
-    if (!validStore($data) || !$data['ever_seen']) return 'unavailable';
-    if (isset($data['presence'])) {
-        $p=$data['presence'];
-        $latestEvent=0;
-        foreach ($data['runs'] as $run) $latestEvent=max($latestEvent,$run['at']);
-        // MOSA is authoritative if it observed at least the latest stored native event.
-        // Newer legacy events without a source snapshot keep the prior working path.
-        if ($p['at'] >= intdiv($latestEvent,1000000)) {
-            if ($p['at']<$now-STALE_AFTER_SECONDS || $p['at']>$now+120) return 'unavailable';
-            return $p['state'];
-        }
-    }
-    $fresh=false; $stale=false;
-    foreach ($data['runs'] as $run) {
-        if ($run['state']!=='running') continue;
-        if ($run['at']>=($now-STALE_AFTER_SECONDS)*1000000 &&
-            $run['at']<=($now+120)*1000000) $fresh=true;
-        else $stale=true;
-    }
-    return $fresh?'running':($stale?'unavailable':'idle');
+    $p=$data['presence']??null;
+    if ($p===null || $p['at']<$now-STALE_AFTER_SECONDS || $p['at']>$now+120) return 'unavailable';
+    // A newer event without a corresponding MOSA snapshot makes the state unknown.
+    if ($p['at']<=intdiv($data['latest_event_at'],1000000) && $p['event_at']<$data['latest_event_at'])
+        return 'unavailable';
+    return $p['state'];
 }
 
 function readFile(string $path): ?array {
@@ -176,12 +132,11 @@ function readFile(string $path): ?array {
         if (!flock($handle,LOCK_SH)) return null;
         $raw=stream_get_contents($handle,MAX_STORE_BYTES+1);
         if (!is_string($raw) || strlen($raw)>MAX_STORE_BYTES) return null;
-        $data=json_decode($raw,true);
-        return validStore($data)?$data:null;
+        return normalizeStore(json_decode($raw,true));
     } finally { flock($handle,LOCK_UN); fclose($handle); }
 }
 
-function appendFile(string $path, array $events, ?array $presence=null): void {
+function appendFile(string $path, int $latestEvent, ?array $presence): void {
     $dir=dirname($path);
     if (!is_dir($dir) || is_link($dir) || is_link($path)) throw new \RuntimeException('private_store_unavailable');
     $umask=umask(0077);
@@ -191,11 +146,12 @@ function appendFile(string $path, array $events, ?array $presence=null): void {
         if (!flock($handle,LOCK_EX) || is_link($path)) throw new \RuntimeException('private_store_unavailable');
         $raw=stream_get_contents($handle,MAX_STORE_BYTES+1);
         if (!is_string($raw) || strlen($raw)>MAX_STORE_BYTES) throw new \RuntimeException('invalid_store');
-        $data=$raw===''?initial():json_decode($raw,true);
-        if (!validStore($data)) throw new \RuntimeException('invalid_store');
-        $updated=apply($data,$events);
+        $updated=$raw===''?initial():normalizeStore(json_decode($raw,true));
+        if ($updated===null) throw new \RuntimeException('invalid_store');
+        $updated['latest_event_at']=max($updated['latest_event_at'],$latestEvent);
         if ($presence!==null) {
-            if (!isset($updated['presence']) || $presence['at'] >= $updated['presence']['at']) {
+            $prior=$updated['presence'];
+            if ($prior===null || [$presence['at'],$presence['event_at']]>[$prior['at'],$prior['event_at']]) {
                 $updated['presence']=$presence;
             }
         }
