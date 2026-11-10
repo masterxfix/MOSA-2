@@ -37,6 +37,61 @@ function coverageRead(): array {
         return $result;
     } finally { if ($pdo->inTransaction()) $pdo->rollBack();$pdo=null; }
 }
+/** Scope the audit output to metadata. The public Actions log receives no prices or grants. */
+function routeAudit(string $isin,string $password): array {
+    if (preg_match('/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/D',$isin)!==1 || $password==='') coverageFail('audit_input');
+    $coverage=coverageRead();
+    $assets=array_values(array_filter($coverage['assets'],static fn($asset)=>($asset['isin']??null)===$isin));
+    $writer=new PDO('mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4',
+        'h29077_mosa2_test',$password,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_TIMEOUT=>5]);
+    unset($password);
+    $writer->exec('SET SESSION TRANSACTION READ ONLY');
+    if (!$writer->beginTransaction()) coverageFail('audit_begin');
+    try {
+        $identity=$writer->query("SELECT DATABASE() AS db,CURRENT_USER() AS account,@@session.transaction_read_only AS read_only")->fetch();
+        if ($identity['db']!=='h29077_mosa2_test'||$identity['account']!=='h29077_mosa2_test@localhost'
+            ||(string)$identity['read_only']!=='1') coverageFail('audit_target');
+        $ledger=bounded($writer,'SELECT migration_key FROM m2_schema_migrations ORDER BY version',20);
+        $source=bounded($writer,"SELECT source_key,source_type,enabled FROM m2_sources WHERE source_key='provider:gettex_mund_delayed'",2);
+        $unit=bounded($writer,"SELECT unit_key,unit_version,status,monetary_currency_code FROM m2_units WHERE unit_key='EUR' AND unit_version=1",2);
+        $jobs=bounded($writer,"SELECT job_key,module_key,handler_key,enabled FROM m2_jobs WHERE job_key IN ('market_collector_scheduler_v1','collector_reservations_v1') ORDER BY job_key",4);
+        $gates=[];
+        if(in_array('0005_collector_reservations',array_column($ledger,'migration_key'),true)){
+            $gates=bounded($writer,"SELECT provider,status,stop_latched,unresolved,error_code FROM m2_collector_state WHERE provider IN ('gettex_mund_delayed_v1','boerse_frankfurt_api_v1')",4);
+        }
+        $grants=$writer->query('SHOW GRANTS FOR CURRENT_USER()')->fetchAll(PDO::FETCH_COLUMN);
+        $tables=['m2_sources','m2_asset_source_routes','m2_market_observations','m2_market_current'];
+        $privileges=[];
+        foreach($tables as $table){
+            foreach(['INSERT','UPDATE'] as $verb){
+                $privileges[$table][$verb]=false;
+                foreach($grants as $grant){
+                    if(preg_match('/^GRANT (.+) ON (.+) TO /D',$grant,$match)!==1)continue;
+                    $object=str_replace(chr(96),'',$match[2]);
+                    if(in_array($object,['*.*','h29077_mosa2_test.*','h29077_mosa2_test.'.$table],true)
+                        &&(in_array($verb,explode(', ',$match[1]),true)||$match[1]==='ALL PRIVILEGES'))$privileges[$table][$verb]=true;
+                }
+            }
+        }
+        $asset=count($assets)===1?$assets[0]:[];
+        $routes=array_map(static fn($route)=>array_intersect_key($route,array_flip([
+            'source_key','route_revision','route_type','enabled','qualification','manual_qualification','quote_unit_key','currency'
+        ])),$asset['routes']??[]);
+        $result=['database'=>$coverage['database'],'database_connections'=>2,'provider_requests'=>0,'database_writes'=>0,
+            'schema'=>array_column($ledger,'migration_key'),'gettex_source'=>$source,'eur_unit'=>$unit,'jobs'=>$jobs,
+            'reservations'=>$gates,'writer_direct_grants'=>$privileges,'matching_assets'=>count($assets),
+            'asset_identity'=>$asset['identity_status']??null,'asset_routes'=>$routes,'current_status'=>$asset['current_status']??null];
+        if (!$writer->rollBack()) coverageFail('audit_rollback');
+        return $result;
+    } finally {
+        if($writer->inTransaction())$writer->rollBack();
+    }
+}
 ini_set('display_errors','0');ini_set('log_errors','0');
-try { echo json_encode(['ok'=>true,'coverage'=>coverageRead()],JSON_THROW_ON_ERROR); }
+try {
+    $result=isset($mosa_input['audit_isin'])
+        ?routeAudit($mosa_input['audit_isin'],$mosa_input['writer_password'])
+        :coverageRead();
+    echo json_encode(['ok'=>true,'coverage'=>$result],JSON_THROW_ON_ERROR);
+}
 catch (\Throwable) { echo '{"ok":false,"failure":"MARKET_COVERAGE_READ_FAILED","provider_requests":0,"database_writes":0}';exit(1); }

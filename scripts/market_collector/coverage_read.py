@@ -1,6 +1,7 @@
 """One bounded, read-only Dogado market coverage report; no provider or DB writes."""
 import json
 import logging
+import re
 from pathlib import Path
 import sys
 
@@ -32,7 +33,16 @@ def execute(env, paramiko=None):
                   secrets_in_log='NEIN/PASS')
     try:
         config = profile.configuration(env)
+        isin = env.get('MOSA_MARKET_AUDIT_ISIN', '')
+        audit = bool(isin)
+        if audit and (not re.fullmatch(r'[A-Z]{2}[A-Z0-9]{9}[0-9]', isin)
+                      or not env.get('MOSA_TEST_DB_PASSWORD')):
+            raise remote.ProbeError('ROUTE_AUDIT_CONFIGURATION')
         php_source = source()
+        if audit:
+            report['gettex_private_use_configured'] = env.get('MOSA_MARKET_GETTEX_PRIVATE_USE') == '1'
+            provider = json.loads((ROOT/'config/collector-provider-budget.json').read_text())['providers'].get('gettex_mund_delayed_v1', {})
+            report['gettex_documented_limit_configured'] = isinstance(provider.get('documented_provider_limit'), dict)
         if paramiko is None:
             import paramiko
         logging.getLogger('paramiko').disabled = True
@@ -43,7 +53,10 @@ def execute(env, paramiko=None):
             binary, attempts = remote.capability(transport, report['capability_attempts'])
             report['dogado_php84_cli'] = 'PASS'
             report['stage'] = 'coverage_read'
-            payload = json.dumps({'source': php_source}).encode('utf-8')
+            args = {'source': php_source}
+            if audit:
+                args.update(audit_isin=isin, writer_password=env['MOSA_TEST_DB_PASSWORD'])
+            payload = json.dumps(args).encode('utf-8')
             code, output, errors, elapsed = remote.remote_call(transport, remote.command(binary, remote.BOOTSTRAP), payload, timeout=90)
             if code or errors:
                 raise remote.ProbeError('COVERAGE_REMOTE_PROCESS_FAILED')
