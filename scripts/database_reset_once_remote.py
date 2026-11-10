@@ -2,6 +2,8 @@
 import json
 import logging
 import os
+import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import collector_actions as access
+import collector_db_locality as remote
+from issue61_inventory import HOST_INVENTORY
 
 
 def execute(env, paramiko=None):
@@ -16,13 +20,14 @@ def execute(env, paramiko=None):
         return {"status": "FIRST_ATTEMPT_ONLY"}
     if env.get("GITHUB_EVENT_NAME") != "workflow_dispatch":
         return {"status": "WORKFLOW_DISPATCH_ONLY"}
-    if env.get("GITHUB_REF") != "refs/heads/main":
-        return {"status": "MAIN_BRANCH_ONLY"}
+    if (env.get("GITHUB_REPOSITORY") != "masterxfix/MOSA-2" or env.get("GITHUB_ACTOR") != "masterxfix"
+            or env.get("GITHUB_REF") != "refs/heads/codex/issue-61-controlled-reset"):
+        return {"status": "ISSUE61_SCOPE_ONLY"}
     commit = env.get("MOSA2_RESET_EXPECTED_COMMIT", "")
-    if env.get("GITHUB_SHA") != commit:
+    if not re.fullmatch(r"[0-9a-f]{40}",commit) or env.get("GITHUB_SHA") != commit:
         return {"status": "COMMIT_BINDING_REJECTED"}
     authorization = env.get("MOSA2_RESET_AUTHORIZATION", "")
-    if authorization != "MOSA2-TEST-DATA-RESET:" + commit:
+    if authorization != "MOSA2-ISSUE61-CONTENT-RESET:" + commit:
         return {"status": "AUTHORIZATION_REJECTED"}
 
     stage = "CONFIGURATION"
@@ -35,6 +40,17 @@ def execute(env, paramiko=None):
         logging.getLogger("paramiko").propagate = False
         stage = "SSH"
         with access.ssh_client(config, {}, paramiko) as transport:
+            stage = "KNOWN_WRITERS"
+            cmd=shlex.join(["/opt/alt/python311/bin/python3.11","-I","-B","-c",HOST_INVENTORY])
+            rc,data,errors,_=remote.remote_call(transport,cmd,timeout=35)
+            if rc or errors:
+                return {"status":"RESET_NOT_EXECUTED","phase":"KNOWN_WRITERS","error_code":"subscription_inventory_rejected"}
+            inventory=json.loads(data)
+            for key in ("cron","user_processes","system_unit_files","user_unit_files","user_timers","system_timers"):
+                if inventory[key].get("matches",0):
+                    return {"status":"RESET_NOT_EXECUTED","phase":"KNOWN_WRITERS","error_code":"m2_writer_detected:"+key}
+            if not all(inventory[k].get("visible") for k in ("cron","user_processes")):
+                return {"status":"RESET_NOT_EXECUTED","phase":"KNOWN_WRITERS","error_code":"m2_subscription_process_list_unavailable"}
             stage = "TUNNEL"
             with access.tunnel(transport, {}) as port:
                 request = {
@@ -42,7 +58,7 @@ def execute(env, paramiko=None):
                     "attempt": env["GITHUB_RUN_ATTEMPT"],
                     "commit": commit,
                     "authorization": authorization,
-                    "mode": "irreversible-full-test-data-reset",
+                    "mode": "issue61-schema6-content-reset",
                     "db_port": port,
                 }
                 child_env = {k: env[k] for k in ("PATH", "HOME", "LANG", "SYSTEMROOT", "TEMP", "TMP") if k in env}
@@ -61,11 +77,13 @@ def execute(env, paramiko=None):
                     return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_RESULT_REJECTED"}
                 if (reply.returncode == 0) != (result["status"] == "RESET_SUCCEEDED"):
                     return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_EXIT_MISMATCH"}
+                result["known_m2_subscription_writers"]=0
                 return result
     except subprocess.TimeoutExpired:
         return {"status": "RESET_OUTCOME_UNKNOWN", "phase": "SUBPROCESS_TIMEOUT"}
     except Exception:
-        return {"status": {"CONFIGURATION": "RESET_CONFIGURATION_REJECTED", "SSH": "RESET_SSH_REJECTED", "TUNNEL": "RESET_TUNNEL_REJECTED", "SUBPROCESS": "RESET_SUBPROCESS_REJECTED"}.get(stage, "RESET_UNEXPECTED_REJECTED")}
+        return {"status": "RESET_OUTCOME_UNKNOWN" if stage=="SUBPROCESS" else "RESET_NOT_EXECUTED", "phase":stage,
+                "error_code":"remote_step_failed"}
 
 
 def public_text(report, env):

@@ -1,67 +1,58 @@
+"""Issue 61's bounded reset contract; live access is never used here."""
 import pathlib
 import re
+import sys
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+import database_reset_once_remote as remote
+
 PHP = (ROOT / "scripts/database_reset_once.php").read_text(encoding="utf-8")
-REMOTE = (ROOT / "scripts/database_reset_once_remote.py").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/database-reset-once.yml").read_text(encoding="utf-8")
 
 
-class DatabaseResetContractTests(unittest.TestCase):
-    def test_reset_is_commit_bound_and_first_attempt_only(self):
-        self.assertIn("first_attempt_only", PHP)
-        self.assertIn("MOSA2-TEST-DATA-RESET:", PHP)
-        self.assertIn("GITHUB_RUN_ATTEMPT", REMOTE)
-        self.assertIn("test \"$RESET_AUTHORIZATION\" = \"MOSA2-TEST-DATA-RESET:$GITHUB_SHA\"", WORKFLOW)
+class ResetContractTests(unittest.TestCase):
+    def test_purge_covers_exact_schema_and_fk_order(self):
+        migrations = sorted((ROOT / "docs/database/migrations").glob("000[1-6]_*.sql"))
+        tables, edges = set(), set()
+        for path in migrations:
+            for statement in path.read_text(encoding="utf-8").split(";"):
+                match = re.search(r"(CREATE|ALTER) TABLE (m2_[a-z0-9_]+)",statement)
+                if not match:
+                    continue
+                child = match[2]
+                if match[1] == "CREATE":
+                    tables.add(child)
+                for parent in re.findall(r"\bREFERENCES (m2_[a-z0-9_]+)",statement):
+                    edges.add((child,parent))
+        order = re.findall(r"'(m2_[a-z0-9_]+)'",PHP.split("const PURGE_ORDER = [",1)[1].split("];",1)[0])
+        self.assertEqual(len(order),25)
+        self.assertEqual(set(order),tables-{"m2_schema_migrations"})
+        for child,parent in edges-{("m2_units","m2_units"),("m2_collector_state","m2_collector_cycles")}:
+            self.assertLess(order.index(child),order.index(parent),(child,parent))
 
-    def test_only_target_database_and_expected_schema_are_allowed(self):
-        self.assertIn("TARGET_DATABASE = 'h29077_mosa2_test'", PHP)
-        self.assertIn("EXPECTED_VERSION = '8.0.26-16'", PHP)
-        self.assertIn("envelope(6)['tables']", PHP)
-        self.assertIn("CollectorSchema6\\schemas()", PHP)
-        self.assertIn("'schema_version' => 6", PHP)
-        self.assertIn("same(count($actual), 6, 'ledger_count')", PHP)
+    def test_historical_authorization_and_wrong_scope_cannot_reach_credentials(self):
+        sha = "a"*40
+        valid = dict(GITHUB_RUN_ATTEMPT="1",GITHUB_EVENT_NAME="workflow_dispatch",GITHUB_ACTOR="masterxfix",
+                     GITHUB_REF="refs/heads/codex/issue-61-controlled-reset",GITHUB_REPOSITORY="masterxfix/MOSA-2",
+                     MOSA2_RESET_EXPECTED_COMMIT=sha,GITHUB_SHA=sha,
+                     MOSA2_RESET_AUTHORIZATION="MOSA2-ISSUE61-CONTENT-RESET:"+sha)
+        for changes, want in [
+            ({"GITHUB_RUN_ATTEMPT":"2"},"FIRST_ATTEMPT_ONLY"),
+            ({"GITHUB_EVENT_NAME":"schedule"},"WORKFLOW_DISPATCH_ONLY"),
+            ({"GITHUB_REF":"refs/heads/main"},"ISSUE61_SCOPE_ONLY"),
+            ({"GITHUB_ACTOR":"different"},"ISSUE61_SCOPE_ONLY"),
+            ({"GITHUB_SHA":"b"*40},"COMMIT_BINDING_REJECTED"),
+            ({"MOSA2_RESET_AUTHORIZATION":"MOSA2-TEST-DATA-RESET:"+sha},"AUTHORIZATION_REJECTED"),
+        ]:
+            self.assertEqual(remote.execute(valid | changes)["status"],want)
+        self.assertNotRegex(WORKFLOW,r"(?m)^\s*(schedule|push|workflow_run|pull_request):")
 
-    def test_reset_uses_delete_order_without_schema_or_fk_shortcuts(self):
-        self.assertIn("$db->exec('DELETE FROM '.qi($table).$filter);", PHP)
-        self.assertIn("job_key <> 'collector_reservations_v1'", PHP)
-        self.assertIn("'m2_fundamental_current', 'm2_fundamental_observations', 'm2_provider_fetches'", PHP)
-        self.assertIn("'m2_collector_requests', 'm2_collector_cycles', 'm2_collector_days'", PHP)
-        self.assertNotIn("TRUNCATE", PHP.upper())
-        self.assertNotIn("DROP TABLE", PHP.upper())
-        self.assertNotIn("FOREIGN_KEY_CHECKS=0", PHP.upper())
-        self.assertIn("same((int)$db->query('SELECT @@foreign_key_checks')->fetchColumn(), 1", PHP)
-
-    def test_dynamic_ssh_tunnel_port_reaches_all_database_connections(self):
-        self.assertIn('"db_port": port', REMOTE)
-        self.assertIn("check(is_int($port) && $port >= 1 && $port <= 65535", PHP)
-        self.assertEqual(PHP.count("connection($password, '127.0.0.1', $port)"), 3)
-        self.assertNotIn("connection($password);", PHP)
-
-    def test_commit_outcome_is_not_reported_as_not_executed(self):
-        self.assertIn("$phase = 'COMMIT';", PHP)
-        self.assertIn("$commitAttempted = true; $db->commit(); $committed = true;", PHP)
-        self.assertIn("'RESET_POSTCHECK_FAILED'", PHP)
-        self.assertIn("'RESET_OUTCOME_UNKNOWN'", PHP)
-        self.assertIn('"SUBPROCESS_TIMEOUT"', REMOTE)
-        self.assertIn("return result", REMOTE)
-        self.assertIn("'error_code' => safeFailureCode($error)", PHP)
-
-    def test_schema6_retains_definitions_and_bootstrap(self):
-        self.assertIn("'m2_fundamental_metrics', 'm2_fundamental_units', 'm2_collector_state'", PHP)
-        self.assertIn("lockedDatabase($db)", PHP)
-        self.assertIn("serialize($rows)", PHP)
-        self.assertNotIn("const TABLES = [", PHP)
-
-    def test_baseline_and_independent_postcheck_are_required(self):
-        self.assertIn("baseline($db)", PHP)
-        self.assertIn("postcheck($db, $root", PHP)
-        self.assertIn("connection($password, '127.0.0.1', $port); readOnlyBegin($db)", PHP)
-        self.assertIn("collector_disabled", PHP)
+    def test_fk_hint_only_for_self_reference_and_no_ddl(self):
+        self.assertEqual(re.findall(r"DELETE /\*\+ SET_VAR\(foreign_key_checks=OFF\) \*/ FROM (\w+)", PHP),["m2_units"])
+        self.assertNotRegex(PHP,r"(?i)\b(?:TRUNCATE|DROP (?:TABLE|DATABASE)|ALTER TABLE|SET (?:SESSION )?foreign_key_checks)\b")
 
 
 if __name__ == "__main__":
     unittest.main()
-

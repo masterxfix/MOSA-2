@@ -1,6 +1,5 @@
-name: MOSA-2 reset cancelled (disabled)
-# 2026-11-04: User withdrew authorization for deleting the existing test data.
-# Keep this file as historical evidence only; never perform database changes.
+name: MOSA-2 one-time content reset (Issue 61)
+# New owner authorization is bound only to the Issue 61 branch and exact SHA.
 
 on:
   workflow_dispatch:
@@ -23,10 +22,20 @@ concurrency:
 
 jobs:
   reset:
-    # Hard-disabled: previous reset authorization withdrawn on 2026-11-04.
-    if: ${{ false }}
+    if: github.repository == 'masterxfix/MOSA-2' && github.actor == 'masterxfix' && github.ref == 'refs/heads/codex/issue-61-controlled-reset' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs.expected_commit == github.sha && inputs.reset_authorization == format('MOSA2-ISSUE61-CONTENT-RESET:{0}', github.sha)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0.46
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: mosa2_reset_isolated
+        ports: [127.0.0.1:3307:3306]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
     steps:
       - name: Require exact reviewed revision and authorization
         env:
@@ -34,7 +43,7 @@ jobs:
           RESET_AUTHORIZATION: ${{ inputs.reset_authorization }}
         run: |
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
-          test "$RESET_AUTHORIZATION" = "MOSA2-TEST-DATA-RESET:$GITHUB_SHA"
+          test "$RESET_AUTHORIZATION" = "MOSA2-ISSUE61-CONTENT-RESET:$GITHUB_SHA"
 
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -51,6 +60,17 @@ jobs:
 
       - name: Install existing tunnel dependencies
         run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+
+      - name: Prove the full FK-safe purge and rollback on isolated Schema 6 first
+        env:
+          ISSUE61_ISOLATED_MYSQL: '1'
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+        run: |
+          php -l scripts/database_reset_once.php
+          php -l tests/issue61_reset_mysql.php
+          python3 -B -m unittest discover -s tests -p 'test_database_reset_once.py' -v
+          export ISSUE61_ISOLATED_HOST="$(docker inspect --format '{{.Config.Hostname}}' "$MYSQL_CONTAINER")"
+          php tests/issue61_reset_mysql.php
 
       - name: Run one preflight, one transactional reset and one independent postcheck
         env:
