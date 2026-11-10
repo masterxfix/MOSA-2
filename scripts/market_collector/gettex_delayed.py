@@ -24,9 +24,15 @@ class GettexDelayedTradeV1:
     content_types = ('application/gzip', 'application/x-gzip', 'application/octet-stream')
 
     def live_request(self, instrument, instant, *, php_cli=None, request_script=None):
+        return self.archive_request(instrument, instant, file_slot(instant).strftime(FILE_STAMP))
+
+    def archive_request(self, instrument, instant, slot):
         require(type(instrument) is str and re.fullmatch(r'[A-Z]{2}[A-Z0-9]{9}[0-9]', instrument),
                 'qualified ISIN context required')
-        slot = file_slot(instant).strftime(FILE_STAMP)
+        require(type(slot) is str and re.fullmatch(r'\d{8}\.\d{2}\.\d{2}', slot), 'Gettex file identity')
+        end = datetime.strptime(slot, FILE_STAMP)
+        newest = file_slot(instant)
+        require(end.minute % 15 == 0 and newest-timedelta(days=1) <= end <= newest, 'Gettex file timestamp')
         return dict(url=FILE_BASE+f'posttrade.{slot}.mund.csv.gz', headers=[],
                     request_key='gettex-mund:'+slot, max_bytes=MAX_FILE_BYTES)
 
@@ -37,8 +43,7 @@ class GettexDelayedTradeV1:
         key = re.fullmatch(r'gettex-mund:(\d{8}\.\d{2}\.\d{2})', payload.request_key)
         require(key is not None, 'Gettex file identity mismatch')
         end = datetime.strptime(key[1], FILE_STAMP)
-        newest = file_slot(payload.requested_at)
-        require(end.minute % 15 == 0 and newest-timedelta(days=1) <= end <= newest, 'Gettex file timestamp')
+        self.archive_request(route.instrument, payload.requested_at, key[1])
         require(len(payload.payload_bytes) <= MAX_FILE_BYTES, 'Gettex compressed size')
         try:
             with gzip.GzipFile(fileobj=BytesIO(payload.payload_bytes)) as file:

@@ -80,7 +80,11 @@ function collect(string $root,string $password,array $config,array $scope,?calla
         check(count($routes)>0&&count($routes)<=$scope['request_budget'],'collection_budget');
         same($scope['routes']??null,$routes,'collection_authorized_routes');
         $entries=[];
-        foreach($plan['prepared'] as $item)$entries[]=['private_root'=>\Mosa2\MarketAcceptance\privateItem($root,'batch',$item['manifest'])];
+        foreach($plan['prepared'] as $item){
+            $manifest=$item['manifest'];
+            if(isset($scope['archive']))$manifest['gettex_archive']=$scope['archive'];
+            $entries[]=['private_root'=>\Mosa2\MarketAcceptance\privateItem($root,'batch',$manifest)];
+        }
         $prepared=prepare($root,$config['public_root'],$entries);
         $gate=static function($c,$baseline,$decided)use($manual,$routes){
             $id=$decided['route']['route_id'];
@@ -168,13 +172,21 @@ function run(string $privateRoot,string $password,array $config,array $entries):
 /** Stdin-only manual Actions entry; scope is reviewed as ISINs, never fixture IDs. */
 if(realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){
     ini_set('display_errors','0');ini_set('log_errors','0');umask(0077);
-    $started=false;
+    $started=false;$routeWrites=0;
     try{
         require_once __DIR__.'/batch_scope.php';require_once __DIR__.'/actions_acceptance.php';
         $input=json_decode(stream_get_contents(STDIN),true,64,JSON_THROW_ON_ERROR);
         $config=$input['config'];$password=$input['password'];$scope=$input['scope'];
         check($scope['mode']==='manual'&&is_int($scope['request_budget'])&&$scope['request_budget']>=1&&$scope['request_budget']<=5,'manual_request_budget');
         $connect=static fn()=>\Mosa2\Phase2\connection($password,$config['db_host'],$config['db_port']);
+        if(isset($scope['archive'])){
+            same($config['private_dogado']??null,true,'archive_private_host');
+            same($scope['source_priority'],['provider:gettex_mund_delayed'],'archive_source');
+            same($scope['request_budget'],1,'archive_budget');
+            same(count($scope['expected_isins']),1,'archive_isin_count');
+            $routeWrites=null;
+            $routeWrites=\Mosa2\MarketAcceptance\prepareGettexRoute($connect,$config['state_contract'],$scope['expected_isins'][0]);
+        }
         $state=\Mosa2\MarketAcceptance\capture($connect,$config['state_contract']);
         $selection=\Mosa2\MarketBatchScope\selection($state,gmdate('Y-m-d H:i:s').'.000000');
         $plan=\Mosa2\MarketBatchScope\plan($state,$selection,$scope['source_priority'],providers(),'Mosa2\\MarketLive\\completePlan',true,10,$scope['expected_isins']);
@@ -183,8 +195,15 @@ if(realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){
         $scope['routes']=[];
         foreach($plan['prepared'] as $item){$route=array_values(array_filter($state['m2_asset_source_routes'],static fn($r)=>$r['id']===$item['route_id']))[0];$scope['routes'][$item['route_id']]=hash('sha256',\Mosa2\Phase3D\json($route));}
         $started=true;$result=collect($input['private_root'],$password,$config,$scope);
+        $result['route_writes']=$routeWrites;
         unset($password,$input,$connect);
         echo json_encode($result,JSON_THROW_ON_ERROR);exit($result['ok']?0:1);
-    }catch(Throwable){echo json_encode(['ok'=>false,'failure'=>$started?'collection_result_unknown':'collection_preflight_failed',
-        'provider_requests'=>$started?null:0,'database_writes'=>$started?null:0]);exit(1);}
+    }catch(Throwable $error){
+        $code=$error->getMessage();
+        $failure=$started?'collection_result_unknown':
+            ($error instanceof \PDOException?'database_operation_failed':
+            (preg_match('/^[a-z0-9_]{1,90}$/D',$code)===1?$code:'collection_preflight_failed'));
+        echo json_encode(['ok'=>false,'failure'=>$failure,'route_writes'=>$routeWrites,
+            'provider_requests'=>$started?null:0,'database_writes'=>$started?null:0]);exit(1);
+    }
 }

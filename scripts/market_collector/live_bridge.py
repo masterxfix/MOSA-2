@@ -2,6 +2,7 @@
 import base64
 from dataclasses import asdict
 from datetime import datetime, timezone
+import hashlib
 import importlib
 import json
 import os
@@ -31,8 +32,14 @@ def run(data):
             raise ValueError('adapter module')
         adapter = getattr(importlib.import_module(module), manifest['adapter_class'])()
         stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
-        endpoint = adapter.live_request(manifest['instrument'], stamp,
-            php_cli=data['php_cli'], request_script=data.get('request_script', str(private/'request.php')))
+        archive = manifest.get('gettex_archive')
+        if archive is None:
+            endpoint = adapter.live_request(manifest['instrument'], stamp,
+                php_cli=data['php_cli'], request_script=data.get('request_script', str(private/'request.php')))
+        else:
+            if adapter.provider_key != 'gettex_mund_delayed_v1':
+                raise ValueError('archive provider binding')
+            endpoint = adapter.archive_request(manifest['instrument'], stamp, archive['slot'])
         http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],
             tuple(tuple(h.split(': ', 1)) for h in endpoint['headers'])), timeout=25,
             max_bytes=endpoint.get('max_bytes', 2 * 1024 * 1024))
@@ -43,6 +50,8 @@ def run(data):
         provider_duration_ms = (time.monotonic() - started) * 1000
         if response.http_status != 200:
             raise ValueError('provider response')
+        if archive is not None and hashlib.sha256(response.payload_bytes).hexdigest() != archive['sha256']:
+            raise ValueError('archive content changed')
         return dict(ok=True, provider_requests=1, provider_duration_ms=provider_duration_ms, response=transport(asdict(response)),
             request_key=endpoint['request_key'], requested_at=stamp,
             provider_key=adapter.provider_key, adapter_module=module,

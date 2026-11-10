@@ -64,6 +64,47 @@ function capture(callable $connect,array $contract): array {
     $p=$connect();$p->exec('SET TRANSACTION READ ONLY');$p->beginTransaction();
     try{return snapshot($p,$contract);}finally{$p->rollBack();}
 }
+/** Register only the missing source and a disabled route for an existing asset. */
+function prepareGettexRoute(callable $connect,array $contract,string $isin): int {
+    $sourceValues=['source_key'=>'provider:gettex_mund_delayed','source_type'=>'market_data',
+        'display_name'=>'gettex','base_url'=>'https://www.gettex.de/handel/delayed-data/','enabled'=>'1'];
+    $db=$connect();check($db->beginTransaction(),'gettex_route_transaction');
+    try {
+        $before=snapshot($db,$contract);$state=$before;$inserted=[];
+        $ids=array_values(array_filter($before['m2_asset_identifiers'],static fn($id)=>
+            $id['identifier_type']==='isin'&&$id['normalized_value']===$isin&&$id['scope_key']===''
+            &&$id['is_primary']==='1'&&$id['valid_to']===null));
+        same(count($ids),1,'gettex_existing_isin');
+        $assets=array_values(array_filter($before['m2_assets'],static fn($asset)=>
+            $asset['entity_id']===$ids[0]['asset_id']&&$asset['status']==='active'));
+        same(count($assets),1,'gettex_existing_asset');
+        $existing=array_values(array_filter($before['m2_sources'],static fn($source)=>
+            $source['source_key']===$sourceValues['source_key']));
+        check(count($existing)<=1,'gettex_source_ambiguous');
+        $store=new \Mosa2\MarketIdentity\PdoStore($db);
+        $now=(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
+        if($existing===[]){
+            $row=$sourceValues+['created_at'=>$now,'updated_at'=>$now];
+            $id=$store->insert('m2_sources',$row);
+            $inserted['m2_sources']=[['id'=>$id]+$row];
+            $state['m2_sources'][]=$inserted['m2_sources'][0];
+        }else{
+            check(\Mosa2\MarketIdentity\matchFields($existing[0],$sourceValues),'gettex_source_drift');
+        }
+        $manifest=gettexManifest($state,['isin'=>$isin,'name'=>$assets[0]['display_name']]);
+        $plan=completePlan($state,$manifest);
+        same($plan['asset']['decision'],'EXISTING_MATCH','gettex_no_asset_insert');
+        $route=strings(applyMarketRoutePlan($store,$plan['route'],$assets[0]['entity_id'],$now));
+        if($plan['route']['decision']==='CREATE_REVISION')$inserted['m2_asset_source_routes']=[$route];
+        $delta=['deltas'=>array_map('count',$inserted)];
+        $after=snapshot($db,$contract);compareDelta($before,$after,$delta,$inserted);
+        same($db->commit(),true,'gettex_route_commit');
+    } finally {
+        if($db->inTransaction())$db->rollBack();
+    }
+    same(capture($connect,$contract),$after,'gettex_route_independent_readback');
+    return array_sum($delta['deltas']);
+}
 function counts(array $state): array {return array_map('count',$state);}
 function acceptance(array $scope,string $root,array $config,callable $connect,callable $invoke): array {
     $r=['ok'=>false,'stage'=>'database_authentication','db_authentication'=>'NOT_CHECKED','ledger'=>'NOT_CHECKED','preparation_provider_requests'=>0,

@@ -1,4 +1,4 @@
-"""Manual runner: pinned SSH, direct-tcpip only, PHP on this runner. No remote files."""
+"""Manual collector runner with the existing pinned Dogado SSH boundary."""
 from contextlib import contextmanager
 import json
 import hashlib
@@ -194,12 +194,14 @@ def collection_scope(env):
     import re
     if (not re.fullmatch('[0-9a-f]{40}', commit) or env.get('GITHUB_SHA') != commit
             or env.get('GITHUB_ACTIONS') != 'true' or env.get('GITHUB_RUN_ATTEMPT') != '1'
-            or env.get('GITHUB_EVENT_NAME') != 'workflow_dispatch' or env.get('GITHUB_REF') != 'refs/heads/main'
+            or env.get('GITHUB_EVENT_NAME') != 'workflow_dispatch'
+            or env.get('GITHUB_REF') not in ('refs/heads/main','refs/heads/codex/issue-59-24h-quotes')
             or env.get('GITHUB_REPOSITORY') != 'masterxfix/MOSA-2'):
         raise ConfigurationError('COLLECTION_CONTEXT')
     raw = env.get('MOSA_MARKET_SCOPE', '')
     scope = json.loads(raw)
-    if (set(scope) != {'mode', 'request_budget', 'source_priority', 'expected_isins'}
+    required = {'mode', 'request_budget', 'source_priority', 'expected_isins'}
+    if (type(scope) is not dict or set(scope) not in (required, required | {'archive'})
             or scope['mode'] != 'manual' or type(scope['request_budget']) is not int
             or not 1 <= scope['request_budget'] <= 5
             or type(scope['expected_isins']) is not list
@@ -210,10 +212,17 @@ def collection_scope(env):
             or any(s not in ('provider:tradegate_bsx_mid', 'provider:boerse_frankfurt_api', 'provider:gettex_mund_delayed') for s in scope['source_priority'])
             or len(set(scope['source_priority'])) != len(scope['source_priority'])):
         raise ConfigurationError('COLLECTION_SCOPE')
-    if ('provider:gettex_mund_delayed' in scope['source_priority']
-            and (env.get('MOSA_MARKET_GETTEX_PRIVATE_USE') != '1' or scope['request_budget'] != 1
-                 or scope['source_priority'] != ['provider:gettex_mund_delayed'])):
-        raise ConfigurationError('GETTEX_PRIVATE_USE_OR_BUDGET')
+    archive = scope.get('archive')
+    gettex = 'provider:gettex_mund_delayed' in scope['source_priority']
+    if gettex or 'archive' in scope:
+        if (env.get('MOSA_MARKET_GETTEX_PRIVATE_USE') != '1' or scope['request_budget'] != 1
+                or scope['source_priority'] != ['provider:gettex_mund_delayed']
+                or type(archive) is not dict or set(archive) != {'slot','sha256'}
+                or not isinstance(archive['slot'],str) or not re.fullmatch(r'[0-9]{8}\.[0-9]{2}\.[0-9]{2}',archive['slot'])
+                or not isinstance(archive['sha256'],str) or not re.fullmatch('[0-9a-f]{64}',archive['sha256'])):
+            raise ConfigurationError('GETTEX_PRIVATE_USE_OR_BUDGET')
+    elif env.get('GITHUB_REF') != 'refs/heads/main':
+        raise ConfigurationError('COLLECTION_CONTEXT')
     digest = hashlib.sha256(raw.encode()).hexdigest()
     if env.get('MOSA_MARKET_AUTHORIZATION') != 'MOSA2-MARKET-BATCH:' + commit + ':' + digest:
         raise ConfigurationError('COLLECTION_AUTHORIZATION')
@@ -229,6 +238,13 @@ def execute_collection(env, paramiko=None):
             import paramiko
         report['stage'] = 'ssh'
         with ssh_client(config, report, paramiko) as transport:
+            if 'archive' in scope:
+                sys.path.insert(0,str(ROOT))
+                from scripts.market_collector import dogado_archive
+                report['stage'] = 'collection'
+                result = dogado_archive.execute(transport,ROOT,scope,env['MOSA_TEST_DB_PASSWORD'])
+                report.update(ok=result.get('ok') is True,collection=result,provider_requests=result.get('provider_requests'))
+                return report
             report['stage'] = 'db_tunnel'
             with tunnel(transport, report) as port:
                 with tempfile.TemporaryDirectory(prefix='mosa2-market-batch-') as private:

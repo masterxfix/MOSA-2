@@ -59,6 +59,7 @@ function routeAudit(string $isin,string $password): array {
         if(in_array('0005_collector_reservations',array_column($ledger,'migration_key'),true)){
             $gates=bounded($writer,"SELECT provider,status,stop_latched,unresolved,error_code FROM m2_collector_state WHERE provider IN ('gettex_mund_delayed_v1','boerse_frankfurt_api_v1')",4);
         }
+        if ($writer->query('SELECT CURRENT_ROLE()')->fetchColumn()!=='NONE') coverageFail('audit_unresolved_roles');
         $grants=$writer->query('SHOW GRANTS FOR CURRENT_USER()')->fetchAll(PDO::FETCH_COLUMN);
         $tables=['m2_sources','m2_asset_source_routes','m2_market_observations','m2_market_current'];
         $privileges=[];
@@ -67,7 +68,7 @@ function routeAudit(string $isin,string $password): array {
                 $privileges[$table][$verb]=false;
                 foreach($grants as $grant){
                     if(preg_match('/^GRANT (.+) ON (.+) TO /D',$grant,$match)!==1)continue;
-                    $object=str_replace(chr(96),'',$match[2]);
+                    $object=str_replace(chr(92).'_','_',str_replace(chr(96),'',$match[2]));
                     if(in_array($object,['*.*','h29077_mosa2_test.*','h29077_mosa2_test.'.$table],true)
                         &&(in_array($verb,explode(', ',$match[1]),true)||$match[1]==='ALL PRIVILEGES'))$privileges[$table][$verb]=true;
                 }

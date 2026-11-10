@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       scope:
-        description: Exact JSON mode, request_budget, source_priority, expected_isins
+        description: Exact JSON mode, request_budget, source_priority, expected_isins, and optional reviewed archive
         required: true
         type: string
       authorization:
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   collect:
-    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    if: github.repository == 'masterxfix/MOSA-2' && github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/issue-59-24h-quotes') && github.run_attempt == 1
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
