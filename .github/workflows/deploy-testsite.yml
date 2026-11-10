@@ -57,6 +57,13 @@ jobs:
         env:
           PYTHONPATH: .:tests
         run: python3 -B -m unittest -v test_current_web test_market_current test_observation_read test_quote_selection test_market_view test_phase3c
+      - name: Confirm manual quote and disabled background routes before upload
+        run: |
+          php -l api/codex_status_ingest.php
+          php -l api/fundamentals_history.php
+          php -l api/isin_quote.php
+          node tests/isin_automation_browser_check.cjs
+          php -r '$_SERVER=["REQUEST_METHOD"=>"POST","SERVER_NAME"=>"mosa2-test.scharwerk.de","HTTP_HOST"=>"mosa2-test.scharwerk.de:443"]; require "api/isin_quote.php"; \Mosa2\IsinQuote\main(); if (http_response_code()!==403) exit(1);'
       - name: Backup explicit web files before deployment
         if: inputs.operation == 'deploy'
         env:

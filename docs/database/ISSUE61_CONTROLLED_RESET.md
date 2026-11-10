@@ -81,7 +81,7 @@ PR #60 bleiben von diesem Arbeitsbranch getrennt.
 
 [Backup- und Restore-Nachweis 42778639026](https://github.com/masterxfix/MOSA-2/actions/runs/42778639026),
 Commit `debaa8ef508b80b63c28a781a4de0fae160ccf0d`. Vollständiger Schema-6-Export
-unter Lesesperre für genau die 26 Zieltabelle(n); verschlüsseltes Readback aus
+unter Lesesperre für genau die 26 Zieltabellen; verschlüsseltes Readback aus
 dem privaten Dogado-Verzeichnis und vollständiger DDL- und Datenvergleich nach
 Wiederherstellung in einer netzisolierten MySQL-8-Instanz. Die isolierte Instanz
 wurde nach dem Vergleich entfernt. Null Schreibzugriffe auf die Live-Datenbank.
@@ -95,3 +95,17 @@ liegt außerhalb des Webroots im privaten Dogado-Verzeichnis. Der
 Wiederherstellungsschlüssel ist getrennt im geschützten Windows-Benutzerkontext
 hinterlegt. Die Löschfrist ist im Manifest vermerkt; es gibt dafür keinen
 neuen automatischen Auslöser.
+
+## Unabhängiger Readback
+
+[Leselauf 42778982325](https://github.com/masterxfix/MOSA-2/actions/runs/42778982325)
+nach den Seitenaufrufen und der manuellen Abfrage: alle 26 Zeilenzahlen,
+26 Schemasignaturen und die Signatur des Migrationsledgers stimmen mit dem
+Ausgangsinventar überein. Es sind weiter 358 Zeilen vorhanden. Das Webkonto
+hat nur Leserechte auf die Testdatenbank. Die im Dogado-Konto sichtbare
+Prozessliste zeigte keinen M2-Schreiber.
+
+Es wurde kein Reset gestartet. Der abonnementsbezogene Zugang kann weder
+laufende systemd-Timer noch MySQL-Sitzungen aller anderen Konten vollständig
+einsehen. Ohne diese unabhängige, auf M2 begrenzte Stillstandsbescheinigung
+bleibt die Löschung gesperrt.
