@@ -84,6 +84,42 @@ print(json.dumps({
 """
 
 
+WEB_READER = r"""
+try {
+    $root='/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+    if (realpath($root)!==$root || !is_file($root) || (fileperms($root)&0077)!==0) throw new RuntimeException();
+    $c=require $root;
+    $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+    $u='h29077_mosa2_read';
+    if ($c['dsn']!==$dsn || $c['user']!==$u) throw new RuntimeException();
+    $db=new PDO($dsn,$u,$c['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_TIMEOUT=>4]);
+    unset($c);
+    if ($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test' ||
+        $db->query('SELECT CURRENT_USER()')->fetchColumn()!==$u.'@localhost' ||
+        $db->query('SELECT CURRENT_ROLE()')->fetchColumn()!=='NONE') throw new RuntimeException();
+    $db->exec('SET SESSION TRANSACTION READ ONLY');
+    if (!$db->beginTransaction()) throw new RuntimeException();
+    $schema='h29077\\_mosa2\\_test';
+    $host='`'.$u.'`@`localhost`';
+    $grants=$db->query('SHOW GRANTS FOR CURRENT_USER')->fetchAll(PDO::FETCH_COLUMN);
+    $select=false;
+    foreach ($grants as $grant) {
+        if ($grant==='GRANT USAGE ON *.* TO '.$host) continue;
+        $matched=false;
+        foreach (['SELECT','SELECT, SHOW VIEW'] as $rights) {
+            if ($grant==='GRANT '.$rights.' ON `'.$schema.'`.* TO '.$host) $matched=true;
+        }
+        if (!$matched) throw new RuntimeException();
+        $select=true;
+    }
+    if (!$select || !$db->rollBack()) throw new RuntimeException();
+    echo '{"configured_db_account_select_only":true}';
+} catch (Throwable) {
+    echo '{"configured_db_account_select_only":false}';
+}
+"""
+
+
 def database(port, env):
     child_env = {key:env[key] for key in ('PATH','HOME','LANG') if key in env}
     reply = subprocess.run(['php', str(Path(__file__).with_suffix('.php'))],
@@ -106,6 +142,9 @@ def execute(env):
                 result['subscription'] = json.loads(data)
             else:
                 result['subscription'] = {'ok':False,'reason':'SUBSCRIPTION_INVENTORY_FAILED'}
+            binary, _ = remote.capability(transport)
+            rc, data, errors, _ = remote.remote_call(transport,remote.command(binary,WEB_READER),timeout=22)
+            result['web_reader'] = json.loads(data) if rc==0 and not errors else {'configured_db_account_select_only':False}
             with access.tunnel(transport,result) as port:
                 result['database'] = database(port,env)
                 result['ok'] = result['database'].get('ok') is True and 'cron' in result['subscription']
