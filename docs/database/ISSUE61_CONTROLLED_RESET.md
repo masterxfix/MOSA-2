@@ -56,9 +56,10 @@ Sitzungsliste ist auf das geprüfte Datenbankkonto beschränkt.
   Wartungsläufe wurden bei GitHub auf `disabled_manually` gesetzt. Es gab
   keine laufenden, wartenden oder angeforderten Schreibjobs.
 - Die M2-Testsite wurde über die [freigegebenen Dateien](https://github.com/masterxfix/MOSA-2/actions/runs/42777436321)
-  aktualisiert. Das [letzte Deployment](https://github.com/masterxfix/MOSA-2/actions/runs/42777865652)
-  enthält den korrigierten Marktdaten-Hinweis. Der Testsite-Workflow ist
-  danach gesperrt, damit eine frühere Revision die Sperren nicht zurückrollt.
+  aktualisiert. Der [Marktdaten-Hinweis](https://github.com/masterxfix/MOSA-2/actions/runs/42777865652)
+  und der [abschließende Kompatibilitätsstand](https://github.com/masterxfix/MOSA-2/actions/runs/42779346579)
+  wurden separat ausgerollt. Der Testsite-Workflow wurde wieder gesperrt,
+  damit eine frühere Revision die Sperren nicht zurückrollt.
 - Das manuelle ISIN-Formular und der Browser-Cache bleiben nutzbar. Die
   Browser-Timer, Startsteuerung und History-Formulare sind entfernt.
   Altes Browser-JavaScript kann den Kurs-Endpunkt nicht mehr aufrufen.
@@ -69,9 +70,15 @@ Sitzungsliste ist auf das geprüfte Datenbankkonto beschränkt.
   lesbaren systemd-Unit-Dateien. Die Sicht auf laufende systemd-Timer
   und auf MySQL-Sitzungen anderer Konten bleibt unvollständig.
 
-Chrome über die echte Testsite: Startseite 97 ms, Marktdaten 109 ms,
-Fundamentaldaten 176 ms. Der manuelle Test lieferte einen Kurs. Nur die
-temporäre Test-ISIN wurde aus dem Browser entfernt.
+Chrome über die echte Testsite: Startseite 97 ms, Marktdaten zuletzt 72 ms,
+Fundamentaldaten zuletzt 178 ms, jeweils mit vollständiger Anzeige.
+Der manuelle Test lieferte einen Kurs. Nur die temporäre Test-ISIN wurde
+aus dem Browser entfernt. Die offizielle Berichtsverlinkung mit Kennzeichen
+„Manuell“ ist auf der Testsite erhalten.
+
+GitHub-Readback am Ende: 53 Workflows im M2-Testumfang gesperrt, einschließlich
+des einmaligen Sicherungs-/Lesewegs und der CI-Auslöser. Null laufende und
+keine wartenden Läufe. Der separate Produktionsworkflow blieb unverändert.
 
 Bei fehlender vollständiger Inventur der M2-Schreiber oder fehlender
 verifizierter Sicherung darf kein Reset gestartet werden. `main` und
