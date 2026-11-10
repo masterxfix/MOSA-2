@@ -78,12 +78,36 @@ MOSA-Vergleichsdaten, DB-Job und geprüfte Route erforderlich. Die veröffentlic
 Standardkonfigurationen sind deaktiviert. Die Schema-5/6-Sperren bleiben wirksam.
 
 Gettex MUND nutzt die veröffentlichten verzögerten Posttrade-Dateien mit
-expliziter ISIN und UTC-Zeitstempel. Der manuelle Batch setzt einen bereits
-gebundenen Source und eine qualifizierte Route sowie die Bestätigung
-MOSA_MARKET_GETTEX_PRIVATE_USE=1 voraus und akzeptiert genau einen GET pro Lauf.
-Die Testseite und alle Empfänger müssen im erlaubten privaten Nutzungsumfang
-liegen. Vor einem Dauerbetrieb muss das Provider-Budget für die Dateiabfragen
-geprüft werden. Die Yahoo-HTTPS-Quelle bleibt bis zur bestätigten Zustimmung
+expliziter ISIN und UTC-Zeitstempel. Der manuelle Archivimport ist an den
+geprüften Commit, genau eine ISIN, das UTC-Dateifenster und den SHA-256 der
+Originaldatei gebunden. Er prüft die geschützte Testdatenbank, registriert bei
+Bedarf Quelle und deaktivierte Route zur bestehenden ISIN und nutzt den
+vorhandenen Observation-v2-Writer und Current-Readback. Die Variable
+MOSA_MARKET_GETTEX_PRIVATE_USE=1 bezieht sich auf die private, zugriffsgeschützte
+Testsite. Die Verarbeitung und die Originaldatei bleiben auf Dogado. Der
+öffentliche Actions-Bericht enthält nur Prüfergebnisse und Zähler.
+
+Der Erstlauf erlaubt einen GET und reserviert die ISIN und Datei gemeinsam.
+Wenn Dogado den Datei-Endpunkt nicht erreicht, kann die Originaldatei über den
+vorhandenen privaten Dateizugang im reservierten Ordner bereitgestellt werden.
+Der separate Wiederanlauf prüft Eigentümer, Dateityp, Größe, Modus und
+Prüfsumme. Er verwendet den erfassten UTC-Dateizeitpunkt und sendet keinen
+weiteren GET. Jede Wiederanlaufreservierung lässt genau eine Ausführung zu.
+Eine bestätigte Route ist keine Freigabe für den Scheduler.
+
+Auf Dogado konnte der Diagnose-Lauf die TCP-Verbindung zum gettex-Archiv auf
+Port 8000 nicht aufbauen. Der Wiederanlauf mit der geprüften Originaldatei
+bestand die unabhängigen Observation- und Current-Readbacks ohne Provider-GET.
+Nachweise: [Verbindungsprüfung](https://github.com/masterxfix/MOSA-2/actions/runs/42772931393)
+und [privater Archivimport](https://github.com/masterxfix/MOSA-2/actions/runs/42773391152).
+
+Vor dem Dauerbetrieb sind die Verbindung vom Scheduler zum veröffentlichten
+Datei-Endpunkt, der bestehende Freigabestand von Schema und Job, die
+nicht-interaktive Secret-Übergabe und dokumentierte Providerlimits zu prüfen.
+Der veröffentlichte Viertelstundentakt der Dateien begrenzt den sinnvollen
+Bedarf auf höchstens einen Abruf je veröffentlichter Datei mit Wiederverwendung
+für die zugeordneten ISINs. Der Takt ist keine zugesicherte Provider-Obergrenze.
+Die Yahoo-HTTPS-Quelle bleibt bis zur bestätigten Zustimmung
 für automatisierte Abrufe gesperrt. Die zusätzlichen Währungseinheiten sind ein
 eigenes versioniertes Paket. Bestehende Seed-Definitionen bleiben bytegleich.
 Ein physischer Writer-Route-Binding für eine neue Währung setzt den passenden
