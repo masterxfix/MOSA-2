@@ -101,6 +101,23 @@ class PlanningTests(unittest.TestCase):
                 self.assertEqual(self.decision(now=NOW.replace(month=month, day=day, hour=hour)), "SKIP")
         self.assertEqual(self.decision(now=NOW.replace(tzinfo=None)), "BLOCKED")
 
+    def test_utc_policy_ignores_german_sessions_and_respects_budget(self):
+        for text in ("2026-11-09T22:48:00+01:00", "2026-11-10T02:30:00+01:00",
+                     "2026-11-07T10:00:00+01:00", "2026-04-03T10:00:00+02:00",
+                     "2026-03-29T03:00:00+02:00", "2026-10-25T02:30:00+02:00",
+                     "2026-10-25T02:30:00+01:00"):
+            now=plan.instant(text)
+            c, state, qualification=fixture(now)
+            for key in ("weekdays","windows","interval_seconds"):
+                del c[key]
+            c.update(format=plan.FORMAT_V2,schedule_policy=plan.SCHEDULE_24H,calendar=None)
+            state["last_completed_at"]=None
+            self.assertEqual(plan.configured_cadence(c,now),900,text)
+            expected="SKIP" if now.minute==48 else "RUN_ELIGIBLE"
+            self.assertEqual(self.decision(c,state,qualification,now),expected,text)
+            self.assertEqual(self.decision(c,state|{"provider_requests_used":20},qualification,now),"BLOCKED")
+            self.assertEqual(plan.next_slot(c,now).minute % 15,0)
+
     def test_due_uses_absolute_elapsed_time(self):
         c, s, q = fixture()
         s.update(last_status="COMPLETE", last_started_at=(NOW - timedelta(seconds=299)).isoformat())

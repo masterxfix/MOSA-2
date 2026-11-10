@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261109-clear-steps';
+const cacheVersion='isin-20261110-247';
 const html=fs.readFileSync(__dirname+'/../marktdaten.html','utf8');
 const indexHtml=fs.readFileSync(__dirname+'/../index.html','utf8');
 assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),'marktdaten.html uses the automation cache version');
@@ -42,12 +42,12 @@ vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf
 const calendar=sandbox.MosaIsinAutomation;
 assert.equal(calendar.clampInterval(4),5,'Interval lower bound clamps to 5 seconds');
 assert.equal(calendar.clampInterval(301),300,'Interval upper bound clamps to 300 seconds');
-assert.equal(calendar.intervalFor(new Date('2026-11-09T10:00:00+01:00'),5),5,'Monday uses configured interval');
-assert.equal(calendar.intervalFor(new Date('2026-11-07T10:00:00+01:00'),300),3600,'Saturday uses fixed 60-minute interval');
-assert.equal(calendar.intervalFor(new Date('2026-04-03T10:00:00+02:00'),300),3600,'Good Friday uses fixed 60-minute interval');
-assert.equal(calendar.intervalFor(new Date('2026-04-06T10:00:00+02:00'),300),3600,'Easter Monday is calculated as a Baden-Württemberg holiday');
-assert.equal(calendar.intervalFor(new Date('2026-05-14T10:00:00+02:00'),300),3600,'Ascension Day is calculated as a Baden-Württemberg holiday');
-assert.equal(calendar.intervalFor(new Date('2026-05-15T10:00:00+02:00'),300),300,'Following Friday returns to configured interval');
+for(const time of ['2026-11-09T22:48:00+01:00','2026-11-10T02:30:00+01:00',
+  '2026-11-07T10:00:00+01:00','2026-04-03T10:00:00+02:00',
+  '2026-03-29T03:00:00+02:00','2026-10-25T02:30:00+02:00','2026-10-25T02:30:00+01:00']){
+  assert.equal(calendar.intervalFor(new Date(time),300),300,time+' respects the configured interval');
+}
+
 
 (async()=>{
   assert.equal(automationToggle.textContent,'Automatik starten','Automation starts inactive');
@@ -66,7 +66,8 @@ assert.equal(calendar.intervalFor(new Date('2026-05-15T10:00:00+02:00'),300),300
   const scheduled=[...timers.values()].find(timer=>timer.delay>=5000);
   assert.ok(scheduled,'Completed cycle schedules the next run');
   holdNext=true;
-  TestDate.nowValue+=3601000;
+  assert.equal(scheduled.delay,300000,'Sunday respects the configured delay');
+  TestDate.nowValue+=300000;
   const firstRun=scheduled.fn();
   await Promise.resolve();await Promise.resolve();
   assert.equal(active,1,'A scheduled cycle marks the existing run busy');
@@ -80,5 +81,5 @@ assert.equal(calendar.intervalFor(new Date('2026-05-15T10:00:00+02:00'),300),300
   assert.equal(JSON.parse(storage.get('mosa2-isin-automation-v1')).enabled,false,'Stop persists deactivation');
   assert.equal(timers.size,0,'Stopping clears the pending timer');
   assert.equal(storage.get('unrelated-key'),'keep','Automation leaves unrelated LocalStorage keys untouched');
-  console.log('PASS automation: bounds, Baden-Württemberg holidays, mode switching, persistence, pause/resume, and no overlap');
+  console.log('PASS automation: bounds, late/night, holidays, DST, persistence, pause/resume, and no overlap');
 })().catch(error=>{console.error(error);process.exit(1);});

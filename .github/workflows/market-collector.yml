@@ -47,6 +47,7 @@ jobs:
         env:
           MOSA_MARKET_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           MOSA_MARKET_SCOPE: ${{ inputs.scope }}
+          MOSA_MARKET_GETTEX_PRIVATE_USE: ${{ vars.MOSA_MARKET_GETTEX_PRIVATE_USE }}
           MOSA_MARKET_AUTHORIZATION: ${{ inputs.authorization }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}

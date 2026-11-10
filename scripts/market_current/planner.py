@@ -47,7 +47,7 @@ def projection(fact, normalized, route, now):
 
 def select(facts, route, now, previous=None, catalog=None):
     """Shared PHP contract, also called directly by the read-only Observations view."""
-    catalog = catalog or writer.observation.catalog_module.normative_catalog()
+    catalog = catalog or writer.observation.catalog_module.runtime_catalog()
     units = {}
     for key, version in (('quote_unit_key', 'quote_unit_version'),
                          ('quantity_basis_unit_key', 'quantity_basis_unit_version'),
@@ -102,7 +102,7 @@ def check_route_transition(data):
 
 def plan_facts(data, catalog=None):
     """Pure projection plan; caller must keep approval checking separate from inspection."""
-    catalog = catalog or writer.observation.catalog_module.normative_catalog()
+    catalog = catalog or writer.observation.catalog_module.runtime_catalog()
     route = data['route']
     now = writer.observation.shared('timestamp', value=data['now'])
     facts = data['facts'];require(type(facts) is list and len(facts)<=2, 'bounded_current_candidates')

@@ -229,6 +229,10 @@ function sourceTransport(array $request,string $code,callable $emit,?callable $t
     $emit(['event'=>'request','stage'=>'started','request_key'=>$key,'name'=>$title]);
     if (!sourceAllowed($request,$code)){
         $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'source_rejected'];
+    } elseif ($transport===null && str_starts_with($key,'yahoo_') && getenv('MOSA2_YAHOO_AUTOMATION_AUTHORIZED')!=='1') {
+        $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'provider_access_unconfirmed'];
+    } elseif ($transport===null && ($_SESSION['quote_provider_retry_at'][parse_url($request['url'],PHP_URL_HOST)]??0)>time()) {
+        $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'provider_cooldown'];
     } else {
         // Seven descriptors mean at most seven external GETs, including L&S.
         // Do not silently spend extra requests or leave the approved host via redirects.
@@ -236,6 +240,14 @@ function sourceTransport(array $request,string $code,callable $emit,?callable $t
         try{$reply=($transport??'fixlabMosaMarketSourceLabLiveTransport')($request);}
         catch(Throwable){$reply=['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'transport_exception'];}
         if(!is_array($reply))$reply=['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'transport_invalid'];
+    }
+    if ($transport===null && session_status()===PHP_SESSION_ACTIVE && ($reply['http_status']??null)===429) {
+        // Stop requests to this host for the rest of the comparison and subsequent cycles.
+        $retry=$reply['retry_after']??null;
+        $now=time();
+        $until=is_string($retry)&&ctype_digit($retry)?$now+min((float)$retry,31536000):
+            (is_string($retry)?strtotime($retry):false);
+        $_SESSION['quote_provider_retry_at'][parse_url($request['url'],PHP_URL_HOST)]=max($now+60,$until?:0);
     }
     $emit(['event'=>'request','stage'=>'finished','request_key'=>$key,'name'=>$title,
         'http_status'=>is_int($reply['http_status']??null)?$reply['http_status']:null,
@@ -267,31 +279,45 @@ function sourceRecord(string $key,array $source,string $code,string $captured): 
     if(($source['available']??false)!==true||$price===null
         ||!is_string($currency)||preg_match('/^[A-Z]{3}$/D',$currency)!==1
         ||!is_string($quoted)){
-        return $base+['status'=>'error','code'=>preg_match('/^[a-z0-9_]{1,90}$/D',(string)($source['error_code']??''))===1
-            ? $source['error_code'] : 'quote_unavailable'];
+        $error=$source['error_code']??(($source['available']??false)===true?'invalid_quote':'quote_unavailable');
+        if(!is_string($error)||preg_match('/^[a-z0-9_]{1,90}$/D',$error)!==1)$error='quote_unavailable';
+        $missing=preg_match('/(?:not_delivered|not_found|_missing|^quote_unavailable$|^provider_access_unconfirmed$)/D',$error)===1;
+        return $base+['status'=>$missing?'unavailable':'error','code'=>$error];
     }
     try{
         $market=new DateTimeImmutable($quoted);
-        $stamp=timeUtc($market);
+        $received=new DateTimeImmutable($captured);
+        if($market>$received)return $base+['status'=>'error','code'=>'market_time_future'];
+        $stamp=$market->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
     }catch(Throwable){return $base+['status'=>'error','code'=>'market_time_invalid'];}
-    $age=max(0,time()-$market->getTimestamp());
-    return $base+['status'=>'ok','price'=>$price,'currency'=>$currency,'market_at'=>$stamp,
+    $age=$received->getTimestamp()-$market->getTimestamp();
+    return $base+['status'=>'ok','price'=>$price,'currency'=>$currency==='GBX'?'GBP':$currency,'unit'=>$currency,'market_at'=>$stamp,
         'age_seconds'=>$age,'stale'=>$age>1800,
         'bid'=>asPrice($source['bid']??null),'ask'=>asPrice($source['ask']??null),
         'symbol'=>is_string($source['symbol']??null)?$source['symbol']:null];
 }
 /** Executes the unchanged MOSA core once; never writes to the database. */
-function previewAll(string $input,callable $emit,?callable $transport=null): array {
+function previewAll(string $input,callable $emit,?callable $transport=null,?DateTimeImmutable $now=null): array {
     $code=isin($input);
     require_once __DIR__.'/market_source_engine.php';
+    $received=[];
     $lab=\fixlabRunMosaMarketSourceLab($code,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
-        static fn(array $request)=>sourceTransport($request,$code,$emit,$transport));
-    $captured=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+        static function(array $request)use($code,$emit,$transport,$now,&$received):array{
+            $reply=sourceTransport($request,$code,$emit,$transport);
+            $received[$request['request_key']]=($now??new DateTimeImmutable())->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
+            return $reply;
+        },$now);
+    $captured=($now??new DateTimeImmutable())->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
     $items=[];$success=0;
     foreach(['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade',
         'boerse_frankfurt_trade','yahoo_home_market'] as $key){
         $source=$lab['sources'][$key]??[];
-        $result=sourceRecord($key,is_array($source)?$source:[],$code,$captured);
+        $requestKey=match($key){
+            'lang_schwarz_quote','lang_schwarz_trade'=>isset($received['lang_schwarz_page'])?'lang_schwarz_page':'lang_schwarz_search',
+            'yahoo_home_market'=>isset($received[$key])?$key:'yahoo_home_search',
+            default=>$key,
+        };
+        $result=sourceRecord($key,is_array($source)?$source:[],$code,$received[$requestKey]??$captured);
         if($result['status']==='ok')$success++;
         $items[]=$result;
     }
@@ -333,7 +359,8 @@ function main(): void {
         if (!session_start()) fail('SESSION_UNAVAILABLE');
         $key=$code.':'.$provider;$now=microtime(true);
         if ($now-($_SESSION['quote_at'][$key]??0)<3.0) {session_write_close();http_response_code(429);echo '{"status":"error","code":"TOO_FREQUENT"}';return;}
-        $_SESSION['quote_at'][$key]=$now;session_write_close();
+        $_SESSION['quote_at']=array_filter($_SESSION['quote_at']??[],static fn($stamp)=>$now-$stamp<3.0);
+        $_SESSION['quote_at'][$key]=$now; // Hold the session lock across the sequential comparison.
         if($provider==='all'){
             header('Content-Type: application/x-ndjson; charset=utf-8');
             header('X-Accel-Buffering: no');
@@ -349,5 +376,6 @@ function main(): void {
         http_response_code(in_array($error->getMessage(),['INVALID_ISIN','INVALID_REQUEST','SOURCE_UNSUPPORTED'],true)?400:502);
         echo json_encode(['status'=>'error','code'=>$error->getMessage()]);
     }catch(Throwable){http_response_code(502);echo '{"status":"error","code":"SOURCE_UNAVAILABLE"}';}
+    finally{if(session_status()===PHP_SESSION_ACTIVE)session_write_close();}
 }
 if (realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__) main();

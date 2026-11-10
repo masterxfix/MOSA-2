@@ -2,13 +2,14 @@
 declare(strict_types=1);
 require dirname(__DIR__,2).'/api/isin_quote.php';
 use function Mosa2\IsinQuote\{previewAll,sourceAllowed,sourceRecord};
+$now=new DateTimeImmutable('2026-11-09T22:48:00+01:00');
 function assertSameValue(mixed $actual,mixed $expected,string $label):void {
     if($actual!==$expected)throw new RuntimeException($label.' '.json_encode([$actual,$expected]));
 }
 $code='DE000A0JBPG2';
 $quote='<!doctype html><html><body><h2>PNE AG</h2><table><tr><th>ISIN</th><th>Handelswährung</th></tr><tr><td>DE000A0JBPG2</td><td>EUR</td></tr><tr><td>Bid</td><td>5,44</td></tr><tr><td>Ask</td><td>5,56</td></tr></table><p>Letzte Aktualisierung: 02.11.2026 @ 15:02:00</p></body></html>';
 $lsSearch=json_encode(['data'=>[['isin'=>$code,'instrumentId'=>123456,'marketId'=>1,'categorySymbol'=>'STK','link'=>'/de/aktie/123456','name'=>'PNE AG']]]);
-$lsPage='<div item="123456@1" field="bid">5,40</div><div item="123456@1" field="ask">5,60</div><div item="123456@1" field="midTime">15:03:00</div><div item="123456@1" data-type="trades"><table><tr><td field="tradeTime">02.11. 15:04:00</td><td field="tradeWithCurrencySymbol">5,52 €</td></tr></table></div>';
+$lsPage='<div item="123456@1" field="bid">5,40</div><div item="123456@1" field="ask">5,60</div><div item="123456@1" field="midTime">09.11.2026 22:47:00</div><div item="123456@1" data-type="trades"><table><tr><td field="tradeTime">09.11. 22:47:15</td><td field="tradeWithCurrencySymbol">5,52 €</td></tr></table></div>';
 $trade='<table><tr><td>02.11.2026</td><td>15:05:00</td><td>250</td><td>XGAT</td><td>5,54</td></tr></table>';
 $frankfurt=json_encode(['isin'=>$code,'mic'=>'XFRA','currency'=>['originalValue'=>'EUR'],'lastPrice'=>5.58,'timestampLastPrice'=>'2026-11-02T15:06:00+01:00']);
 $search=json_encode(['quotes'=>[['symbol'=>'PNE.DE','quoteType'=>'EQUITY','exchange'=>'GER','longname'=>'PNE AG','currency'=>'EUR']]]);
@@ -26,7 +27,7 @@ $transport=static function(array $r)use($fixtures,&$requests):array{
     if(!array_key_exists($r['request_key'],$fixtures))throw new RuntimeException('unplanned provider');
     return ['body'=>$fixtures[$r['request_key']],'http_status'=>200,'latency_ms'=>1,'error_code'=>null];
 };
-$result=previewAll($code,static function(array $event)use(&$events):void{$events[]=$event;},$transport);
+$result=previewAll($code,static function(array $event)use(&$events):void{$events[]=$event;},$transport,$now);
 assertSameValue($result['isin'],$code,'isin');
 assertSameValue($result['name'],'PNE AG','name');
 assertSameValue($result['request_count'],7,'one shared comparison, seven HTTP GETs');
@@ -38,6 +39,9 @@ assertSameValue(array_keys($map),['lang_schwarz_quote','lang_schwarz_trade','tra
     'tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'],'provider scopes');
 assertSameValue($map['lang_schwarz_quote']['status'],'ok','ls quote');
 assertSameValue($map['lang_schwarz_trade']['status'],'ok','ls trade');
+assertSameValue($map['lang_schwarz_trade']['market_at'],'2026-11-09T21:47:15.000000Z','late trade actual time');
+assertSameValue($map['lang_schwarz_trade']['captured_at'],'2026-11-09T21:48:00.000000Z','late trade fetch time');
+assertSameValue(fixlabMosaMarketSourceLabLsDatedQuote('22:47:15',$now),null,'undated time does not create a new market date');
 assertSameValue($map['tradegate_quote']['status'],'ok','tradegate quote');
 assertSameValue($map['tradegate_trade']['status'],'ok','tradegate trade');
 assertSameValue($map['boerse_frankfurt_trade']['status'],'ok','frankfurt trade');
@@ -99,4 +103,17 @@ $failed=array_column($partial['records'],null,'provider');
 assertSameValue($failed['tradegate_trade']['status'],'error','tradegate error separate');
 assertSameValue($failed['lang_schwarz_quote']['status'],'ok','other provider succeeds');
 assertSameValue($failed['yahoo_home_market']['status'],'ok','yahoo independently succeeds');
+$night=new DateTimeImmutable('2026-11-10T02:30:00+01:00');
+foreach(['AUD','HKD','JPY','NOK','GBX'] as $unit){
+    $data=sourceRecord('yahoo_home_market',['available'=>true,'price'=>12.5,'currency'=>$unit,
+        'quoted_at'=>'2026-11-10T01:29:00Z'],$foreignCode,$night->format(DateTimeInterface::ATOM));
+    assertSameValue($data['currency'],$unit==='GBX'?'GBP':$unit,'native currency');
+    assertSameValue($data['unit'],$unit,'native unit');
+    assertSameValue($data['age_seconds'],60,'market time age at night');
+}
+$future=sourceRecord('yahoo_home_market',['available'=>true,'price'=>1.5,'currency'=>'AUD',
+    'quoted_at'=>'2026-11-10T01:31:00Z'],$foreignCode,$night->format(DateTimeInterface::ATOM));
+assertSameValue($future['code'],'market_time_future','future snapshot rejected');
+$missing=sourceRecord('yahoo_home_market',['error_code'=>'home_market_not_found'],$foreignCode,$night->format(DateTimeInterface::ATOM));
+assertSameValue($missing['status'],'unavailable','missing source distinct from failure');
 echo "PASS all four MOSA providers / six quote types, 7 requests, partial errors\n";

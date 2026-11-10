@@ -207,9 +207,13 @@ def collection_scope(env):
             or any(not isinstance(i, str) or not re.fullmatch('[A-Z]{2}[A-Z0-9]{9}[0-9]', i) for i in scope['expected_isins'])
             or len(set(scope['expected_isins'])) != len(scope['expected_isins'])
             or type(scope['source_priority']) is not list or not scope['source_priority']
-            or any(s not in ('provider:tradegate_bsx_mid', 'provider:boerse_frankfurt_api') for s in scope['source_priority'])
+            or any(s not in ('provider:tradegate_bsx_mid', 'provider:boerse_frankfurt_api', 'provider:gettex_mund_delayed') for s in scope['source_priority'])
             or len(set(scope['source_priority'])) != len(scope['source_priority'])):
         raise ConfigurationError('COLLECTION_SCOPE')
+    if ('provider:gettex_mund_delayed' in scope['source_priority']
+            and (env.get('MOSA_MARKET_GETTEX_PRIVATE_USE') != '1' or scope['request_budget'] != 1
+                 or scope['source_priority'] != ['provider:gettex_mund_delayed'])):
+        raise ConfigurationError('GETTEX_PRIVATE_USE_OR_BUDGET')
     digest = hashlib.sha256(raw.encode()).hexdigest()
     if env.get('MOSA_MARKET_AUTHORIZATION') != 'MOSA2-MARKET-BATCH:' + commit + ':' + digest:
         raise ConfigurationError('COLLECTION_AUTHORIZATION')

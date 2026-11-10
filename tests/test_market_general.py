@@ -61,7 +61,7 @@ class GeneralMarketTests(unittest.TestCase):
 
     def call(self, **extra):
         with tempfile.TemporaryDirectory(prefix='mosa-general-') as private:
-            data = dict(action='general', state=self.state, acquired_by_isin=self.acquired, private_root=private.replace('\\','/'),
+            data = dict(action='general', state=self.state, acquired_by_isin=self.acquired, private_root=Path(private).resolve().as_posix(),
                         config=dict(python=sys.executable, project=str(ROOT), php='php', runtime_path=os.environ['PATH'])) | extra
             data['observations'] = data['state'].get('m2_market_observations', [])
             reply = subprocess.run(['php', str(ROOT/'tests/market_runtime_fixture.php')], input=json.dumps(data),
@@ -138,6 +138,21 @@ class GeneralMarketTests(unittest.TestCase):
         first = next(x for x in result['state']['m2_market_observations'] if x['asset_id']=='101')
         self.assertEqual(first['source_id'], '301')
         self.assertEqual(result['state']['m2_asset_source_routes'], active['m2_asset_source_routes'])
+
+    def test_same_market_time_with_later_collection_is_unchanged(self):
+        selected = self.state['m2_asset_identifiers'][0]['normalized_value']
+        first = self.call(requested_isins=[selected], request_budget=1)
+        state = first['state']
+        state['m2_schema_migrations'] = []
+        acquired = deepcopy(self.acquired)
+        key = next(iter(acquired))
+        body = live_bridge.restore(acquired[key]['response'])
+        body['collected_at'] = '2026-09-01 15:00:00.000000'
+        acquired[key]['response'] = live_bridge.transport(body)
+        result = self.call(state=state, acquired_by_isin=acquired, requested_isins=[selected], request_budget=1)
+        self.assertTrue(result['reports'][0]['ok'], result['reports'])
+        self.assertEqual(result['reports'][0]['database_writes'],0)
+        self.assertEqual(result['state']['m2_market_observations'],state['m2_market_observations'])
 
     def test_older_observation_preserves_newer_current(self):
         first = self.call()

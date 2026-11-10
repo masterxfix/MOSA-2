@@ -58,10 +58,15 @@ class YahooChartSnapshotV1:
         require(type(meta) is dict, 'snapshot meta required')
         require(type(meta.get('symbol')) is str and meta['symbol'] == route.instrument, 'symbol context mismatch')
         # Provider spellings are understood here only. No monetary projection.
-        units = {'GBp': 'GBX', 'GBX': 'GBX', 'EUR': 'EUR', 'GBP': 'GBP'}
-        require(type(meta.get('currency')) is str and meta['currency'] in units, 'unsupported provider unit')
+        currency = meta.get('currency')
+        require(type(currency) is str and (currency == 'GBp' or re.fullmatch(r'[A-Z]{3}', currency)),
+                'unsupported provider unit')
+        unit = 'GBX' if currency == 'GBp' else currency
+        # The shared normalizer verifies this exact unit against the pinned catalog and physical route.
         price = meta.get('regularMarketPrice')
         require(type(price) in (int, Decimal), 'native numeric snapshot price required')
+        require(type(price) is int or price.is_finite(), 'finite native price required')
+        require(price > 0, 'positive native price required')
         if type(price) is Decimal:
             require(price.is_finite() and -10 <= price.as_tuple().exponent <= 18 and price.adjusted() < 18,
                     'native price precision exceeds writer contract')
@@ -79,4 +84,4 @@ class YahooChartSnapshotV1:
             ('unit_field_source', META+'currency'), ('observed_at_source', 'CollectedPayload.collected_at'))
         return ObservationCandidate(route.route['asset_id'], payload.source_id, payload.route_id,
             market.strftime('%Y-%m-%d %H:%M:%S.%f'), payload.collected_at, native, None, None, None,
-            units[meta['currency']], payload.payload_sha256, provenance)
+            unit, payload.payload_sha256, provenance)

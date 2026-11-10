@@ -9,6 +9,7 @@ require_once __DIR__.'/state_integrity.php';
 const CORE=['asset_id','source_id','route_id','currency','market_at','observed_at','price','bid','ask','volume'];
 const UNITS=['unit_contract_version','quote_unit_key','quote_unit_version','quantity_basis_unit_key',
     'quantity_basis_unit_version','quantity_basis_amount','volume_unit_key','volume_unit_version'];
+const NATIVE_CURRENCY_PACKAGE='d04ad8778bc2bf61acb6056335b765b34364117c1f0f0edc9efdb36cd1eb82bc';
 const CREATED='2001-01-01 00:00:02.000000';
 const NS='phase3o-synthetic';
 
@@ -34,7 +35,7 @@ function writerPlans(string $root,array $request,string $runtimePath): array {
 function insertValues(array $plan,array $route,string $created=CREATED): array {
     same($plan['decision']??null,'INSERT','insert_decision');
     same($plan['observation_format_version']??null,2,'insert_format');
-    same($plan['catalog_fingerprint']??null,\Mosa2\Phase3M\PACKAGE,'insert_catalog');
+    check(in_array($plan['catalog_fingerprint']??null,[\Mosa2\Phase3M\PACKAGE,NATIVE_CURRENCY_PACKAGE],true),'insert_catalog');
     $fields=array_merge(CORE,UNITS);$columns=array_merge($fields,['observation_format_version','dedupe_key','created_at']);
     same($plan['expected_db_columns']??null,$columns,'insert_columns');
     $values=$plan['db_values']??[];same(array_keys($values),$columns,'insert_value_columns');

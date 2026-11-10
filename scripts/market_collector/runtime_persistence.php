@@ -92,7 +92,11 @@ function relevantFacts(PDO $p,array $writer): array {
     $rows=observationBy($p,'dedupe_key',$key);$facts=[];foreach($rows as $row)$facts[$row['id']]=$row;
     $sameFact=boundedRows($p,'SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE asset_id=? AND source_id=? AND market_at <=> ? AND observed_at=? LIMIT 2',
         [$raw['asset_id'],$raw['source_id'],$raw['market_at'],$raw['observed_at']],1);
-    foreach($sameFact as $row)$facts[$row['id']]=$row;return array_values($facts);
+    foreach($sameFact as $row)$facts[$row['id']]=$row;
+    $sameMarket=boundedRows($p,'SELECT *,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE asset_id=? AND source_id=? AND route_id=? AND market_at=? AND observation_format_version=2 ORDER BY observed_at,id LIMIT 1',
+        [$raw['asset_id'],$raw['source_id'],$raw['route_id'],$raw['market_at']],1);
+    foreach($sameMarket as $row)$facts[$row['id']]=$row;
+    return array_values($facts);
 }
 function exactObservation(PDO $p,string $id,array $expected): array {
     $rows=observationBy($p,'id',$id);same(count($rows),1,'observation_readback');same($rows[0],$expected,'observation_exact');return $rows[0];
@@ -128,14 +132,22 @@ function runtimeRun(string $privateRoot,array $config,array $manifest,callable $
             $request=['action'=>'plan','acquired'=>$acquired,'route'=>$binding,'created_at'=>$now,'existing'=>[],'allow_duplicate'=>true];
             $candidate=$invoke($config,$request)['plan'];same($candidate['decision'],'INSERT','candidate_plan');
             $facts=relevantFacts($p,$candidate);$request['existing']=existing($facts);$writer=$invoke($config,$request)['plan'];
-            same($writer['canonical_bytes'],$candidate['canonical_bytes'],'candidate_drift');same($writer['dedupe_key'],$candidate['dedupe_key'],'candidate_key_drift');
+            if($writer['decision']==='INSERT'){
+                same($writer['canonical_bytes'],$candidate['canonical_bytes'],'candidate_drift');
+                same($writer['dedupe_key'],$candidate['dedupe_key'],'candidate_key_drift');
+            }else{
+                $unchanged=$writer['normalized'];$unchanged['observed_at']=$candidate['normalized']['observed_at'];
+                same($unchanged,$candidate['normalized'],'candidate_market_fact_drift');
+            }
             $r['writer']=$writer['decision'];
             if($writer['decision']==='INSERT'){
                 \Mosa2\Phase3O\executePlan($p,$writer,$binding,$now);$id=$p->lastInsertId();
                 $values=\Mosa2\Phase3O\insertValues($writer,$binding,$now);$values['dedupe_key']=strtoupper(bin2hex($values['dedupe_key']));$expected=['id'=>$id]+strings($values);
             }else{
                 same($writer['decision'],'DUPLICATE_UNCHANGED','writer_decision');
-                same(count($facts),1,'duplicate_origin');$expected=$facts[0];$id=$expected['id'];
+                $key=strtoupper(bin2hex(\Mosa2\Phase3O\byteValue($writer['dedupe_key'])));
+                $matches=array_values(array_filter($facts,static fn($fact)=>$fact['dedupe_key']===$key));
+                same(count($matches),1,'duplicate_origin');$expected=$matches[0];$id=$expected['id'];
                 same(array_intersect_key($expected,$writer['normalized']),strings($writer['normalized']),'duplicate_payload');
             }
             $r['observation_id']=$id;$observation=exactObservation($p,$id,$expected);

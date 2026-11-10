@@ -1,3 +1,6 @@
 docs/database/migrations/0004_current_observation_provenance.sql text eol=lf
 index.html text eol=lf
 assets/css/main.css text eol=lf
+api/market_core/native_currency_units.json text eol=lf
+api/market_core/units.json text eol=lf
+docs/database/seeds/0001_market_units_v1.json text eol=lf

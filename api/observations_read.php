@@ -10,7 +10,7 @@ require_once __DIR__.'/qualified_scope.php';
 /** Bounded candidate set. The 101st row is a completeness sentinel, not displayed. */
 function latest(array $rows,array $route,string $isin,string $now,int $stale): array {
     checked(count($rows)<=101);
-    $base=['name'=>$route['display_name'],'isin'=>$isin,'source'=>$route['source_name'],'venue'=>$route['source_key']==='provider:boerse_frankfurt_api'?'Börse Frankfurt · XFRA':'—'];
+    $base=['name'=>$route['display_name'],'isin'=>$isin,'source'=>$route['source_name'],]+sourceDetails($route['source_key']);
     $facts=[];
     foreach(array_slice($rows,0,100) as $raw){
         $r=strings($raw);
@@ -28,17 +28,20 @@ function latest(array $rows,array $route,string $isin,string $now,int $stale): a
     return $base+$item+['observation_id'=>$r['id'],'age_seconds'=>\Mosa2\QuoteSelection\age($r,$now)];
 }
 
-function read(PDO $p,array $config,string $now): array {
+function read(PDO $p,array $config,string $now,bool $preferCurrent=false): array {
     $stale=$config['stale_seconds']??null;checked(is_int($stale)&&$stale>=60&&$stale<=86400);timestamp($now);
     require_once __DIR__.'/current_read.php';
-    $items=readTransaction($p,static function()use($p,$now,$stale){
+    $items=readTransaction($p,static function()use($p,$now,$stale,$preferCurrent){
         $published=\Mosa2\CurrentRead\published($p,$now,$stale);
         $facts=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex
             FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
         $items=[];
         foreach($published as $entry){
             $r=$entry['route'];$facts->execute([$r['asset_id'],$r['source_id']]);
-            $items[]=latest($facts->fetchAll(PDO::FETCH_ASSOC),$r,$r['isin'],$now,$stale);
+            $observation=latest($facts->fetchAll(PDO::FETCH_ASSOC),$r,$r['isin'],$now,$stale);
+            if(!$preferCurrent){$items[]=$observation;continue;}
+            $current=$entry['item']+['isin'=>$r['isin']]+sourceDetails($r['source_key']);
+            $items[]=($observation['market_at']??'')>=($current['market_at']??'')?$observation:$current;
         }
         return $items;
     });

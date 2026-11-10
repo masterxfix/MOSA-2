@@ -57,3 +57,37 @@ failure, scope authorization and manual/automatic route status. No live provider
 database access is part of these tests. `tests/test_market_batch_scope.php` verifies
 source priorities and physical binding; the existing relevant regression families
 cover runtime, route identity, Current transitions and Schema-6 locks/release integrity.
+
+## Rund-um-die-Uhr-Kurse
+
+Die Browserautomatik nutzt den eingestellten Takt unabhängig vom deutschen
+Handelskalender. Quellabrufe bleiben sequenziell. Ein HTTP 429 pausiert weitere
+Abrufe für denselben Host in der Sitzung. Andere Hosts können weiter liefern.
+Die Ansicht nutzt zusätzlich den schreibgeschützten Endpunkt
+api/market.php?view=best für den freigegebenen Veröffentlichungsumfang.
+Eine identische Marktzeit behält beim erneuten Abruf die erste Erfassungszeit.
+
+Der vorhandene Scheduler akzeptiert für einen geprüften privaten Betrieb
+die Policy UTC_900_V1 mit calendar=null. Die passende Budget-Proposal enthält
+schedule_policy=UTC_900_V1, timezone=UTC, assets und interval_seconds=900.
+Die UTC-Takte werden alle 15 Minuten fällig. Der Kalendertag für das bestehende
+Budget richtet sich weiterhin nach Europe/Berlin. Die geschützte Scheduler-Sidecar
+kann mit --private-operation operation_config und budget_config gemeinsam aufnehmen. Für jede
+Betriebsfreigabe bleiben Provider-Rechte, dokumentierte Limits, frische
+MOSA-Vergleichsdaten, DB-Job und geprüfte Route erforderlich. Die veröffentlichten
+Standardkonfigurationen sind deaktiviert. Die Schema-5/6-Sperren bleiben wirksam.
+
+Gettex MUND nutzt die veröffentlichten verzögerten Posttrade-Dateien mit
+expliziter ISIN und UTC-Zeitstempel. Der manuelle Batch setzt einen bereits
+gebundenen Source und eine qualifizierte Route sowie die Bestätigung
+MOSA_MARKET_GETTEX_PRIVATE_USE=1 voraus und akzeptiert genau einen GET pro Lauf.
+Die Testseite und alle Empfänger müssen im erlaubten privaten Nutzungsumfang
+liegen. Vor einem Dauerbetrieb muss das Provider-Budget für die Dateiabfragen
+geprüft werden. Die Yahoo-HTTPS-Quelle bleibt bis zur bestätigten Zustimmung
+für automatisierte Abrufe gesperrt. Die zusätzlichen Währungseinheiten sind ein
+eigenes versioniertes Paket. Bestehende Seed-Definitionen bleiben bytegleich.
+Ein physischer Writer-Route-Binding für eine neue Währung setzt den passenden
+eingefrorenen Datenbankeintrag voraus.
+
+- [Gettex Delayed Data](https://www.gettex.de/handel/delayed-data/)
+- [Yahoo-Nutzungsbedingungen](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html)

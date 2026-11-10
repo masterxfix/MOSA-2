@@ -11,7 +11,8 @@ function providers(): array {
     require_once __DIR__.'/tradegate_manifest.php';
     require_once __DIR__.'/actions_acceptance.php';
     return ['provider:tradegate_bsx_mid'=>'Mosa2\\TradegateQuote\\manifest',
-        'provider:boerse_frankfurt_api'=>'Mosa2\\MarketAcceptance\\manifest'];
+        'provider:boerse_frankfurt_api'=>'Mosa2\\MarketAcceptance\\manifest',
+        'provider:gettex_mund_delayed'=>'Mosa2\\MarketAcceptance\\gettexManifest'];
 }
 /** Registry qualification belongs to the shared planning library. */
 function qualify(array $state,array $selection,callable $manifestFactory): array {

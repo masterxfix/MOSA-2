@@ -21,7 +21,7 @@ from scripts.phase3o.live_plan import transport, restore
 def run(data):
     action = data['action']
     if action == 'runtime':
-        writer.observation.catalog_module.normative_catalog()
+        writer.observation.catalog_module.runtime_catalog()
         return dict(ok=True, database_connections=0, provider_requests=0)
     if action == 'fetch':
         private = Path(data['private_root'])
@@ -34,7 +34,8 @@ def run(data):
         endpoint = adapter.live_request(manifest['instrument'], stamp,
             php_cli=data['php_cli'], request_script=data.get('request_script', str(private/'request.php')))
         http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],
-            tuple(tuple(h.split(': ', 1)) for h in endpoint['headers'])), timeout=25)
+            tuple(tuple(h.split(': ', 1)) for h in endpoint['headers'])), timeout=25,
+            max_bytes=endpoint.get('max_bytes', 2 * 1024 * 1024))
         fd = os.open(private/'provider-consumed.lock', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         os.close(fd)
         started = time.monotonic()
@@ -65,15 +66,32 @@ def run(data):
             acquired['request_key'], acquired['requested_at'], acquired['instrument'])
         response = TransportResponse(**restore(acquired['response']))
         route = RouteContract(request.provider_key, request.instrument, 2, binding)
+        catalog = writer.observation.catalog_module.runtime_catalog()
+        existing = restore(data['existing'])
         result = pipeline(request, route, FixtureTransport({request: response}), [adapter],
-            catalog=writer.observation.catalog_module.normative_catalog(),
-            created_at=data['created_at'], existing=restore(data['existing']))
+            catalog=catalog, created_at=data['created_at'], existing=existing)
+        if result['decision'] == 'INSERT' and data.get('allow_duplicate') is True:
+            candidate = result['writer_plan']['normalized']
+            matches = [fact['payload'] for fact in existing if fact['format_version'] == 2 and
+                       all(fact['payload'][key] == candidate[key] for key in
+                           ('asset_id', 'source_id', 'route_id', 'market_at'))]
+            if matches:
+                prior = min(matches, key=lambda fact: fact['observed_at'])
+                normalized = writer.observation.normalize_observation(prior, catalog)
+                if any(normalized[key] != value for key, value in candidate.items() if key != 'observed_at'):
+                    raise ValueError('conflicting market snapshot')
+                planner = writer.WriterPlanner(catalog, [route.envelope()], existing)
+                old_plan = planner.plan(prior, format_version=2, intent='NEW_NATIVE_V2',
+                                        created_at=data['created_at'])
+                if old_plan['decision'] != 'DUPLICATE_UNCHANGED':
+                    raise ValueError('unchanged snapshot replay')
+                result = dict(decision=old_plan['decision'], writer_plan=old_plan)
         allowed = ('INSERT', 'DUPLICATE_UNCHANGED') if data.get('allow_duplicate') is True else ('INSERT',)
         if result['decision'] not in allowed:
             raise ValueError('writer decision')
         return dict(ok=True, plan=transport(result['writer_plan']))
     if action == 'replay':
-        planner = writer.WriterPlanner(writer.observation.catalog_module.normative_catalog(),
+        planner = writer.WriterPlanner(writer.observation.catalog_module.runtime_catalog(),
             [dict(format_version=2, route=data['route'])], restore(data['existing']))
         plan = planner.plan(data['stored'], format_version=2, intent='NEW_NATIVE_V2', created_at=data['created_at'])
         if plan['decision'] != 'DUPLICATE_UNCHANGED':

@@ -12,7 +12,10 @@ const FIELDS=[...CORE,...UNITS];
 function catalog(): array {
     $wire=file_get_contents(__DIR__.'/units.json');
     requireValue(hash('sha256',$wire)==='0d9f196e4ccbd5e687292fa3d7a1a087b343ec81fb609b8b64b6454713246bbf','quote_catalog');
-    return json_decode($wire,true,32,JSON_THROW_ON_ERROR)['definitions'];
+    $additional=file_get_contents(__DIR__.'/native_currency_units.json');
+    requireValue(hash('sha256',$additional)==='d170bc53909e6d38daf19682b6a9a454ee53653fa4a3885243662915ad924da6','quote_native_catalog');
+    return array_merge(json_decode($wire,true,32,JSON_THROW_ON_ERROR)['definitions'],
+        json_decode($additional,true,32,JSON_THROW_ON_ERROR)['definitions']);
 }
 function unit(array $catalog,mixed $key,mixed $version): array {
     requireValue(is_string($key)&&preg_match('/^[A-Z][A-Z0-9_]{0,63}$/D',$key)===1,'quote_unit');

@@ -3,13 +3,13 @@ declare(strict_types=1);
 namespace Mosa2\CurrentRead;
 use PDO;
 use RuntimeException;
-use function Mosa2\ObservationRead\{checked,strings,binding,publishedSql,readTransaction};
+use function Mosa2\ObservationRead\{checked,strings,binding,publishedSql,readTransaction,sourceDetails};
 require_once __DIR__.'/read_model.php';
 require_once __DIR__.'/qualified_scope.php';
 
 /** Current is the only display source. The referenced fact only verifies provenance. */
 function item(?array $current,?array $origin,array $r,string $isin,string $now,int $stale): array {
-    $base=['name'=>$r['display_name'],'source'=>$r['source_name'],'venue'=>$r['source_key']==='provider:boerse_frankfurt_api'?'Börse Frankfurt · XFRA':'—'];
+    $base=['name'=>$r['display_name'],'source'=>$r['source_name'],]+sourceDetails($r['source_key']);
     if($current===null)return $base+['status'=>'missing'];
     checked($origin!==null);
     $current=strings($current);$origin=strings($origin);
@@ -18,7 +18,7 @@ function item(?array $current,?array $origin,array $r,string $isin,string $now,i
     checked($current['observation_id']===$origin['id']&&$current['observation_format_version']==='2'
         &&$current['route_revision']===$r['route_revision']
         &&hash_equals($qualified['dedupe_key'],strtoupper($current['observation_dedupe_key'])));
-    return \Mosa2\MarketRead\present($current+['display_name'=>$base['name'],'source_name'=>$base['source'],'venue'=>$base['venue'],'valid_binding'=>'1'],$now,$stale);
+    return \Mosa2\MarketRead\present($current+['display_name'=>$base['name'],'source_name'=>$base['source'],'venue'=>$base['venue'],'valid_binding'=>'1'],$now,$stale)+['quote_type'=>$base['quote_type']];
 }
 /** The same validated publication boundary is used by both web views. */
 function published(PDO $p,string $now,int $stale): array {

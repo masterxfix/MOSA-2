@@ -103,6 +103,40 @@ class MarketCollectorTests(unittest.TestCase):
         self.assertEqual(len(result['dedupe_key']),32)
         self.assertEqual(result['route_binding']['route_id'],'301')
 
+    def test_native_currency_is_checked_by_the_physical_route(self):
+        self.catalog = writer.observation.catalog_module.runtime_catalog()
+        for currency in ('AUD','HKD','JPY','NOK'):
+            payload=self.payload_meta(symbol='SYNTH-GBX.L', currency=currency)
+            result=self.run_pipeline(self.inputs(currency,payload))
+            self.assertEqual(result['decision'],'INSERT',result)
+            self.assertEqual(result['writer_plan']['normalized']['currency'],currency)
+            self.assertEqual(result['writer_plan']['normalized']['quote_unit_key'],currency)
+            self.reject(self.inputs('GBP',payload))
+
+    def test_gettex_delayed_file_preserves_late_trade_time(self):
+        import gzip
+        from scripts.market_collector.gettex_delayed import GettexDelayedTradeV1
+        from scripts.market_collector.http_transport import HttpGet
+        adapter=GettexDelayedTradeV1()
+        isin='DE0000000001'
+        requested='2026-11-09 22:15:00.000000'
+        descriptor=adapter.live_request(isin,requested)
+        self.assertTrue(descriptor['url'].endswith('posttrade.20261109.22.00.mund.csv.gz'))
+        request=Request(adapter.provider_key,'201','301',descriptor['request_key'],requested,isin)
+        route=RouteContract(request.provider_key,isin,2,dict(self.inputs()[1].route))
+        HttpGet(request,descriptor['url'])
+        with self.assertRaises(ValueError):
+            HttpGet(request,descriptor['url'].replace('erdk.bayerische-boerse.de','example.com'))
+        data=(b'DE0000000001,21:48:20.121390,EUR,12.345,110\n'
+              b'DE0000000002,21:50:01.000000,EUR,13.10,10\n')
+        collected='2026-11-09 22:15:00.345678'
+        response=TransportResponse(gzip.compress(data),collected,200,'application/gzip')
+        result=pipeline(request,route,FixtureTransport({request:response}),[adapter],
+                        catalog=self.catalog,created_at='2026-11-09 22:16:00.000000')
+        self.assertEqual(result['decision'],'INSERT',result)
+        self.assertEqual(result['candidate'].market_at,'2026-11-09 21:48:20.121390')
+        self.assertEqual(result['candidate'].observed_at,collected)
+
     def test_snapshot_to_current_to_web_and_replay_uses_shared_components(self):
         # Synthetic persistence boundary: plans supply exact stored values, no DB/network.
         from scripts.market_current import planner as current

@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 FORMAT = "mosa2-collector-operation-plan-v1"
 FORMAT_V2 = "mosa2-collector-operation-plan-v2"
 SCHEDULE = "BERLIN_60_900_V1"
+SCHEDULE_24H = "UTC_900_V1"
 ZONE = ZoneInfo("Europe/Berlin")
 TERMINAL = {"COMPLETE", "FAILED", "PARTIAL_FAILED", "OUTCOME_UNKNOWN"}
 FAILED = {"FAILED", "PARTIAL_FAILED", "OUTCOME_UNKNOWN"}
@@ -57,7 +58,7 @@ def _configuration(c):
         expected = expected - {"weekdays", "windows", "interval_seconds"} | {"schedule_policy"}
     if set(c) != expected or c["format"] not in (FORMAT, FORMAT_V2) or type(c["execution_enabled"]) is not bool:
         raise ValueError("config")
-    if modern and c["schedule_policy"] != SCHEDULE:
+    if modern and c["schedule_policy"] not in (SCHEDULE, SCHEDULE_24H):
         raise ValueError("schedule")
     if c["max_batch_size"] != 10 or type(c["max_batch_size"]) is not int:
         raise ValueError("batch")
@@ -95,6 +96,10 @@ def _configuration(c):
         if any(a[1] > b[0] for a, b in zip(sorted(parsed), sorted(parsed)[1:])):
             raise ValueError("overlap")
     cal = c["calendar"]
+    if modern and c["schedule_policy"] == SCHEDULE_24H:
+        if cal is not None:
+            raise ValueError("calendar not used with UTC cadence")
+        return assets, parsed, None, None, (set(), set())
     if set(cal) != {"approved", "source", "version", "valid_from", "valid_until", "open_dates", "closed_dates"} or cal["approved"] is not True:
         raise ValueError("calendar")
     if any(not isinstance(cal[k], str) or not 1 <= len(cal[k]) <= 200 for k in ("source", "version")):
@@ -141,14 +146,22 @@ def calendar_holiday(config, now):
     return None
 
 
+def configured_cadence(config, now):
+    """Resolve the reviewed policy. Berlin civil time still defines the budget day."""
+    if config.get("schedule_policy") == SCHEDULE_24H:
+        _configuration(config)
+        return 900
+    return cadence_seconds(now, holiday=calendar_holiday(config, now))
+
+
 def next_slot(config, now):
-    """Strictly future theoretical UTC tick; stop at missing calendar coverage."""
+    """Strictly future UTC tick; stop at missing coverage for the legacy policy."""
     cursor = now.astimezone(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=1)
     for _ in range(16):
-        holiday = calendar_holiday(config, cursor)
-        if holiday is None:
+        interval = configured_cadence(config, cursor)
+        if interval is None:
             return None
-        if is_slot(cursor, holiday=holiday):
+        if int(cursor.timestamp()) % interval == 0:
             return cursor
         cursor += timedelta(minutes=1)
     return None
@@ -204,12 +217,13 @@ def decide(config, state, qualification, now, candidate_id, *, simulation=False)
         if state["provider_requests_used"] + len(assets) > config["provider_budget"]["per_day"]:
             return "BLOCKED"
         day = local.date()
-        if not lo <= day <= hi:
+        if lo is not None and not lo <= day <= hi:
             return "BLOCKED"
         if modern:
-            if day not in dates[0] | dates[1]:
+            interval = configured_cadence(config, utc)
+            if interval is None:
                 return "BLOCKED"
-            if not is_slot(utc, holiday=day in dates[1]):
+            if utc.microsecond or int(utc.timestamp()) % interval:
                 return "SKIP"  # UTC slot only: never catch up a missed tick
             if last is not None:
                 end = instant(state["last_completed_at"])

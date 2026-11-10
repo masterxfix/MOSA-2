@@ -84,7 +84,7 @@ class ObservationReadTests(unittest.TestCase):
         api=(ROOT/"api/market.php").read_text()
         source=(ROOT/"api/observations_read.php").read_text()
         self.assertIn("dirname(__DIR__,2).'/mosa2-market-read-private/access.php'",api)
-        self.assertIn("['current','observations']",api)
+        self.assertIn("['current','observations','best']",api)
         self.assertNotIn("$_GET",source)
         for term in ("INSERT ","UPDATE ","DELETE ","REPLACE ","ALTER ","TRUNCATE ","market_collector","shell_exec","curl_"):
             self.assertNotIn(term,source+api)

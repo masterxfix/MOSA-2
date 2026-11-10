@@ -34,15 +34,14 @@ def cycle(operation_config, budget_config, evidence, now, provider_key=PROVIDER)
             result["reason"] = "BOUNDED_ASSET_SCOPE_REQUIRED"
             return result
         result.update(assets=list(assets), expected_provider_requests=len(assets))
-        holiday = operation.calendar_holiday(operation_config, utc)
-        interval = budget.cadence_seconds(utc, holiday=holiday)
+        interval = operation.configured_cadence(operation_config, utc)
         result["interval_seconds"] = interval
         upcoming = operation.next_slot(operation_config, utc)
         result["next_theoretical_at"] = upcoming.isoformat() if upcoming else None
         if interval is None:
             result["reason"] = "CONFIGURATION_OR_CALENDAR_UNKNOWN"
             return result
-        due = operation.is_slot(utc, holiday=holiday)
+        due = not utc.microsecond and int(utc.timestamp()) % interval == 0
         result["scheduled_at"] = utc.isoformat() if due else None
         candidate = "cycle-" + utc.strftime("%Y%m%dt%H%M%Sz")
         result["cycle_id"] = candidate
@@ -64,14 +63,21 @@ def cycle(operation_config, budget_config, evidence, now, provider_key=PROVIDER)
                                                 ("combined_per_day", "per_day"),
                                                 ("combined_parallel", "parallel")))
         proposal = budget_config["proposal"]
-        if proposal["calendar_approved"] is not True:
-            result["reason"] = "CALENDAR_PROPOSAL_UNCONFIRMED"
-            return result
-        if (proposal["timezone"] != "Europe/Berlin" or proposal["assets"] != len(assets) or
-                proposal["weekday_fast_window"] != ["06:00", "24:00"] or
-                proposal["weekday_fast_seconds"] != 60 or proposal["night_weekend_holiday_seconds"] != 900):
-            result["reason"] = "CONFLICTING_SCHEDULE_PROPOSAL"
-            return result
+        if operation_config["schedule_policy"] == operation.SCHEDULE_24H:
+            expected = {"schedule_policy": operation.SCHEDULE_24H, "timezone": "UTC",
+                        "assets": len(assets), "interval_seconds": 900}
+            if proposal != expected:
+                result["reason"] = "CONFLICTING_SCHEDULE_PROPOSAL"
+                return result
+        else:
+            if proposal["calendar_approved"] is not True:
+                result["reason"] = "CALENDAR_PROPOSAL_UNCONFIRMED"
+                return result
+            if (proposal["timezone"] != "Europe/Berlin" or proposal["assets"] != len(assets) or
+                    proposal["weekday_fast_window"] != ["06:00", "24:00"] or
+                    proposal["weekday_fast_seconds"] != 60 or proposal["night_weekend_holiday_seconds"] != 900):
+                result["reason"] = "CONFLICTING_SCHEDULE_PROPOSAL"
+                return result
         previous, event = evidence["monitoring_previous"], evidence["monitoring_event"]
         for item in (previous, event):
             age = (utc-operation.instant(item["checked_at"])).total_seconds()

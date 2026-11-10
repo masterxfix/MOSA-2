@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'), assert=require('node:assert/strict');
 class E{constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.textContent='';this.attrs={};this.disabled=false;}
- append(...items){this.children.push(...items)} replaceChildren(...items){this.children=items.flatMap(e=>e.children??[e])} addEventListener(event,fn){this[event]=fn} querySelector(sel){return this.map?.[sel]??null}}
+ append(...items){this.children.push(...items)} replaceChildren(...items){this.children=items.flatMap(e=>e.children??[e])} setAttribute(name,value){this.attrs[name]=value} addEventListener(event,fn){this[event]=fn} querySelector(sel){return this.map?.[sel]??null}}
 const form=new E('form'),input=new E('input'),button=new E('button'),steps=new E('ol'),list=new E('ol'),counter=new E('p');
 input.value='DE000A0JBPG2';form.map={'[data-isin-input]':input,'button[type=submit]':button};form.parentElement={querySelector:q=>q==='[data-isin-steps]'?steps:null};
 counter.firstChild={textContent:'00'};

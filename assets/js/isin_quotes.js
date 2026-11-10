@@ -12,10 +12,11 @@
   const typeLabels = Object.freeze({stock:"Aktie",etf:"ETF",fund:"Fonds",other:"Sonstiges",unknown:"Unbekannt"});
   const confirmedTypes = new Set(["stock","etf","fund","other"]);
   const valid = value => typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
-  const validQuote = (quote, isin) => Boolean(quote && quote.isin===isin && providers.some(provider=>provider.key===quote.provider)
+  const validQuote = (quote, isin) => Boolean(quote && quote.isin===isin && (quote.provider==="stored" || providers.some(provider=>provider.key===quote.provider))
     && typeof quote.price === "string" && /^\d+(?:\.\d{1,12})?$/.test(quote.price)
-    && typeof quote.currency === "string" && quote.currency !== ""
-    && typeof quote.market_at === "string" && Number.isFinite(Date.parse(quote.market_at)));
+    && Number(quote.price)>0 && /^[A-Z]{3}$/.test(quote.currency)
+    && typeof quote.market_at === "string" && Number.isFinite(Date.parse(quote.market_at))
+    && typeof quote.captured_at === "string" && Date.parse(quote.market_at)<=Date.parse(quote.captured_at));
   const forms = [...document.querySelectorAll("[data-isin-form]")];
   if (!forms.length) return;
   const detailsToggle = document.querySelector("[data-isin-details-toggle]");
@@ -25,53 +26,11 @@
   const automationStatus = automationRoot?.querySelector("[data-isin-automation-status]");
   const AUTOMATION_KEY = "mosa2-isin-automation-v1";
   const DEFAULT_INTERVAL_SECONDS = 60;
-  const WEEKEND_INTERVAL_SECONDS = 3600;
   const clampInterval = value => Math.min(300, Math.max(5, Math.round(Number(value) || DEFAULT_INTERVAL_SECONDS)));
-  function berlinDateParts(value = new Date()) {
-    const parts = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/Berlin", year:"numeric", month:"2-digit", day:"2-digit"})
-      .formatToParts(value).reduce((result, part) => { if (part.type !== "literal") result[part.type] = part.value; return result; }, {});
-    return {year:Number(parts.year), month:Number(parts.month), day:Number(parts.day)};
-  }
-  function dateKey(year, month, day) { return year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0"); }
-  function utcDateKey(value) { return dateKey(value.getUTCFullYear(), value.getUTCMonth()+1, value.getUTCDate()); }
-  function addUtcDays(value, days) { return new Date(value.getTime() + days*86400000); }
-  function easterSunday(year) {
-    const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
-    const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
-    const month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;
-    return new Date(Date.UTC(year,month-1,day));
-  }
-  function bwHolidayKeys(year) {
-    const easter=easterSunday(year), keys=new Set([
-      dateKey(year,1,1), dateKey(year,1,6), dateKey(year,5,1), dateKey(year,10,3), dateKey(year,11,1),
-      dateKey(year,12,25), dateKey(year,12,26)
-    ]);
-    for (const days of [-2,1,39,50,60]) keys.add(utcDateKey(addUtcDays(easter,days)));
-    return keys;
-  }
-  function isBadenWuerttembergHoliday(value = new Date()) {
-    const parts=berlinDateParts(value);
-    return bwHolidayKeys(parts.year).has(dateKey(parts.year,parts.month,parts.day));
-  }
-  function dayMode(value = new Date()) {
-    if (isBadenWuerttembergHoliday(value)) return "Feiertag Baden-Württemberg";
-    const parts=berlinDateParts(value), weekday=new Date(Date.UTC(parts.year,parts.month-1,parts.day)).getUTCDay();
-    return weekday===0 || weekday===6 ? "Wochenende" : "Werktag";
-  }
-  function intervalFor(value = new Date(), configuredSeconds = DEFAULT_INTERVAL_SECONDS) {
-    return dayMode(value) === "Werktag" ? clampInterval(configuredSeconds) : WEEKEND_INTERVAL_SECONDS;
-  }
-  function berlinOffsetMs(value) {
-    const zone=new Intl.DateTimeFormat("en-US", {timeZone:"Europe/Berlin", timeZoneName:"longOffset", hour:"2-digit", minute:"2-digit", hour12:false})
-      .formatToParts(value).find(part => part.type === "timeZoneName")?.value || "GMT+01:00";
-    const match=zone.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/);
-    if (!match) return 3600000;
-    return (match[1] === "-" ? -1 : 1) * (Number(match[2])*60 + Number(match[3] || 0))*60000;
-  }
-  function nextBerlinMidnight(value = new Date()) {
-    const parts=berlinDateParts(value), utcMidnight=Date.UTC(parts.year,parts.month-1,parts.day+1,0,0,0);
-    return utcMidnight-berlinOffsetMs(new Date(utcMidnight));
-  }
+  const intervalFor = (_date, configuredSeconds = DEFAULT_INTERVAL_SECONDS) => clampInterval(configuredSeconds);
+  const storedQuotes = new Map();
+  const storedRoot=document.querySelector("[data-isin-stored-quotes]");
+  let storedStatus="loading", storedReadAt=null, storedReadPending=false;
   function restoreAutomation() {
     if (!automationRoot) return {intervalSeconds:DEFAULT_INTERVAL_SECONDS,enabled:false,lastUpdatedAt:null};
     try {
@@ -113,7 +72,7 @@
   function formatAutomationTimestamp(value) { return value ? date(value) : "—"; }
   function updateAutomationStatus() {
     if (!automationRoot) return;
-    const activeInterval=intervalFor(new Date(),automation.intervalSeconds), mode=dayMode(new Date());
+    const activeInterval=intervalFor(new Date(),automation.intervalSeconds);
     if (automationInterval && automationInterval.value !== String(automation.intervalSeconds)) automationInterval.value=String(automation.intervalSeconds);
     if (automationToggle) {
       automationToggle.textContent=automation.enabled ? "Automatik stoppen" : "Automatik starten";
@@ -121,7 +80,7 @@
       automationToggle.disabled=busy;
     }
     if (automationStatus) automationStatus.textContent=(automation.enabled ? "Automatik aktiv" : "Automatik inaktiv")+
-      " · Aktives Intervall: "+formatAutomationInterval(activeInterval)+(automation.enabled ? "" : " (inaktiv)")+" · Modus: "+mode+
+      " · Aktives Intervall: "+formatAutomationInterval(activeInterval)+(automation.enabled ? "" : " (inaktiv)")+" · Modus: rund um die Uhr"+
       " · Letzte Aktualisierung: "+formatAutomationTimestamp(automation.lastUpdatedAt);
   }
   function clearAutomationTimer() {
@@ -133,7 +92,7 @@
     if (!automationRoot || !automation.enabled || document.visibilityState === "hidden" || busy || !entries.length) return;
     const interval=intervalFor(value,automation.intervalSeconds), last=Date.parse(automation.lastUpdatedAt || ""),
       due=Number.isFinite(last) ? last+interval*1000 : value.getTime()+interval*1000,
-      next=Math.min(due,nextBerlinMidnight(value)), delay=Math.max(250,Math.min(2147483647,next-value.getTime()));
+      delay=Math.max(250,due-value.getTime());
     automationTimer=setTimeout(runAutomaticCycle,delay);
   }
   async function runAutomaticCycle() {
@@ -156,8 +115,50 @@
     const stamp=Date.parse(quote.market_at);
     return Boolean(quote.refresh_failed_at) || !Number.isFinite(stamp) || Date.now()-stamp>1800000;
   }
+  function availableQuotes(entry) {
+    return [...entry.quotes, storedQuotes.get(entry.isin)].filter(quote=>validQuote(quote,entry.isin));
+  }
   function best(entry) {
-    return entry.quotes.filter(quote=>validQuote(quote,entry.isin)).slice().sort((a,b)=>Date.parse(b.market_at)-Date.parse(a.market_at) || providers.findIndex(p=>p.key===a.provider)-providers.findIndex(p=>p.key===b.provider))[0] || null;
+    return availableQuotes(entry).sort((a,b)=>compareTimestamp(b.market_at,a.market_at)
+      || compareTimestamp(b.captured_at,a.captured_at))[0] || null;
+  }
+  function compareTimestamp(a,b) {
+    const fraction=value=>Number((value.match(/\.(\d{4,6})Z$/)?.[1]||"").padEnd(6,"0").slice(3));
+    return Date.parse(a)-Date.parse(b) || fraction(a)-fraction(b);
+  }
+  function updateQuote(previous, record) {
+    if (!previous || compareTimestamp(record.market_at,previous.market_at)>0) return record;
+    const {refresh_failed_at, ...retained}=previous;
+    return {...retained, unchanged:true};
+  }
+  async function loadStoredQuotes() {
+    if (!storedRoot || storedReadPending || (storedReadAt!==null && Date.now()-storedReadAt<60000)) return;
+    storedReadPending=true;
+    const firstRead=storedReadAt===null;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+    try {
+      const response=await fetch("api/market.php?view=best",{cache:"no-store",signal:controller.signal});
+      if (!response.ok) throw Error("MARKET_READ");
+      const result=await response.json();
+      if (result.status!=="ok" || !Array.isArray(result.items)) throw Error("MARKET_READ");
+      storedQuotes.clear();
+      for (const item of result.items) {
+        if (!["stored","stale"].includes(item.status) || !valid(item.isin)) continue;
+        const utc=value=>typeof value==="string"?value.replace(" ","T"):"";
+        const quote={...item,source:item.source+" · "+item.venue,provider:"stored",captured_at:utc(item.observed_at),market_at:utc(item.market_at)};
+        if (validQuote(quote,item.isin)) storedQuotes.set(item.isin,quote);
+      }
+      storedStatus="ok";
+    } catch { storedStatus="error"; }
+    finally {
+      clearTimeout(timer);
+      storedReadAt=Date.now();storedReadPending=false;
+      paint();
+      if (firstRead) requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        storedRoot.dataset.dataReadyMs=String(Math.round(performance.now()));
+        storedRoot.dataset.dataSuccess=String(storedStatus==="ok");
+      }));
+    }
   }
   function age(quote) {
     const stamp=Date.parse(quote.market_at);
@@ -176,7 +177,7 @@
         const quote=best(entry), li=document.createElement("li");
         const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");
         const link=document.createElement("a");link.href="marktdaten.html";link.textContent=entry.name || entry.isin;
-        const detail=document.createElement("small");detail.textContent=entry.isin+" · "+typeLabel(entry)+(quote ? " · "+fmtPrice(quote.price)+" "+quote.currency+" · "+quote.source+(old(quote)?" · Veraltet":"") : " · Noch kein Abruf");
+        const detail=document.createElement("small");detail.textContent=entry.isin+" · "+typeLabel(entry)+(quote ? " · "+fmtPrice(quote.price)+" "+(quote.unit||quote.currency)+" · "+quote.source+(old(quote)?" · Veraltet":"") : " · Noch kein Abruf");
         link.append(detail);
         const remove=document.createElement("button");remove.type="button";remove.className="isin-delete";remove.dataset.isinRemove=entry.isin;remove.textContent="Entfernen";remove.setAttribute("aria-label",entry.isin+" entfernen");
         const arrow=document.createElement("span");arrow.textContent="↗";
@@ -188,8 +189,11 @@
     const number=document.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(entries.length).padStart(2,"0");
     for (const tbody of document.querySelectorAll("[data-isin-table]")) {
       const fragment=document.createDocumentFragment();
-      for (const entry of entries) {
-        const latest=best(entry), quotes=entry.quotes.filter(quote=>validQuote(quote,entry.isin));
+      const displayed=[...entries,...[...storedQuotes.values()]
+        .filter(quote=>!entries.some(entry=>entry.isin===quote.isin))
+        .map(quote=>({isin:quote.isin,name:quote.name,quotes:[]}))];
+      for (const entry of displayed) {
+        const latest=best(entry), quotes=availableQuotes(entry);
         if (!detailsOpen) {
           if (latest) renderQuoteRow(fragment,entry,latest);
           else renderMissingRow(fragment,entry);
@@ -199,25 +203,28 @@
         for (const quote of quotes) renderQuoteRow(fragment,entry,quote);
         for(const error of entry.errors||[]) renderErrorRow(fragment,entry,error);
       }
-      if(!entries.length){const tr=document.createElement("tr");tr.className="market-placeholder";const td=itemCell(tr,"ISIN","Noch keine ISIN eingegeben.");td.colSpan=10;fragment.append(tr);}
+      if(!displayed.length){const tr=document.createElement("tr");tr.className="market-placeholder";const td=itemCell(tr,"ISIN","Noch keine ISIN eingegeben.");td.colSpan=10;fragment.append(tr);}
       tbody.replaceChildren(fragment);
     }
     if(detailsToggle){detailsToggle.disabled=busy;detailsToggle.textContent=detailsOpen?"Weniger anzeigen":"Alle Details anzeigen";detailsToggle.setAttribute("aria-expanded",String(detailsOpen));}
-    for (const label of document.querySelectorAll("[data-isin-summary]")) label.textContent=entries.length+" ISIN"+(entries.length===1?"":"s")+" · Manuell abgefragte Kurse";
+    for (const label of document.querySelectorAll("[data-isin-summary]")) label.textContent=entries.length+" ISIN"+(entries.length===1?"":"s")+
+      (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
+        ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
     syncDeleteButtons();
     updateAutomationStatus();
   }
   function renderQuoteRow(fragment,entry,quote) {
     const tr=document.createElement("tr");tr.dataset.status=old(quote)?"stale":"stored";
     itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));
-    const price=itemCell(tr,"Kurs",fmtPrice(quote.price)+" "+quote.currency);price.className="market-price";
-    itemCell(tr,"Währung / Einheit",quote.currency+" · "+quote.quote_type);
+    const price=itemCell(tr,"Kurs",fmtPrice(quote.price)+" "+(quote.unit||quote.currency));price.className="market-price";
+    itemCell(tr,"Währung / Einheit",(quote.unit && quote.unit!==quote.currency ? quote.currency+" / "+quote.unit : quote.currency)+" · "+quote.quote_type);
     itemCell(tr,"Quelle / Handelsplatz",quote.source);
     itemCell(tr,"Marktzeit",date(quote.market_at));
     itemCell(tr,"Abgerufen",date(quote.captured_at));
     itemCell(tr,"Datenalter",age(quote));
     itemCell(tr,"ISIN",entry.isin);
-    itemCell(tr,"Status",old(quote)?"Veraltet":"Kurs abgerufen");fragment.append(tr);
+    const status=quote.provider==="stored"?"Gespeichert":quote.unchanged?"Unverändert":"Kurs abgerufen";
+    itemCell(tr,"Status",(old(quote)?"Veraltet · ":"")+status);fragment.append(tr);
   }
   function renderMissingRow(fragment,entry) {
     const tr=document.createElement("tr");tr.dataset.status="missing";
@@ -226,11 +233,11 @@
     itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status","Kein erfolgreicher Kurs vorhanden");fragment.append(tr);
   }
   function renderErrorRow(fragment,entry,error) {
-    const tr=document.createElement("tr");tr.dataset.status="error";
+    const tr=document.createElement("tr");tr.dataset.status=error.status==="unavailable"?"missing":"error";
     itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));itemCell(tr,"Kurs","—");itemCell(tr,"Währung / Einheit","—");
     itemCell(tr,"Quelle / Handelsplatz",sourceLabel(error.provider));
     itemCell(tr,"Marktzeit","—");itemCell(tr,"Abgerufen",date(error.captured_at));itemCell(tr,"Datenalter","—");
-    itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status","Fehler: "+error.code);fragment.append(tr);
+    itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status",(error.status==="unavailable"?"Nicht verfügbar: ":"Fehler: ")+error.code);fragment.append(tr);
   }
   function removeEntry(isin) {
     if (busy) return;
@@ -295,7 +302,7 @@
   function sourceLabel(provider) {
     return providers.find(p=>p.key===provider)?.label || "MOSA-Quellenvergleich";
   }
-  function applyResult(entry,result,form,preserveExisting) {
+  function applyResult(entry,result,form) {
     if(!result||result.isin!==entry.isin||!Array.isArray(result.records)||result.records.length!==providers.length)
       throw Error("INVALID_RESULT");
     if(confirmedTypes.has(result.instrument_type) && typeof result.instrument_type_source === "string" && result.instrument_type_source !== ""){
@@ -305,32 +312,33 @@
     }else if(result.instrument_type === "unknown" && result.instrument_type_source === "lang_schwarz_conflict"){
       entry.instrument_type="unknown";entry.instrument_type_source=result.instrument_type_source;entry.instrument_type_verified_at=null;
     }
-    let quotes=preserveExisting?entry.quotes.slice():[];
-    let errors=preserveExisting?entry.errors.filter(error=>error.provider!=="all"):[];
-    const seen=new Set();let successful=0,failed=0;
+    let quotes=entry.quotes.slice();
+    let errors=entry.errors.filter(error=>error.provider!=="all");
+    const seen=new Set();let successful=0,unchanged=0,failed=0;
     for(const record of result.records){
       if(!record||!providers.some(p=>p.key===record.provider)||seen.has(record.provider))throw Error("INVALID_PROVIDER_RESULT");
       seen.add(record.provider);
       const label=sourceLabel(record.provider);
-      if(record.status==="ok"&&typeof record.price==="string"&&/^\d+(?:\.\d{1,12})?$/.test(record.price)
-        &&typeof record.market_at==="string"&&typeof record.currency==="string"){
-        const fresh={...record};delete fresh.refresh_failed_at;
-        quotes=quotes.filter(quote=>quote.provider!==record.provider);quotes.push(fresh);
-        errors=errors.filter(error=>error.provider!==record.provider);successful++;
-        progress(form,label+": "+fmtPrice(record.price)+" "+record.currency+" · "+record.quote_type+
-          " · Marktzeit "+date(record.market_at)+(old(record)?" · Veraltet":""),"success");
+      if(record.status==="ok" && validQuote(record,entry.isin)){
+        const previous=quotes.find(quote=>quote.provider===record.provider);
+        const accepted=updateQuote(previous,record);
+        quotes=quotes.filter(quote=>quote.provider!==record.provider);quotes.push(accepted);
+        errors=errors.filter(error=>error.provider!==record.provider);
+        if (accepted.unchanged) unchanged++; else successful++;
+        progress(form,label+": "+fmtPrice(accepted.price)+" "+accepted.currency+" · "+accepted.quote_type+
+          " · Marktzeit "+date(accepted.market_at)+(accepted.unchanged?" · Unverändert":"")+(old(accepted)?" · Veraltet":""),"success");
       }else{
         const reason=typeof record.code==="string"?record.code:"QUOTE_UNAVAILABLE";
         const capturedAt=typeof record.captured_at==="string"?record.captured_at:new Date().toISOString();
-        if(preserveExisting)quotes=quotes.map(quote=>quote.provider===record.provider?{...quote,refresh_failed_at:capturedAt}:quote);
+        quotes=quotes.map(quote=>quote.provider===record.provider?{...quote,refresh_failed_at:capturedAt}:quote);
         errors=errors.filter(error=>error.provider!==record.provider);
-        errors.push({provider:record.provider,code:reason,captured_at:capturedAt});failed++;
+        errors.push({provider:record.provider,status:record.status,code:reason,captured_at:capturedAt});failed++;
         progress(form,label+": kein bestätigter Kurs ("+reason+").","error");
       }
     }
     entry.quotes=quotes;entry.errors=errors;
     if(typeof result.name==="string"&&result.name)entry.name=result.name;
-    return {successful,failed};
+    return {successful,unchanged,failed};
   }
   function markRequestFailure(entry,reason) {
     const capturedAt=new Date().toISOString();
@@ -356,20 +364,19 @@
       if(entries.length>=30){progress(form,"Die Liste enthält bereits 30 ISINs.","error");return;}
       entry={isin:code,name:null,quotes:[],errors:[]};entries.unshift(entry);
     }
-    entry.quotes=[];entry.errors=[]; // The last result is never relabelled as a new request.
     setBusy(true);
     save();paint();progress(form,"MOSA-Quellenvergleich für "+code+" gestartet.");
     try{
       const result=await requestAll(code,event=>reportStep(form,event));
-      const outcome=applyResult(entry,result,form,false);save();paint();
-      if(outcome.successful){
+      const outcome=applyResult(entry,result,form);save();paint();
+      if(outcome.successful || outcome.unchanged){
         const winner=best(entry);
         progress(form,"Ergebnis: "+(entry.name||code)+" · "+fmtPrice(winner.price)+" "+winner.currency+
           " · "+winner.source+" · Erfasst "+date(winner.captured_at)+(old(winner)?" · Marktzeit veraltet":""),"success");
       }else progress(form,"Kein Anbieter hat einen bestätigten Kurs geliefert. Es wird kein alter Wert als aktuell ausgegeben.","error");
     }catch(error){
       const reason=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Abfrage fehlgeschlagen";
-      progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
+      markRequestFailure(entry,reason);progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
     }finally{
       setBusy(false);
       if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
@@ -391,11 +398,11 @@
         progress(form,"Aktualisiere "+(index+1)+" von "+snapshot.length+": "+label);
         try{
           const result=await requestAll(entry.isin,event=>reportStep(form,event));
-          const outcome=applyResult(entry,result,form,true);
-          if(outcome.successful){
+          const outcome=applyResult(entry,result,form);
+          if(outcome.successful || outcome.unchanged){
             successful++;
-            progress(form,label+": "+outcome.successful+" Kurs"+(outcome.successful===1?"":"e")+" aktualisiert"+
-              (outcome.failed?", "+outcome.failed+" Quellenfehler":""),outcome.failed?"info":"success");
+            progress(form,label+": "+outcome.successful+" neu, "+outcome.unchanged+" unverändert"+
+              (outcome.failed?", "+outcome.failed+" Quellen ohne bestätigten Kurs":""),outcome.failed?"info":"success");
           }else{
             failed++;progress(form,label+": fehlgeschlagen: kein bestätigter Kurs.","error");
           }
@@ -411,6 +418,7 @@
       setBusy(false);save();
       if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
       paint();scheduleAutomation();
+      loadStoredQuotes();
       if(list)list.replaceChildren();
     }
     return true;
@@ -436,11 +444,12 @@
     });
     document.addEventListener("visibilitychange",()=>{
       if (document.visibilityState === "hidden") clearAutomationTimer();
-      else { paint();scheduleAutomation(); }
+      else { paint();scheduleAutomation();loadStoredQuotes(); }
     });
   }
   paint();
   if (automationRoot) scheduleAutomation();
+  loadStoredQuotes();
   globalThis.MosaIsinLookup=Object.freeze({valid});
-  globalThis.MosaIsinAutomation=Object.freeze({clampInterval,intervalFor,isBadenWuerttembergHoliday,dayMode});
+  globalThis.MosaIsinAutomation=Object.freeze({clampInterval,intervalFor});
 }());

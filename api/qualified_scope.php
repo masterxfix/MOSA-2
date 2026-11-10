@@ -35,6 +35,14 @@ function binding(array $r,string $isin,bool $published=false): array {
     }
     return $r;
 }
+function sourceDetails(string $source): array {
+    return match($source){
+        'provider:boerse_frankfurt_api'=>['venue'=>'Börse Frankfurt · XFRA','quote_type'=>'Letzter Handel'],
+        'provider:tradegate_bsx_mid'=>['venue'=>'Tradegate BSX · XGAT','quote_type'=>'Mid (Geld/Brief)'],
+        'provider:gettex_mund_delayed'=>['venue'=>'gettex · MUND','quote_type'=>'Letzter Handel (verzögert)'],
+        default=>['venue'=>'—','quote_type'=>'Gespeicherter Kurs'],
+    };
+}
 function scopeSql(): string {
     return "SELECT /*+ MAX_EXECUTION_TIME(1500) */ i.normalized_value AS isin,a.entity_id AS asset_id,a.asset_class,a.status AS asset_status,
         s.id AS source_id,s.source_key,s.display_name AS source_name,s.enabled AS source_enabled,s.source_type,r.id AS route_id,r.route_revision,r.route_type,r.external_key,r.priority,r.enabled,

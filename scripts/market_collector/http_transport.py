@@ -1,6 +1,7 @@
 """Single-use, anonymous HTTPS GET transport. No provider request construction."""
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -22,7 +23,9 @@ class HttpGet:
         require(self.request is None or type(self.request) is Request, 'bound collector request required')
         require(type(self.url) is str, 'HTTPS URL required')
         parsed = urllib.parse.urlsplit(self.url)
-        require(parsed.scheme == 'https' and bool(parsed.hostname) and parsed.port in (None, 443)
+        gettex_file = parsed.netloc == 'erdk.bayerische-boerse.de:8000' and not parsed.query and re.fullmatch(
+            r'/delayed-data/MUNC-MUND/posttrade/posttrade\.\d{8}\.\d{2}\.\d{2}\.mund\.csv\.gz', parsed.path)
+        require(parsed.scheme == 'https' and bool(parsed.hostname) and (parsed.port in (None, 443) or gettex_file)
                 and parsed.username is None and parsed.password is None and not parsed.fragment, 'anonymous HTTPS URL required')
         require(type(self.headers) is tuple, 'immutable headers required')
         names = set()

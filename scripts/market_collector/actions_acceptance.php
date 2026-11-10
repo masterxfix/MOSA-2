@@ -13,6 +13,22 @@ require_once __DIR__.'/live_batch.php';
  * Exact legacy hashes remain checked by the unchanged route planner.
  */
 function manifest(array $state,array $selection): array {
+    return quoteManifest($state,$selection,[
+        'source_key'=>'boerse_frankfurt_api','reference_key'=>'frankfurt','venue_key'=>'boerse_frankfurt','family'=>'frankfurt_snapshot',
+        'reference'=>'Phase-3D ISIN+venue; FrankfurtSnapshotV1 verifies ISIN/XFRA/EUR',
+        'provider_key'=>'boerse_frankfurt_api_v1','adapter_module'=>'scripts.market_collector.boerse_frankfurt',
+        'adapter_class'=>'FrankfurtSnapshotV1',
+    ]);
+}
+function gettexManifest(array $state,array $selection): array {
+    return quoteManifest($state,$selection,[
+        'source_key'=>'gettex_mund_delayed','reference_key'=>'gettex_mund','venue_key'=>'gettex_mund','family'=>'gettex_delayed_trade',
+        'reference'=>'Gettex MUND delayed posttrade CSV; explicit ISIN and UTC publication slot',
+        'provider_key'=>'gettex_mund_delayed_v1','adapter_module'=>'scripts.market_collector.gettex_delayed',
+        'adapter_class'=>'GettexDelayedTradeV1',
+    ]);
+}
+function quoteManifest(array $state,array $selection,array $provider): array {
     $isin=$selection['isin'];check(\Mosa2\Phase3D\isinValid($isin),'scope_isin');
     $ids=array_values(array_filter($state['m2_asset_identifiers'],static fn($r)=>$r['identifier_type']==='isin'&&$r['normalized_value']===$isin&&$r['scope_key']===''));
     same(count($ids),1,'scope_global_identity');$id=$ids[0]['asset_id'];
@@ -25,16 +41,16 @@ function manifest(array $state,array $selection): array {
     same(planAssetIdentity($state,$identity)['decision'],'EXISTING_MATCH','scope_identity_conflict');
     $units=array_fill_keys(\Mosa2\MarketIdentity\UNIT_FIELDS,null);
     $units['unit_contract_version']='mosa2-market-unit-v1';$units['quote_unit_key']='EUR';$units['quote_unit_version']='1';
-    $evidence=['sample_id'=>'LIVE-'.substr(hash('sha256',$isin),0,10),'source_reference'=>'qualified:frankfurt:'.$isin,'family'=>'frankfurt_snapshot',
-        'row'=>['isin'=>$isin,'provider_key'=>'boerse_frankfurt_api','venue_key'=>'boerse_frankfurt','currency'=>'EUR','quote_variant'=>null,'series'=>'snapshot','observation_kind'=>'market_quote'],
-        'proof'=>['external_identity'=>['isin'=>$isin,'venue'=>'boerse_frankfurt'],'route_reference'=>'Phase-3D ISIN+venue; FrankfurtSnapshotV1 verifies ISIN/XFRA/EUR',
+    $evidence=['sample_id'=>'LIVE-'.substr(hash('sha256',$isin),0,10),'source_reference'=>'qualified:'.$provider['reference_key'].':'.$isin,'family'=>$provider['family'],
+        'row'=>['isin'=>$isin,'provider_key'=>$provider['source_key'],'venue_key'=>$provider['venue_key'],'currency'=>'EUR','quote_variant'=>null,'series'=>'snapshot','observation_kind'=>'market_quote'],
+        'proof'=>['external_identity'=>['isin'=>$isin,'venue'=>$provider['venue_key']],'route_reference'=>$provider['reference'],
             'unit_class'=>'currency_per_instrument']];
-    $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']==='provider:boerse_frankfurt_api'));
+    $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']==='provider:'.$provider['source_key']));
     same(count($sources),1,'scope_source');
     $route=planMarketRoute($state['m2_asset_source_routes'],['asset_id'=>$id,'source_id'=>$sources[0]['id'],'route_type'=>'quote','priority'=>0,'enabled'=>$selection['route_enabled']??0,'evidence'=>$evidence],$units);
     check(in_array($route['decision'],['CREATE_REVISION','EXISTING_MATCH'],true),'scope_route_conflict');
     $m=['policy'=>$route['decision']==='EXISTING_MATCH'?'USE_EXISTING_ROUTE':'ONBOARD_NEW_ROUTE','identity'=>$identity,'route_evidence'=>$evidence,'unit_binding'=>$units,
-        'instrument'=>$isin,'provider_key'=>'boerse_frankfurt_api_v1','adapter_module'=>'scripts.market_collector.boerse_frankfurt','adapter_class'=>'FrankfurtSnapshotV1'];
+        'instrument'=>$isin]+array_intersect_key($provider,array_flip(['provider_key','adapter_module','adapter_class']));
     if(isset($selection['route_enabled']))$m['route_enabled']=$selection['route_enabled'];
     completePlan($state,$m);return $m;
 }

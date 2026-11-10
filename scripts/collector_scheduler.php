@@ -163,16 +163,24 @@ function main(array $args): array {
     $project=dirname(__DIR__);
     $operation=json_decode(file_get_contents($project.'/config/collector-operation.json'),true,64,JSON_THROW_ON_ERROR);
     $budget=json_decode(file_get_contents($project.'/config/collector-provider-budget.json'),true,64,JSON_THROW_ON_ERROR);
-    if(($operation['execution_enabled']??false)!==true||($budget['execution_enabled']??false)!==true)
+    // An explicitly supplied private sidecar may hold the reviewed operation and budget.
+    // A checkout without an operating configuration stays disabled before reading stdin or opening a DB.
+    $public='/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de';
+    $privatePolicy=count($args)===3&&$args[2]==='--private-operation';
+    if(!$privatePolicy&&(($operation['execution_enabled']??false)!==true||($budget['execution_enabled']??false)!==true))
         return ['status'=>'SKIP','reason'=>'DISABLED'];
-    check(count($args)===2,'scheduler_cli');
+    check(count($args)===2||$privatePolicy,'scheduler_cli');
+    check(!\Mosa2\MarketBatch\inside(str_replace('\\','/',$project),$public),'scheduler_private_release');
+    $spec=json_decode(privateFile($args[1],$public),true,64,JSON_THROW_ON_ERROR);
+    if($privatePolicy){
+        check(is_array($spec['operation_config']??null)&&is_array($spec['budget_config']??null),'scheduler_private_policy');
+        $operation=$spec['operation_config'];$budget=$spec['budget_config'];
+        if(($operation['execution_enabled']??false)!==true||($budget['execution_enabled']??false)!==true)
+            return ['status'=>'SKIP','reason'=>'DISABLED'];
+    }
     $password=stdinPassword(STDIN);
     require_once __DIR__.'/collector_release/runtime.php';
     $runtime=\Mosa2\CollectorRelease\configuration($project,4);
-    // Explicitly approved existing private configuration; never search, provision or create paths here.
-    $public='/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de';
-    check(!\Mosa2\MarketBatch\inside(str_replace('\\','/',$project),$public),'scheduler_private_release');
-    $spec=json_decode(privateFile($args[1],$public),true,64,JSON_THROW_ON_ERROR);
     $root=\Mosa2\MarketBatch\path($spec['private_root']);
     check(!\Mosa2\MarketBatch\inside($root,$public)&&(fileperms($root)&0077)===0,'scheduler_private_root');
     $runtime['public_root']=$public;$runtime['state_contract']=['schema_version'=>4,'allow_current'=>true];
