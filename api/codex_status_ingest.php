@@ -52,7 +52,9 @@ try {
             }
         }
     }
-    if ($accepted>0) appendFile(storePath(),$latestEvent,$presence);
+    if ($accepted>0 && ($payload['presence_scope']??null)==='m2-orders') {
+        appendFile(storePath(),$latestEvent,$presence);
+    }
     $reply(202,$accepted);
 } catch (Throwable) {
     $reply(503);

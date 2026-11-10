@@ -1,13 +1,13 @@
 # Codex-Statuspunkt – MOSA 2
 
 ## Zweck
-In `index.html`, `marktdaten.html` und `fundamentaldaten.html` sitzt ein 11-Pixel-Punkt mittig in der Kopfzeile. **Grün** steht für mindestens einen laufenden Codex-Auftrag, **Grau** für keinen aktiven Auftrag und ein **heller Ring mit zwei Pixeln Strichstärke** für unbekannten Status. Tooltip und Screenreader-Text benennen alle drei Zustände.
+In `index.html`, `marktdaten.html` und `fundamentaldaten.html` sitzt ein 11-Pixel-Punkt mittig in der Kopfzeile. **Grün** steht für mindestens einen laufenden MOSA-2-Auftrag, **Grau** für keinen aktiven Auftrag und ein **heller Ring mit zwei Pixeln Strichstärke** für unbekannten Status. Tooltip und Screenreader-Text benennen alle drei Zustände. Starte einen Auftrag mit `Auftrag-M2: <Anweisung>` oder mit `Auftrag-M2` auf einer eigenen ersten Zeile. Eine normale Nachricht eröffnet keinen Auftrag.
 
 ## MOSA als maßgebliche Drei-Zustände-Quelle
 
 Die bestehende MOSA-Aktivitätsauswertung entscheidet für native Codex-Aufträge (CLI und VS Code) über genau drei Zustände: `running`, `idle`, `unavailable`. Der native MOSA-Sender überträgt den berechneten Wert als `mosa_source_presence` über die bestehende authentifizierte MOSA-2-Spiegelung. MOSA 2 speichert den Zustand und die Zeitmarken im bestehenden privaten Speicher. Ein älterer, erneut zugestellter Wert überschreibt keinen neueren. Fehlende oder länger als 180 Sekunden alte MOSA-Evidenz ergibt `unavailable`. Dasselbe gilt, wenn eine neuere Ereigniszeit der letzten MOSA-Meldung widerspricht. Gespeicherte Altdateien bleiben lesbar. Aus einzelnen Ereignissen berechnet M2 keinen Zustand.
 
-Der vorhandene MOSA-Empfänger liefert die Metadaten im erfolgreichen Publisher-ACK zurück. Die Live-Abnahme folgt demselben Datenweg und prüft alle drei Zustände auf der Testseite.
+Der vorhandene MOSA-Empfänger liefert auf Anforderung des Publishers (`m2-orders`) nur die Präsenz ausdrücklich markierter M2-Aufträge zurück. M2 übernimmt diese Präsenz über den Vertrag `mosa2_mosa_order_presence_v1`. Vorher gespeicherte oder erneut zugestellte unbeschränkte Zustände können den Punkt nicht aktivieren.
 
 ## Herkunft und Vertragsgrenze
 Bewährte MOSA-Telemetrie statt eines frei erfundenen Statussignals: `mosa_ai_control_telemetry_v1`, `surface=codex_cli|codex_vscode`, `UserPromptSubmit` (Start), `Stop` oder `SessionEnd` (Ende), dazwischen Tool-Ereignisse als Aktivitätsnachweis. `SessionStart` ist ausdrücklich **kein** Auftragsstart. Andere Oberflächen wie `work_desktop` und WinSCP zählen nicht. Parallele Codex-Aufträge werden getrennt berücksichtigt. Laufende Aufträge ohne neue native Evidenz für mehr als 180 Sekunden werden **unbekannt**, nicht inaktiv.

@@ -29,7 +29,7 @@ $check(event($event('SessionStart','abcd1234','turn1234',0,3),$now)===null,'sess
 $start=event($event('UserPromptSubmit','abcd1234','turn1234',0,4),$now);
 $check($start!==null,'native start accepted');
 $sourceEnvelope=static fn(string $state,int $at):array=>[
-    'contract_version'=>'mosa2_mosa_presence_v1','state'=>$state,
+    'contract_version'=>'mosa2_mosa_order_presence_v1','state'=>$state,
     'observed_at_utc'=>gmdate('Y-m-d\TH:i:s\Z',$at)
 ];
 $check(sourcePresence($sourceEnvelope('running',$now),$now)===['state'=>'running','at'=>$now],
@@ -44,8 +44,12 @@ $legacy=['version'=>\Mosa2\CodexStatus\VERSION,'ever_seen'=>true,'runs'=>[
     'abcd1234:turn1234'=>['state'=>'running','at'=>$start['at'],'event_id'=>$start['id']]
 ]];
 $check(state(normalizeStore($legacy),$now)==='unavailable','legacy runs without a MOSA snapshot are unknown');
-$legacy['presence']=sourcePresence($sourceEnvelope('idle',$now),$now);
-$check(state(normalizeStore($legacy),$now)==='idle','existing MOSA snapshot takes precedence over legacy runs');
+$unscopedEnvelope=$sourceEnvelope('running',$now);
+$unscopedEnvelope['contract_version']='mosa2_mosa_presence_v1';
+$check(sourcePresence($unscopedEnvelope,$now)===null,'unscoped MOSA snapshot cannot activate M2');
+$oldSnapshot=['version'=>\Mosa2\CodexStatus\VERSION,'latest_event_at'=>$start['at'],
+    'presence'=>['state'=>'running','at'=>$now,'event_at'=>$start['at']]];
+$check(state(normalizeStore($oldSnapshot),$now)==='unavailable','persisted unscoped state cannot activate M2');
 $subsecond=$event('UserPromptSubmit','subsecond','turn9876',0,16);
 $subsecond['recorded_at_utc']=gmdate('Y-m-d\TH:i:s',$now).'.800Z';
 $parsedSubsecond=event($subsecond,$now);
@@ -56,9 +60,10 @@ mkdir($temp,0700);
 try {
     $path=$temp.'/status.json';
     $check(readFile($path)===null,'missing store is unavailable');
-    file_put_contents($path,json_encode($legacy,JSON_THROW_ON_ERROR));
+    file_put_contents($path,json_encode($oldSnapshot,JSON_THROW_ON_ERROR));
     chmod($path,0600);
-    $check(state(readFile($path),$now)==='idle','existing file is readable');
+    $check(state(readFile($path),$now)==='unavailable','existing file is readable without reviving old activity');
+    appendFile($path,$start['at'],sourcePresence($sourceEnvelope('idle',$now),$now)+['event_at'=>$start['at']]);
     appendFile($path,$parsedSubsecond['at'],null);
     $check(state(readFile($path),$now)==='unavailable','newer event in the same second without a snapshot is unknown');
     $running=sourcePresence($sourceEnvelope('running',$now),$now)+['event_at'=>$parsedSubsecond['at']];

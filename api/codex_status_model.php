@@ -5,7 +5,7 @@ namespace Mosa2\CodexStatus;
 
 const VERSION = 'mosa2_codex_status_v1';
 const SOURCE_VERSION = 'mosa_ai_control_telemetry_v1';
-const SOURCE_PRESENCE_VERSION = 'mosa2_mosa_presence_v1';
+const SOURCE_PRESENCE_VERSION = 'mosa2_mosa_order_presence_v1';
 const STALE_AFTER_SECONDS = 180;
 const MAX_STORE_BYTES = 131072;
 
@@ -46,33 +46,27 @@ function ingestSecret(): ?string {
 }
 
 function initial(): array {
-    return ['version'=>VERSION, 'latest_event_at'=>0, 'presence'=>null];
+    return ['version'=>VERSION, 'source_presence_version'=>SOURCE_PRESENCE_VERSION,
+        'latest_event_at'=>0, 'presence'=>null];
 }
 
 function normalizeStore(mixed $data): ?array {
     if (!is_array($data) || ($data['version']??null)!==VERSION) return null;
+    // A stored snapshot from before the explicit order filter cannot light the dot.
+    if (($data['source_presence_version']??null)!==SOURCE_PRESENCE_VERSION) return initial();
     $latest=$data['latest_event_at']??null;
-    $legacy=!array_key_exists('latest_event_at',$data);
-    if ($legacy) {
-        // Keep the old file readable, but never derive a state from its runs.
-        if (!is_array($data['runs']??null) || count($data['runs'])>128) return null;
-        $latest=0;
-        foreach ($data['runs'] as $run) {
-            if (!is_int($run['at']??null) || $run['at']<1) return null;
-            $latest=max($latest,$run['at']);
-        }
-    }
     if (!is_int($latest) || $latest<0) return null;
     $p=$data['presence']??null;
     if ($p!==null) {
         if (!is_array($p) || !in_array($p['state']??null,['running','idle','unavailable'],true) ||
             !is_int($p['at']??null) || $p['at']<1) return null;
-        $eventAt=$legacy ? min($latest,$p['at']*1000000+999999) : ($p['event_at']??null);
+        $eventAt=$p['event_at']??null;
         if (!is_int($eventAt) || $eventAt<0 || $eventAt>$latest ||
             intdiv($eventAt,1000000)>$p['at']) return null;
         $p=['state'=>$p['state'], 'at'=>$p['at'], 'event_at'=>$eventAt];
     }
-    return ['version'=>VERSION, 'latest_event_at'=>$latest, 'presence'=>$p];
+    return ['version'=>VERSION, 'source_presence_version'=>SOURCE_PRESENCE_VERSION,
+        'latest_event_at'=>$latest, 'presence'=>$p];
 }
 
 function event(mixed $value, int $now): ?array {
