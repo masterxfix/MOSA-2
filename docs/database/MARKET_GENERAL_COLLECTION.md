@@ -60,12 +60,18 @@ cover runtime, route identity, Current transitions and Schema-6 locks/release in
 
 ## Rund-um-die-Uhr-Kurse
 
-Die Browserautomatik nutzt den eingestellten Takt unabhängig vom deutschen
-Handelskalender. Quellabrufe bleiben sequenziell. Ein HTTP 429 pausiert weitere
-Abrufe für denselben Host in der Sitzung. Andere Hosts können weiter liefern.
-Die Ansicht nutzt zusätzlich den schreibgeschützten Endpunkt
-api/market.php?view=best für den freigegebenen Veröffentlichungsumfang.
-Eine identische Marktzeit behält beim erneuten Abruf die erste Erfassungszeit.
+Die Marktdaten-Seite liest bei sichtbarem Tab mit gespeicherten ISINs
+alle 30 Sekunden den freigegebenen Veröffentlichungsumfang über
+`api/market.php?view=best`. Die Seite lädt dabei nicht neu. Bei einem Lesefehler
+bleibt der letzte sichtbare Kurs erhalten und wird als nicht aktualisiert
+gekennzeichnet. Ohne veröffentlichten Kurs kann die Automatik keinen neuen
+Kurs anzeigen. Auf der Startseite bleibt es beim einmaligen Lesen.
+
+Externe Quellabrufe auf der Testsite bleiben manuell über „OK“ oder
+„Aktualisieren“. Sie laufen weiterhin sequenziell. Ein HTTP 429 pausiert
+weitere Abrufe für denselben Host in der Sitzung. Andere Hosts können weiter
+liefern. Eine identische Marktzeit behält beim erneuten Abruf die erste
+Erfassungszeit.
 
 Der vorhandene Scheduler akzeptiert für einen geprüften privaten Betrieb
 die Policy UTC_900_V1 mit calendar=null. Die passende Budget-Proposal enthält

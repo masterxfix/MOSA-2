@@ -22,7 +22,9 @@
   const detailsToggle = document.querySelector("[data-isin-details-toggle]");
   const storedQuotes = new Map();
   const storedRoot=document.querySelector("[data-isin-stored-quotes]");
-  let storedStatus="loading", storedReadAt=null, storedReadPending=false;
+  const marketView=document.querySelector("[data-isin-market-view]");
+  const READ_INTERVAL=30000, STORED_URL="api/market.php?view=best";
+  let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
   function restore() {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -45,18 +47,21 @@
     if (entries.length) localStorage.setItem(KEY, JSON.stringify(entries));
     else localStorage.removeItem(KEY);
   } catch { /* Browser storage is optional. */ }};
+  const priceFormat=new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:10});
+  const dateFormat=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin",dateStyle:"short",timeStyle:"medium"});
   const fmtPrice = p => {
     const num=Number(p);
     return typeof p==="string" && /^\d+(?:\.\d{1,12})?$/.test(p) && Number.isFinite(num)
-      ? new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:10}).format(num) : "—";
+      ? priceFormat.format(num) : "—";
   };
   function date(value) {
     const stamp=Date.parse(value);
-    return Number.isFinite(stamp) ? new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin",dateStyle:"short",timeStyle:"medium"}).format(stamp)+" Uhr" : "—";
+    return Number.isFinite(stamp) ? dateFormat.format(stamp)+" Uhr" : "—";
   }
   function old(quote) {
     const stamp=Date.parse(quote.market_at);
-    return Boolean(quote.refresh_failed_at) || !Number.isFinite(stamp) || Date.now()-stamp>1800000;
+    return Boolean(quote.refresh_failed_at) || (quote.provider==="stored" && storedStatus==="error")
+      || !Number.isFinite(stamp) || Date.now()-stamp>1800000;
   }
   function availableQuotes(entry) {
     return [...entry.quotes, storedQuotes.get(entry.isin)].filter(quote=>validQuote(quote,entry.isin));
@@ -74,41 +79,93 @@
     const {refresh_failed_at, ...retained}=previous;
     return {...retained, unchanged:true};
   }
-  async function loadStoredQuotes() {
-    if (!storedRoot || storedReadPending || (storedReadAt!==null && Date.now()-storedReadAt<60000)) return;
-    storedReadPending=true;
-    const firstRead=storedReadAt===null;
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
-    try {
-      const response=await fetch("api/market.php?view=best",{cache:"no-store",signal:controller.signal});
-      if (!response.ok) throw Error("MARKET_READ");
-      const result=await response.json();
-      if (result.status!=="ok" || !Array.isArray(result.items)) throw Error("MARKET_READ");
-      storedQuotes.clear();
-      for (const item of result.items) {
-        if (!["stored","stale"].includes(item.status) || !valid(item.isin)) continue;
-        const utc=value=>typeof value==="string"?value.replace(" ","T"):"";
-        const quote={...item,source:item.source+" · "+item.venue,provider:"stored",captured_at:utc(item.observed_at),market_at:utc(item.market_at)};
-        if (validQuote(quote,item.isin)) storedQuotes.set(item.isin,quote);
+  function scheduleStoredRead() {
+    if(storedTimer!==null){clearTimeout(storedTimer);storedTimer=null;}
+    if(!marketView || !storedRoot || storedStopped || document.hidden || busy || storedRead
+      || (nextStoredAt!==null && !entries.length))return;
+    storedTimer=setTimeout(()=>{
+      storedTimer=null;
+      loadStoredQuotes();
+    },nextStoredAt===null?0:Math.max(0,nextStoredAt-performance.now()));
+  }
+  function loadStoredQuotes() {
+    if(!storedRoot || storedRead || storedStopped || busy || (marketView && document.hidden))return;
+    const firstRead=nextStoredAt===null;
+    nextStoredAt=performance.now()+READ_INTERVAL;
+    // MOSA's chart pattern: one same-origin read at a time, separate from provider lookups.
+    const started=performance.now();
+    storedRead=Promise.resolve().then(async()=>{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+      let httpStatus=0;
+      try {
+        const response=await fetch(STORED_URL,{credentials:"same-origin",cache:"no-store",
+          signal:controller.signal,headers:{Accept:"application/json"}});
+        httpStatus=response.status;
+        if(httpStatus===401 || httpStatus===403)storedStopped=true;
+        if(!response.ok)throw Error("MARKET_READ");
+        const result=await response.json();
+        if(result.status!=="ok" || !Array.isArray(result.items))throw Error("MARKET_READ");
+        const fresh=new Map();
+        for(const item of result.items) {
+          if(!item || !["stored","stale"].includes(item.status) || !valid(item.isin))continue;
+          const utc=value=>typeof value==="string"?value.replace(" ","T"):"";
+          const quote={...item,source:item.source+" · "+item.venue,provider:"stored",captured_at:utc(item.observed_at),market_at:utc(item.market_at)};
+          if(validQuote(quote,item.isin))fresh.set(item.isin,quote);
+        }
+        storedQuotes.clear();
+        for(const [isin,quote] of fresh)storedQuotes.set(isin,quote);
+        storedStatus="ok";
+      } catch { storedStatus="error"; }
+      finally {
+        clearTimeout(timer);
+        if(marketView){
+          // Local timings distinguish background requests from initial page readiness.
+          storedRoot.dataset.isinReadCount=String(++readCount);
+          storedRoot.dataset.isinReadStartedMs=String(Math.round(started));
+          storedRoot.dataset.isinReadDurationMs=String(Math.round(performance.now()-started));
+          storedRoot.dataset.isinReadHttp=String(httpStatus);
+        }
+        storedRead=null;
+        paint();
+        scheduleStoredRead();
+        if(firstRead)requestAnimationFrame(()=>requestAnimationFrame(()=>{
+          storedRoot.dataset.dataReadyMs=String(Math.round(performance.now()));
+          storedRoot.dataset.dataSuccess=String(storedStatus==="ok");
+        }));
       }
-      storedStatus="ok";
-    } catch { storedStatus="error"; }
-    finally {
-      clearTimeout(timer);
-      storedReadAt=Date.now();storedReadPending=false;
-      paint();
-      if (firstRead) requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        storedRoot.dataset.dataReadyMs=String(Math.round(performance.now()));
-        storedRoot.dataset.dataSuccess=String(storedStatus==="ok");
-      }));
-    }
+    });
   }
   function age(quote) {
     const stamp=Date.parse(quote.market_at);
     return Number.isFinite(stamp) ? String(Math.max(0,Math.round((Date.now()-stamp)/60000)))+" Min." : "—";
   }
   function typeLabel(entry) {return typeLabels[entry.instrument_type] || typeLabels.unknown;}
-  function itemCell(row,label,value) {const cell=document.createElement("td");cell.dataset.label=label;cell.textContent=value;row.append(cell);return cell;}
+  const headings=["Wertpapier","Typ","Kurs","Währung / Einheit","Quelle / Handelsplatz","Marktzeit","Abgerufen","Datenalter","ISIN","Status"];
+  function reconcileRows(tbody, rows) {
+    const existing=new Map(Array.from(tbody.children,row=>[row.dataset.isinRow,row]));
+    let next=tbody.firstElementChild;
+    for(const [key,status,values] of rows){
+      let row=existing.get(key);
+      existing.delete(key);
+      if(!row){
+        row=document.createElement("tr");
+        row.dataset.isinRow=key;
+        if(key==="empty")row.className="market-placeholder";
+        for(let i=0;i<values.length;i++){
+          const cell=document.createElement("td");
+          cell.dataset.label=key==="empty"?"ISIN":headings[i];
+          if(key==="empty")cell.colSpan=10;
+          if(i===2)cell.className="market-price";
+          row.append(cell);
+        }
+      }
+      if(status && row.dataset.status!==status)row.dataset.status=status;
+      values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
+      if(row===next)next=next.nextElementSibling;
+      else tbody.insertBefore(row,next);
+    }
+    for(const row of existing.values())row.remove();
+  }
   function syncDeleteButtons() {
     for (const button of document.querySelectorAll("[data-isin-remove]")) button.disabled = busy;
     for (const button of document.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
@@ -131,55 +188,60 @@
     }
     const number=document.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(entries.length).padStart(2,"0");
     for (const tbody of document.querySelectorAll("[data-isin-table]")) {
-      const fragment=document.createDocumentFragment();
+      const rows=[];
+      const ownIsins=new Set(entries.map(entry=>entry.isin));
       const displayed=[...entries,...[...storedQuotes.values()]
-        .filter(quote=>!entries.some(entry=>entry.isin===quote.isin))
+        .filter(quote=>!ownIsins.has(quote.isin))
         .map(quote=>({isin:quote.isin,name:quote.name,quotes:[]}))];
-      for (const entry of displayed) {
-        const latest=best(entry), quotes=availableQuotes(entry);
-        if (!detailsOpen) {
-          if (latest) renderQuoteRow(fragment,entry,latest);
-          else renderMissingRow(fragment,entry);
+      for(const entry of displayed){
+        const main=entry.isin+":main";
+        if(!detailsOpen){
+          const latest=best(entry);
+          rows.push(latest?quoteRow(main,entry,latest,true):missingRow(main,entry));
           continue;
         }
-        if (!quotes.length) renderMissingRow(fragment,entry);
-        for (const quote of quotes) renderQuoteRow(fragment,entry,quote);
-        for(const error of entry.errors||[]) renderErrorRow(fragment,entry,error);
+        const quotes=availableQuotes(entry);
+        if(!quotes.length)rows.push(missingRow(main,entry));
+        for(const quote of quotes)rows.push(quoteRow(entry.isin+":quote:"+quote.provider,entry,quote,false));
+        for(const error of entry.errors||[])rows.push(errorRow(entry,error));
       }
-      if(!displayed.length){const tr=document.createElement("tr");tr.className="market-placeholder";const td=itemCell(tr,"ISIN","Noch keine ISIN eingegeben.");td.colSpan=10;fragment.append(tr);}
-      tbody.replaceChildren(fragment);
+      if(!rows.length)rows.push(["empty",null,["Noch keine ISIN eingegeben."]]);
+      reconcileRows(tbody,rows);
     }
-    if(detailsToggle){detailsToggle.disabled=busy;detailsToggle.textContent=detailsOpen?"Weniger anzeigen":"Alle Details anzeigen";detailsToggle.setAttribute("aria-expanded",String(detailsOpen));}
-    for (const label of document.querySelectorAll("[data-isin-summary]")) label.textContent=entries.length+" ISIN"+(entries.length===1?"":"s")+
+    if(detailsToggle){
+      const text=detailsOpen?"Weniger anzeigen":"Alle Details anzeigen";
+      if(detailsToggle.textContent!==text)detailsToggle.textContent=text;
+      if(detailsToggle.getAttribute("aria-expanded")!==String(detailsOpen))
+        detailsToggle.setAttribute("aria-expanded",String(detailsOpen));
+    }
+    const summary=entries.length+" ISIN"+(entries.length===1?"":"s")+
       (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
         ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
+    for(const label of document.querySelectorAll("[data-isin-summary]")){
+      if(label.textContent!==summary)label.textContent=summary;
+    }
     syncDeleteButtons();
   }
-  function renderQuoteRow(fragment,entry,quote) {
-    const tr=document.createElement("tr");tr.dataset.status=old(quote)?"stale":"stored";
-    itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));
-    const price=itemCell(tr,"Kurs",fmtPrice(quote.price)+" "+(quote.unit||quote.currency));price.className="market-price";
-    itemCell(tr,"Währung / Einheit",(quote.unit && quote.unit!==quote.currency ? quote.currency+" / "+quote.unit : quote.currency)+" · "+quote.quote_type);
-    itemCell(tr,"Quelle / Handelsplatz",quote.source);
-    itemCell(tr,"Marktzeit",date(quote.market_at));
-    itemCell(tr,"Abgerufen",date(quote.captured_at));
-    itemCell(tr,"Datenalter",age(quote));
-    itemCell(tr,"ISIN",entry.isin);
-    const status=quote.provider==="stored"?"Gespeichert":quote.unchanged?"Unverändert":"Kurs abgerufen";
-    itemCell(tr,"Status",(old(quote)?"Veraltet · ":"")+status);fragment.append(tr);
+  function quoteRow(key,entry,quote,compact) {
+    const stale=old(quote);
+    let status=quote.provider==="stored"?"Gespeichert":quote.unchanged?"Unverändert":"Kurs abgerufen";
+    if(compact && marketView && quote.provider!=="stored" && storedStatus!=="loading")
+      status+=storedStatus==="ok"?" · Kein neuer gespeicherter Kurs":" · Hintergrundabruf fehlgeschlagen";
+    return [key,stale?"stale":"stored",[
+      entry.name||entry.isin,typeLabel(entry),fmtPrice(quote.price)+" "+(quote.unit||quote.currency),
+      (quote.unit && quote.unit!==quote.currency?quote.currency+" / "+quote.unit:quote.currency)+" · "+quote.quote_type,
+      quote.source,date(quote.market_at),date(quote.captured_at),age(quote),entry.isin,(stale?"Veraltet · ":"")+status
+    ]];
   }
-  function renderMissingRow(fragment,entry) {
-    const tr=document.createElement("tr");tr.dataset.status="missing";
-    itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));itemCell(tr,"Kurs","—");itemCell(tr,"Währung / Einheit","—");
-    itemCell(tr,"Quelle / Handelsplatz","—");itemCell(tr,"Marktzeit","—");itemCell(tr,"Abgerufen","—");itemCell(tr,"Datenalter","—");
-    itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status","Kein erfolgreicher Kurs vorhanden");fragment.append(tr);
+  function missingRow(key,entry) {
+    return [key,"missing",[entry.name||entry.isin,typeLabel(entry),"—","—","—","—","—","—",entry.isin,"Kein erfolgreicher Kurs vorhanden"]];
   }
-  function renderErrorRow(fragment,entry,error) {
-    const tr=document.createElement("tr");tr.dataset.status=error.status==="unavailable"?"missing":"error";
-    itemCell(tr,"Wertpapier",entry.name||entry.isin);itemCell(tr,"Typ",typeLabel(entry));itemCell(tr,"Kurs","—");itemCell(tr,"Währung / Einheit","—");
-    itemCell(tr,"Quelle / Handelsplatz",sourceLabel(error.provider));
-    itemCell(tr,"Marktzeit","—");itemCell(tr,"Abgerufen",date(error.captured_at));itemCell(tr,"Datenalter","—");
-    itemCell(tr,"ISIN",entry.isin);itemCell(tr,"Status",(error.status==="unavailable"?"Nicht verfügbar: ":"Fehler: ")+error.code);fragment.append(tr);
+  function errorRow(entry,error) {
+    const missing=error.status==="unavailable";
+    return [entry.isin+":error:"+error.provider,missing?"missing":"error",[
+      entry.name||entry.isin,typeLabel(entry),"—","—",sourceLabel(error.provider),"—",date(error.captured_at),"—",entry.isin,
+      (missing?"Nicht verfügbar: ":"Fehler: ")+error.code
+    ]];
   }
   function removeEntry(isin) {
     if (busy) return;
@@ -281,6 +343,7 @@
     for(const button of document.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
     if(detailsToggle) detailsToggle.disabled=value;
     syncDeleteButtons();
+    scheduleStoredRead();
   }
   async function submit(form) {
     if(busy)return;
@@ -295,6 +358,7 @@
     setBusy(true);
     save();paint();
     try{
+      if(storedRead)await storedRead;
       const result=await requestAll(code);
       const outcome=applyResult(entry,result);save();paint();
       if(!outcome.successful && !outcome.unchanged)
@@ -316,6 +380,7 @@
     const snapshot=entries.slice();let failed=false;
     setBusy(true);
     try{
+      if(storedRead)await storedRead;
       for(const entry of snapshot){
         try{
           const result=await requestAll(entry.isin);
@@ -332,7 +397,6 @@
     }finally{
       setBusy(false);save();
       paint();
-      loadStoredQuotes();
     }
     return true;
   }
@@ -344,6 +408,13 @@
   });
   for(const button of document.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries);
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();});
+  if(marketView){
+    document.addEventListener("visibilitychange",scheduleStoredRead);
+    window.addEventListener("storage",event=>{
+      if(busy || (event.key!==KEY && event.key!==null))return;
+      entries=restore();paint();scheduleStoredRead();
+    });
+  }
   paint();
   loadStoredQuotes();
   globalThis.MosaIsinLookup=Object.freeze({valid});

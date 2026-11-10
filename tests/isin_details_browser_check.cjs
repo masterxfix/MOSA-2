@@ -1,18 +1,11 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261110-no-steps';
+const cacheVersion='isin-20261110-market-poll';
 for(const file of ['marktdaten.html','index.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
 }
 
-class E {
-  constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.textContent='';this.disabled=false;this.events={};this.attributes={};}
-  append(...items){this.children.push(...items);this.textContent=this.children.map(item=>item?.textContent??'').join('')}
-  replaceChildren(...items){this.children=items.flatMap(item=>item.children??[item]);this.textContent=this.children.map(item=>item?.textContent??'').join('')}
-  addEventListener(event,fn){this.events[event]=fn}
-  setAttribute(name,value){this.attributes[name]=value;this[name]=value}
-  querySelector(selector){return this.map?.[selector]??null}
-}
+const {E}=require('./fixtures/isin_dom.cjs');
 
 const form=new E('form'),detailsToggle=new E('button'),table=new E('tbody');
 const document={

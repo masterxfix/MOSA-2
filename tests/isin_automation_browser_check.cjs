@@ -1,55 +1,135 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261110-no-steps';
-const html=fs.readFileSync(__dirname+'/../marktdaten.html','utf8');
-const indexHtml=fs.readFileSync(__dirname+'/../index.html','utf8');
-assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),'marktdaten.html uses the current cache version');
-assert.ok(!html.includes('data-isin-automation'),'Market page has no automation control');
-assert.ok(!indexHtml.includes('data-isin-automation'),'Index page has no second automation control or trigger');
-
-class E {
-  constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.textContent='';this.disabled=false;this.events={};this.attributes={};this.value='';}
-  append(...items){this.children.push(...items);this.textContent=this.children.map(item=>item?.textContent??'').join('');}
-  replaceChildren(...items){this.children=items.flatMap(item=>item.children??[item]);this.textContent=this.children.map(item=>item?.textContent??'').join('');}
-  addEventListener(event,fn){this.events[event]=fn;}
-  setAttribute(name,value){this.attributes[name]=value;this[name]=value;}
-  querySelector(selector){return this.map?.[selector]??null;}
+const {E}=require('./fixtures/isin_dom.cjs');
+const script=fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8');
+const key='mosa2-isin-lookup-v1', a='DE0007030009', b='DE0005313704';
+const base=Date.parse('2026-11-08T12:00:00Z');
+const initial=[{isin:a,name:'Alpha',quotes:[],errors:[]},{isin:b,name:'Beta',quotes:[],errors:[]}];
+const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Tradegate BSX',
+  quote_type:'Mid',currency:'EUR',market_at:'2026-11-08 11:59:00.000000Z',
+  observed_at:'2026-11-08 11:59:10.000000Z',status:'stored'});
+const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
+const flush=()=>new Promise(setImmediate);
+function harness({market=true,entries=initial}={}){
+  let ms=0,timerId=0,http=200,items=stored,hold=false,release,active=0,maxActive=0,writes=0;
+  const timers=new Map(),calls=[],events={},windowEvents={};
+  const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
+  const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
+  const table=new E('tbody'),details=new E('button'),root=new E('body'),summary=new E('span');
+  const error=new E('p');error.hidden=true;
+  form.parentElement={querySelector:selector=>selector==='[data-isin-error]'?error:null};
+  form.map={'[data-isin-input]':input,'button[type=submit]':submit};
+  const document={hidden:false,querySelectorAll:selector=>({
+    '[data-isin-form]':[form],'[data-isin-refresh]':market?[refresh]:[],'[data-isin-table]':market?[table]:[],
+    '[data-isin-summary]':market?[summary]:[]
+  }[selector]??[]),querySelector:selector=>({
+    '[data-isin-stored-quotes]':root,'[data-isin-market-view]':market?new E('section'):null,
+    '[data-isin-details-toggle]':market?details:null
+  }[selector]??null),createElement:tag=>new E(tag),addEventListener:(name,fn)=>{events[name]=fn;}};
+  class TestDate extends Date {constructor(...args){super(...(args.length?args:[TestDate.now()]));} static now(){return base+ms;}}
+  const setTimeout=(fn,delay)=>{timers.set(++timerId,{at:ms+delay,fn});return timerId;};
+  const clearTimeout=id=>timers.delete(id);
+  async function advance(delay){
+    const target=ms+delay;
+    for(;;){
+      const next=[...timers].filter(([,timer])=>timer.at<=target).sort(([,x],[,y])=>x.at-y.at)[0];
+      if(!next)break;
+      const [id,timer]=next;timers.delete(id);ms=timer.at;timer.fn();await flush();
+    }
+    ms=target;await flush();
+  }
+  async function fetch(url,opts){
+    calls.push({url,at:ms,opts});active++;maxActive=Math.max(maxActive,active);
+    try{
+      if(url==='api/market.php?view=best'){
+        assert.equal(opts.method,undefined,'The background read is a GET');
+        assert.equal(opts.credentials,'same-origin');
+        assert.equal(opts.cache,'no-store');
+        if(hold)await new Promise(resolve=>{release=resolve;});
+        return {ok:http===200,status:http,json:async()=>({status:'ok',items})};
+      }
+      assert.equal(url,'api/isin_quote.php');
+      assert.equal(opts.method,'POST');
+      assert.equal(opts.headers['X-MOSA2-Quote-Intent'],'manual');
+      const {isin,provider}=JSON.parse(opts.body);
+      assert.equal(provider,'all');
+      const providers=['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'];
+      const records=providers.map(provider=>({isin,provider,status:'ok',source:'Tradegate',currency:'EUR',price:'30.00',quote_type:'Trade',
+        market_at:'2026-11-08T12:00:00Z',captured_at:'2026-11-08T12:00:10Z'}));
+      return {ok:true,status:200,body:null,json:async()=>({status:'ok',isin,name:'Manual AG',records})};
+    }finally{active--;}
+  }
+  const localStorage={getItem:k=>storage.get(k),setItem:(k,v)=>{writes++;storage.set(k,v);},
+    removeItem:k=>{writes++;storage.delete(k);}};
+  const sandbox={document,window:{addEventListener:(name,fn)=>{windowEvents[name]=fn;}},localStorage,fetch,AbortController,
+    Date:TestDate,performance:{now:()=>ms},setTimeout,clearTimeout,requestAnimationFrame:fn=>fn()};
+  vm.runInNewContext(script,sandbox);
+  return {table,input,form,refresh,details,root,summary,calls,error,storage,advance,
+    get writes(){return writes;},get maxActive(){return maxActive;},
+    hide(value){document.hidden=value;events.visibilitychange();},
+    update(value){items=value;},status(value){http=value;},
+    hold(){hold=true;},release(){hold=false;release();}};
 }
 
-const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),table=new E('tbody');
-submit.type='submit';input.value='DE0000000001';
-form.map={'[data-isin-input]':input,'button[type=submit]':submit};
-form.parentElement={querySelector:()=>null};
-const detailsToggle=new E('button');
-const automationRoot=new E('div'),automationInterval=new E('input'),automationToggle=new E('button'),automationStatus=new E('p');
-automationInterval.value='300';automationRoot.map={'[data-isin-automation-interval]':automationInterval,'[data-isin-automation-toggle]':automationToggle,'[data-isin-automation-status]':automationStatus};
-const visibilityHandlers=[];
-const document={visibilityState:'visible',querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-refresh]'?[refresh]:selector==='[data-isin-table]'?[table]:[],querySelector:selector=>selector==='[data-isin-details-toggle]'?detailsToggle:selector==='[data-isin-automation]'?automationRoot:null,createElement:tag=>new E(tag),createDocumentFragment:()=>new E('fragment'),addEventListener:(event,fn)=>{if(event==='visibilitychange')visibilityHandlers.push(fn);}};
-const initial=[{isin:'DE0000000001',name:'Test AG',instrument_type:'stock',quotes:[{isin:'DE0000000001',provider:'tradegate_trade',source:'Test',price:'10.00',currency:'EUR',quote_type:'Trade',market_at:'2026-11-07T10:00:00Z',captured_at:'2026-11-07T10:01:00Z'}],errors:[]}];
-const storage=new Map([['mosa2-isin-lookup-v1',JSON.stringify(initial)],['mosa2-isin-automation-v1',JSON.stringify({intervalSeconds:300,enabled:true,lastUpdatedAt:'2000-01-01T00:00:00Z'})],['unrelated-key','keep']]);
-const localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
-const RealDate=Date;
-class TestDate extends RealDate { constructor(...args){super(...(args.length?args:[TestDate.nowValue]));} static now(){return TestDate.nowValue;} static parse=value=>RealDate.parse(value); static UTC(...args){return RealDate.UTC(...args);} }
-TestDate.nowValue=RealDate.parse('2026-11-08T12:00:00Z');
-const providers=['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'];
-function successResult(isin){return {status:'ok',isin,name:'Test AG',instrument_type:'stock',instrument_type_source:'lang_schwarz',instrument_type_verified_at:'2026-11-08T08:00:00Z',records:providers.map(provider=>({status:'ok',isin,provider,source:provider,price:'10.00',currency:'EUR',quote_type:'Trade',market_at:'2026-11-08T08:00:00Z',captured_at:'2026-11-08T08:01:00Z'}))};}
-let timerId=0;const timers=new Map();
-function fakeSetTimeout(fn,delay){const id=++timerId;const wrapped=async()=>{timers.delete(id);return fn();};timers.set(id,{fn:wrapped,delay});return id;}
-function fakeClearTimeout(id){timers.delete(id);}
-let calls=0,active=0,maxActive=0,holdNext=false,releaseNext=null;
-async function fetch(_url, options){assert.equal(options.headers["X-MOSA2-Quote-Intent"],"manual");calls++;active++;maxActive=Math.max(maxActive,active);if(holdNext)await new Promise(resolve=>{releaseNext=resolve;});active--;return {ok:true,body:null,json:async()=>successResult('DE0000000001')};}
-const sandbox={document,localStorage,fetch,AbortController,Intl,Date:TestDate,JSON,Number,String,Object,Array,Set,Math,Error,setTimeout:fakeSetTimeout,clearTimeout:fakeClearTimeout,window:{confirm:()=>true}};sandbox.globalThis=sandbox;
-vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),sandbox);
-
 (async()=>{
-  assert.equal(sandbox.MosaIsinAutomation,undefined);
-  assert.equal(calls,0,'Persisted active setting cannot start a request');
-  assert.equal(timers.size,0,'No recurring or initial timer');
-  assert.equal(visibilityHandlers.length,0,'Tab activation cannot start a request');
-  assert.deepEqual(automationToggle.events,{});
-  assert.equal(storage.get('mosa2-isin-lookup-v1'),JSON.stringify(initial),'Initial cache remains untouched');
-  await refresh.events.click();
-  assert.equal(calls,1,'Manual refresh works with the protected endpoint');
-  assert.equal(timers.size,0,'Manual refresh does not schedule a new cycle');
-  assert.equal(storage.get('unrelated-key'),'keep');
-  console.log('PASS manual only: legacy active setting ignored; cache and manual refresh intact');
-})().catch(error=>{console.error(error);process.exit(1);});
+  const m=harness();await flush();
+  assert.equal(m.root.dataset.dataSuccess,'true');
+  assert.deepEqual(m.calls.map(call=>call.at),[0]);
+  assert.equal(m.table.children.length,2);
+  const [first,second]=m.table.children, cells=[...first.cells], secondCells=[...second.cells];
+  const inserts=m.table.insertions, before=cells.map(c=>c.textWrites);
+  const secondBefore=secondCells.map(c=>c.textWrites);
+  m.update([{...stored[0],price:'11.00'},stored[1]]);
+  await m.advance(29999);assert.equal(m.calls.length,1);
+  await m.advance(1);
+  assert.deepEqual(m.table.children,[first,second]);
+  assert.deepEqual(first.cells,cells);assert.deepEqual(second.cells,secondCells);
+  assert.equal(m.table.insertions,inserts);
+  assert.equal(cells[2].textContent,'11,00 EUR');
+  assert.deepEqual(cells.map((cell,i)=>cell.textWrites-before[i]),[0,0,1,0,0,0,0,1,0,0]);
+  assert.deepEqual(secondCells.map((cell,i)=>cell.textWrites-secondBefore[i]),[0,0,0,0,0,0,0,1,0,0]);
+  m.details.events.click();
+  const detailRows=[...m.table.children], detailInserts=m.table.insertions;
+  m.input.value='draft ISIN';
+  await m.advance(60000);
+  assert.deepEqual(m.calls.map(call=>call.at),[0,30000,60000,90000]);
+  assert.deepEqual(m.table.children,detailRows);assert.equal(m.table.insertions,detailInserts);
+  assert.equal(m.details.getAttribute('aria-expanded'),'true');
+  assert.equal(m.input.value,'draft ISIN');
+  assert.equal(m.writes,0,'Background data never rewrites the user list');
+  assert.equal(m.root.dataset.isinReadCount,'4');
+  assert.equal(m.root.dataset.isinReadHttp,'200');
+
+  m.hide(true);await m.advance(90000);
+  assert.equal(m.calls.length,4,'Hidden tab makes no new requests');
+  m.status(503);m.hide(false);await m.advance(0);
+  assert.equal(m.calls.length,5,'An overdue read resumes when visible');
+  assert.equal(m.root.dataset.isinReadHttp,'503');
+  assert.deepEqual(m.table.children,detailRows);
+  assert.equal(detailRows[0].cells[2].textContent,'11,00 EUR');
+  assert.match(detailRows[0].cells[9].textContent,/Veraltet/);
+  m.status(200);m.hold();await m.advance(30000);await m.advance(35000);
+  assert.equal(m.calls.length,6,'Slow read cannot overlap the next cycle');
+  m.release();await flush();await m.advance(0);
+  assert.equal(m.calls.length,7);
+  assert.equal(m.maxActive,1);
+  assert.equal(detailRows[0].cells[9].textContent,'Gespeichert');
+
+  m.status(403);await m.advance(30000);await m.advance(60000);
+  assert.equal(m.calls.length,8,'Authorization failure stops polling');
+
+  const home=harness({market:false});await flush();await home.advance(90000);
+  assert.deepEqual(home.calls.map(call=>call.url),['api/market.php?view=best']);
+  const empty=harness({entries:[]});await flush();await empty.advance(90000);
+  assert.equal(empty.calls.length,1,'An empty personal list only reads once');
+  empty.input.value=b;empty.form.events.submit({preventDefault(){}});await flush();
+  assert.equal(empty.calls[1].url,'api/isin_quote.php','The first new ISIN is queried immediately');
+  assert.equal(JSON.parse(empty.storage.get(key))[0].isin,b);
+  await empty.advance(0);await empty.advance(30000);
+  assert.equal(empty.calls[2].url,'api/market.php?view=best');
+  assert.equal(empty.calls[3].at-empty.calls[2].at,30000);
+  await empty.refresh.events.click();
+  assert.equal(empty.calls.at(-1).url,'api/isin_quote.php','Manual refresh preserves the source comparison');
+  assert.equal(empty.error.hidden,true);
+  assert.equal(empty.maxActive,1);
+  console.log('PASS stored-only poll: 30 s, keyed cells, visible tabs, recovery, no overlap, manual source requests');
+})().catch(error=>{console.error(error);process.exitCode=1;});

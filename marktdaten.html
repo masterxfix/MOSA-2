@@ -11,7 +11,7 @@
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/codex_status.js?v=20261110" defer></script>
   <script src="assets/js/market.js" defer></script>
-  <script src="assets/js/isin_quotes.js?v=isin-20261110-no-steps" defer></script>
+  <script src="assets/js/isin_quotes.js?v=isin-20261110-market-poll" defer></script>
 </head>
 <body data-isin-stored-quotes class="market-page">
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -30,7 +30,7 @@
     <section class="market-section observation-section" aria-labelledby="observations-titel" data-isin-market-view>
       <div class="section-heading"><div><p class="eyebrow">01 / Observations</p><h2 id="observations-titel">Meine ISIN-Kursabfragen</h2></div>
         <span class="snapshot" data-isin-summary role="status">Noch keine ISIN eingegeben.</span></div>
-      <p class="context-note">Die Ansicht zeigt eigene ISIN-Abfragen und gespeicherte Kurse aus der Datenbank. Eine neue Abfrage startet über „OK“ oder „Aktualisieren“. Ältere Kurse sind als veraltet gekennzeichnet.</p>
+      <p class="context-note">Bei geöffnetem, sichtbarem Tab prüft die Ansicht alle 30 Sekunden, ob neue gespeicherte Kurse vorliegen. „OK“ und „Aktualisieren“ fragen die Kursquellen direkt ab. Ältere Kurse sind als veraltet gekennzeichnet.</p>
       <form class="isin-form" data-isin-form autocomplete="off">
         <label for="isin-market">ISIN eingeben</label>
         <div class="isin-form-row"><input id="isin-market" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE0005313704" spellcheck="false" required><button type="submit">OK</button><button type="button" data-isin-refresh>Aktualisieren</button></div>
