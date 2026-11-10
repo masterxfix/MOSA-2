@@ -243,9 +243,6 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .isin-form-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .isin-form-row button { padding: 12px 20px; color: var(--bg); background: var(--accent); border: 1px solid var(--accent); border-radius: 2px; font-weight: 600; cursor: pointer; }
 .isin-form-row button:disabled { opacity: .6; cursor: wait; }
-.isin-steps { max-width: 850px; margin: 20px 0 0; padding-left: 20px; color: var(--muted); font-size: .76rem; line-height: 1.9; }
-.isin-steps li[data-status="success"] { color: var(--positive); }
-.isin-steps li[data-status="error"] { color: var(--muted); }
 .asset-index small { display: block; margin-top: 5px; font-size: .68rem; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
 .asset-index .isin-empty { display: block; color: var(--muted); font-size: .85rem; }
 @media (max-width: 760px) { .isin-form-row { gap: 8px; } .isin-form-row input { width: 100%; } }

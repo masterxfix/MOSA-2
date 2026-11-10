@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261110-compact';
+const cacheVersion='isin-20261110-no-steps';
 const html=fs.readFileSync(__dirname+'/../marktdaten.html','utf8');
 const indexHtml=fs.readFileSync(__dirname+'/../index.html','utf8');
 assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),'marktdaten.html uses the current cache version');
@@ -15,10 +15,10 @@ class E {
   querySelector(selector){return this.map?.[selector]??null;}
 }
 
-const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),steps=new E('ol'),table=new E('tbody');
+const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),table=new E('tbody');
 submit.type='submit';input.value='DE0000000001';
 form.map={'[data-isin-input]':input,'button[type=submit]':submit};
-form.parentElement={querySelector:selector=>selector==='[data-isin-steps]'?steps:selector==='[data-isin-table]'?table:null};
+form.parentElement={querySelector:()=>null};
 const detailsToggle=new E('button');
 const automationRoot=new E('div'),automationInterval=new E('input'),automationToggle=new E('button'),automationStatus=new E('p');
 automationInterval.value='300';automationRoot.map={'[data-isin-automation-interval]':automationInterval,'[data-isin-automation-toggle]':automationToggle,'[data-isin-automation-status]':automationStatus};

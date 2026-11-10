@@ -1,5 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-for(const [file,cacheVersion] of [['marktdaten.html','isin-20261110-compact'],['index.html','isin-20261110-manual']]){
+const cacheVersion='isin-20261110-no-steps';
+for(const file of ['marktdaten.html','index.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
 }
@@ -13,8 +14,7 @@ class E {
   querySelector(selector){return this.map?.[selector]??null}
 }
 
-const form=new E('form'),steps=new E('ol'),detailsToggle=new E('button'),table=new E('tbody');
-form.parentElement={querySelector:selector=>selector==='[data-isin-steps]'?steps:null};
+const form=new E('form'),detailsToggle=new E('button'),table=new E('tbody');
 const document={
   querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-table]'?[table]:[],
   querySelector:selector=>selector==='[data-isin-details-toggle]'?detailsToggle:null,
