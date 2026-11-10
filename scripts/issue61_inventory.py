@@ -32,19 +32,23 @@ def private_directory(path):
         return False
 def process_inventory():
     try:
-        p=subprocess.run(['ps','-u',str(os.getuid()),'-o','pid=,ppid=,args='],capture_output=True,text=True,timeout=6)
+        p=subprocess.run(['ps','-u',str(os.getuid()),'-o','pid=','-o','ppid=','-o','args='],
+                         capture_output=True,text=True,timeout=6)
         if p.returncode:
             return {'visible':False,'exit':p.returncode}
         excluded={os.getpid(),os.getppid()}
-        matches=0
+        matches=inspected=0
         for line in p.stdout.splitlines():
+            if not line.strip():
+                continue
             parts=line.split(None,2)
-            if len(parts)!=3 or not all(part.isdigit() for part in parts[:2]):
+            if len(parts)<2 or not all(part.isdigit() for part in parts[:2]):
                 return {'visible':False}
             pid,ppid=map(int,parts[:2])
-            if pid not in excluded and ppid!=os.getpid() and writer.search(parts[2]):
+            inspected+=1
+            if pid not in excluded and ppid!=os.getpid() and len(parts)==3 and writer.search(parts[2]):
                 matches+=1
-        return {'visible':True,'matches':matches}
+        return {'visible':inspected>0,'matches':matches}
     except (OSError,subprocess.TimeoutExpired):
         return {'visible':False}
 def unit_inventory(roots):

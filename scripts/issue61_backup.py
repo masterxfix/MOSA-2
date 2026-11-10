@@ -226,7 +226,9 @@ def run(env):
         scoped.recovery(raw)  # independent 256-bit backup recovery material
         key=bytes.fromhex(raw)
         stage='schema_contract'
-        contract=backup.migration.contract()['envelope6']
+        php="require 'scripts/market_collector/schema6.php'; echo json_encode(\\Mosa2\\CollectorSchema5\\envelope(6),JSON_THROW_ON_ERROR);"
+        contract=json.loads(backup.command(['php','-r',php],limit=20000))
+        require(len(contract['tables'])==26 and len(contract['digests'])==6,'SCHEMA6_CONTRACT')
         stage='source_read_locked_export'
         with access.ssh_client(access.configuration(env),report,paramiko) as ssh:
             with access.tunnel(ssh,report) as port:
