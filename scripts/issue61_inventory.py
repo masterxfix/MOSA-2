@@ -30,11 +30,51 @@ def private_directory(path):
         return stat.S_ISDIR(s.st_mode) and stat.S_IMODE(s.st_mode)==0o700 and s.st_uid==os.getuid()
     except OSError:
         return False
+def process_inventory():
+    try:
+        p=subprocess.run(['ps','-u',str(os.getuid()),'-o','pid=,ppid=,args='],capture_output=True,text=True,timeout=6)
+        if p.returncode:
+            return {'visible':False,'exit':p.returncode}
+        excluded={os.getpid(),os.getppid()}
+        matches=0
+        for line in p.stdout.splitlines():
+            parts=line.split(None,2)
+            if len(parts)!=3 or not all(part.isdigit() for part in parts[:2]):
+                return {'visible':False}
+            pid,ppid=map(int,parts[:2])
+            if pid not in excluded and ppid!=os.getpid() and writer.search(parts[2]):
+                matches+=1
+        return {'visible':True,'matches':matches}
+    except (OSError,subprocess.TimeoutExpired):
+        return {'visible':False}
+def unit_inventory(roots):
+    found=matched=0
+    for root in roots:
+        try:
+            with os.scandir(root) as entries:
+                for item in entries:
+                    if not item.name.endswith(('.timer','.service')):
+                        continue
+                    if item.is_symlink() and os.path.realpath(item.path)=='/dev/null':
+                        continue
+                    with open(item.path,'r',encoding='utf-8',errors='replace') as stream:
+                        text=stream.read(65537)
+                    if len(text)>65536:
+                        return {'visible':False}
+                    matched+=bool(markers.search(item.name+'\n'+text))
+            found+=1
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return {'visible':False}
+    return {'visible':bool(found),'roots_found':found,'matches':matched}
 print(json.dumps({
     'cron':run(['crontab','-l'],markers,True),
     'user_timers':run(['systemctl','--user','list-timers','--all','--no-legend','--no-pager'],markers),
     'system_timers':run(['systemctl','list-timers','--all','--no-legend','--no-pager'],markers),
-    'user_processes':run(['ps','-u',str(os.getuid()),'-o','args='],writer),
+    'system_unit_files':unit_inventory(['/etc/systemd/system','/run/systemd/system','/usr/lib/systemd/system','/lib/systemd/system']),
+    'user_unit_files':unit_inventory([os.path.expanduser('~/.config/systemd/user'),'/etc/systemd/user','/usr/lib/systemd/user']),
+    'user_processes':process_inventory(),
     'private_storage':private_directory('/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector'),
 }))
 """
@@ -44,7 +84,7 @@ def database(port, env):
     child_env = {key:env[key] for key in ('PATH','HOME','LANG') if key in env}
     reply = subprocess.run(['php', str(Path(__file__).with_suffix('.php'))],
                            input=json.dumps(dict(port=port,password=env['MOSA_TEST_DB_PASSWORD'])),
-                           text=True, capture_output=True, timeout=90, env=child_env)
+                           text=True, capture_output=True, timeout=240, env=child_env)
     if reply.stderr or len(reply.stdout)>30000:
         raise RuntimeError('DB_INVENTORY_OUTPUT_REJECTED')
     return json.loads(reply.stdout)
@@ -65,6 +105,8 @@ def execute(env):
             with access.tunnel(transport,result) as port:
                 result['database'] = database(port,env)
                 result['ok'] = result['database'].get('ok') is True and 'cron' in result['subscription']
+    except subprocess.TimeoutExpired:
+        result['failure']='DB_INVENTORY_DEADLINE_EXCEEDED'
     except Exception:
         result['failure']='INVENTORY_TRANSPORT_REJECTED'
     return result
