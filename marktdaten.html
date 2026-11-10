@@ -11,7 +11,7 @@
   <script src="assets/js/navigation.js" defer></script>
   <script src="assets/js/codex_status.js?v=20261110" defer></script>
   <script src="assets/js/market.js" defer></script>
-  <script src="assets/js/isin_quotes.js?v=isin-20261110-manual" defer></script>
+  <script src="assets/js/isin_quotes.js?v=isin-20261110-compact" defer></script>
 </head>
 <body data-isin-stored-quotes class="market-page">
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
@@ -35,7 +35,7 @@
         <label for="isin-market">ISIN eingeben</label>
         <div class="isin-form-row"><input id="isin-market" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE0005313704" spellcheck="false" required><button type="submit">OK</button><button type="button" data-isin-refresh>Aktualisieren</button></div>
       </form>
-      <ol class="isin-steps" data-isin-steps aria-label="Schritte der Kursabfrage" aria-live="polite"></ol>
+      <p class="context-note" data-isin-error role="status" hidden></p>
       <p><button class="observation-refresh" type="button" data-isin-details-toggle aria-expanded="false">Alle Details anzeigen</button></p>
       <div class="observation-table-wrap" aria-busy="false" data-observation-region>
         <table class="market-table observation-table">

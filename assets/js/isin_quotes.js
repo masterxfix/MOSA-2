@@ -195,6 +195,16 @@
     const list=form.parentElement.querySelector("[data-isin-steps]");if(!list)return;
     const item=document.createElement("li");item.dataset.status=kind;item.textContent=message;list.append(item);
   }
+  function showError(form,message="") {
+    const error=form.parentElement.querySelector("[data-isin-error]");
+    if(!error)return;
+    error.hidden=!message;
+    error.textContent=message;
+  }
+  function reportError(form,message) {
+    progress(form,message,"error");
+    showError(form,message);
+  }
   async function requestAll(code, onEvent) {
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);
     try {
@@ -299,10 +309,11 @@
     if(busy)return;
     const code=form.querySelector("[data-isin-input]").value.trim().toUpperCase();
     const list=form.parentElement.querySelector("[data-isin-steps]");if(list)list.replaceChildren();
-    if(!valid(code)){progress(form,"Ungültige ISIN. Bitte zwölf Zeichen einschließlich Prüfziffer eingeben.","error");return;}
+    showError(form);
+    if(!valid(code)){reportError(form,"Ungültige ISIN. Bitte zwölf Zeichen einschließlich Prüfziffer eingeben.");return;}
     let entry=entries.find(e=>e.isin===code);
     if(!entry){
-      if(entries.length>=30){progress(form,"Die Liste enthält bereits 30 ISINs.","error");return;}
+      if(entries.length>=30){reportError(form,"Die Liste enthält bereits 30 ISINs.");return;}
       entry={isin:code,name:null,quotes:[],errors:[]};entries.unshift(entry);
     }
     setBusy(true);
@@ -314,10 +325,10 @@
         const winner=best(entry);
         progress(form,"Ergebnis: "+(entry.name||code)+" · "+fmtPrice(winner.price)+" "+winner.currency+
           " · "+winner.source+" · Erfasst "+date(winner.captured_at)+(old(winner)?" · Marktzeit veraltet":""),"success");
-      }else progress(form,"Kein Anbieter hat einen bestätigten Kurs geliefert. Es wird kein alter Wert als aktuell ausgegeben.","error");
+      }else reportError(form,"Kein Anbieter hat einen bestätigten Kurs geliefert. Es wird kein alter Wert als aktuell ausgegeben.");
     }catch(error){
       const reason=error.name==="AbortError"?"Zeitüberschreitung":error.message||"Abfrage fehlgeschlagen";
-      markRequestFailure(entry,reason);progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
+      markRequestFailure(entry,reason);reportError(form,"Quellenvergleich nicht abgeschlossen: "+reason);
     }finally{
       setBusy(false);
       save();paint();
@@ -328,6 +339,7 @@
     entries=restore();paint();
     const form=forms[0],list=form.parentElement.querySelector("[data-isin-steps]");
     if(list)list.replaceChildren();
+    showError(form);
     if(!entries.length){progress(form,"Keine gespeicherten ISINs. Es wurde keine Abfrage ausgelöst.");return false;}
     const snapshot=entries.slice();let successful=0,failed=0;
     setBusy(true);progress(form,"Aktualisierung gestartet: "+snapshot.length+" ISIN"+(snapshot.length===1?"":"s")+".");
@@ -353,6 +365,7 @@
         save();paint();
       }
       progress(form,"Aktualisierung abgeschlossen: "+successful+" erfolgreich, "+failed+" fehlgeschlagen.",failed?"error":"success");
+      if(failed)showError(form,"Mindestens eine Kursabfrage konnte nicht erfolgreich aktualisiert werden.");
     }finally{
       setBusy(false);save();
       paint();

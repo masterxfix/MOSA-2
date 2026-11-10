@@ -1,8 +1,9 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261110-manual';
-for(const file of ['marktdaten.html','index.html']){
+for(const [file,cacheVersion] of [['marktdaten.html','isin-20261110-compact'],['index.html','isin-20261110-manual']]){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
+  assert.equal(html.includes('data-isin-steps'),file==='index.html','Only the homepage keeps its progress list');
+  if(file==='marktdaten.html')assert.match(html,/<p[^>]*data-isin-error[^>]*role="status"[^>]*hidden/);
 }
 
 class E {
@@ -29,7 +30,8 @@ const oldDroneShield={provider:'tradegate_quote',source:'Tradegate BSX · Geld/B
 const oldEtf={provider:'boerse_frankfurt_trade',source:'Börse Frankfurt · letzter Handel',price:'5.0000000000',currency:'EUR',quote_type:'Letzter Handel',market_at:'2026-11-02T12:02:00Z',captured_at:'2026-11-02T12:03:00Z',isin:'IE00BMYDM794'};
 const initial=[{isin:'AU000000DRO2',name:'DroneShield',quotes:[oldDroneShield],errors:[]},{isin:'IE00BMYDM794',name:'L&G Hydrogen Economy ETF',quotes:[oldEtf],errors:[]}];
 const storage=new Map([['mosa2-isin-lookup-v1',JSON.stringify(initial)],['unrelated-key','keep']]),localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
-let confirmCalls=0;
+let confirmCalls=0,marketView=false;
+const marketError=new E('p');marketError.hidden=true;
 const calls=[];let active=0,maxActive=0;
 const providers=['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'];
 function successResult(isin,name){return {status:'ok',isin,name,instrument_type:'stock',instrument_type_source:'lang_schwarz',instrument_type_verified_at:'2026-11-03T08:01:00Z',records:providers.map((provider,index)=>({status:'ok',isin,provider,source:provider,price:(10+index/10).toFixed(3),currency:'EUR',quote_type:'Letzter Handel',market_at:'2026-11-03T08:00:00Z',captured_at:'2026-11-03T08:01:00Z'}))};}
@@ -40,8 +42,8 @@ async function fetch(url,options){
   assert.equal(refresh.disabled,true,'Refresh is disabled during an update');assert.equal(submit.disabled,true,'OK is disabled during an update');
   assert.ok(assetList.children.every(item=>item.children[2]?.disabled===true),'Single-delete buttons are disabled during an update');
   assert.equal(clear.disabled,true,'Clear-all is disabled during an update');
-  await new Promise(resolve=>setTimeout(resolve,5));active--;
-  assert.ok(steps.children.some(item=>item.textContent.includes('Aktualisiere 1 von 2: DroneShield')),'Progress is visible before the first provider request');
+  await new Promise(setImmediate);active--;
+  if(!marketView&&calls.length<=2)assert.ok(steps.children.some(item=>item.textContent.includes('Aktualisiere 1 von 2: DroneShield')),'Homepage progress is visible during refresh');
   return {ok:true,body:null,json:async()=>body.isin==='AU000000DRO2'?successResult(body.isin,'DroneShield'):body.isin==='IE00BMYDM794'?failedResult(body.isin,'L&G Hydrogen Economy ETF'):successResult(body.isin,'BYD')};
 }
 
@@ -80,7 +82,8 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),sandbox);
   assert.equal(JSON.parse(storage.get('mosa2-isin-lookup-v1')).length,1,'Single deletion survives reload');
 
-  await form.events.submit({preventDefault(){}});
+  form.events.submit({preventDefault(){}});
+  await new Promise(setImmediate);
   assert.equal(calls.length,3,'The existing OK flow still starts one shared request');
   assert.equal(calls[2].body.isin,'CNE100000296');
   assert.equal(JSON.parse(storage.get('mosa2-isin-lookup-v1')).length,2,'OK adds the new ISIN without duplicating saved entries');
@@ -98,5 +101,32 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   await refresh.events.click();
   assert.equal(calls.length,3,'An empty saved list triggers no provider request');
   assert.ok(steps.children.some(item=>item.textContent.includes('Keine gespeicherten ISINs')),'Empty list explains that no request was made');
-  console.log('PASS refresh: two sequential provider=all requests, retained failed quote timestamps, persistence, and OK regression');
+  marketView=true;
+  form.parentElement={querySelector:selector=>selector==='[data-isin-error]'?marketError:null};
+  input.value='UNGÜLTIG';
+  form.events.submit({preventDefault(){}});
+  await new Promise(setImmediate);
+  assert.equal(calls.length,3,'Invalid ISIN does not contact a provider');
+  assert.equal(marketError.hidden,false);
+  assert.match(marketError.textContent,/Ungültige ISIN/);
+
+  input.value='AU000000DRO2';
+  form.events.submit({preventDefault(){}});
+  await new Promise(setImmediate);
+  assert.equal(calls.length,4,'OK works without a progress list');
+  assert.equal(marketError.hidden,true,'A successful query clears the previous error');
+  assert.match(table.textContent,/DroneShield.*10,00 EUR/);
+
+  input.value='IE00BMYDM794';
+  form.events.submit({preventDefault(){}});
+  await new Promise(setImmediate);
+  assert.equal(calls.length,5);
+  assert.equal(marketError.hidden,false);
+  assert.match(marketError.textContent,/Kein Anbieter hat einen bestätigten Kurs geliefert/);
+  await refresh.events.click();
+  assert.equal(calls.length,7,'Refresh works without a progress list');
+  assert.equal(marketError.hidden,false);
+  assert.equal(marketError.textContent,'Mindestens eine Kursabfrage konnte nicht erfolgreich aktualisiert werden.');
+  assert.match(table.textContent,/DroneShield.*10,00 EUR/);
+  console.log('PASS refresh and OK: sequential requests, persistence, homepage progress and single market-page errors');
 })().catch(error=>{console.error(error);process.exit(1)});

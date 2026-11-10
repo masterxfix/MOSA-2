@@ -1,8 +1,8 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261110-manual';
+const cacheVersion='isin-20261110-compact';
 const html=fs.readFileSync(__dirname+'/../marktdaten.html','utf8');
 const indexHtml=fs.readFileSync(__dirname+'/../index.html','utf8');
-assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),'marktdaten.html uses the manual cache version');
+assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),'marktdaten.html uses the current cache version');
 assert.ok(!html.includes('data-isin-automation'),'Market page has no automation control');
 assert.ok(!indexHtml.includes('data-isin-automation'),'Index page has no second automation control or trigger');
 
