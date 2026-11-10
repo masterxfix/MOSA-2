@@ -6,13 +6,14 @@ import hashlib
 import importlib
 import json
 import os
+import stat
 from pathlib import Path
 import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.market_collector.contracts import Request, RouteContract
+from scripts.market_collector.contracts import Request, RouteContract, TransportResponse
 from scripts.market_collector.collector import FixtureTransport
 from scripts.market_collector.http_transport import HttpGet, ReadOnlyHttpTransport
 from scripts.market_collector.normalizer import pipeline, writer
@@ -39,20 +40,36 @@ def run(data):
         else:
             if adapter.provider_key != 'gettex_mund_delayed_v1':
                 raise ValueError('archive provider binding')
+            stamp = archive.get('captured_at', stamp)
             endpoint = adapter.archive_request(manifest['instrument'], stamp, archive['slot'])
-        http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],
-            tuple(tuple(h.split(': ', 1)) for h in endpoint['headers'])), timeout=25,
-            max_bytes=endpoint.get('max_bytes', 2 * 1024 * 1024))
-        fd = os.open(private/'provider-consumed.lock', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        os.close(fd)
-        started = time.monotonic()
-        response = http.fetch(None)
-        provider_duration_ms = (time.monotonic() - started) * 1000
-        if response.http_status != 200:
-            raise ValueError('provider response')
+        if archive is not None and 'private_path' in archive:
+            source = Path(archive['private_path'])
+            parent = private.resolve().parents[2]
+            if source.parent != parent or source.name != 'mosa2-gettex-posttrade.'+archive['slot']+'.mund.csv.gz':
+                raise ValueError('private archive binding')
+            with os.fdopen(os.open(source, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+                    raise ValueError('private archive metadata')
+                raw = stream.read(endpoint['max_bytes']+1)
+            if len(raw) > endpoint['max_bytes']:
+                raise ValueError('private archive size')
+            response = TransportResponse(raw, stamp, 200, 'application/gzip')
+            requests, provider_duration_ms = 0, 0
+        else:
+            http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],
+                tuple(tuple(h.split(': ', 1)) for h in endpoint['headers'])), timeout=25,
+                max_bytes=endpoint.get('max_bytes', 2 * 1024 * 1024))
+            fd = os.open(private/'provider-consumed.lock', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(fd)
+            started = time.monotonic()
+            response = http.fetch(None)
+            requests, provider_duration_ms = 1, (time.monotonic() - started) * 1000
+            if response.http_status != 200:
+                raise ValueError('provider response')
         if archive is not None and hashlib.sha256(response.payload_bytes).hexdigest() != archive['sha256']:
             raise ValueError('archive content changed')
-        return dict(ok=True, provider_requests=1, provider_duration_ms=provider_duration_ms, response=transport(asdict(response)),
+        return dict(ok=True, provider_requests=requests, provider_duration_ms=provider_duration_ms, response=transport(asdict(response)),
             request_key=endpoint['request_key'], requested_at=stamp,
             provider_key=adapter.provider_key, adapter_module=module,
             adapter_class=manifest['adapter_class'], instrument=manifest['instrument'])
@@ -68,7 +85,6 @@ def run(data):
                     market_at=normalized['market_at'], observed_at=normalized['observed_at'])
     if action == 'plan':
         acquired = data['acquired']
-        from scripts.market_collector.contracts import TransportResponse
         adapter = getattr(importlib.import_module(acquired['adapter_module']), acquired['adapter_class'])()
         binding = data['route']
         request = Request(acquired['provider_key'], binding['source_id'], binding['id'],

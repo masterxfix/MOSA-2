@@ -217,7 +217,9 @@ def collection_scope(env):
     if gettex or 'archive' in scope:
         if (env.get('MOSA_MARKET_GETTEX_PRIVATE_USE') != '1' or scope['request_budget'] != 1
                 or scope['source_priority'] != ['provider:gettex_mund_delayed']
-                or type(archive) is not dict or set(archive) != {'slot','sha256'}
+                or type(archive) is not dict or set(archive) not in ({'slot','sha256'},{'slot','sha256','captured_at'})
+                or ('captured_at' in archive and (not isinstance(archive['captured_at'],str)
+                    or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}',archive['captured_at'])))
                 or not isinstance(archive['slot'],str) or not re.fullmatch(r'[0-9]{8}\.[0-9]{2}\.[0-9]{2}',archive['slot'])
                 or not isinstance(archive['sha256'],str) or not re.fullmatch('[0-9a-f]{64}',archive['sha256'])):
             raise ConfigurationError('GETTEX_PRIVATE_USE_OR_BUDGET')

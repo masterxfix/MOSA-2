@@ -32,8 +32,29 @@ def run_archive(data):
         identity=scope['expected_isins'][0]+':'+archive['slot']
         name='gettex-'+hashlib.sha256(identity.encode()).hexdigest()
         os.umask(0o077)
-        os.mkdir(name,0o700,dir_fd=parent)
-        work=Path(root)/name
+        reserved=Path(root)/name
+        if 'captured_at' in archive:
+            original=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
+            try:
+                info=os.fstat(original)
+                need((info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))==(UID,GID,0o700)
+                     and reserved.resolve()==reserved,'ARCHIVE_RESERVED_ROOT')
+                filename='mosa2-gettex-posttrade.'+archive['slot']+'.mund.csv.gz'
+                fd=os.open(filename,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=original)
+                with os.fdopen(fd,'rb') as source:
+                    info=os.fstat(source.fileno())
+                    need(stat.S_ISREG(info.st_mode) and info.st_uid==UID and info.st_nlink==1
+                         and 0<info.st_size<=2097152,'ARCHIVE_PRIVATE_FILE')
+                    os.fchmod(source.fileno(),0o600)
+                    need(hashlib.sha256(source.read(2097153)).hexdigest()==archive['sha256'],'ARCHIVE_FILE_DIGEST')
+                archive['private_path']=str(reserved/filename)
+                os.mkdir('replay',0o700,dir_fd=original)
+                work=reserved/'replay'
+            finally:
+                os.close(original)
+        else:
+            os.mkdir(name,0o700,dir_fd=parent)
+            work=reserved
         need(work.resolve()==work,'ARCHIVE_WORK_PATH')
     finally:
         os.close(parent)
@@ -100,7 +121,11 @@ def execute(transport, project, scope, password):
     from datetime import datetime, timezone
 
     now=datetime.now(timezone.utc).strftime(gettex_delayed.STAMP)
-    gettex_delayed.GettexDelayedTradeV1().archive_request(scope['expected_isins'][0],now,scope['archive']['slot'])
+    archive=scope['archive']
+    capture=archive.get('captured_at',now)
+    if capture>now:
+        raise ValueError('future archive capture')
+    gettex_delayed.GettexDelayedTradeV1().archive_request(scope['expected_isins'][0],capture,archive['slot'])
     commit=release.git(project,'rev-parse','HEAD').decode().strip()
     _,read=release.repository(project,commit)
     contract=release.decode(read(release.SCHEMA6_CONTRACT))
