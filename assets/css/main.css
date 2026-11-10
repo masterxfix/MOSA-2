@@ -39,6 +39,7 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .dot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin: 0 8px 2px 18px; }
 /* Codex status is a separate indicator; the existing .dot remains a text separator. */
 .codex-status-dot { position: absolute; inset: 0; margin: auto; width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--muted); }
+.codex-status-dot[data-state="unavailable"] { border-width: 2px; }
 .codex-status-dot[data-state="idle"] { background: #64748b; border-color: #64748b; }
 .codex-status-dot[data-state="running"] { background: #34d399; border-color: #34d399; }
 

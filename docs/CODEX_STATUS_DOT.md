@@ -1,7 +1,7 @@
 # Codex-Statuspunkt – MOSA 2
 
 ## Zweck
-In `index.html`, `marktdaten.html` und `fundamentaldaten.html` sitzt ein 11-Pixel-Punkt mittig in der Kopfzeile. **Grün** steht für mindestens einen laufenden Codex-Auftrag, **Grau** für keinen aktiven Auftrag und ein **heller Ring** für unbekannten Status. Tooltip und Screenreader-Text benennen alle drei Zustände.
+In `index.html`, `marktdaten.html` und `fundamentaldaten.html` sitzt ein 11-Pixel-Punkt mittig in der Kopfzeile. **Grün** steht für mindestens einen laufenden Codex-Auftrag, **Grau** für keinen aktiven Auftrag und ein **heller Ring mit zwei Pixeln Strichstärke** für unbekannten Status. Tooltip und Screenreader-Text benennen alle drei Zustände.
 
 ## MOSA als maßgebliche Drei-Zustände-Quelle
 
@@ -13,6 +13,9 @@ Der vorhandene MOSA-Empfänger liefert die Metadaten im erfolgreichen Publisher-
 Bewährte MOSA-Telemetrie statt eines frei erfundenen Statussignals: `mosa_ai_control_telemetry_v1`, `surface=codex_cli|codex_vscode`, `UserPromptSubmit` (Start), `Stop` oder `SessionEnd` (Ende), dazwischen Tool-Ereignisse als Aktivitätsnachweis. `SessionStart` ist ausdrücklich **kein** Auftragsstart. Andere Oberflächen wie `work_desktop` und WinSCP zählen nicht. Parallele Codex-Aufträge werden getrennt berücksichtigt. Laufende Aufträge ohne neue native Evidenz für mehr als 180 Sekunden werden **unbekannt**, nicht inaktiv.
 
 ## Verbindung der bestehenden MOSA-Quelle
+
+Die Hook-Konfiguration des MOSA-Checkouts gilt nur in dessen Projekt. Für einen Start aus der Codex-App im separaten lokalen MOSA-2-Projekt muss dort `.codex/hooks.json` dieselben Ereignisse auf den vorhandenen `scripts/mosa_ai_activity_hook.ps1` im MOSA-Checkout verweisen. Verwende den absoluten lokalen Skriptpfad und die bestehende Senderkonfiguration. Codex verlangt die Vertrauensprüfung der Hook-Einträge am neuen Projektpfad. Sie erfolgt in der App über „Hooks prüfen“ oder „Einstellungen → Hooks“. Ohne diese Registrierung und Freigabe erhält MOSA aus dem Projekt keine Ereignisse. Ein CLI-Test im MOSA-Checkout prüft den Empfänger, aber ersetzt die App-Abnahme im MOSA-2-Projekt nicht.
+
 - MOSA bleibt Quelle der nativen Codex-Hooks; der bestehende MOSA-Publisher spiegelt denselben bereits erzeugten Batch optional an die fest erlaubte MOSA-2-Testsite-URL. Es werden keine neuen Hook-Ereignisse und keine parallele Auftragserfassung erzeugt.
 - Die Verbindung verwendet im MOSA-Quellhost die externen Variablen `FIXLAB_MOSA2_CODEX_STATUS_URL`, `FIXLAB_MOSA2_CODEX_STATUS_TOKEN` sowie bei aktivem äußerem Testsite-Schutz `FIXLAB_MOSA2_CODEX_STATUS_BASIC_USER` und `FIXLAB_MOSA2_CODEX_STATUS_BASIC_PASSWORD`. Der URL-Wert wird gegen `https://mosa2-test.scharwerk.de/api/codex_status_ingest.php` geprüft; Token und Zugangsdaten bleiben außerhalb von Git, Logs und HTML. Der Sender überträgt den Token im Header `X-Mosa2-Codex-Token`.
 - MOSA-2 benötigt **entweder** die bisherige Umgebungsvariable `MOSA2_CODEX_STATUS_TOKEN` **oder** (wenn PHP-FPM/Plesk keine Umgebungsvariablen bereitstellt) die Datei `mosa2-codex-status-private/token.txt` im bereits vorgesehenen privaten Verzeichnis **außerhalb des Webroots**. Diese Datei enthält ausschließlich 64 hexadezimale Zeichen aus einem kryptografisch zufällig erzeugten 32-Byte-Token und darf nur für den Eigentümer lesbar sein (`0600`); der PHP-Reader lehnt Symlinks, zu offene Berechtigungen und ungültige Werte ab. Ein vorhandener gültiger Umgebungstoken hat Vorrang. Derselbe Token wird ausschließlich im nativen MOSA-Sender als `FIXLAB_MOSA2_CODEX_STATUS_TOKEN` hinterlegt. Token niemals in Git, Browser, Logs, Chat, URLs oder Webroots ablegen; der äußere HTTP-Schutz bleibt aktiv.
