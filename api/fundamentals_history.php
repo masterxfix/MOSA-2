@@ -52,6 +52,9 @@ if (($_SERVER['HTTP_HOST'] ?? '') !== 'mosa2-test.scharwerk.de' ||
 
 $owner = hash('sha256', $_SERVER['REMOTE_USER']);
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
+// Issue #61: block new jobs on the testsite; keep existing read/queue logic in source.
+if ($method === 'POST')
+    historyReply(403, ['message' => 'Historische Importe sind auf der MOSA-2-Testsite gesperrt.']);
 if (!in_array($method, ['GET', 'POST'], true)) {
     header('Allow: GET, POST');
     historyReply(405, ['message' => 'Methode nicht unterstützt.']);

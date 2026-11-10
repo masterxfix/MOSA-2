@@ -19,6 +19,8 @@ if (($_SERVER['REQUEST_METHOD']??'GET')!=='POST') {
     header('Allow: POST');
     $reply(405);
 }
+// Issue #61: stop background writes to M2 only. The native sender is unchanged.
+if (($_SERVER['HTTP_HOST']??'')==='mosa2-test.scharwerk.de') $reply(403);
 if (strtolower(trim(explode(';',(string)($_SERVER['CONTENT_TYPE']??''),2)[0]))!=='application/json') $reply(415);
 $secret=\Mosa2\CodexStatus\ingestSecret();
 $given=(string)($_SERVER['HTTP_X_MOSA2_CODEX_TOKEN']??'');

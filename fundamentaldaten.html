@@ -30,17 +30,6 @@
       <div class="fundamentals-layout">
         <aside class="fundamental-assets" aria-label="Unternehmen"><p class="fundamental-total"><span data-fundamental-total>—</span> Aktien</p><div data-fundamental-assets></div></aside>
         <div class="fundamental-detail">
-          <form data-history-form hidden>
-            <fieldset>
-              <legend>Historische Berichte</legend>
-              <label>Startjahr <input name="start" type="number" min="1900" value="2025" required></label>
-              <label>Endjahr <input name="end" type="number" min="1900" value="2025" required></label>
-              <label>Datenart <select name="kind"><option value="both">Jahre und Quartale</option><option value="fy">Jahresdaten</option><option value="fq">Quartalsdaten</option></select></label>
-              <button type="submit">Fehlende Berichte anfordern</button>
-              <p data-history-status role="status"></p>
-              <p class="fundamental-identity" data-history-receipt></p>
-            </fieldset>
-          </form>
           <div data-fundamental-detail aria-live="polite"><p class="fundamental-placeholder">Gespeicherte Kennzahlen werden geladen …</p></div>
         </div>
       </div>

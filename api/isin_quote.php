@@ -342,6 +342,10 @@ function main(): void {
     header('X-Content-Type-Options: nosniff');header('Referrer-Policy: no-referrer');
     if (($_SERVER['REQUEST_METHOD']??'')!=='POST') {http_response_code(405);header('Allow: POST');echo '{"status":"error","code":"METHOD_NOT_ALLOWED"}';return;}
     $host=$_SERVER['HTTP_HOST']??'';
+    // Older open tabs must not keep polling during the M2 testsite reset hold.
+    if ($host==='mosa2-test.scharwerk.de' && ($_SERVER['HTTP_X_MOSA2_QUOTE_INTENT']??'')!=='manual') {
+        http_response_code(403);echo '{"status":"error","code":"MANUAL_QUOTE_REQUIRED"}';return;
+    }
     if ($host==='' || (isset($_SERVER['HTTP_ORIGIN']) && $_SERVER['HTTP_ORIGIN']!=='https://'.$host)
         || (isset($_SERVER['HTTP_SEC_FETCH_SITE'])&&!in_array($_SERVER['HTTP_SEC_FETCH_SITE'],['same-origin','none'],true))
         || ($_SERVER['HTTP_X_REQUESTED_WITH']??'')!=='XMLHttpRequest'

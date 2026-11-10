@@ -20,26 +20,9 @@
   const forms = [...document.querySelectorAll("[data-isin-form]")];
   if (!forms.length) return;
   const detailsToggle = document.querySelector("[data-isin-details-toggle]");
-  const automationRoot = document.querySelector("[data-isin-automation]");
-  const automationInterval = automationRoot?.querySelector("[data-isin-automation-interval]");
-  const automationToggle = automationRoot?.querySelector("[data-isin-automation-toggle]");
-  const automationStatus = automationRoot?.querySelector("[data-isin-automation-status]");
-  const AUTOMATION_KEY = "mosa2-isin-automation-v1";
-  const DEFAULT_INTERVAL_SECONDS = 60;
-  const clampInterval = value => Math.min(300, Math.max(5, Math.round(Number(value) || DEFAULT_INTERVAL_SECONDS)));
-  const intervalFor = (_date, configuredSeconds = DEFAULT_INTERVAL_SECONDS) => clampInterval(configuredSeconds);
   const storedQuotes = new Map();
   const storedRoot=document.querySelector("[data-isin-stored-quotes]");
   let storedStatus="loading", storedReadAt=null, storedReadPending=false;
-  function restoreAutomation() {
-    if (!automationRoot) return {intervalSeconds:DEFAULT_INTERVAL_SECONDS,enabled:false,lastUpdatedAt:null};
-    try {
-      const saved=JSON.parse(localStorage.getItem(AUTOMATION_KEY) || "{}");
-      return {intervalSeconds:clampInterval(saved.intervalSeconds),enabled:saved.enabled === true,
-        lastUpdatedAt:typeof saved.lastUpdatedAt === "string" && Number.isFinite(Date.parse(saved.lastUpdatedAt)) ? saved.lastUpdatedAt : null};
-    } catch { return {intervalSeconds:DEFAULT_INTERVAL_SECONDS,enabled:false,lastUpdatedAt:null}; }
-  }
-  let automation=restoreAutomation(), automationTimer=null;
   function restore() {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -62,46 +45,6 @@
     if (entries.length) localStorage.setItem(KEY, JSON.stringify(entries));
     else localStorage.removeItem(KEY);
   } catch { /* Browser storage is optional. */ }};
-  function saveAutomation() {
-    if (!automationRoot) return;
-    try { localStorage.setItem(AUTOMATION_KEY, JSON.stringify(automation)); } catch { /* Browser storage is optional. */ }
-  }
-  function formatAutomationInterval(seconds) {
-    return seconds >= 3600 ? String(Math.round(seconds/60))+" Min." : String(seconds)+" Sek.";
-  }
-  function formatAutomationTimestamp(value) { return value ? date(value) : "—"; }
-  function updateAutomationStatus() {
-    if (!automationRoot) return;
-    const activeInterval=intervalFor(new Date(),automation.intervalSeconds);
-    if (automationInterval && automationInterval.value !== String(automation.intervalSeconds)) automationInterval.value=String(automation.intervalSeconds);
-    if (automationToggle) {
-      automationToggle.textContent=automation.enabled ? "Automatik stoppen" : "Automatik starten";
-      automationToggle.setAttribute("aria-pressed",String(automation.enabled));
-      automationToggle.disabled=busy;
-    }
-    if (automationStatus) automationStatus.textContent=(automation.enabled ? "Automatik aktiv" : "Automatik inaktiv")+
-      " · Aktives Intervall: "+formatAutomationInterval(activeInterval)+(automation.enabled ? "" : " (inaktiv)")+" · Modus: rund um die Uhr"+
-      " · Letzte Aktualisierung: "+formatAutomationTimestamp(automation.lastUpdatedAt);
-  }
-  function clearAutomationTimer() {
-    if (automationTimer !== null) { clearTimeout(automationTimer); automationTimer=null; }
-  }
-  function scheduleAutomation(value = new Date()) {
-    clearAutomationTimer();
-    updateAutomationStatus();
-    if (!automationRoot || !automation.enabled || document.visibilityState === "hidden" || busy || !entries.length) return;
-    const interval=intervalFor(value,automation.intervalSeconds), last=Date.parse(automation.lastUpdatedAt || ""),
-      due=Number.isFinite(last) ? last+interval*1000 : value.getTime()+interval*1000,
-      delay=Math.max(250,due-value.getTime());
-    automationTimer=setTimeout(runAutomaticCycle,delay);
-  }
-  async function runAutomaticCycle() {
-    automationTimer=null;
-    if (!automationRoot || !automation.enabled || document.visibilityState === "hidden" || busy || !entries.length) { scheduleAutomation(); return; }
-    const now=new Date(), last=Date.parse(automation.lastUpdatedAt || "");
-    if (Number.isFinite(last) && now.getTime() < last+intervalFor(now,automation.intervalSeconds)*1000) { scheduleAutomation(now); return; }
-    await refreshAll(null,true);
-  }
   const fmtPrice = p => {
     const num=Number(p);
     return typeof p==="string" && /^\d+(?:\.\d{1,12})?$/.test(p) && Number.isFinite(num)
@@ -211,7 +154,6 @@
       (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
         ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
     syncDeleteButtons();
-    updateAutomationStatus();
   }
   function renderQuoteRow(fragment,entry,quote) {
     const tr=document.createElement("tr");tr.dataset.status=old(quote)?"stale":"stored";
@@ -258,7 +200,7 @@
     try {
       const response=await fetch("api/isin_quote.php",{
         method:"POST",credentials:"same-origin",cache:"no-store",signal:controller.signal,
-        headers:{"Accept":"application/x-ndjson","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+        headers:{"Accept":"application/x-ndjson","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest","X-MOSA2-Quote-Intent":"manual"},
         body:JSON.stringify({isin:code,provider:"all"})
       });
       if(!response.ok)throw Error("HTTP_"+response.status);
@@ -351,7 +293,6 @@
     for(const form of forms){const button=form.querySelector("button[type=submit]");if(button)button.disabled=value;}
     for(const button of document.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
     if(detailsToggle) detailsToggle.disabled=value;
-    if(automationToggle) automationToggle.disabled=value;
     syncDeleteButtons();
   }
   async function submit(form) {
@@ -379,17 +320,15 @@
       markRequestFailure(entry,reason);progress(form,"Quellenvergleich nicht abgeschlossen: "+reason,"error");
     }finally{
       setBusy(false);
-      if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
       save();paint();
-      scheduleAutomation();
     }
   }
-  async function refreshAll(button, automatic=false) {
+  async function refreshAll() {
     if(busy)return false;
     entries=restore();paint();
     const form=forms[0],list=form.parentElement.querySelector("[data-isin-steps]");
     if(list)list.replaceChildren();
-    if(!entries.length){progress(form,"Keine gespeicherten ISINs. Es wurde keine Abfrage ausgelöst.");scheduleAutomation();return false;}
+    if(!entries.length){progress(form,"Keine gespeicherten ISINs. Es wurde keine Abfrage ausgelöst.");return false;}
     const snapshot=entries.slice();let successful=0,failed=0;
     setBusy(true);progress(form,"Aktualisierung gestartet: "+snapshot.length+" ISIN"+(snapshot.length===1?"":"s")+".");
     try{
@@ -416,40 +355,21 @@
       progress(form,"Aktualisierung abgeschlossen: "+successful+" erfolgreich, "+failed+" fehlgeschlagen.",failed?"error":"success");
     }finally{
       setBusy(false);save();
-      if (automationRoot) { automation.lastUpdatedAt=new Date().toISOString(); saveAutomation(); }
-      paint();scheduleAutomation();
+      paint();
       loadStoredQuotes();
       if(list)list.replaceChildren();
     }
     return true;
   }
   for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);});
-  for(const button of document.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",()=>refreshAll(button));
+  for(const button of document.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",refreshAll);
   for(const list of document.querySelectorAll("[data-isin-list]")) list.addEventListener("click",event=>{
     const button=event.target.closest("[data-isin-remove]");
     if(button) removeEntry(button.dataset.isinRemove);
   });
   for(const button of document.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries);
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();});
-  if (automationRoot) {
-    automationInterval.addEventListener("change",()=>{
-      automation.intervalSeconds=clampInterval(automationInterval.value);
-      automationInterval.value=String(automation.intervalSeconds);
-      saveAutomation();paint();scheduleAutomation();
-    });
-    automationToggle.addEventListener("click",()=>{
-      if (busy) return;
-      automation.enabled=!automation.enabled;saveAutomation();paint();
-      if (automation.enabled) runAutomaticCycle(); else clearAutomationTimer();
-    });
-    document.addEventListener("visibilitychange",()=>{
-      if (document.visibilityState === "hidden") clearAutomationTimer();
-      else { paint();scheduleAutomation();loadStoredQuotes(); }
-    });
-  }
   paint();
-  if (automationRoot) scheduleAutomation();
   loadStoredQuotes();
   globalThis.MosaIsinLookup=Object.freeze({valid});
-  globalThis.MosaIsinAutomation=Object.freeze({clampInterval,intervalFor});
 }());
