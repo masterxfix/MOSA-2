@@ -79,17 +79,21 @@
     const {refresh_failed_at, ...retained}=previous;
     return {...retained, unchanged:true};
   }
+  const tabActive=()=>!document.hidden && document.hasFocus();
   function scheduleStoredRead() {
     if(storedTimer!==null){clearTimeout(storedTimer);storedTimer=null;}
-    if(!marketView || !storedRoot || storedStopped || document.hidden || busy || storedRead
-      || (nextStoredAt!==null && !entries.length))return;
+    if(!marketView || !storedRoot)return;
+    const active=tabActive();
+    if(storedRoot.dataset.isinTabActive!==String(active))storedRoot.dataset.isinTabActive=String(active);
+    if(storedStopped || !active || busy || storedRead || (nextStoredAt!==null && !entries.length))return;
     storedTimer=setTimeout(()=>{
       storedTimer=null;
       loadStoredQuotes();
     },nextStoredAt===null?0:Math.max(0,nextStoredAt-performance.now()));
   }
   function loadStoredQuotes() {
-    if(!storedRoot || storedRead || storedStopped || busy || (marketView && document.hidden))return;
+    if(!storedRoot || storedRead || storedStopped || busy
+      || (marketView && (document.hidden || (nextStoredAt!==null && !tabActive()))))return;
     const firstRead=nextStoredAt===null;
     nextStoredAt=performance.now()+READ_INTERVAL;
     // MOSA's chart pattern: one same-origin read at a time, separate from provider lookups.
@@ -410,6 +414,8 @@
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();});
   if(marketView){
     document.addEventListener("visibilitychange",scheduleStoredRead);
+    window.addEventListener("focus",scheduleStoredRead);
+    window.addEventListener("blur",scheduleStoredRead);
     window.addEventListener("storage",event=>{
       if(busy || (event.key!==KEY && event.key!==null))return;
       entries=restore();paint();scheduleStoredRead();

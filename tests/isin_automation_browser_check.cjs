@@ -10,7 +10,7 @@ const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Trade
 const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
 const flush=()=>new Promise(setImmediate);
 function harness({market=true,entries=initial}={}){
-  let ms=0,timerId=0,http=200,items=stored,hold=false,release,active=0,maxActive=0,writes=0;
+  let ms=0,timerId=0,http=200,items=stored,hold=false,release,active=0,maxActive=0,writes=0,focused=true;
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
   const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
@@ -18,7 +18,7 @@ function harness({market=true,entries=initial}={}){
   const error=new E('p');error.hidden=true;
   form.parentElement={querySelector:selector=>selector==='[data-isin-error]'?error:null};
   form.map={'[data-isin-input]':input,'button[type=submit]':submit};
-  const document={hidden:false,querySelectorAll:selector=>({
+  const document={hidden:false,hasFocus:()=>focused,querySelectorAll:selector=>({
     '[data-isin-form]':[form],'[data-isin-refresh]':market?[refresh]:[],'[data-isin-table]':market?[table]:[],
     '[data-isin-summary]':market?[summary]:[]
   }[selector]??[]),querySelector:selector=>({
@@ -66,6 +66,7 @@ function harness({market=true,entries=initial}={}){
   return {table,input,form,refresh,details,root,summary,calls,error,storage,advance,
     get writes(){return writes;},get maxActive(){return maxActive;},
     hide(value){document.hidden=value;events.visibilitychange();},
+    focus(value){focused=value;windowEvents[value?"focus":"blur"]();},
     update(value){items=value;},status(value){http=value;},
     hold(){hold=true;},release(){hold=false;release();}};
 }
@@ -114,8 +115,11 @@ function harness({market=true,entries=initial}={}){
   assert.equal(m.maxActive,1);
   assert.equal(detailRows[0].cells[9].textContent,'Gespeichert');
 
-  m.status(403);await m.advance(30000);await m.advance(60000);
-  assert.equal(m.calls.length,8,'Authorization failure stops polling');
+  m.focus(false);await m.advance(60000);
+  assert.equal(m.calls.length,7,'A visible but unfocused tab makes no new requests');
+  assert.equal(m.root.dataset.isinTabActive,'false');
+  m.status(403);m.focus(true);await m.advance(0);await m.advance(60000);
+  assert.equal(m.calls.length,8,'An overdue read resumes on focus and stops on authorization failure');
 
   const home=harness({market:false});await flush();await home.advance(90000);
   assert.deepEqual(home.calls.map(call=>call.url),['api/market.php?view=best']);

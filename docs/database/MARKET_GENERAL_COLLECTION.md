@@ -60,7 +60,7 @@ cover runtime, route identity, Current transitions and Schema-6 locks/release in
 
 ## Rund-um-die-Uhr-Kurse
 
-Die Marktdaten-Seite liest bei sichtbarem Tab mit gespeicherten ISINs
+Die Marktdaten-Seite liest bei aktivem Tab mit gespeicherten ISINs
 alle 30 Sekunden den freigegebenen Veröffentlichungsumfang über
 `api/market.php?view=best`. Die Seite lädt dabei nicht neu. Bei einem Lesefehler
 bleibt der letzte sichtbare Kurs erhalten und wird als nicht aktualisiert
