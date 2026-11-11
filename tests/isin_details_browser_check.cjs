@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='page-shell-1';
-for(const file of ['marktdaten.html','index.html']){
+const cacheVersion='overview-market-1';
+for(const file of ['marktdaten.html','index.html','fundamentaldaten.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
 }
@@ -8,6 +8,7 @@ for(const file of ['marktdaten.html','index.html']){
 const {E}=require('./fixtures/isin_dom.cjs');
 
 const form=new E('form'),detailsToggle=new E('button'),table=new E('tbody');
+table.dataset.isinActions='';
 const document={
   querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-table]'?[table]:[],
   querySelector:selector=>selector==='[data-isin-details-toggle]'?detailsToggle:null,
@@ -45,6 +46,7 @@ detailsToggle.events.click();
 assert.equal(detailsToggle.textContent,'Weniger anzeigen','Details toggle opens');
 assert.equal(detailsToggle.attributes['aria-expanded'],'true','Details report expanded state');
 assert.equal(table.children.length,7,'Detail view renders all quotes, errors and missing-state rows');
+assert.equal(table.children.filter(row=>row.cells[10]?.firstElementChild).length,3,'One removal control per local ISIN even in detail view');
 assert.ok(table.textContent.includes('SOURCE_TIMEOUT')&&table.textContent.includes('NO_QUOTE'),'Provider errors appear only in detail view');
 assert.ok(table.textContent.includes('Later capture only'),'All saved provider results appear in detail view');
 

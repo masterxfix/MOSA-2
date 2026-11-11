@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='page-shell-1';
-for(const file of ['marktdaten.html','index.html']){
+const cacheVersion='overview-market-1';
+for(const file of ['marktdaten.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
   assert.doesNotMatch(html,/data-isin-steps|class="isin-steps"/,file+' has no progress list');
@@ -9,11 +9,13 @@ for(const file of ['marktdaten.html','index.html']){
 
 const {E}=require('./fixtures/isin_dom.cjs');
 
-const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),clear=new E('button'),table=new E('tbody'),assetList=new E('ol');
+const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),clear=new E('button'),table=new E('tbody');
+table.dataset.isinActions='';
+const removeButtons=()=>table.children.map(row=>row.cells[10]?.firstElementChild).filter(Boolean);
 submit.type='submit';refresh.type='button';input.value='CNE100000296';
 form.map={'[data-isin-input]':input,'button[type=submit]':submit};
 const document={
-  querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-refresh]'?[refresh]:selector==='[data-isin-clear]'?[clear]:selector==='[data-isin-remove]'?assetList.children.map(item=>item.children[2]).filter(Boolean):selector==='[data-isin-list]'?[assetList]:selector==='[data-isin-table]'?[table]:[],
+  querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-refresh]'?[refresh]:selector==='[data-isin-clear]'?[clear]:selector==='[data-isin-remove]'?removeButtons():selector==='[data-isin-table]'?[table]:[],
   querySelector:()=>null,
   createElement:tag=>new E(tag),
   createDocumentFragment:()=>new E('fragment')
@@ -34,7 +36,7 @@ async function fetch(url,options){
   const body=JSON.parse(options.body);calls.push({url,body});active++;maxActive=Math.max(maxActive,active);
   assert.equal(options.method,'POST');assert.equal(body.provider,'all');
   assert.equal(refresh.disabled,true,'Refresh is disabled during an update');assert.equal(submit.disabled,true,'OK is disabled during an update');
-  assert.ok(assetList.children.every(item=>item.children[2]?.disabled===true),'Single-delete buttons are disabled during an update');
+  assert.ok(removeButtons().length && removeButtons().every(button=>button.disabled),'Single-delete buttons are disabled during an update');
   assert.equal(clear.disabled,true,'Clear-all is disabled during an update');
   await new Promise(setImmediate);active--;
   return {ok:true,body:null,json:async()=>body.isin==='AU000000DRO2'?successResult(body.isin,'DroneShield'):body.isin==='IE00BMYDM794'?failedResult(body.isin,'L&G Hydrogen Economy ETF'):successResult(body.isin,'BYD')};
@@ -56,7 +58,6 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   assert.equal(stored[0].instrument_type,'stock');
   assert.equal(stored[1].instrument_type,'etf');
   assert.ok(table.textContent.includes('Aktie')&&table.textContent.includes('ETF'),'L1 table renders the verified type labels');
-  assert.ok(assetList.textContent.includes('Aktie')&&assetList.textContent.includes('ETF'),'ISIN overview renders the verified type labels');
   const retained=stored[1].quotes.find(quote=>quote.provider==='boerse_frankfurt_trade');
   assert.equal(retained.market_at,oldEtf.market_at,'Failed refresh keeps the old market timestamp');
   assert.equal(retained.captured_at,oldEtf.captured_at,'Failed refresh keeps the old capture timestamp');
@@ -65,12 +66,12 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   assert.equal(errorStatus.textContent,'Mindestens eine Kursabfrage konnte nicht erfolgreich aktualisiert werden.');
 
   const callsBeforeDelete=calls.length;
-  const firstRemove=assetList.children[0].children[2];
-  await assetList.events.click({target:{closest:()=>firstRemove}});
+  const firstRemove=removeButtons()[0];
+  await table.events.click({target:{closest:()=>firstRemove}});
   assert.equal(calls.length,callsBeforeDelete,'Single deletion makes no provider request');
   assert.equal(JSON.parse(storage.get('mosa2-isin-lookup-v1')).length,1,'Single deletion persists the remaining list');
   assert.equal(storage.get('unrelated-key'),'keep','Single deletion leaves other LocalStorage keys untouched');
-  assert.ok(!assetList.textContent.includes('DroneShield'),'Single deletion updates the overview immediately');
+  assert.ok(!table.textContent.includes('DroneShield'),'Single deletion updates the table immediately');
 
   vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),sandbox);
   assert.equal(JSON.parse(storage.get('mosa2-isin-lookup-v1')).length,1,'Single deletion survives reload');

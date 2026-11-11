@@ -38,7 +38,7 @@
     timing.textContent = "— ms";
     timing.setAttribute("aria-label", "Seitenladezeit wird gemessen");
     timing.removeAttribute("title");
-    const modules = current === home ? [window.MosaIsinLookup] :
+    const modules = current === home ? [] :
       current.dataset.page === "market" ? [window.MosaIsinLookup, window.MosaMarket] :
       [window.MosaFundamentals];
     const sessions = modules.filter(module => module?.mount).map(module => module.mount(main));
@@ -93,7 +93,8 @@
     const started = performance.now();
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const asset = new URL("assets/main-" + next.dataset.page + ".html?v=page-shell-1", home.href);
+      const version = next.dataset.page === "fundamentals" ? "page-shell-1" : "overview-market-1";
+      const asset = new URL("assets/main-" + next.dataset.page + ".html?v=" + version, home.href);
       const response = await fetch(asset, {credentials: "same-origin", signal: controller.signal});
       if (!response.ok || response.redirected) throw Error("Main unavailable");
       const template = document.createElement("template");
@@ -106,7 +107,7 @@
       if (!traverse) history.pushState(null, "", url);
       dispose();
       document.body.classList.replace(current.dataset.page + "-page", next.dataset.page + "-page");
-      document.body.toggleAttribute("data-isin-stored-quotes", next.dataset.page !== "fundamentals");
+      document.body.toggleAttribute("data-isin-stored-quotes", next.dataset.page === "market");
       current.removeAttribute("aria-current");
       next.setAttribute("aria-current", "page");
       current = next;

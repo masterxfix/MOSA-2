@@ -156,9 +156,10 @@
   function typeLabel(entry) {return typeLabels[entry.instrument_type] || typeLabels.unknown;}
   const headings=["Wertpapier","Typ","Kurs","Währung / Einheit","Quelle / Handelsplatz","Marktzeit","Abgerufen","Datenalter","ISIN","Status"];
   function reconcileRows(tbody, rows) {
+    const actions=tbody.dataset.isinActions!==undefined;
     const existing=new Map(Array.from(tbody.children,row=>[row.dataset.isinRow,row]));
     let next=tbody.firstElementChild;
-    for(const [key,status,values] of rows){
+    for(const [key,status,values,removeIsin] of rows){
       let row=existing.get(key);
       existing.delete(key);
       if(!row){
@@ -168,13 +169,33 @@
         for(let i=0;i<values.length;i++){
           const cell=document.createElement("td");
           cell.dataset.label=key==="empty"?"ISIN":headings[i];
-          if(key==="empty")cell.colSpan=10;
+          if(key==="empty")cell.colSpan=actions?11:10;
           if(i===2)cell.className="market-price";
+          if(actions && i===headings.length-1)cell.className="isin-quote-status";
+          row.append(cell);
+        }
+        if(actions && key!=="empty"){
+          const cell=document.createElement("td");
+          cell.className="isin-row-action";
+          cell.dataset.label="Meine Liste";
           row.append(cell);
         }
       }
       if(status && row.dataset.status!==status)row.dataset.status=status;
       values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
+      if(actions && key!=="empty"){
+        const cell=row.cells[values.length], button=cell.firstElementChild;
+        if(!removeIsin)button?.remove();
+        else if(!button){
+          const remove=document.createElement("button");
+          remove.type="button";
+          remove.className="isin-delete";
+          remove.dataset.isinRemove=removeIsin;
+          remove.textContent="Entfernen";
+          remove.setAttribute("aria-label",removeIsin+" entfernen");
+          cell.append(remove);
+        }
+      }
       if(row===next)next=next.nextElementSibling;
       else tbody.insertBefore(row,next);
     }
@@ -186,21 +207,6 @@
   }
   function paint() {
     if(scope.signal.aborted)return;
-    for (const list of root.querySelectorAll("[data-isin-list]")) {
-      const fragment=document.createDocumentFragment();
-      for (const [index,entry] of entries.entries()) {
-        const quote=best(entry), li=document.createElement("li");
-        const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");
-        const link=document.createElement("a");link.href="marktdaten.html";link.textContent=entry.name || entry.isin;
-        const detail=document.createElement("small");detail.textContent=entry.isin+" · "+typeLabel(entry)+(quote ? " · "+fmtPrice(quote.price)+" "+(quote.unit||quote.currency)+" · "+quote.source+(old(quote)?" · Veraltet":"") : " · Noch kein Abruf");
-        link.append(detail);
-        const remove=document.createElement("button");remove.type="button";remove.className="isin-delete";remove.dataset.isinRemove=entry.isin;remove.textContent="Entfernen";remove.setAttribute("aria-label",entry.isin+" entfernen");
-        const arrow=document.createElement("span");arrow.textContent="↗";
-        li.append(number,link,remove,arrow);fragment.append(li);
-      }
-      if (!entries.length) {const li=document.createElement("li");li.className="isin-empty";li.textContent="Noch keine ISIN eingegeben.";fragment.append(li);}
-      list.replaceChildren(fragment);
-    }
     const number=root.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(entries.length).padStart(2,"0");
     for (const tbody of root.querySelectorAll("[data-isin-table]")) {
       const rows=[];
@@ -210,15 +216,17 @@
         .map(quote=>({isin:quote.isin,name:quote.name,quotes:[]}))];
       for(const entry of displayed){
         const main=entry.isin+":main";
+        const first=rows.length;
         if(!detailsOpen){
           const latest=best(entry);
           rows.push(latest?quoteRow(main,entry,latest,true):missingRow(main,entry));
-          continue;
+        }else{
+          const quotes=availableQuotes(entry);
+          if(!quotes.length)rows.push(missingRow(main,entry));
+          for(const quote of quotes)rows.push(quoteRow(entry.isin+":quote:"+quote.provider,entry,quote,false));
+          for(const error of entry.errors||[])rows.push(errorRow(entry,error));
         }
-        const quotes=availableQuotes(entry);
-        if(!quotes.length)rows.push(missingRow(main,entry));
-        for(const quote of quotes)rows.push(quoteRow(entry.isin+":quote:"+quote.provider,entry,quote,false));
-        for(const error of entry.errors||[])rows.push(errorRow(entry,error));
+        if(ownIsins.has(entry.isin))rows[first][3]=entry.isin;
       }
       if(!rows.length)rows.push(["empty",null,["Noch keine ISIN eingegeben."]]);
       reconcileRows(tbody,rows);
@@ -427,7 +435,7 @@
   }
   for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);},listeners);
   for(const button of root.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",refreshAll,listeners);
-  for(const list of root.querySelectorAll("[data-isin-list]")) list.addEventListener("click",event=>{
+  for(const table of root.querySelectorAll("[data-isin-table]")) table.addEventListener("click",event=>{
     const button=event.target.closest("[data-isin-remove]");
     if(button) removeEntry(button.dataset.isinRemove);
   },listeners);

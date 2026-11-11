@@ -105,7 +105,7 @@ class FundamentalsWebTests(unittest.TestCase):
         self.assertIn('data-fundamentals-view', page)
         self.assertIn('href="fundamentaldaten.html"', homepage)
         self.assertIn('window.MosaFundamentals', navigation)
-        self.assertIn('Fundamentaldaten entdecken', homepage)
+        self.assertIn('href="fundamentaldaten.html" data-page="fundamentals"', homepage)
         self.assertNotRegex(page + navigation + homepage, r'password|secret|token|m2_entities|configcenter|/var/')
 
 

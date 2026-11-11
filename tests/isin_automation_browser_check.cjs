@@ -9,12 +9,13 @@ const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Trade
   observed_at:'2026-11-08 11:59:10.000000Z',status:'stored'});
 const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
 const flush=()=>new Promise(setImmediate);
-function harness({market=true,entries=initial,lifecycle=false}={}){
+function harness({market=true,entries=initial,lifecycle=false,actions=false}={}){
   let ms=0,timerId=0,http=200,items=stored,hold=false,release,active=0,maxActive=0,writes=0,focused=true;
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
   const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
   const table=new E('tbody'),details=new E('button'),root=new E('body'),summary=new E('span');
+  if(actions)table.dataset.isinActions='';
   const error=new E('p');error.hidden=true;
   form.parentElement={querySelector:selector=>selector==='[data-isin-error]'?error:null};
   form.map={'[data-isin-input]':input,'button[type=submit]':submit};
@@ -153,5 +154,13 @@ function harness({market=true,entries=initial,lifecycle=false}={}){
   assert.equal(scoped.calls.length,3,'A new visit starts a single 30-second polling loop');
   secondVisit.dispose();
   assert.equal(scoped.writes,0,'Mounting and leaving views does not change stored ISINs');
+  const mixed=harness({entries:[initial[0]],actions:true});await flush();
+  assert.equal(mixed.table.children.length,2,'Database-only results still appear in the same table');
+  const owned=mixed.table.children[0].cells[10].firstElementChild;
+  assert.equal(owned.dataset.isinRemove,a);
+  assert.equal(mixed.table.children[1].cells[10].firstElementChild,null,'Database-only rows cannot be removed');
+  mixed.table.events.click({target:{closest:()=>owned}});
+  assert.equal(mixed.table.children.length,2,'Removing a local ISIN does not remove its database quote');
+  assert.equal(mixed.table.children[0].cells[10].firstElementChild,null);
   console.log('PASS stored-only poll: 30 s, keyed cells, visible tabs, recovery, no overlap, manual source requests');
 })().catch(error=>{console.error(error);process.exitCode=1;});

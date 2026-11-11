@@ -7,14 +7,14 @@
   <meta name="description" content="MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Projektziel, geprüfte Ergebnisse und nächste Entwicklungsschritte.">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Projektüberblick</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=sticky-header-3">
+  <link rel="stylesheet" href="assets/css/main.css?v=overview-market-1">
   <script src="assets/js/codex_status.js?v=20261110" defer></script>
   <script src="assets/js/market.js?v=page-shell-1" defer></script>
-  <script src="assets/js/isin_quotes.js?v=page-shell-1" defer></script>
+  <script src="assets/js/isin_quotes.js?v=overview-market-1" defer></script>
   <script src="assets/js/fundamentals.js?v=page-shell-1" defer></script>
-  <script src="assets/js/navigation.js?v=sticky-header-3" defer></script>
+  <script src="assets/js/navigation.js?v=overview-market-1" defer></script>
 </head>
-<body data-isin-stored-quotes class="overview-page" data-site-shell>
+<body class="overview-page" data-site-shell>
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
   <header>
     <div class="topbar wrap">
@@ -32,39 +32,21 @@
     </nav>
   </header>
   <main id="inhalt" class="wrap">
-    <section class="hero home-hero" aria-labelledby="projekt-titel">
-      <div class="hero-copy"><p class="eyebrow">Persönliche Finanzdaten · MOSA 2</p>
-        <h1 id="projekt-titel">Finanzdaten.<br><em>Mit Zusammenhang.</em></h1>
-        <p class="intro">Eine gemeinsame Grundlage für Ihre Finanzwelt. Klare Daten, belegbare Herkunft und eine Perspektive auf das Ganze.</p>
-        <a class="primary-link" href="marktdaten.html">Marktdaten entdecken <span aria-hidden="true">↗</span></a>
-        <a class="text-link home-fundamentals-link" href="fundamentaldaten.html">Fundamentaldaten entdecken <span aria-hidden="true">↗</span></a>
-      </div>
-      <aside class="hero-aside" aria-label="Der aktuelle Umfang"><p class="eyebrow">Im Blick</p>
-        <p class="hero-number" data-isin-count>00<span>Eingegebene ISINs</span></p>
-        <p>Jeder Kurs mit Quelle und Zeitstempel.<br>Jeder Datenstand nachvollziehbar.</p>
-        <span class="quiet-label">Kursabruf nur nach Klick auf OK</span>
-      </aside>
+    <section class="hero overview-developed" aria-labelledby="projekt-titel">
+      <p class="eyebrow">Projektüberblick · MOSA 2</p>
+      <h1 id="projekt-titel">Was wir bisher<br><em>entwickelt haben.</em></h1>
+      <dl class="overview-status">
+        <div><dt>Datenbank</dt><dd>Schema 6 und die grundlegende Datenbankarchitektur sind vorbereitet. Das Schema beschreibt die Struktur, nicht den Bestand an gespeicherten Markt- und Fundamentaldaten.</dd></div>
+        <div><dt>Codex</dt><dd>Die Aktivitätsanbindung ist integriert. Das Symbol im Header zeigt den Live-Status aus der bestehenden Codex-Anbindung.</dd></div>
+        <div><dt>Seitenarchitektur</dt><dd>Header und Footer bleiben beim Seitenwechsel geladen. Nur der Hauptinhalt wechselt; der Header bleibt beim Scrollen sichtbar.</dd></div>
+        <div><dt>Markt- und Fundamentaldaten</dt><dd>Quellenabfragen und Ansichten für Kurse und Berichtskennzahlen sind entwickelt. Im aktiven Marktdaten-Tab wird alle 30 Sekunden nach neuen gespeicherten Kursen gesucht.</dd></div>
+      </dl>
     </section>
-    <section class="market-entry" aria-labelledby="markt-einstieg">
-      <div class="section-copy"><p class="eyebrow" id="markt-einstieg">01 / Marktdaten</p>
-        <a class="text-link" href="marktdaten.html#observations-titel">Meine ISINs ansehen <span aria-hidden="true">→</span></a>
-        <form class="isin-form" data-isin-form autocomplete="off">
-          <label for="isin-home">ISIN eingeben</label>
-        <div class="isin-form-row"><input id="isin-home" data-isin-input name="isin" type="text" maxlength="12" minlength="12" pattern="[A-Za-z]{2}[A-Za-z0-9]{9}[0-9]" placeholder="z. B. DE0005313704" spellcheck="false" required><button type="submit">OK</button></div>
-        </form>
-        <p class="context-note" data-isin-error role="status" hidden></p>
-      </div><ol class="asset-index" data-isin-list aria-label="Meine eingegebenen ISINs"></ol>
-      <div class="isin-list-actions"><button type="button" class="isin-delete-all" data-isin-clear>Alle ISINs löschen</button></div>
-    </section>
-    <section class="progress-section" aria-labelledby="entwicklung-titel">
-      <div class="section-heading"><div><p class="eyebrow">Schritt für Schritt</p><h2 id="entwicklung-titel">Unser Entwicklungsweg</h2></div></div>
-      <ol class="progress">
-        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
-        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Einzel- und Drei-Aktien-Livetest bestätigt</p></li>
-      </ol>
-      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Weitere einzeln freigegebene Asset- und Live-Datenübernahmen</li><li>Breitere MOSA-Datenmigration</li><li>Weitere Freigaben für Current-Routen</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Freigabe des automatischen Regelbetriebs</li><li>Produktivfreigabe</li></ul></aside>
+    <section class="overview-milestone" aria-labelledby="nova-meilenstein">
+      <p class="eyebrow">Nächster Meilenstein</p>
+      <h2 id="nova-meilenstein">NOVA-Anbindung</h2>
+      <p>Die in MOSA bewährte NOVA-Anbindung soll in die gemeinsame M2-Architektur integriert werden: zuerst Verbindung, Präsenz und Arbeitsstatus, danach die fachliche Nutzung.</p>
+      <p class="quiet-label">In MOSA 2 noch nicht funktional angebunden.</p>
     </section>
   </main>
   <footer class="wrap footer">

@@ -1,7 +1,15 @@
   <main id="inhalt" class="wrap">
-    <section class="hero" aria-labelledby="markt-titel">
-      <div class="eyebrow">Der gespeicherte Marktstand · MOSA 2</div>
-      <h1 id="markt-titel">Marktdaten.<br><em>Mit Herkunft.</em></h1>
+    <section class="hero home-hero market-hero" aria-labelledby="markt-titel">
+      <div class="hero-copy">
+        <p class="eyebrow">Der gespeicherte Marktstand · MOSA 2</p>
+        <h1 id="markt-titel">Marktdaten.<br><em>Mit Herkunft.</em></h1>
+      </div>
+      <aside class="hero-aside" aria-label="Im Blick">
+        <p class="eyebrow">Im Blick</p>
+        <p class="hero-number" data-isin-count>00<span>Eingegebene ISINs</span></p>
+        <p>Jeder Kurs mit Quelle und Zeitstempel.<br>Jeder Datenstand nachvollziehbar.</p>
+        <span class="quiet-label">Quellenabruf über OK oder Aktualisieren</span>
+      </aside>
     </section>
 
     <section class="market-section observation-section" aria-labelledby="observations-titel" data-isin-market-view>
@@ -17,10 +25,11 @@
       <div class="observation-table-wrap" aria-busy="false" data-observation-region>
         <table class="market-table observation-table">
           <caption class="visually-hidden">Von Ihnen abgefragte Wertpapiere mit Typ, Kursart, Quelle, Marktzeit und Abrufzeit</caption>
-          <thead><tr><th scope="col">Wertpapier</th><th scope="col">Typ</th><th scope="col">Kurs</th><th scope="col">Währung / Einheit</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Marktzeitpunkt</th><th scope="col">Erfasst</th><th scope="col">Datenalter</th><th scope="col">ISIN</th><th scope="col">Datenstatus</th></tr></thead>
-          <tbody data-isin-table><tr><td colspan="10">Noch keine ISIN eingegeben.</td></tr></tbody>
+          <thead><tr><th scope="col">Wertpapier</th><th scope="col">Typ</th><th scope="col">Kurs</th><th scope="col">Währung / Einheit</th><th scope="col">Quelle / Handelsplatz</th><th scope="col">Marktzeitpunkt</th><th scope="col">Erfasst</th><th scope="col">Datenalter</th><th scope="col">ISIN</th><th scope="col">Datenstatus</th><th scope="col">Meine Liste</th></tr></thead>
+          <tbody data-isin-table data-isin-actions><tr><td colspan="11">Noch keine ISIN eingegeben.</td></tr></tbody>
         </table>
       </div>
+      <div class="isin-list-actions"><button type="button" class="isin-delete-all" data-isin-clear disabled>Alle ISINs löschen</button></div>
       <noscript><p>Für die ISIN-Abfrage bitte JavaScript aktivieren.</p></noscript>
     </section>
   </main>
