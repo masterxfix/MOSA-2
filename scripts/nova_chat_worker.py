@@ -11,7 +11,8 @@ import time
 import urllib.error
 import urllib.request
 
-ENDPOINT = "https://mosa2-test.scharwerk.de/api/nova_chat.php"
+ENDPOINT = "https://mosa2-test.scharwerk.de/api/nova-transport/worker.php"
+WORKER_USER = "mosa2-nova-worker"
 VERSION = "mosa2_nova_chat_v1"
 CONFIG = Path.home() / ".config" / "mosa2-nova-chat.json"
 TEXT_INFERENCE = """
@@ -34,8 +35,8 @@ def credentials():
     if CONFIG.is_symlink() or CONFIG.stat().st_mode & 0o077:
         raise ValueError("Private M2 transport configuration required")
     config = json.loads(CONFIG.read_text(encoding="utf-8"))
-    if not re.fullmatch(r"[0-9a-f]{64}", config["worker_token"]):
-        raise ValueError("Invalid worker token")
+    if config["basic_user"] != WORKER_USER or not re.fullmatch(r"[0-9a-f]{64}", config["worker_token"]):
+        raise ValueError("A dedicated NOVA service account and token are required")
     basic = base64.b64encode(
         (config["basic_user"] + ":" + config["basic_password"]).encode()
     ).decode()

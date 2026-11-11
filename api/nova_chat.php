@@ -17,7 +17,8 @@ function reply(int $status, array $body = []): never
     exit;
 }
 
-if (!trustedSite($_SERVER)) reply(403);
+$isWorker = defined('MOSA2_NOVA_WORKER_ROUTE') && MOSA2_NOVA_WORKER_ROUTE;
+if (!trustedChatRoute($_SERVER, $isWorker)) reply(403);
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 if (!in_array($method, ['GET', 'POST'], true)) {
     header('Allow: GET, POST');
@@ -26,10 +27,10 @@ if (!in_array($method, ['GET', 'POST'], true)) {
 
 $directory = privateDirectory();
 $token = $_SERVER['HTTP_X_M2_NOVA_WORKER'] ?? null;
-$isWorker = $token !== null;
 try {
-    if ($isWorker && ($method !== 'POST' || isset($_SERVER['HTTP_ORIGIN'])
+    if ($isWorker && (!is_string($token) || $method !== 'POST' || isset($_SERVER['HTTP_ORIGIN'])
         || preg_match('/\A[0-9a-f]{64}\z/', $token) !== 1)) reply(403);
+    if (!$isWorker && $token !== null) reply(403);
     if (!$isWorker && $method === 'POST' && ($_SERVER['HTTP_ORIGIN'] ?? '') !== ORIGIN) reply(403);
     $digest = workerDigest($directory);
     if ($digest === null) reply(503);

@@ -187,7 +187,7 @@ def main():
     files = selected_files(os.environ.get("MOSA_TEST_SFTP_FILES", "[]")) if args.operation in ('backup','deploy') else None
     nova_digest = os.environ.get("MOSA_TEST_NOVA_WORKER_SHA256", "")
     if nova_digest and (args.operation != "deploy" or re.fullmatch(r"[0-9a-f]{64}", nova_digest) is None
-            or "api/nova_chat.php" not in dict(files or [])):
+            or "api/nova-transport/worker.php" not in dict(files or [])):
         raise ValueError("NOVA verifier provisioning requires the NOVA chat testsite deployment")
     execute(config, args.operation, files, nova_digest)
 

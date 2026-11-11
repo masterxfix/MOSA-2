@@ -6,6 +6,7 @@ namespace Mosa2\NovaChat;
 const VERSION = 'mosa2_nova_chat_v1';
 const ORIGIN = 'https://mosa2-test.scharwerk.de';
 const HOST = 'mosa2-test.scharwerk.de';
+const WORKER_USER = 'mosa2-nova-worker';
 const FRESH = 20;
 const MAX_RUN = 100;
 const MAX_BYTES = 262144;
@@ -21,6 +22,11 @@ function trustedSite(array $server): bool
         && ($server['SERVER_NAME'] ?? '') === HOST
         && ($server['HTTPS'] ?? '') === 'on'
         && is_string($server['REMOTE_USER'] ?? null) && $server['REMOTE_USER'] !== '';
+}
+
+function trustedChatRoute(array $server, bool $workerRoute): bool
+{
+    return trustedSite($server) && (($server['REMOTE_USER'] === WORKER_USER) === $workerRoute);
 }
 
 function workerDigest(string $directory): ?string

@@ -14,6 +14,10 @@ $server = ['HTTP_HOST' => HOST, 'SERVER_NAME' => HOST, 'HTTPS' => 'on', 'REMOTE_
 check(trustedSite($server), 'Authenticated testsite');
 check(!trustedSite(array_diff_key($server, ['REMOTE_USER' => true])), 'Missing authenticated user');
 check(!trustedSite(['HTTP_HOST' => 'scharwerk.de'] + $server), 'Production host denied');
+$workerServer = ['REMOTE_USER' => WORKER_USER] + $server;
+check(trustedChatRoute($workerServer, true), 'Dedicated worker on worker route');
+check(!trustedChatRoute($workerServer, false), 'Dedicated worker denied on browser route');
+check(!trustedChatRoute($server, true), 'Browser credentials denied on worker route');
 $now = 1000;
 $data = ['seen' => 0, 'chats' => []];
 $request = ['id' => str_repeat('a', 32), 'text' => 'Wie funktioniert ein Test?'];
