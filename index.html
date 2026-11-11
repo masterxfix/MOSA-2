@@ -29,14 +29,13 @@
         <a class="text-link home-fundamentals-link" href="fundamentaldaten.html">Fundamentaldaten entdecken <span aria-hidden="true">↗</span></a>
       </div>
       <aside class="hero-aside" aria-label="Der aktuelle Umfang"><p class="eyebrow">Im Blick</p>
-        <p class="hero-number" data-isin-count>00<span>Browserlokale ISINs</span></p>
-        <p>Ihre Eingaben und Kursabfragen bleiben in diesem Browser.<br>Sie sind kein M2-Datenbankbestand.</p>
+        <p class="hero-number" data-isin-count>00<span>Eingegebene ISINs</span></p>
+        <p>Jeder Kurs mit Quelle und Zeitstempel.<br>Jeder Datenstand nachvollziehbar.</p>
         <span class="quiet-label">Kursabruf nur nach Klick auf OK</span>
       </aside>
     </section>
     <section class="market-entry" aria-labelledby="markt-einstieg">
-      <div class="section-copy"><p class="eyebrow" id="markt-einstieg">01 / Marktdaten</p><h2>Ihre Abfragen.<br>Getrennt vom DB-Bestand.</h2>
-        <p>ISIN eingeben und mit OK eine Kursabfrage starten. Die bestehende Wertpapierliste zeigt die browserlokal gespeicherten Abfragen; gespeicherte M2-Werte werden getrennt in der Read-only-Marktdatenansicht angezeigt.</p>
+      <div class="section-copy"><p class="eyebrow" id="markt-einstieg">01 / Marktdaten</p>
         <a class="text-link" href="marktdaten.html#observations-titel">Meine ISINs ansehen <span aria-hidden="true">→</span></a>
         <form class="isin-form" data-isin-form autocomplete="off">
           <label for="isin-home">ISIN eingeben</label>
@@ -46,20 +45,15 @@
       </div><ol class="asset-index" data-isin-list aria-label="Meine eingegebenen ISINs"></ol>
       <div class="isin-list-actions"><button type="button" class="isin-delete-all" data-isin-clear>Alle ISINs löschen</button></div>
     </section>
-    <section class="current-state-section" aria-labelledby="aktueller-stand-titel">
-      <div class="section-heading"><div><p class="eyebrow">02 / Aktueller M2-Stand</p><h2 id="aktueller-stand-titel">Schema 6.<br>Der Fachbestand ist zurückgesetzt.</h2></div><p class="snapshot">Reset bestätigt<br><time datetime="2026-11-10">10. November 2026</time></p></div>
-      <div class="current-state-list">
-        <article class="current-state-row"><h3>Datenbank</h3><p>Schema 6 ist strukturell bestätigt: 26 InnoDB-Tabellen, davon 25 Fachtabellen nach dem kontrollierten Reset leer; das Migrationsledger 0001–0006 bleibt erhalten.</p><span class="status-label">Struktur bestätigt</span></article>
-        <article class="current-state-row"><h3>Marktdaten</h3><p>Der bestehende Read-only-Reader meldet am 11.11.2026 keinen gespeicherten Datenbankbestand. Die browserlokale ISIN-Liste bleibt davon unabhängig und wird nicht in die Datenbank übernommen.</p><span class="status-label">DB-Reader: 0 Einträge</span></article>
-        <article class="current-state-row"><h3>Fundamentaldaten · NEL-Pilot</h3><p>Der NEL-Pilot war vor dem Reset read-only und mit Herkunftsnachweisen bestätigt. Nach dem Reset sind aktuell keine NEL- oder sonstigen Fundamentaldaten gespeichert; fehlende Werte bleiben ausdrücklich nicht verfügbar.</p><span class="status-label">Aktueller Bestand: nicht verfügbar</span></article>
-        <article class="current-state-row"><h3>Historische Berichte</h3><p>Historische Berichtsabfragen und offizielle Finanzbericht-Links bleiben im Fundamentaldaten-Modul hinterlegt. Die Testsite startet daraus keinen automatischen Import; der aktuelle Datenbestand wird read-only angezeigt.</p><a class="text-link" href="fundamentaldaten.html">Fundamentaldaten öffnen <span aria-hidden="true">→</span></a></article>
-        <article class="current-state-row"><h3>Codex-Anbindung</h3><p>Die bestehende Anzeige liest den autorisierten Codex-Status weiter in den drei Zuständen „läuft“, „inaktiv“ und „nicht verfügbar“. Es gibt keinen zweiten Statusweg auf der Startseite.</p><span class="status-label status-label-success">Funktionsfähig</span></article>
-      </div>
-      <p class="context-note">Die Zahlen des aktuellen Bestands kommen aus den vorhandenen Read-only-Ansichten. Kursabfragen im Browser und tatsächlich in M2 gespeicherte Werte bleiben getrennt.</p>
-    </section>
-    <section class="next-step" aria-labelledby="naechstes-ziel">
-      <div class="next-copy"><p class="eyebrow">03 / Nächster Integrationsschritt</p><h2 id="naechstes-ziel">NOVA folgt.<br><em>Noch nicht angebunden.</em></h2></div>
-      <p class="intro">NOVA ist als nächste Integrationsstufe vorgemerkt. Eine technische Anbindung oder produktive Nutzung in MOSA 2 besteht am 11.11.2026 noch nicht.</p>
+    <section class="progress-section" aria-labelledby="entwicklung-titel">
+      <div class="section-heading"><div><p class="eyebrow">Schritt für Schritt</p><h2 id="entwicklung-titel">Unser Entwicklungsweg</h2></div></div>
+      <ol class="progress">
+        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 1</p><h3>Plattform &amp; Datenbank</h3><p class="step-state">Abgeschlossen</p></li>
+        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 2</p><h3>Core &amp; Identität</h3><p class="step-state">Abgeschlossen</p></li>
+        <li class="complete"><span class="step-marker" aria-hidden="true">✓</span><p class="step-label">Phase 3</p><h3>Marktdaten-Grundschicht</h3><p class="step-state">Abgeschlossen</p></li>
+        <li class="upcoming"><span class="step-marker" aria-hidden="true">04</span><p class="step-label">Phase 4</p><h3>Collector &amp; Datenübernahme</h3><p class="step-state">Einzel- und Drei-Aktien-Livetest bestätigt</p></li>
+      </ol>
+      <aside class="not-started" aria-labelledby="offen-titel"><h3 id="offen-titel">Noch offen</h3><ul><li>Weitere einzeln freigegebene Asset- und Live-Datenübernahmen</li><li>Breitere MOSA-Datenmigration</li><li>Weitere Freigaben für Current-Routen</li><li>Bars-Import</li><li>Depotdaten</li><li>News</li><li>KI-Auswertung auf MOSA-2-Daten</li><li>Freigabe des automatischen Regelbetriebs</li><li>Produktivfreigabe</li></ul></aside>
     </section>
   </main>
   <footer class="wrap footer">
