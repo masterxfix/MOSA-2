@@ -5,15 +5,15 @@
   if (!root) return;
   const state = { items: [], selected: null, jobs: new Map() };
   const officialReports = new Map([
-    ["AU000000DRO2", "https://www.droneshield.com/investor-relations"],
-    ["CNE100000296", "https://www.bydglobal.com/cn/investor-relations"],
-    ["CNE100006CQ4", "https://www.ubtrobot.com/en/financial"],
-    ["DE0005313704", "https://www.zeiss.com/meditec-ag/de/investor-relations/finanzpublikationen.html"],
-    ["DE000A0JBPG2", "https://www.pnegroup.com/en/investor-relations/publications/"],
-    ["DK0060252690", "https://www.pandoragroup.com/investor/reports-and-presentations"],
-    ["NO0010081235", "https://nelhydrogen.com/reports-and-presentations/"],
-    ["US67066G1040", "https://investor.nvidia.com/financial-info/financial-reports/"],
-    ["US76655K1034", "https://investors.rigetti.com/financial-information/quarterly-results"]
+    ["AU000000DRO2", {url: "https://www.droneshield.com/investor-relations", origin: "Manuell"}],
+    ["CNE100000296", {url: "https://www.bydglobal.com/cn/investor-relations", origin: "Manuell"}],
+    ["CNE100006CQ4", {url: "https://www.ubtrobot.com/en/financial", origin: "Manuell"}],
+    ["DE0005313704", {url: "https://www.zeiss.com/meditec-ag/de/investor-relations/finanzpublikationen.html", origin: "Manuell"}],
+    ["DE000A0JBPG2", {url: "https://www.pnegroup.com/en/investor-relations/publications/", origin: "Manuell"}],
+    ["DK0060252690", {url: "https://www.pandoragroup.com/investor/reports-and-presentations", origin: "Manuell"}],
+    ["NO0010081235", {url: "https://nelhydrogen.com/reports-and-presentations/", origin: "Manuell"}],
+    ["US67066G1040", {url: "https://investor.nvidia.com/financial-info/financial-reports/", origin: "Manuell"}],
+    ["US76655K1034", {url: "https://investors.rigetti.com/financial-information/quarterly-results", origin: "Manuell"}]
   ]);
   const elements = {
     assets: root.querySelector("[data-fundamental-assets]"),
@@ -109,13 +109,15 @@
     const identity = document.createElement("p");
     identity.className = "fundamental-identity";
     identity.textContent = "ISIN " + item.isin + " · " + item.observations.length + " Observations · " + item.current.length + " Current";
-    const reportsUrl = officialReports.get(item.isin);
-    if (reportsUrl) {
+    const reportSource = officialReports.get(item.isin);
+    if (reportSource) {
       const link = document.createElement("a");
-      link.href = reportsUrl;
+      link.href = reportSource.url;
       link.textContent = "Offizielle Finanzberichte";
+      const origin = document.createElement("small");
+      origin.textContent = " · " + reportSource.origin;
       identity.textContent += " · ";
-      identity.append(link);
+      identity.append(link, origin);
     }
     header.append(identity);
     const timing = document.createElement("p");timing.className = "fundamental-capture";const latest = item.observations.map((row) => row.captured_at).sort().at(-1);timing.textContent = "Erfasst bis " + date(latest) + ". Gespeicherter Datenbankstand, kein Live-Abruf.";header.append(timing);fragment.append(header);
