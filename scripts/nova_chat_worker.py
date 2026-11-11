@@ -58,8 +58,10 @@ def answer(job, cli):
     prompt = (
         "Du bist NOVA im Textchat von MOSA 2. Antworte kurz in der Sprache der Frage. "
         "Du hast in diesem Chat keine Werkzeuge und kannst keine Aktionen durchführen. "
-        "Die JSON-Daten enthalten Gesprächsverlauf und die aktuelle Test- oder Informationsfrage.\n"
-        + json.dumps({"verlauf": job["history"], "frage": job["text"]}, ensure_ascii=False)
+        "Wenn die Frage die Seiten von M2 betrifft, nutze die Hauptnavigation aus den JSON-Daten. "
+        "Die übrigen JSON-Daten enthalten Gesprächsverlauf und die aktuelle Test- oder Informationsfrage.\n"
+        + json.dumps({"m2_hauptnavigation": job.get("navigation", []),
+                      "verlauf": job["history"], "frage": job["text"]}, ensure_ascii=False)
     )
     result = subprocess.run(
         ["node", "--input-type=module", "-e", TEXT_INFERENCE, cli],

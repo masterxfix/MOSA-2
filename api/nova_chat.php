@@ -52,6 +52,10 @@ try {
         [$status, $result] = transaction($directory, static function (array &$data, int $now) use ($request): array {
             return worker($data, $request, $now);
         });
+        if (isset($result['job'])) {
+            $homepage = @file_get_contents(dirname(__DIR__).'/index.html', false, null, 0, 32768);
+            $result['job']['navigation'] = is_string($homepage) ? navigationLabels($homepage) : [];
+        }
         reply($status, $result);
     }
 

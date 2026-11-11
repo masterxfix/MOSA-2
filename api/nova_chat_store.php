@@ -113,9 +113,19 @@ function running(array $data, int $now): bool
 function acceptsText(mixed $text): bool
 {
     if (!is_string($text) || strlen($text) > 1000 || preg_match('/[\x00-\x08\x0b-\x1f\x7f]/', $text)) return false;
+    $greeting = '(?:hallo|hi|hey|moin|servus|guten (?:morgen|tag|abend))(?:[ \t]+nova)?';
+    if (preg_match('/\A'.$greeting.'[.!]?\z/iu', $text) === 1) return true;
+    $question = preg_replace('/\A'.$greeting.'(?:[ \t]*[,!:][ \t\n]*|[ \t\n]+)/iu', '', $text, 1);
     // Test greetings and informational questions only. The worker additionally has no tools.
-    return preg_match('/\A(?:hallo(?: nova)?[.!]?|(?:test|ping)(?: [\p{L}\p{N}_ -]{1,60})?[.!]?|'
-        .'(?:was|wer|wie|warum|wann|wo|woher|wozu|welch\p{L}*|wieviel|what|who|when|why|where|how|which)\b[^<>]{1,999}\?)\z/iu', $text) === 1;
+    return $question !== null && preg_match('/\A(?:(?:test|ping)(?: [\p{L}\p{N}_ -]{1,60})?[.!]?|'
+        .'(?:was|wer|wie|warum|wann|wo|woher|wozu|welch\p{L}*|wieviele?|what|who|when|why|where|how|which)\b[^<>]{1,999}\?)\z/iu', $question) === 1;
+}
+
+function navigationLabels(string $html): array
+{
+    if (preg_match('/<nav\b[^>]*\bdata-site-nav\b[^>]*>(.*?)<\/nav>/is', $html, $nav) !== 1) return [];
+    preg_match_all('/<a\b[^>]*\bdata-page="[^"]+"[^>]*>([^<]+)<\/a>/i', $nav[1], $links);
+    return array_map(static fn(string $label): string => html_entity_decode(trim($label), ENT_QUOTES, 'UTF-8'), $links[1]);
 }
 
 function browserView(array $data, string $owner, int $now, string $csrf): array
