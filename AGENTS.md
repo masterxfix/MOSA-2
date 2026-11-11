@@ -19,6 +19,7 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 6. **Laufwerk E: ist tabu:** ChatGPT und Codex dürfen `E:` niemals lesen, öffnen, aufrufen oder prüfen – auch nicht, wenn es entsperrt ist. Werkzeuge, die darauf zugreifen würden, nicht starten.
 7. **Übersichtlich anzeigen:** In Übersichten die letzten brauchbaren Informationen zuerst zeigen; weitere Details nur bei Bedarf und veraltete Daten klar kennzeichnen.
 8. **MOSA 2 – keine unnötigen Freigaben:** Wenn ich einen MOSA-2-Auftrag erteile, erledigen ChatGPT und Codex ihn selbstständig bis zum funktionierenden, geprüften Ergebnis. Für Code, Tests, Deployments, Plesk und normale Chrome-Browsersteuerung braucht ihr mich nicht erneut zu fragen. **Nur bevor Codex meinen gesamten PC steuert, muss es mich ausdrücklich fragen und mein Ja abwarten.** Laufwerk `E:` bleibt tabu; keine Zugangsdaten offenlegen und keine fremden Produktivsysteme ändern.
+9. **Codex-Aufträge für MOSA 2 kennzeichnen:** Jeder an Codex gerichtete Auftrag für MOSA 2 beginnt **unmittelbar am Anfang des Auftragstextes** mit dem exakten Präfix `Auftrag-M2:`. Keine Überschrift, Einleitung oder andere Zeichen davor setzen. Das Kennzeichen unterscheidet M2-Aufträge eindeutig; es ändert keine bestehenden Sicherheits-, Freigabe- oder Abnahmeregeln.
 
 ### ChatGPT
 - **Fakten statt Annahmen:** ChatGPT beantwortet Nutzerfragen mit überprüften Fakten; Unbekanntes oder nicht Verifiziertes wird ausdrücklich als solches benannt und niemals als Tatsache dargestellt.
