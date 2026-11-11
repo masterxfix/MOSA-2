@@ -62,8 +62,8 @@ if ($Mode -eq 'Prepare') {
     } finally { $m2Rsa.Dispose() }
 } else {
     if (!(Test-Path -LiteralPath $m2SecretFile)) { throw 'No private worker credentials.' }
-    $m2Python = (Get-Command python.exe -CommandType Application).Source
-    $m2Cli = (Get-Command codex.exe -CommandType Application).Source
+    $m2Python = (Get-Command python.exe -CommandType Application | Select-Object -First 1).Source
+    $m2Cli = (Get-Command codex.exe -CommandType Application | Select-Object -First 1).Source
     $m2Worker = Join-Path $m2Dir 'codex_chat_worker.py'
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'codex_chat_worker.py') -Destination $m2Worker
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'nova_chat_worker.py') -Destination $m2Dir
