@@ -62,6 +62,8 @@ def answer(job, cli):
     result = subprocess.run(
         ["node", "--input-type=module", "-e", TEXT_INFERENCE, cli],
         input=prompt, text=True, encoding="utf-8", capture_output=True, timeout=75, check=True,
+        # Keep the prompt in this process. A launcher restart would inherit consumed stdin.
+        env={**os.environ, "NODE_DISABLE_COMPILE_CACHE": "1", "OPENCLAW_NO_RESPAWN": "1"},
     )
     envelope = json.loads(result.stdout)
     if envelope.get("ok") is not True or envelope.get("transport") != "local":
