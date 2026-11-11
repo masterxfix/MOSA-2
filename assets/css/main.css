@@ -104,7 +104,7 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
   inset: calc(50% + 22px) auto auto 50%;
   transform: translateX(-50%);
   z-index: 1;
-  width: min(380px, calc(100vw - 32px));
+  width: min(760px, calc(100vw - 32px));
   max-height: min(510px, calc(100dvh - 100px));
   margin: 0;
   padding: 14px;
