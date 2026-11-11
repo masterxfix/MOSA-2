@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Mosa2\NovaChat;
 
+if (($argv[1] ?? '') === 'codex') define('MOSA2_CODEX_CHAT_ROUTE', true);
 require __DIR__.'/../api/nova_chat_store.php';
 
 function check(bool $value, string $label): void
@@ -14,7 +15,10 @@ $server = ['HTTP_HOST' => HOST, 'SERVER_NAME' => HOST, 'HTTPS' => 'on', 'REMOTE_
 check(trustedSite($server), 'Authenticated testsite');
 check(!trustedSite(array_diff_key($server, ['REMOTE_USER' => true])), 'Missing authenticated user');
 check(!trustedSite(['HTTP_HOST' => 'scharwerk.de'] + $server), 'Production host denied');
-$workerServer = ['REMOTE_USER' => WORKER_USER] + $server;
+$workerServer = ['REMOTE_USER' => chatName() === 'Codex' ? CODEX_WORKER_USER : WORKER_USER] + $server;
+$otherWorker = ['REMOTE_USER' => chatName() === 'Codex' ? WORKER_USER : CODEX_WORKER_USER] + $server;
+check(!trustedChatRoute($otherWorker, true) && !trustedChatRoute($otherWorker, false), 'Other agent worker denied');
+check(str_ends_with(privateDirectory(), '/mosa2-'.strtolower(chatName()).'-chat-private'), 'Agent has private storage');
 check(trustedChatRoute($workerServer, true), 'Dedicated worker on worker route');
 check(!trustedChatRoute($workerServer, false), 'Dedicated worker denied on browser route');
 check(!trustedChatRoute($server, true), 'Browser credentials denied on worker route');
@@ -47,6 +51,11 @@ check(browserView($data, 'b', $now, 'csrf')['messages'] === [], 'Other session c
 [, $claim] = worker($data, ['action' => 'claim'], $now);
 check($claim['job']['text'] === $request['text'], 'Worker receives original request');
 check(running($data, $now), 'Activity reported for claimed request');
+if (chatName() === 'Codex') {
+    check(!browserView($data, 'a', $now + FRESH, 'csrf')['connected'], 'Stale connection during work is unavailable');
+    check(worker($data, ['action' => 'heartbeat'], $now + FRESH)[0] === 200, 'Worker can refresh connectivity');
+    check(browserView($data, 'a', $now + FRESH, 'csrf')['connected'], 'Fresh heartbeat during work');
+}
 check(worker($data, ['action' => 'claim'], $now)[1]['job'] === null, 'Duplicate claim denied');
 $completion = ['action' => 'complete', 'id' => $request['id'], 'lease' => $claim['job']['lease'],
     'ok' => true, 'reply' => 'Testantwort'];
@@ -79,4 +88,4 @@ $fullChat = ['seen' => $now, 'chats' => ['a' => ['updated' => $now,
 $before = $fullChat;
 check(submit($fullChat, 'a', $request, $now) === 507 && $fullChat === $before,
     'Storage budget protects existing messages and leaves room for replies');
-echo "NOVA chat authentication, isolation, deduplication and timeout tests passed.\n";
+echo chatName()." chat authentication, isolation, deduplication and timeout tests passed.\n";

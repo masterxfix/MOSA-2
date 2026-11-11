@@ -7,6 +7,8 @@ const VERSION = 'mosa2_nova_chat_v1';
 const ORIGIN = 'https://mosa2-test.scharwerk.de';
 const HOST = 'mosa2-test.scharwerk.de';
 const WORKER_USER = 'mosa2-nova-worker';
+const CODEX_WORKER_USER = 'mosa2-codex-worker';
+const CODEX_VERSION = 'mosa2_codex_chat_v1';
 const FRESH = 20;
 const MAX_RUN = 100;
 const MAX_BYTES = 1048576;
@@ -15,9 +17,14 @@ const MAX_REPLY_BYTES = 8000;
 const MAX_REQUEST_BYTES = 65536;
 const MAX_HISTORY_BYTES = 32768;
 
+function chatName(): string
+{
+    return defined('MOSA2_CODEX_CHAT_ROUTE') ? 'Codex' : 'NOVA';
+}
+
 function privateDirectory(): string
 {
-    return dirname(__DIR__, 2).'/mosa2-nova-chat-private';
+    return dirname(__DIR__, 2).'/mosa2-'.strtolower(chatName()).'-chat-private';
 }
 
 function trustedSite(array $server): bool
@@ -30,7 +37,10 @@ function trustedSite(array $server): bool
 
 function trustedChatRoute(array $server, bool $workerRoute): bool
 {
-    return trustedSite($server) && (($server['REMOTE_USER'] === WORKER_USER) === $workerRoute);
+    if (!trustedSite($server)) return false;
+    $user = $server['REMOTE_USER'];
+    return $workerRoute ? $user === (chatName() === 'Codex' ? CODEX_WORKER_USER : WORKER_USER)
+        : !in_array($user, [WORKER_USER, CODEX_WORKER_USER], true);
 }
 
 function workerDigest(string $directory): ?string
@@ -99,7 +109,7 @@ function expire(array &$data, int $now): void
             if (($job['state'] === 'queued' && $job['at'] <= $now - 30)
                 || ($job['state'] === 'running' && $job['started'] <= $now - MAX_RUN)) {
                 $job['state'] = 'error';
-                $job['reply'] = 'NOVA hat nicht rechtzeitig geantwortet. Die Anfrage wird nicht erneut ausgeführt.';
+                $job['reply'] = chatName().' hat nicht rechtzeitig geantwortet. Die Anfrage wird nicht erneut ausgeführt.';
             }
         }
         unset($job);
@@ -134,7 +144,7 @@ function browserView(array $data, string $owner, int $now, string $csrf): array
     foreach ($data['chats'][$owner]['messages'] ?? [] as $job) {
         $messages[] = array_intersect_key($job, array_flip(['id', 'text', 'state', 'reply']));
     }
-    return ['csrf' => $csrf, 'connected' => $data['seen'] > $now - FRESH || running($data, $now),
+    return ['csrf' => $csrf, 'connected' => $data['seen'] > $now - FRESH || (chatName() === 'NOVA' && running($data, $now)),
         'messages' => $messages];
 }
 
@@ -148,7 +158,7 @@ function submit(array &$data, string $owner, array $request, int $now): int
         if ($job['id'] === $id) return $job['text'] === $text ? 200 : 409;
         if (in_array($job['state'], ['queued', 'running'], true)) return 409;
     }
-    if ($data['seen'] <= $now - FRESH && !running($data, $now)) return 503;
+    if ($data['seen'] <= $now - FRESH && (chatName() === 'Codex' || !running($data, $now))) return 503;
     $chat['updated'] = $now;
     $chat['messages'][] = ['id' => $id, 'text' => $text, 'state' => 'queued', 'at' => $now];
     $next = $data;
@@ -179,6 +189,10 @@ function recentHistory(array $history): array
 
 function worker(array &$data, array $request, int $now): array
 {
+    if (chatName() === 'Codex' && ($request['action'] ?? '') === 'heartbeat') {
+        $data['seen'] = $now;
+        return [200, []];
+    }
     if (($request['action'] ?? '') === 'claim') {
         $data['seen'] = $now;
         if (running($data, $now)) return [200, ['job' => null]];
@@ -211,7 +225,7 @@ function worker(array &$data, array $request, int $now): array
             if (in_array($job['state'], ['done', 'error'], true)) return [200, []];
             if ($job['state'] !== 'running') return [409, []];
             $job['state'] = $request['ok'] ? 'done' : 'error';
-            $job['reply'] = $request['ok'] ? $reply : 'NOVA konnte diese Anfrage nicht beantworten.';
+            $job['reply'] = $request['ok'] ? $reply : chatName().' konnte diese Anfrage nicht beantworten.';
             $data['seen'] = $chat['updated'] = $now;
             return [200, []];
         }

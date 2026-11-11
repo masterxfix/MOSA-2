@@ -7,11 +7,11 @@
   <meta name="description" content="MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Projektziel, geprüfte Ergebnisse und nächste Entwicklungsschritte.">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · Projektüberblick</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=nova-chat-3">
+  <link rel="stylesheet" href="assets/css/main.css?v=m2-chat-1">
   <script src="assets/js/codex_status.js?v=20261110" defer></script>
   <script src="assets/js/nova_status.js?v=nova-status-1" defer></script>
   <script src="assets/js/reader_status.js?v=reader-status-2" defer></script>
-  <script src="assets/js/nova_chat.js?v=nova-chat-3" defer></script>
+  <script src="assets/js/nova_chat.js?v=m2-chat-1" defer></script>
   <script src="assets/js/market.js?v=page-shell-1" defer></script>
   <script src="assets/js/isin_quotes.js?v=overview-market-1" defer></script>
   <script src="assets/js/fundamentals.js?v=page-shell-1" defer></script>
@@ -24,11 +24,11 @@
       <a class="brand" href="#inhalt" aria-label="MOSA 2 – Projektüberblick"><span class="brand-symbol" aria-hidden="true">m</span>MOSA <span class="brand-version">2</span></a>
       <span class="project-label"><span data-project-label-text>Finanzdaten mit Kontext</span> <span class="dot" aria-hidden="true"></span> Testumgebung</span>
       <span class="ai-symbols">
-        <span class="codex-status-symbol" data-codex-status data-state="unavailable" role="img" aria-label="Codex-Status unbekannt" title="Codex-Status unbekannt"></span>
+        <button class="codex-status-symbol" type="button" data-codex-status data-state="unavailable" aria-haspopup="dialog" aria-controls="codex-chat" aria-expanded="false" aria-label="Codex-Status unbekannt" title="Codex-Status unbekannt"></button>
         <button class="nova-symbol" type="button" data-nova-status data-state="unavailable" aria-haspopup="dialog" aria-controls="nova-chat" aria-expanded="false" aria-label="NOVA-Status nicht verfügbar" title="NOVA-Status nicht verfügbar"></button>
         <button class="reader-status-symbol" type="button" data-reader-status data-state="unavailable" aria-label="Lesegerät prüfen und lokalen Zugriff erlauben" title="Lesegerät prüfen und lokalen Zugriff erlauben"></button>
       </span>
-      <dialog id="nova-chat" class="nova-chat" aria-labelledby="nova-chat-title">
+      <dialog id="nova-chat" data-m2-chat="nova" class="nova-chat" aria-labelledby="nova-chat-title">
         <div class="nova-chat-top">
           <div><strong id="nova-chat-title">NOVA</strong><span data-nova-chat-connection>Verbindung wird geprüft</span></div>
           <button type="button" data-nova-chat-close aria-label="NOVA-Chat schließen">×</button>
@@ -37,6 +37,18 @@
         <p class="nova-chat-feedback" data-nova-chat-feedback role="status"></p>
         <form class="nova-chat-form">
           <textarea name="message" aria-label="Nachricht an NOVA" placeholder="Nachricht an NOVA" rows="2" required></textarea>
+          <button type="submit" disabled>Senden</button>
+        </form>
+      </dialog>
+      <dialog id="codex-chat" data-m2-chat="codex" class="nova-chat" aria-labelledby="codex-chat-title">
+        <div class="nova-chat-top">
+          <div><strong id="codex-chat-title">Codex</strong><span data-nova-chat-connection>Verbindung wird geprüft</span><span>Separate Textsitzung</span></div>
+          <button type="button" data-nova-chat-close aria-label="Codex-Chat schließen">×</button>
+        </div>
+        <div class="nova-chat-messages" data-nova-chat-messages role="log" aria-label="Unterhaltung"></div>
+        <p class="nova-chat-feedback" data-nova-chat-feedback role="status"></p>
+        <form class="nova-chat-form">
+          <textarea name="message" aria-label="Nachricht an Codex" placeholder="Nachricht an Codex" rows="2" required></textarea>
           <button type="submit" disabled>Senden</button>
         </form>
       </dialog>

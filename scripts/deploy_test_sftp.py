@@ -100,18 +100,18 @@ def probe(sftp, run_id):
     print("Probe removal and absence check: PASS")
 
 
-def provision_nova_chat(sftp, digest):
+def provision_chat(sftp, digest, agent):
     """Create only the M2 chat's private directory and a non-rotating verifier."""
     parent = posixpath.dirname(shared.TEST_ROOT)
     if sftp.normalize(parent) != parent:
         raise ValueError("Unexpected private parent")
-    directory = parent + "/mosa2-nova-chat-private"
+    directory = parent + "/mosa2-" + agent + "-chat-private"
     if shared.remote_kind(sftp, directory) is None:
         sftp.mkdir(directory, mode=0o700)
     if not stat.S_ISDIR(sftp.lstat(directory).st_mode) or sftp.normalize(directory) != directory:
-        raise ValueError("Invalid NOVA chat directory")
+        raise ValueError("Invalid chat directory")
     if stat.S_IMODE(sftp.lstat(directory).st_mode) != 0o700:
-        raise ValueError("Invalid NOVA chat directory permissions")
+        raise ValueError("Invalid chat directory permissions")
     path = directory + "/worker.sha256"
     if shared.remote_kind(sftp, path) is None:
         temporary = directory + "/.verifier-" + uuid.uuid4().hex
@@ -124,14 +124,14 @@ def provision_nova_chat(sftp, digest):
             if shared.remote_kind(sftp, temporary) is not None:
                 sftp.remove(temporary)
     if not stat.S_ISREG(sftp.lstat(path).st_mode) or stat.S_IMODE(sftp.lstat(path).st_mode) != 0o600:
-        raise ValueError("Invalid NOVA chat verifier permissions")
+        raise ValueError("Invalid chat verifier permissions")
     with sftp.open(path, "rb") as remote:
         if remote.read(66) != (digest + "\n").encode():
-            raise ValueError("NOVA chat verifier differs; refusing to replace it")
-    print("Private NOVA chat verifier: PASS")
+            raise ValueError("chat verifier differs; refusing to replace it")
+    print("Private " + agent + " chat verifier: PASS")
 
 
-def execute(config, operation, files=None, nova_digest=""):
+def execute(config, operation, files=None, nova_digest="", codex_digest=""):
     import paramiko
 
     class PinnedHostKey(paramiko.MissingHostKeyPolicy):
@@ -164,7 +164,9 @@ def execute(config, operation, files=None, nova_digest=""):
                 actual,_=backup_files(sftp,files)
                 if actual!=expected:raise ValueError('Remote files drifted after backup')
                 if nova_digest:
-                    provision_nova_chat(sftp, nova_digest)
+                    provision_chat(sftp, nova_digest, "nova")
+                if codex_digest:
+                    provision_chat(sftp, codex_digest, "codex")
                 shared.upload(sftp, shared.TEST_ROOT, files, profile="test")
                 for name,data in files:
                     shared.check_remote(sftp,shared.TEST_ROOT,name,scoped=True)
@@ -173,7 +175,7 @@ def execute(config, operation, files=None, nova_digest=""):
                     if hashlib.sha256(returned).hexdigest()!=digest:raise ValueError('Final target hash mismatch')
                     print('SHA256 '+name+' '+digest)
                 print("Explicit file-set upload/readback/SHA-256: PASS")
-            print("Remote file scope: MOSA-2 testsite" + (" and its private NOVA verifier" if nova_digest else " webroot"))
+            print("Remote file scope: MOSA-2 testsite" + (" and private chat verifier" if nova_digest or codex_digest else " webroot"))
 
 
 def main():
@@ -189,7 +191,11 @@ def main():
     if nova_digest and (args.operation != "deploy" or re.fullmatch(r"[0-9a-f]{64}", nova_digest) is None
             or "api/nova-transport/worker.php" not in dict(files or [])):
         raise ValueError("NOVA verifier provisioning requires the NOVA chat testsite deployment")
-    execute(config, args.operation, files, nova_digest)
+    codex_digest = os.environ.get("MOSA_TEST_CODEX_WORKER_SHA256", "")
+    if codex_digest and (args.operation != "deploy" or re.fullmatch(r"[0-9a-f]{64}", codex_digest) is None
+            or "api/codex-transport/worker.php" not in dict(files or [])):
+        raise ValueError("Codex verifier provisioning requires the Codex chat testsite deployment")
+    execute(config, args.operation, files, nova_digest, codex_digest)
 
 
 if __name__ == "__main__":

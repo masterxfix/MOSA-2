@@ -13,11 +13,12 @@ header('X-Content-Type-Options: nosniff');
 function reply(int $status, array $body = []): never
 {
     http_response_code($status);
-    echo json_encode(['contract_version' => VERSION] + $body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+    echo json_encode(['contract_version' => chatName() === 'Codex' ? CODEX_VERSION : VERSION] + $body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$isWorker = defined('MOSA2_NOVA_WORKER_ROUTE') && MOSA2_NOVA_WORKER_ROUTE;
+$isCodex = chatName() === 'Codex';
+$isWorker = $isCodex ? defined('MOSA2_CODEX_WORKER_ROUTE') : defined('MOSA2_NOVA_WORKER_ROUTE');
 if (!trustedChatRoute($_SERVER, $isWorker)) reply(403);
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 if (!in_array($method, ['GET', 'POST'], true)) {
@@ -26,7 +27,7 @@ if (!in_array($method, ['GET', 'POST'], true)) {
 }
 
 $directory = privateDirectory();
-$token = $_SERVER['HTTP_X_M2_NOVA_WORKER'] ?? null;
+$token = $_SERVER[$isCodex ? 'HTTP_X_M2_CODEX_WORKER' : 'HTTP_X_M2_NOVA_WORKER'] ?? null;
 try {
     if ($isWorker && (!is_string($token) || $method !== 'POST' || isset($_SERVER['HTTP_ORIGIN'])
         || preg_match('/\A[0-9a-f]{64}\z/', $token) !== 1)) reply(403);
@@ -55,13 +56,19 @@ try {
         if (isset($result['job'])) {
             $homepage = @file_get_contents(dirname(__DIR__).'/index.html', false, null, 0, 32768);
             $result['job']['navigation'] = is_string($homepage) ? navigationLabels($homepage) : [];
+            if ($isCodex && is_string($homepage)) {
+                // Supply the published overview as text. The Codex session cannot read repository files.
+                $result['job']['overview'] = preg_match('/<main\b[^>]*>(.*?)<\/main>/is', $homepage, $main)
+                    ? trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($main[1]), ENT_QUOTES, 'UTF-8')) ?? '')
+                    : '';
+            }
         }
         reply($status, $result);
     }
 
-    session_name('Mosa2NovaChat');
+    session_name($isCodex ? 'Mosa2CodexChat' : 'Mosa2NovaChat');
     if (!session_start(['use_strict_mode' => 1, 'use_only_cookies' => 1, 'cookie_secure' => true,
-        'cookie_httponly' => true, 'cookie_samesite' => 'Strict', 'cookie_path' => '/api/nova_chat.php'])) reply(503);
+        'cookie_httponly' => true, 'cookie_samesite' => 'Strict', 'cookie_path' => $isCodex ? '/api/codex_chat.php' : '/api/nova_chat.php'])) reply(503);
     $user = hash('sha256', $_SERVER['REMOTE_USER']);
     if (($_SESSION['user'] ?? null) !== $user) {
         if (!session_regenerate_id(true)) reply(503);

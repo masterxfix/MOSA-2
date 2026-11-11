@@ -24,6 +24,11 @@ on:
         type: string
         required: false
 
+      codex_worker_sha256:
+        description: Optional one-time SHA-256 verifier for the private Codex chat worker
+        type: string
+        required: false
+
 permissions:
   contents: read
 
@@ -68,6 +73,7 @@ jobs:
           php -l api/isin_quote.php
           node tests/isin_automation_browser_check.cjs
           php tests/test_nova_chat.php
+          php tests/test_nova_chat.php codex
           php -r '$_SERVER=["REQUEST_METHOD"=>"POST","SERVER_NAME"=>"mosa2-test.scharwerk.de","HTTP_HOST"=>"mosa2-test.scharwerk.de:443"]; require "api/isin_quote.php"; \Mosa2\IsinQuote\main(); if (http_response_code()!==403) exit(1);'
       - name: Backup explicit web files before deployment
         if: inputs.operation == 'deploy'
@@ -90,6 +96,7 @@ jobs:
           if-no-files-found: error
       - name: SFTP testsite only
         env:
+          MOSA_TEST_CODEX_WORKER_SHA256: ${{ inputs.codex_worker_sha256 }}
           MOSA_TEST_NOVA_WORKER_SHA256: ${{ inputs.nova_worker_sha256 }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}

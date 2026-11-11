@@ -47,14 +47,14 @@ def credentials():
             "User-Agent": "MOSA2-NOVA-Transport/1.0"}
 
 
-def exchange(opener, headers, payload):
-    request = urllib.request.Request(ENDPOINT, json.dumps(payload).encode(), headers, method="POST")
+def exchange(opener, headers, payload, *, endpoint=ENDPOINT, version=VERSION):
+    request = urllib.request.Request(endpoint, json.dumps(payload).encode(), headers, method="POST")
     with opener.open(request, timeout=8) as response:
         body = response.read(MAX_RESPONSE_BYTES + 1)
     if len(body) > MAX_RESPONSE_BYTES:
         raise ValueError("M2 response too large")
     result = json.loads(body)
-    if result.get("contract_version") != VERSION:
+    if result.get("contract_version") != version:
         raise ValueError("Unexpected M2 response")
     return result
 
