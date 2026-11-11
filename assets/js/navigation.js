@@ -55,12 +55,14 @@
     });
   }
 
+  function hashTarget(url) {
+    if (!url.hash) return null;
+    try { return document.getElementById(decodeURIComponent(url.hash.slice(1))); }
+    catch { return null; }
+  }
+
   function position(url) {
-    let target = null;
-    if (url.hash) {
-      try { target = document.getElementById(decodeURIComponent(url.hash.slice(1))); }
-      catch { /* An invalid fragment should behave like a missing anchor. */ }
-    }
+    const target = hashTarget(url);
     const focus = target || main;
     if (!focus.hasAttribute("tabindex")) focus.tabIndex = -1;
     focus.focus({preventScroll: true});
@@ -138,4 +140,13 @@
   });
 
   mount(0);
+  const initialUrl = new URL(location.href);
+  if (initialUrl.hash) {
+    // The browser can scroll to the initial fragment before the header is measured.
+    documentReady.then(paint).then(() => {
+      if (view !== 1 || pending || location.href !== initialUrl.href) return;
+      updateHeaderOffset();
+      hashTarget(initialUrl)?.scrollIntoView();
+    });
+  }
 }());
