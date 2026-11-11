@@ -28,6 +28,7 @@ def render(filename):
     stored = " data-isin-stored-quotes" if key == "market" else ""
     latency = ' inkl. Daten' if key == "fundamentals" else ''
     scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'reader_status.js?v=reader-status-2',
+               'nova_chat.js?v=nova-chat-1',
                'market.js?v=page-shell-1',
                'isin_quotes.js?v=overview-market-1', 'fundamentals.js?v=page-shell-1',
                'navigation.js?v=overview-market-1']
@@ -41,7 +42,7 @@ def render(filename):
   <meta name="description" content="{escape(description)}">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · {escape(title)}</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=reader-status-1">
+  <link rel="stylesheet" href="assets/css/main.css?v=nova-chat-1">
 {scripts}
 </head>
 <body{stored} class="{key}-page" data-site-shell>
@@ -52,9 +53,21 @@ def render(filename):
       <span class="project-label"><span data-project-label-text>{label}</span> <span class="dot" aria-hidden="true"></span> Testumgebung</span>
       <span class="ai-symbols">
         <span class="codex-status-symbol" data-codex-status data-state="unavailable" role="img" aria-label="Codex-Status unbekannt" title="Codex-Status unbekannt"></span>
-        <span class="nova-symbol" data-nova-status data-state="unavailable" role="img" aria-label="NOVA-Status nicht verfügbar" title="NOVA-Status nicht verfügbar"></span>
+        <button class="nova-symbol" type="button" data-nova-status data-state="unavailable" aria-haspopup="dialog" aria-controls="nova-chat" aria-expanded="false" aria-label="NOVA-Status nicht verfügbar" title="NOVA-Status nicht verfügbar"></button>
         <button class="reader-status-symbol" type="button" data-reader-status data-state="unavailable" aria-label="Lesegerät prüfen und lokalen Zugriff erlauben" title="Lesegerät prüfen und lokalen Zugriff erlauben"></button>
       </span>
+      <dialog id="nova-chat" class="nova-chat" aria-labelledby="nova-chat-title">
+        <div class="nova-chat-top">
+          <div><strong id="nova-chat-title">NOVA</strong><span data-nova-chat-connection>Verbindung wird geprüft</span></div>
+          <button type="button" data-nova-chat-close aria-label="NOVA-Chat schließen">×</button>
+        </div>
+        <div class="nova-chat-messages" data-nova-chat-messages role="log" aria-label="Unterhaltung"></div>
+        <p class="nova-chat-feedback" data-nova-chat-feedback role="status"></p>
+        <form class="nova-chat-form">
+          <textarea name="message" aria-label="Nachricht an NOVA" placeholder="Testnachricht oder Frage" rows="2" maxlength="500" required></textarea>
+          <button type="submit" disabled>Senden</button>
+        </form>
+      </dialog>
     </div>
     <nav class="site-nav wrap" aria-label="Seitennavigation" data-site-nav>
 {nav}

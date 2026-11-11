@@ -1,0 +1,82 @@
+<?php
+declare(strict_types=1);
+
+namespace Mosa2\NovaChat;
+
+require_once __DIR__.'/nova_chat_store.php';
+
+ini_set('display_errors', '0');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, private');
+header('X-Content-Type-Options: nosniff');
+
+function reply(int $status, array $body = []): never
+{
+    http_response_code($status);
+    echo json_encode(['contract_version' => VERSION] + $body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if (!trustedSite($_SERVER)) reply(403);
+$method = $_SERVER['REQUEST_METHOD'] ?? '';
+if (!in_array($method, ['GET', 'POST'], true)) {
+    header('Allow: GET, POST');
+    reply(405);
+}
+
+$directory = privateDirectory();
+$token = $_SERVER['HTTP_X_M2_NOVA_WORKER'] ?? null;
+$isWorker = $token !== null;
+try {
+    if ($isWorker && ($method !== 'POST' || isset($_SERVER['HTTP_ORIGIN'])
+        || preg_match('/\A[0-9a-f]{64}\z/', $token) !== 1)) reply(403);
+    if (!$isWorker && $method === 'POST' && ($_SERVER['HTTP_ORIGIN'] ?? '') !== ORIGIN) reply(403);
+    $digest = workerDigest($directory);
+    if ($digest === null) reply(503);
+    if ($isWorker && !hash_equals($digest, hash('sha256', $token))) reply(403);
+
+    $request = [];
+    if ($method === 'POST') {
+        if (($_SERVER['CONTENT_TYPE'] ?? '') !== 'application/json') reply(415);
+        $body = file_get_contents('php://input', false, null, 0, 8193);
+        if (!is_string($body) || strlen($body) > 8192) reply(413);
+        try {
+            $request = json_decode($body, true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            reply(400);
+        }
+        if (!is_array($request)) reply(400);
+    }
+    if ($isWorker) {
+        [$status, $result] = transaction($directory, static function (array &$data, int $now) use ($request): array {
+            return worker($data, $request, $now);
+        });
+        reply($status, $result);
+    }
+
+    session_name('Mosa2NovaChat');
+    if (!session_start(['use_strict_mode' => 1, 'use_only_cookies' => 1, 'cookie_secure' => true,
+        'cookie_httponly' => true, 'cookie_samesite' => 'Strict', 'cookie_path' => '/api/nova_chat.php'])) reply(503);
+    $user = hash('sha256', $_SERVER['REMOTE_USER']);
+    if (($_SESSION['user'] ?? null) !== $user) {
+        if (!session_regenerate_id(true)) reply(503);
+        $_SESSION = ['user' => $user, 'nonce' => bin2hex(random_bytes(32)), 'csrf' => bin2hex(random_bytes(32))];
+    }
+    $owner = hash('sha256', $user.':'.$_SESSION['nonce']);
+    $csrf = $_SESSION['csrf'];
+    session_write_close();
+    if ($method === 'GET') {
+        $data = snapshot($directory);
+        $now = time();
+        expire($data, $now);
+        reply(200, browserView($data, $owner, $now, $csrf));
+    }
+    if (!is_string($request['csrf'] ?? null) || !hash_equals($csrf, $request['csrf'])) reply(403);
+    [$status, $result] = transaction($directory, static function (array &$data, int $now) use ($owner, $request, $csrf): array {
+        $status = submit($data, $owner, $request, $now);
+        return [$status, browserView($data, $owner, $now, $csrf)];
+    });
+    reply($status, $result);
+} catch (\Throwable) {
+    reply(503);
+}

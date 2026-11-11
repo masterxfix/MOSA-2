@@ -3,7 +3,9 @@ import argparse
 import hashlib
 import json
 import os
+import posixpath
 import re
+import stat
 import sys
 import uuid
 from pathlib import Path
@@ -98,7 +100,38 @@ def probe(sftp, run_id):
     print("Probe removal and absence check: PASS")
 
 
-def execute(config, operation, files=None):
+def provision_nova_chat(sftp, digest):
+    """Create only the M2 chat's private directory and a non-rotating verifier."""
+    parent = posixpath.dirname(shared.TEST_ROOT)
+    if sftp.normalize(parent) != parent:
+        raise ValueError("Unexpected private parent")
+    directory = parent + "/mosa2-nova-chat-private"
+    if shared.remote_kind(sftp, directory) is None:
+        sftp.mkdir(directory, mode=0o700)
+    if not stat.S_ISDIR(sftp.lstat(directory).st_mode) or sftp.normalize(directory) != directory:
+        raise ValueError("Invalid NOVA chat directory")
+    if stat.S_IMODE(sftp.lstat(directory).st_mode) != 0o700:
+        raise ValueError("Invalid NOVA chat directory permissions")
+    path = directory + "/worker.sha256"
+    if shared.remote_kind(sftp, path) is None:
+        temporary = directory + "/.verifier-" + uuid.uuid4().hex
+        try:
+            with sftp.open(temporary, "wx") as remote:
+                sftp.chmod(temporary, 0o600)
+                remote.write(digest + "\n")
+            sftp.rename(temporary, path)
+        finally:
+            if shared.remote_kind(sftp, temporary) is not None:
+                sftp.remove(temporary)
+    if not stat.S_ISREG(sftp.lstat(path).st_mode) or stat.S_IMODE(sftp.lstat(path).st_mode) != 0o600:
+        raise ValueError("Invalid NOVA chat verifier permissions")
+    with sftp.open(path, "rb") as remote:
+        if remote.read(66) != (digest + "\n").encode():
+            raise ValueError("NOVA chat verifier differs; refusing to replace it")
+    print("Private NOVA chat verifier: PASS")
+
+
+def execute(config, operation, files=None, nova_digest=""):
     import paramiko
 
     class PinnedHostKey(paramiko.MissingHostKeyPolicy):
@@ -130,6 +163,8 @@ def execute(config, operation, files=None):
                 expected=json.loads((Path(os.environ['RUNNER_TEMP'])/'mosa2-web-before.json').read_text())
                 actual,_=backup_files(sftp,files)
                 if actual!=expected:raise ValueError('Remote files drifted after backup')
+                if nova_digest:
+                    provision_nova_chat(sftp, nova_digest)
                 shared.upload(sftp, shared.TEST_ROOT, files, profile="test")
                 for name,data in files:
                     shared.check_remote(sftp,shared.TEST_ROOT,name,scoped=True)
@@ -138,7 +173,7 @@ def execute(config, operation, files=None):
                     if hashlib.sha256(returned).hexdigest()!=digest:raise ValueError('Final target hash mismatch')
                     print('SHA256 '+name+' '+digest)
                 print("Explicit file-set upload/readback/SHA-256: PASS")
-            print("All remote file operations confined to MOSA-2 test-webroot: PASS")
+            print("Remote file scope: MOSA-2 testsite" + (" and its private NOVA verifier" if nova_digest else " webroot"))
 
 
 def main():
@@ -150,7 +185,11 @@ def main():
         print("Testsite secrets and fixed target profile: PASS")
         return
     files = selected_files(os.environ.get("MOSA_TEST_SFTP_FILES", "[]")) if args.operation in ('backup','deploy') else None
-    execute(config, args.operation, files)
+    nova_digest = os.environ.get("MOSA_TEST_NOVA_WORKER_SHA256", "")
+    if nova_digest and (args.operation != "deploy" or re.fullmatch(r"[0-9a-f]{64}", nova_digest) is None
+            or "api/nova_chat.php" not in dict(files or [])):
+        raise ValueError("NOVA verifier provisioning requires the NOVA chat testsite deployment")
+    execute(config, args.operation, files, nova_digest)
 
 
 if __name__ == "__main__":

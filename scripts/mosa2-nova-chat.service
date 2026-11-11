@@ -1,0 +1,14 @@
+[Unit]
+Description=MOSA 2 NOVA text transport
+After=network-online.target
+
+[Service]
+Environment=PATH=%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 %h/.local/lib/mosa2-nova-chat/worker.py
+Restart=on-failure
+RestartSec=8
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
