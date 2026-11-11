@@ -10,6 +10,8 @@
     ["error", "Lesegerät erkannt, aber nicht einsatzbereit"]
   ]);
   const interval = 5000;
+  const allowLabel = "Lesegerät prüfen und lokalen Zugriff erlauben";
+  const blockedLabel = "Lesegerät nicht erreichbar. Lokalen Zugriff in den Chrome-Website-Einstellungen erlauben.";
   let permission = null;
   let connected = false;
   let pending = false;
@@ -30,22 +32,22 @@
     if (document.hidden || pending) return;
     cancelTimer();
     if (!onClick && permission?.state !== "granted" && !connected) {
-      const label = permission?.state === "denied"
-        ? "Lesegerät nicht erreichbar. Lokalen Zugriff in den Chrome-Website-Einstellungen erlauben."
-        : "Lesegerät prüfen und lokalen Zugriff erlauben";
+      const label = permission?.state === "denied" ? blockedLabel : allowLabel;
       display("unavailable", label);
       return;
     }
 
     pending = true;
     const started = performance.now();
+    // Leave time for the first Chrome permission prompt; normal polls stay short.
+    const askingPermission = onClick && !connected && permission?.state !== "granted";
     try {
       const response = await fetch("http://127.0.0.1:8765/m2-reader-health", {
         credentials: "omit",
         cache: "no-store",
         redirect: "error",
         targetAddressSpace: "loopback",
-        signal: AbortSignal.timeout(1500)
+        signal: AbortSignal.timeout(askingPermission ? 30000 : 1500)
       });
       if (!response.ok) throw Error("Reader status unavailable");
       const result = await response.json();
@@ -57,7 +59,11 @@
       if (!document.hidden) display(result.state);
       symbol.dataset.readyMs ??= String(Math.round(performance.now()));
     } catch {
-      if (!document.hidden) display("unavailable");
+      if (!document.hidden) {
+        const label = permission?.state === "denied" ? blockedLabel
+          : permission?.state === "prompt" ? allowLabel : labels.get("unavailable");
+        display("unavailable", label);
+      }
     } finally {
       pending = false;
       if (!document.hidden && (connected || permission?.state === "granted")) {

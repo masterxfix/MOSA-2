@@ -27,7 +27,7 @@ def render(filename):
     brand = "#inhalt" if key == "overview" else "./"
     stored = " data-isin-stored-quotes" if key == "market" else ""
     latency = ' inkl. Daten' if key == "fundamentals" else ''
-    scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'reader_status.js?v=reader-status-1',
+    scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'reader_status.js?v=reader-status-2',
                'market.js?v=page-shell-1',
                'isin_quotes.js?v=overview-market-1', 'fundamentals.js?v=page-shell-1',
                'navigation.js?v=overview-market-1']
