@@ -58,7 +58,7 @@ def render(filename):
   <meta name="description" content="{escape(description)}">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · {escape(title)}</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=m2-chat-1">
+  <link rel="stylesheet" href="assets/css/main.css?v=nova-offline-1">
 {scripts}
 </head>
 <body{stored} class="{key}-page" data-site-shell>
