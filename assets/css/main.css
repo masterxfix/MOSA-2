@@ -12,11 +12,13 @@
   --space-section: clamp(48px, 7vw, 100px);
   --space-gutter: clamp(20px, 4vw, 64px);
   --width: 1280px;
+  --site-header-height: 158px;
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
   font-size: 16px;
   line-height: 1.65;
   background: var(--bg);
   color: var(--text);
+  scroll-padding-top: calc(var(--site-header-height) + 8px);
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
@@ -31,6 +33,7 @@ h1 em { font-family: var(--display); font-style: normal; font-weight: 400; lette
 h2 { font-size: clamp(1.65rem, 2.9vw, 2.65rem); font-weight: 450; line-height: 1.2; letter-spacing: -.045em; margin-bottom: 0; }
 h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .wrap { width: min(var(--width), calc(100% - var(--space-gutter) * 2)); margin-inline: auto; }
+body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; background: var(--bg); }
 .topbar { position: relative; min-height: 94px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }
 .brand { display: inline-flex; align-items: center; gap: 9px; font-size: 1.05rem; font-weight: 650; letter-spacing: .12em; text-decoration: none; }
 .brand-symbol { display: grid; place-items: center; width: 32px; height: 32px; background: #293d4a; color: #c8e0e9; border-radius: 9px; font-size: 24px; letter-spacing: -.12em; padding-right: 3px; margin-right: 5px; }
@@ -156,7 +159,7 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 [data-page-load-time], [data-data-ready-time] { font-variant-numeric: tabular-nums; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .skip-link { position: absolute; left: 20px; top: -100px; background: var(--text); color: var(--bg); padding: 10px 16px; z-index: 10; }
-.skip-link:focus { top: 12px; }
+.skip-link:focus { position: fixed; top: 12px; }
 @media (max-width: 1050px) {
   .home-hero { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 32px; }
   .hero-aside { padding-left: 24px; }
@@ -164,6 +167,7 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
   .progress { gap: 20px; }
 }
 @media (max-width: 760px) {
+  :root { --site-header-height: 200px; }
   h1 { font-size: clamp(2.8rem, 9vw, 4.1rem); }
   .topbar { min-height: 78px; }
   .project-label { max-width: min(155px, calc(50% - 38px)); font-size: .65rem; text-align: right; }

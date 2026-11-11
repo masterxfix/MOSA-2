@@ -20,6 +20,14 @@
   let view = 0;
   if (!current || !main) return;
 
+  // Use the full header height for both native anchors and scrollIntoView,
+  // including when the navigation wraps at a narrower width.
+  const header = nav.closest("header");
+  const updateHeaderOffset = () => document.documentElement.style.setProperty(
+    "--site-header-height", Math.ceil(header.getBoundingClientRect().height) + "px");
+  updateHeaderOffset();
+  new ResizeObserver(updateHeaderOffset).observe(header, {box: "border-box"});
+
   const documentReady = document.readyState === "complete" ? Promise.resolve() :
     new Promise(resolve => window.addEventListener("load", resolve, {once: true}));
   const paint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
