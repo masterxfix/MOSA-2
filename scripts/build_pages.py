@@ -27,7 +27,8 @@ def render(filename):
     brand = "#inhalt" if key == "overview" else "./"
     stored = " data-isin-stored-quotes" if key == "market" else ""
     latency = ' inkl. Daten' if key == "fundamentals" else ''
-    scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'market.js?v=page-shell-1',
+    scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'reader_status.js?v=reader-status-1',
+               'market.js?v=page-shell-1',
                'isin_quotes.js?v=overview-market-1', 'fundamentals.js?v=page-shell-1',
                'navigation.js?v=overview-market-1']
     scripts = "\n".join(f'  <script src="assets/js/{src}" defer></script>' for src in scripts)
@@ -40,7 +41,7 @@ def render(filename):
   <meta name="description" content="{escape(description)}">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · {escape(title)}</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=nova-status-1">
+  <link rel="stylesheet" href="assets/css/main.css?v=reader-status-1">
 {scripts}
 </head>
 <body{stored} class="{key}-page" data-site-shell>
@@ -52,6 +53,7 @@ def render(filename):
       <span class="ai-symbols">
         <span class="codex-status-symbol" data-codex-status data-state="unavailable" role="img" aria-label="Codex-Status unbekannt" title="Codex-Status unbekannt"></span>
         <span class="nova-symbol" data-nova-status data-state="unavailable" role="img" aria-label="NOVA-Status nicht verfügbar" title="NOVA-Status nicht verfügbar"></span>
+        <button class="reader-status-symbol" type="button" data-reader-status data-state="unavailable" aria-label="Lesegerät prüfen und lokalen Zugriff erlauben" title="Lesegerät prüfen und lokalen Zugriff erlauben"></button>
       </span>
     </div>
     <nav class="site-nav wrap" aria-label="Seitennavigation" data-site-nav>

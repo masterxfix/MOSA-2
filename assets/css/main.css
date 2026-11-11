@@ -50,6 +50,27 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
   height: 24px;
 }
 .codex-status-symbol, .nova-symbol { width: 24px; height: 24px; }
+.reader-status-symbol {
+  position: absolute;
+  left: calc(100% + 10px);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a1afc1;
+  cursor: pointer;
+}
+.reader-status-symbol[data-state="ready"] { color: #77efc4; }
+.reader-status-symbol[data-state="error"] { color: #ff8888; }
+.reader-status-symbol::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M7 2.5h10a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-13a3 3 0 0 1 3-3Z M8 7h8 M8 11h8v4H8z M10 18h4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .codex-status-symbol { color: #f0bb77; }
 .nova-symbol { color: #bcb0f2; }
 .nova-symbol[data-state="idle"] { color: #a1afc1; }
@@ -184,7 +205,7 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
   .overview-page .overview-status { grid-template-columns: 1fr; }
   h1 { font-size: clamp(2.8rem, 9vw, 4.1rem); overflow-wrap: anywhere; }
   .topbar { min-height: 78px; }
-  .project-label { max-width: min(155px, calc(50% - 38px)); font-size: .65rem; text-align: right; }
+  .project-label { max-width: min(155px, calc(50% - 71px)); font-size: .65rem; text-align: right; overflow-wrap: anywhere; }
   .dot { margin-left: 5px; }
   .home-hero { grid-template-columns: 1fr; gap: 42px; }
   .hero-aside { border-left: 0; border-top: 1px solid var(--line); padding: 24px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
