@@ -52,6 +52,8 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
 .codex-status-symbol, .nova-symbol { width: 24px; height: 24px; }
 .codex-status-symbol { color: #f0bb77; }
 .nova-symbol { color: #bcb0f2; }
+.nova-symbol[data-state="idle"] { color: #a1afc1; }
+.nova-symbol[data-state="running"] { color: #77efc4; }
 .codex-status-symbol::before, .nova-symbol::before {
   content: "";
   display: block;
