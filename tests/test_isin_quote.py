@@ -40,7 +40,7 @@ class IsinQuoteTests(unittest.TestCase):
         self.assertNotRegex(home, r'data-isin-(list|form|input|count|clear|table)')
         self.assertNotIn('data-isin-stored-quotes', home)
         self.assertNotIn('Unser Entwicklungsweg', home)
-        self.assertIn('In MOSA 2 noch nicht funktional angebunden.', home)
+        self.assertIn('NOVA fachlich nutzen', home)
         self.assertNotIn('aria-label="Fünf Aktien in der Marktdatenansicht"', home)
         self.assertNotIn('>PNE AG</a>', home)
         self.assertIn('data-isin-count', market)

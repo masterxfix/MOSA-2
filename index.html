@@ -34,20 +34,47 @@
   </header>
   <main id="inhalt" class="wrap">
     <section class="hero overview-developed" aria-labelledby="projekt-titel">
-      <p class="eyebrow">Projektüberblick · MOSA 2</p>
-      <h1 id="projekt-titel">Was wir bisher<br><em>entwickelt haben.</em></h1>
+      <p class="eyebrow">Projektüberblick · MOSA 2 · Stand 11.11.2026</p>
+      <h1 id="projekt-titel">Entwicklungsstand<br><em>von MOSA 2.</em></h1>
       <dl class="overview-status">
-        <div><dt>Datenbank</dt><dd>Schema 6 und die grundlegende Datenbankarchitektur sind vorbereitet. Das Schema beschreibt die Struktur, nicht den Bestand an gespeicherten Markt- und Fundamentaldaten.</dd></div>
-        <div><dt>Codex</dt><dd>Die Aktivitätsanbindung ist integriert. Das Symbol im Header zeigt den Live-Status aus der bestehenden Codex-Anbindung.</dd></div>
-        <div><dt>Seitenarchitektur</dt><dd>Header und Footer bleiben beim Seitenwechsel geladen. Nur der Hauptinhalt wechselt; der Header bleibt beim Scrollen sichtbar.</dd></div>
-        <div><dt>Markt- und Fundamentaldaten</dt><dd>Quellenabfragen und Ansichten für Kurse und Berichtskennzahlen sind entwickelt. Im aktiven Marktdaten-Tab wird alle 30 Sekunden nach neuen gespeicherten Kursen gesucht.</dd></div>
+        <div>
+          <dt>NOVA-Status <small class="quiet-label">· Fertiggestellt und getestet</small></dt>
+          <dd>Auf dem Pironman 5 (mosa-pi) läuft OpenClaw 2026.11.3 nach erfolgreicher Migration wieder mit Gateway und OpenAI-Authentifizierung. Im bestätigten Livetest zeigte M2 einen echten NOVA-Auftrag und danach den grauen Ruhezustand.</dd>
+        </div>
+        <div>
+          <dt>Codex-Anbindung <small class="quiet-label">· Fertiggestellt und getestet</small></dt>
+          <dd>Das Codex-Symbol zeigt den Arbeitsstatus über die bestehende MOSA-Anbindung. Beide Agentensymbole bleiben beim Seitenwechsel im gemeinsamen Header sichtbar.</dd>
+        </div>
+        <div>
+          <dt>Marktdaten <small class="quiet-label">· Fertiggestellt und getestet</small></dt>
+          <dd>Die Marktdatenseite verwaltet ISINs und zeigt den Quellenvergleich mit Herkunft und Zeitstempeln. Die ISIN-Liste und manuell abgerufene Kurse bleiben browserlokal gespeichert.</dd>
+        </div>
+        <div>
+          <dt>Kursaktualisierung <small class="quiet-label">· Fertiggestellt und getestet</small></dt>
+          <dd>Der aktive Marktdaten-Tab liest alle 30 Sekunden gespeicherte Datenbankkurse nach, ohne die Seite neu zu laden. „OK“ und „Aktualisieren“ lösen einen direkten Quellenabruf aus.</dd>
+        </div>
+        <div>
+          <dt>Datenbank <small class="quiet-label">· Schema 6 geprüft</small></dt>
+          <dd>Beim Testdaten-Reset vom 10.11. blieb Schema 6 erhalten. Der fachliche Bestand wird getrennt von der Datenbankstruktur betrachtet.</dd>
+        </div>
+        <div>
+          <dt>Quellenverwaltung <small class="quiet-label">· Implementiert, noch nicht vollständig geprüft</small></dt>
+          <dd>Das Schema und der Kursleser unterstützen Quellen, Kursrouten und Herkunftsangaben. Die Freigabe weiterer Routen und die Prüfung für den Regelbetrieb stehen aus.</dd>
+        </div>
+        <div>
+          <dt>Fundamentaldaten <small class="quiet-label">· Implementiert, noch nicht vollständig geprüft</small></dt>
+          <dd>Die Ansicht liest gespeicherte Berichtskennzahlen und verlinkt bei verfügbaren Unternehmen offizielle Finanzberichte. Der Leerzustand ist live geprüft. Historische Importe sind auf der Testseite gesperrt.</dd>
+        </div>
+        <div>
+          <dt>Seitenarchitektur <small class="quiet-label">· Fertiggestellt und getestet</small></dt>
+          <dd>Der gemeinsame Header bleibt beim Scrollen sichtbar. Beim Seitenwechsel wird nur der Hauptinhalt ausgetauscht.</dd>
+        </div>
       </dl>
     </section>
     <section class="overview-milestone" aria-labelledby="nova-meilenstein">
-      <p class="eyebrow">Nächster Meilenstein</p>
-      <h2 id="nova-meilenstein">NOVA-Anbindung</h2>
-      <p>Die in MOSA bewährte NOVA-Anbindung soll in die gemeinsame M2-Architektur integriert werden: zuerst Verbindung, Präsenz und Arbeitsstatus, danach die fachliche Nutzung.</p>
-      <p class="quiet-label">In MOSA 2 noch nicht funktional angebunden.</p>
+      <p class="eyebrow">Nächster Meilenstein · Geplant</p>
+      <h2 id="nova-meilenstein">NOVA fachlich nutzen</h2>
+      <p>Als Nächstes folgt die fachliche Nutzung von NOVA in M2. Für diesen Schritt ist noch keine laufende Umsetzung bestätigt.</p>
     </section>
   </main>
   <footer class="wrap footer">
