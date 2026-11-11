@@ -41,7 +41,7 @@ $m2Bytes = [Security.Cryptography.ProtectedData]::Unprotect(
 def credentials():
     ps = Path(os.environ["SystemRoot"]) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     result = subprocess.run([str(ps), "-NoProfile", "-NonInteractive", "-Command", CREDENTIAL_SCRIPT],
-                            capture_output=True, timeout=8, check=True)
+                            capture_output=True, timeout=8, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
     config = json.loads(result.stdout)
     if not re.fullmatch(r"[0-9a-f]{64}", config["token"]) or not re.fullmatch(r"[!-~]{32,100}", config["password"]):
         raise ValueError("Invalid private Codex credentials")
@@ -92,7 +92,7 @@ def answer(job, exe, metadata):
                and not any(marker in k.upper() for marker in ("TOKEN", "API_KEY", "PASSWORD", "SECRET"))}
         env["CODEX_HOME"] = str(AUTH_HOME)
         result = subprocess.run(args + ["-"], input=prompt.encode(), capture_output=True,
-                                timeout=75, check=True, cwd=folder, env=env)
+                                timeout=75, check=True, cwd=folder, env=env, creationflags=subprocess.CREATE_NO_WINDOW)
     text = None
     completed = False
     for line in result.stdout.splitlines():

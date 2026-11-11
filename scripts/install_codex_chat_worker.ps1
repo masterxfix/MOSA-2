@@ -7,19 +7,29 @@ $m2Dir = Join-Path $env:LOCALAPPDATA 'MOSA2-CodexChat'
 $m2Name = 'MOSA2-Codex-Text-Transport'
 $m2Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $m2Sid = $m2Identity.User
-if (!(Test-Path -LiteralPath $m2Dir)) {
+$m2New = !(Test-Path -LiteralPath $m2Dir)
+if ($m2New) {
     New-Item -ItemType Directory -Path $m2Dir | Out-Null
 }
 if ((Get-Item -LiteralPath $m2Dir).Attributes -band [IO.FileAttributes]::ReparsePoint) {
     throw 'The Codex transport directory must not be a reparse point.'
 }
-$m2Acl = New-Object Security.AccessControl.DirectorySecurity
-$m2Acl.SetOwner($m2Sid)
-$m2Acl.SetAccessRuleProtection($true, $false)
-$m2Rule = New-Object Security.AccessControl.FileSystemAccessRule(
-    $m2Sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-$m2Acl.AddAccessRule($m2Rule)
-Set-Acl -LiteralPath $m2Dir -AclObject $m2Acl
+if ($m2New) {
+    $m2Acl = New-Object Security.AccessControl.DirectorySecurity
+    $m2Acl.SetOwner($m2Sid)
+    $m2Acl.SetAccessRuleProtection($true, $false)
+    $m2Rule = New-Object Security.AccessControl.FileSystemAccessRule(
+        $m2Sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $m2Acl.AddAccessRule($m2Rule)
+    Set-Acl -LiteralPath $m2Dir -AclObject $m2Acl
+} else {
+    $m2Acl = Get-Acl -LiteralPath $m2Dir
+    $m2Rules = @($m2Acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    if (!$m2Acl.AreAccessRulesProtected -or $m2Acl.GetOwner([Security.Principal.SecurityIdentifier]) -ne $m2Sid -or
+        !$m2Rules.Count -or @($m2Rules | Where-Object IdentityReference -ne $m2Sid).Count) {
+        throw 'The Codex transport directory must have a private ACL.'
+    }
+}
 $m2KeyFile = Join-Path $m2Dir 'setup-key.dpapi'
 $m2SecretFile = Join-Path $m2Dir 'worker.dpapi'
 $m2Scope = [Security.Cryptography.DataProtectionScope]::CurrentUser
@@ -60,7 +70,8 @@ if ($Mode -eq 'Prepare') {
     [IO.File]::WriteAllText((Join-Path $m2Dir 'cli.txt'), $m2Cli)
     & $m2Python -E $m2Worker --verify-scope
     if ($LASTEXITCODE -ne 0) { throw 'The scoped worker access could not be verified.' }
-    $m2Action = New-ScheduledTaskAction -Execute $m2Python -Argument ('-E "' + $m2Worker + '"') -WorkingDirectory $m2Dir
+    $m2Pythonw = Join-Path (Split-Path -Parent $m2Python) 'pythonw.exe'
+    $m2Action = New-ScheduledTaskAction -Execute $m2Pythonw -Argument ('-E "' + $m2Worker + '"') -WorkingDirectory $m2Dir
     $m2Trigger = New-ScheduledTaskTrigger -AtLogOn -User $m2Identity.Name
     $m2Principal = New-ScheduledTaskPrincipal -UserId $m2Identity.Name -LogonType Interactive -RunLevel Limited
     $m2Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
