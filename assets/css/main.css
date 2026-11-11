@@ -79,7 +79,7 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
   background: transparent;
   cursor: pointer;
 }
-.nova-symbol[data-state="idle"] { color: #a1afc1; }
+.nova-symbol[data-state="idle"] { color: #85c8f2; }
 .nova-symbol[data-state="running"] { color: #77efc4; }
 .codex-status-symbol::before, .nova-symbol::before {
   content: "";
