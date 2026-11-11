@@ -168,7 +168,7 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
 }
 @media (max-width: 760px) {
   :root { --site-header-height: 200px; }
-  h1 { font-size: clamp(2.8rem, 9vw, 4.1rem); }
+  h1 { font-size: clamp(2.8rem, 9vw, 4.1rem); overflow-wrap: anywhere; }
   .topbar { min-height: 78px; }
   .project-label { max-width: min(155px, calc(50% - 38px)); font-size: .65rem; text-align: right; }
   .dot { margin-left: 5px; }
