@@ -36,24 +36,36 @@
     root.querySelector("[data-market-region]").setAttribute("aria-busy",String(state==="loading"));
     root.querySelector("[data-market-summary]").textContent=state==="stored"?items.length+" Assets · Stand aus der Datenbank":states[state];
   }
-  function ready(root, ok) {
+  function ready(root, ok, signal) {
     // Two animation frames: rows have reached a browser paint before measurement.
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if(signal.aborted)return;
       const ms=Math.round(performance.now());root.dataset.dataReadyMs=String(ms);root.dataset.dataSuccess=String(ok);
       if(typeof performance.getEntriesByType==="function"){const paint=performance.getEntriesByType("paint").find(p=>p.name==="first-contentful-paint");if(paint)root.dataset.firstContentfulPaintMs=String(paint.startTime);}
       const node=document.querySelector("[data-data-ready-time]");
       if(node){node.textContent=ms+" ms";node.setAttribute("aria-label",(ok?"Darstellung mit Daten ":"Fehleranzeige nach ")+ms+" ms");}
     }));
   }
-  async function load(root) {
-    render(root,"loading");const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),8000);
+  async function load(root, controller, scope, timeout) {
+    render(root,"loading");
     try {
       const response=await fetch("api/market.php",{method:"GET",credentials:"same-origin",cache:"no-store",signal:controller.signal,headers:{Accept:"application/json"}});
       if(!response.ok)throw Error("response");const data=await response.json();
       if(data.status!=="ok"||!Array.isArray(data.items))throw Error("payload");
-      render(root,data.items.length?"stored":"missing",data.items);ready(root,true);
-    }catch(error){render(root,"error");ready(root,false);}finally{clearTimeout(timeout);}
+      if(!scope.signal.aborted){render(root,data.items.length?"stored":"missing",data.items);ready(root,true,scope.signal);}
+    }catch(error){if(!scope.signal.aborted){render(root,"error");ready(root,false,scope.signal);}}finally{clearTimeout(timeout);}
   }
-  globalThis.MosaMarket=Object.freeze({decimal,time,render});
-  const root=document.querySelector("[data-market-view]");if(root){root.dataset.shellReadyMs=String(Math.round(performance.now()));root.dataset.viewport=String(window.innerWidth)+"x"+String(window.innerHeight);load(root);}
+  function mount(main) {
+    const root=main.querySelector("[data-market-view]");
+    if(!root)return {dispose() {}};
+    const scope=new AbortController(),controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),8000);
+    root.dataset.shellReadyMs=String(Math.round(performance.now()));
+    root.dataset.viewport=String(window.innerWidth)+"x"+String(window.innerHeight);
+    return {ready:load(root,controller,scope,timeout),dispose(){
+      scope.abort();clearTimeout(timeout);controller.abort();
+    }};
+  }
+  globalThis.MosaMarket=Object.freeze({decimal,time,render,mount});
+  if(!document.querySelector("[data-site-shell]"))mount(document);
 }());

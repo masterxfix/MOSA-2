@@ -1,9 +1,16 @@
 (function () {
   "use strict";
 
-  const root = document.querySelector("[data-fundamentals-view]");
-  if (!root) return;
-  const state = { items: [], selected: null, jobs: new Map() };
+  const jobs = new Map(), pendingPosts = new Map();
+  function mount(root, legacy = false) {
+  const scope = new AbortController(), timers = new Set();
+  const listeners = {signal: scope.signal};
+  const state = { items: [], selected: null, jobs };
+  function later(callback, delay) {
+    const timer = setTimeout(() => {timers.delete(timer);callback();}, delay);
+    timers.add(timer);
+    return timer;
+  }
   const officialReports = new Map([
     ["AU000000DRO2", {url: "https://www.droneshield.com/investor-relations", origin: "Manuell"}],
     ["CNE100000296", {url: "https://www.bydglobal.com/cn/investor-relations", origin: "Manuell"}],
@@ -165,7 +172,7 @@
       const number = document.createElement("span");number.className = "fundamental-asset-number";number.textContent = String(index + 1).padStart(2, "0");
       const name = document.createElement("span");name.className = "fundamental-asset-name";name.textContent = item.name;
       const arrow = document.createElement("span");arrow.className = "fundamental-asset-arrow";arrow.textContent = "↗";
-      button.append(number,name,arrow);button.addEventListener("click", () => select(item.isin));elements.assets.append(button);
+      button.append(number,name,arrow);button.addEventListener("click", () => select(item.isin), listeners);elements.assets.append(button);
     });
     elements.total.textContent = String(data.totals.assets).padStart(2, "0");
     elements.summary.textContent = data.totals.fundamental_observations + " Observations · " + data.totals.fundamental_current + " Current · Stand " + date(data.as_of);
@@ -187,12 +194,13 @@
   }
   function jobStatus(isin, message, active, id = state.jobs.get(isin)?.id) {
     state.jobs.set(isin, {message, active, id});
-    if (state.selected === isin) showJob(isin);
+    if (!scope.signal.aborted && state.selected === isin) showJob(isin);
   }
   async function historyRequest(method, value) {
     const path = "api/fundamentals_history.php" + (method === "GET" ? "?id=" + encodeURIComponent(value) : "");
     const response = await fetch(path, {
       method, credentials: "same-origin", cache: "no-store",
+      ...(method === "GET" ? {signal: scope.signal} : {}),
       headers: {Accept: "application/json", ...(method === "POST" ? {"Content-Type": "application/json"} : {})},
       ...(method === "POST" ? {body: JSON.stringify(value)} : {})
     });
@@ -201,13 +209,15 @@
     return result;
   }
   async function followJob(isin, result) {
+    if (scope.signal.aborted) return;
     const active = ["queued", "running"].includes(result.status);
     jobStatus(isin, result.message, active, result.id);
     if (!active) {
       if (result.inserted > 0) {
-        const response = await fetch("api/fundamentals.php?isin=" + encodeURIComponent(isin), {cache: "no-store"});
+        const response = await fetch("api/fundamentals.php?isin=" + encodeURIComponent(isin), {cache: "no-store", signal: scope.signal});
         if (!response.ok) throw Error("Import bestätigt. Die aktualisierten Werte konnten noch nicht angezeigt werden.");
         const data = await response.json();
+        if (scope.signal.aborted) return;
         const updated = data.items?.find((item) => item.isin === isin);
         if (!updated) throw Error("Import bestätigt. Die aktualisierten Werte konnten noch nicht angezeigt werden.");
         state.items = state.items.map((item) => item.isin === isin ? updated : item);
@@ -215,10 +225,14 @@
       }
       return;
     }
-    setTimeout(async () => {
+    later(async () => {
       try { await followJob(isin, await historyRequest("GET", result.id)); }
-      catch { jobStatus(isin, "Jobstatus gerade nicht verfügbar. Du kannst dieselbe Anfrage wieder öffnen.", false); }
+      catch { if (!scope.signal.aborted) jobStatus(isin, "Jobstatus gerade nicht verfügbar. Du kannst dieselbe Anfrage wieder öffnen.", false); }
     }, 4000);
+  }
+  async function watchPost(isin, post) {
+    try { await followJob(isin, await post); }
+    catch (error) { if (!scope.signal.aborted) jobStatus(isin, error.message, false); }
   }
   if (elements.history) {
     const year = new Date().getFullYear();
@@ -228,7 +242,7 @@
     elements.history.addEventListener("input", () => {
       const {start, end} = historyScope();
       if (start >= 1900 && end >= start && end <= year) select(state.selected);
-    });
+    }, listeners);
     elements.history.addEventListener("submit", async (event) => {
       event.preventDefault();
       const isin = state.selected;
@@ -239,33 +253,67 @@
         return;
       }
       jobStatus(isin, "Gespeicherter Bestand wird geprüft …", true);
-      try { await followJob(isin, await historyRequest("POST", {isin, ...scope})); }
-      catch (error) { jobStatus(isin, error.message, false); }
-    });
+      // Keep the POST and its receipt independent of the lifetime of this view.
+      const post = historyRequest("POST", {isin, ...scope}).then(result => {
+        jobs.set(isin, {message: result.message, active: ["queued", "running"].includes(result.status), id: result.id});
+        return result;
+      }, error => {
+        jobs.set(isin, {message: error.message, active: false});
+        throw error;
+      }).finally(() => pendingPosts.delete(isin));
+      pendingPosts.set(isin, post);
+      await watchPost(isin, post);
+    }, listeners);
   }
   async function load() {
     elements.status.textContent = "Fundamentaldaten werden geladen …";
-    const controller = new AbortController();const timeout = setTimeout(() => controller.abort(), 8000);
+    const controller = new AbortController();const timeout = later(() => controller.abort(), 8000);
+    scope.signal.addEventListener("abort", () => controller.abort(), {once: true});
     try {
       const response = await fetch("api/fundamentals.php", {method: "GET", credentials: "same-origin", cache: "no-store", signal: controller.signal, headers: {Accept: "application/json"}});
       if (!response.ok) throw Error("response");
-      render(await response.json());
-      const timing = document.querySelector("[data-fundamentals-load-time]");
+      const data = await response.json();
+      if (scope.signal.aborted) return;
+      render(data);
+      const timing = legacy && document.querySelector("[data-fundamentals-load-time]");
       if (timing && typeof performance !== "undefined") {
         const dataReady = performance.now();
-        const measure = () => setTimeout(() => {
+        const measure = () => later(() => {
           const navigation = performance.getEntriesByType("navigation")[0];
           const milliseconds = Math.round(Math.max(dataReady, navigation?.duration || 0));
           timing.textContent = milliseconds + " ms";
         }, 0);
         if (document.readyState === "complete") measure();
-        else window.addEventListener("load", measure, {once: true});
+        else window.addEventListener("load", measure, {...listeners, once: true});
       }
     } catch (error) {
+      if (scope.signal.aborted) return;
       elements.detail.replaceChildren();elements.status.textContent = "Fundamentaldaten nicht verfügbar";elements.summary.textContent = "Die gespeicherten Daten konnten nicht gelesen werden.";
       const message = document.createElement("p");message.className = "fundamental-error";message.textContent = "Bitte später erneut versuchen. Es wurde kein Import gestartet.";elements.detail.append(message);
-    } finally {clearTimeout(timeout);}
+    } finally {clearTimeout(timeout);timers.delete(timeout);}
   }
-  globalThis.MosaFundamentals = Object.freeze({date,period,render});
-  load();
+  const ready = load();
+  if (elements.history) ready.then(() => {
+    if (scope.signal.aborted) return;
+    for (const [isin, job] of jobs) {
+      if (pendingPosts.has(isin)) watchPost(isin, pendingPosts.get(isin));
+      else if (job.active && job.id) {
+        historyRequest("GET", job.id).then(result => followJob(isin, result)).catch(() => {
+          if (!scope.signal.aborted) jobStatus(isin, "Jobstatus gerade nicht verfügbar. Du kannst dieselbe Anfrage wieder öffnen.", false);
+        });
+      }
+    }
+  });
+  return {ready, dispose() {
+    scope.abort();
+    for (const timer of timers) clearTimeout(timer);
+    timers.clear();
+  }, date, period, render};
+  }
+  if (document.querySelector("[data-site-shell]")) {
+    globalThis.MosaFundamentals = Object.freeze({mount});
+  } else {
+    const root = document.querySelector("[data-fundamentals-view]");
+    if (root) globalThis.MosaFundamentals = Object.freeze(mount(root, true));
+  }
 }());

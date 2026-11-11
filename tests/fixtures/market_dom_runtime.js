@@ -9,7 +9,7 @@ class Element {
 const root=new Element(),body=new Element(),region=new Element(),summary=new Element(),timing=new Element();
 root.querySelector=selector=>({'[data-market-rows]':body,'[data-market-region]':region,'[data-market-summary]':summary}[selector]);
 const scenario=process.argv[3];let resolve,reject,requests=[],frames=[];
-const context={document:{createElement:()=>new Element(),createDocumentFragment:()=>new Element(),querySelector:selector=>selector==='[data-market-view]'?root:timing},
+const context={document:{createElement:()=>new Element(),createDocumentFragment:()=>new Element(),querySelector:selector=>({'[data-market-view]':root,'[data-data-ready-time]':timing}[selector]??null)},
   window:{innerWidth:390,innerHeight:844},AbortController,performance:{now:()=>912.4},requestAnimationFrame:fn=>frames.push(fn),setTimeout:()=>1,clearTimeout:()=>{},
   fetch:(url,options)=>{requests.push({url,method:options.method,cache:options.cache});return new Promise((a,b)=>{resolve=a;reject=b;});}};
 vm.runInNewContext(fs.readFileSync(process.argv[2],'utf8'),context);

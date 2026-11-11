@@ -103,7 +103,8 @@ class FundamentalsWebTests(unittest.TestCase):
         navigation = (ROOT / 'assets/js/navigation.js').read_text(encoding='utf-8')
         homepage = (ROOT / 'index.html').read_text(encoding='utf-8')
         self.assertIn('data-fundamentals-view', page)
-        self.assertIn('fundamentaldaten.html', navigation)
+        self.assertIn('href="fundamentaldaten.html"', homepage)
+        self.assertIn('window.MosaFundamentals', navigation)
         self.assertIn('Fundamentaldaten entdecken', homepage)
         self.assertNotRegex(page + navigation + homepage, r'password|secret|token|m2_entities|configcenter|/var/')
 

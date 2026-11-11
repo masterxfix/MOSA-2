@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='isin-20261110-market-focus';
+const cacheVersion='page-shell-1';
 for(const file of ['marktdaten.html','index.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
@@ -28,7 +28,7 @@ const entries=[
 ];
 const storage=new Map([['mosa2-isin-lookup-v1',JSON.stringify(entries)]]);
 const localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
-const sandbox={document,localStorage,Intl,Date,JSON,Number,String,Object,Array,Set,Math,Error,setTimeout,clearTimeout};sandbox.globalThis=sandbox;
+const sandbox={document,localStorage,Intl,Date,JSON,Number,String,Object,Array,Set,Math,Error,AbortController,setTimeout,clearTimeout};sandbox.globalThis=sandbox;
 
 vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),sandbox);
 assert.equal(table.children.length,3,'Standard view renders exactly one row per ISIN');

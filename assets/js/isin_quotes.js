@@ -17,14 +17,19 @@
     && Number(quote.price)>0 && /^[A-Z]{3}$/.test(quote.currency)
     && typeof quote.market_at === "string" && Number.isFinite(Date.parse(quote.market_at))
     && typeof quote.captured_at === "string" && Date.parse(quote.market_at)<=Date.parse(quote.captured_at));
-  const forms = [...document.querySelectorAll("[data-isin-form]")];
-  if (!forms.length) return;
-  const detailsToggle = document.querySelector("[data-isin-details-toggle]");
+  let manualOwner = null, currentView = null;
+  function mount(root) {
+  const forms = [...root.querySelectorAll("[data-isin-form]")];
+  if (!forms.length) return {dispose() {}};
+  const scope = new AbortController();
+  const listeners = {signal:scope.signal};
+  const detailsToggle = root.querySelector("[data-isin-details-toggle]");
   const storedQuotes = new Map();
-  const storedRoot=document.querySelector("[data-isin-stored-quotes]");
-  const marketView=document.querySelector("[data-isin-market-view]");
+  const storedRoot=root===document ? document.querySelector("[data-isin-stored-quotes]") : root;
+  const marketView=root.querySelector("[data-isin-market-view]");
   const READ_INTERVAL=30000, STORED_URL="api/market.php?view=best";
   let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
+  let cancelRead = null;
   function restore() {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -42,7 +47,7 @@
         errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && (e.provider==="all" || providers.some(p=>p.key===e.provider)) && typeof e.code==="string").slice(0,6):[]}));
     } catch {return [];}
   }
-  let entries = restore(), busy = false, detailsOpen = false;
+  let entries = restore(), busy = Boolean(manualOwner), detailsOpen = false;
   const save = () => {try {
     if (entries.length) localStorage.setItem(KEY, JSON.stringify(entries));
     else localStorage.removeItem(KEY);
@@ -82,7 +87,7 @@
   const tabActive=()=>!document.hidden && document.hasFocus();
   function scheduleStoredRead() {
     if(storedTimer!==null){clearTimeout(storedTimer);storedTimer=null;}
-    if(!marketView || !storedRoot)return;
+    if(scope.signal.aborted || !marketView || !storedRoot)return;
     const active=tabActive();
     if(storedRoot.dataset.isinTabActive!==String(active))storedRoot.dataset.isinTabActive=String(active);
     if(storedStopped || !active || busy || storedRead || (nextStoredAt!==null && !entries.length))return;
@@ -92,14 +97,15 @@
     },nextStoredAt===null?0:Math.max(0,nextStoredAt-performance.now()));
   }
   function loadStoredQuotes() {
-    if(!storedRoot || storedRead || storedStopped || busy
+    if(scope.signal.aborted || !storedRoot || storedRead || storedStopped || busy
       || (marketView && (document.hidden || (nextStoredAt!==null && !tabActive()))))return;
     const firstRead=nextStoredAt===null;
     nextStoredAt=performance.now()+READ_INTERVAL;
     // MOSA's chart pattern: one same-origin read at a time, separate from provider lookups.
     const started=performance.now();
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+    cancelRead=()=>{clearTimeout(timer);controller.abort();};
     storedRead=Promise.resolve().then(async()=>{
-      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
       let httpStatus=0;
       try {
         const response=await fetch(STORED_URL,{credentials:"same-origin",cache:"no-store",
@@ -122,6 +128,9 @@
       } catch { storedStatus="error"; }
       finally {
         clearTimeout(timer);
+        cancelRead=null;
+        storedRead=null;
+        if(scope.signal.aborted)return;
         if(marketView){
           // Local timings distinguish background requests from initial page readiness.
           storedRoot.dataset.isinReadCount=String(++readCount);
@@ -129,15 +138,16 @@
           storedRoot.dataset.isinReadDurationMs=String(Math.round(performance.now()-started));
           storedRoot.dataset.isinReadHttp=String(httpStatus);
         }
-        storedRead=null;
         paint();
         scheduleStoredRead();
         if(firstRead)requestAnimationFrame(()=>requestAnimationFrame(()=>{
+          if(scope.signal.aborted)return;
           storedRoot.dataset.dataReadyMs=String(Math.round(performance.now()));
           storedRoot.dataset.dataSuccess=String(storedStatus==="ok");
         }));
       }
     });
+    return storedRead;
   }
   function age(quote) {
     const stamp=Date.parse(quote.market_at);
@@ -171,11 +181,12 @@
     for(const row of existing.values())row.remove();
   }
   function syncDeleteButtons() {
-    for (const button of document.querySelectorAll("[data-isin-remove]")) button.disabled = busy;
-    for (const button of document.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
+    for (const button of root.querySelectorAll("[data-isin-remove]")) button.disabled = busy;
+    for (const button of root.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
   }
   function paint() {
-    for (const list of document.querySelectorAll("[data-isin-list]")) {
+    if(scope.signal.aborted)return;
+    for (const list of root.querySelectorAll("[data-isin-list]")) {
       const fragment=document.createDocumentFragment();
       for (const [index,entry] of entries.entries()) {
         const quote=best(entry), li=document.createElement("li");
@@ -190,8 +201,8 @@
       if (!entries.length) {const li=document.createElement("li");li.className="isin-empty";li.textContent="Noch keine ISIN eingegeben.";fragment.append(li);}
       list.replaceChildren(fragment);
     }
-    const number=document.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(entries.length).padStart(2,"0");
-    for (const tbody of document.querySelectorAll("[data-isin-table]")) {
+    const number=root.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(entries.length).padStart(2,"0");
+    for (const tbody of root.querySelectorAll("[data-isin-table]")) {
       const rows=[];
       const ownIsins=new Set(entries.map(entry=>entry.isin));
       const displayed=[...entries,...[...storedQuotes.values()]
@@ -221,7 +232,7 @@
     const summary=entries.length+" ISIN"+(entries.length===1?"":"s")+
       (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
         ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
-    for(const label of document.querySelectorAll("[data-isin-summary]")){
+    for(const label of root.querySelectorAll("[data-isin-summary]")){
       if(label.textContent!==summary)label.textContent=summary;
     }
     syncDeleteButtons();
@@ -344,13 +355,21 @@
   function setBusy(value) {
     busy=value;
     for(const form of forms){const button=form.querySelector("button[type=submit]");if(button)button.disabled=value;}
-    for(const button of document.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
+    for(const button of root.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
     if(detailsToggle) detailsToggle.disabled=value;
     syncDeleteButtons();
     scheduleStoredRead();
   }
+  const view = () => {
+    entries=restore();setBusy(false);paint();
+    if(!marketView && nextStoredAt===null)loadStoredQuotes();
+  };
+  function finishManual() {
+    manualOwner=null;
+    if(currentView && currentView!==view)currentView();
+  }
   async function submit(form) {
-    if(busy)return;
+    if(busy || manualOwner)return;
     const code=form.querySelector("[data-isin-input]").value.trim().toUpperCase();
     showError(form);
     if(!valid(code)){showError(form,"Ungültige ISIN. Bitte zwölf Zeichen einschließlich Prüfziffer eingeben.");return;}
@@ -359,7 +378,7 @@
       if(entries.length>=30){showError(form,"Die Liste enthält bereits 30 ISINs.");return;}
       entry={isin:code,name:null,quotes:[],errors:[]};entries.unshift(entry);
     }
-    setBusy(true);
+    manualOwner=view;setBusy(true);
     save();paint();
     try{
       if(storedRead)await storedRead;
@@ -373,16 +392,17 @@
     }finally{
       setBusy(false);
       save();paint();
+      finishManual();
     }
   }
   async function refreshAll() {
-    if(busy)return false;
+    if(busy || manualOwner)return false;
     entries=restore();paint();
     const form=forms[0];
     showError(form);
     if(!entries.length)return false;
     const snapshot=entries.slice();let failed=false;
-    setBusy(true);
+    manualOwner=view;setBusy(true);
     try{
       if(storedRead)await storedRead;
       for(const entry of snapshot){
@@ -401,27 +421,38 @@
     }finally{
       setBusy(false);save();
       paint();
+      finishManual();
     }
     return true;
   }
-  for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);});
-  for(const button of document.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",refreshAll);
-  for(const list of document.querySelectorAll("[data-isin-list]")) list.addEventListener("click",event=>{
+  for(const form of forms) form.addEventListener("submit",event=>{event.preventDefault();submit(form);},listeners);
+  for(const button of root.querySelectorAll("[data-isin-refresh]"))button.addEventListener("click",refreshAll,listeners);
+  for(const list of root.querySelectorAll("[data-isin-list]")) list.addEventListener("click",event=>{
     const button=event.target.closest("[data-isin-remove]");
     if(button) removeEntry(button.dataset.isinRemove);
-  });
-  for(const button of document.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries);
-  if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();});
+  },listeners);
+  for(const button of root.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries,listeners);
+  if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();},listeners);
   if(marketView){
-    document.addEventListener("visibilitychange",scheduleStoredRead);
-    window.addEventListener("focus",scheduleStoredRead);
-    window.addEventListener("blur",scheduleStoredRead);
+    document.addEventListener("visibilitychange",scheduleStoredRead,listeners);
+    window.addEventListener("focus",scheduleStoredRead,listeners);
+    window.addEventListener("blur",scheduleStoredRead,listeners);
     window.addEventListener("storage",event=>{
       if(busy || (event.key!==KEY && event.key!==null))return;
       entries=restore();paint();scheduleStoredRead();
-    });
+    },listeners);
   }
+  currentView=view;
+  if(busy)setBusy(true);
   paint();
-  loadStoredQuotes();
-  globalThis.MosaIsinLookup=Object.freeze({valid});
+  const ready=loadStoredQuotes();
+  return {ready,dispose(){
+    scope.abort();
+    if(storedTimer!==null)clearTimeout(storedTimer);
+    cancelRead?.();
+    if(currentView===view)currentView=null;
+  }};
+  }
+  globalThis.MosaIsinLookup=Object.freeze({valid,mount});
+  if (!document.querySelector("[data-site-shell]")) mount(document);
 }());

@@ -9,7 +9,7 @@ const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Trade
   observed_at:'2026-11-08 11:59:10.000000Z',status:'stored'});
 const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
 const flush=()=>new Promise(setImmediate);
-function harness({market=true,entries=initial}={}){
+function harness({market=true,entries=initial,lifecycle=false}={}){
   let ms=0,timerId=0,http=200,items=stored,hold=false,release,active=0,maxActive=0,writes=0,focused=true;
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
@@ -23,7 +23,8 @@ function harness({market=true,entries=initial}={}){
     '[data-isin-summary]':market?[summary]:[]
   }[selector]??[]),querySelector:selector=>({
     '[data-isin-stored-quotes]':root,'[data-isin-market-view]':market?new E('section'):null,
-    '[data-isin-details-toggle]':market?details:null
+    '[data-isin-details-toggle]':market?details:null,
+    '[data-site-shell]':lifecycle?root:null
   }[selector]??null),createElement:tag=>new E(tag),addEventListener:(name,fn)=>{events[name]=fn;}};
   class TestDate extends Date {constructor(...args){super(...(args.length?args:[TestDate.now()]));} static now(){return base+ms;}}
   const setTimeout=(fn,delay)=>{timers.set(++timerId,{at:ms+delay,fn});return timerId;};
@@ -63,7 +64,10 @@ function harness({market=true,entries=initial}={}){
   const sandbox={document,window:{addEventListener:(name,fn)=>{windowEvents[name]=fn;}},localStorage,fetch,AbortController,
     Date:TestDate,performance:{now:()=>ms},setTimeout,clearTimeout,requestAnimationFrame:fn=>fn()};
   vm.runInNewContext(script,sandbox);
+  root.querySelector=document.querySelector;
+  root.querySelectorAll=document.querySelectorAll;
   return {table,input,form,refresh,details,root,summary,calls,error,storage,advance,
+    mount(){return sandbox.MosaIsinLookup.mount(root);},
     get writes(){return writes;},get maxActive(){return maxActive;},
     hide(value){document.hidden=value;events.visibilitychange();},
     focus(value){focused=value;windowEvents[value?"focus":"blur"]();},
@@ -135,5 +139,19 @@ function harness({market=true,entries=initial}={}){
   assert.equal(empty.calls.at(-1).url,'api/isin_quote.php','Manual refresh preserves the source comparison');
   assert.equal(empty.error.hidden,true);
   assert.equal(empty.maxActive,1);
+  const scoped=harness({lifecycle:true});
+  assert.equal(scoped.calls.length,0,'A shared shell does not start the ISIN module automatically');
+  scoped.hold();
+  const firstVisit=scoped.mount();await flush();
+  firstVisit.dispose();
+  assert.equal(scoped.calls[0].opts.signal.aborted,true,'Leaving cancels the outstanding stored GET');
+  scoped.release();await firstVisit.ready;
+  await scoped.advance(60000);
+  assert.equal(scoped.calls.length,1,'Disposed Market schedules no further reads');
+  const secondVisit=scoped.mount();await secondVisit.ready;
+  await scoped.advance(30000);
+  assert.equal(scoped.calls.length,3,'A new visit starts a single 30-second polling loop');
+  secondVisit.dispose();
+  assert.equal(scoped.writes,0,'Mounting and leaving views does not change stored ISINs');
   console.log('PASS stored-only poll: 30 s, keyed cells, visible tabs, recovery, no overlap, manual source requests');
 })().catch(error=>{console.error(error);process.exitCode=1;});
