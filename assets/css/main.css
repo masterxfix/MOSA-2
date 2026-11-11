@@ -128,7 +128,14 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
 }
 .nova-chat button:disabled { opacity: .55; cursor: default; }
 .nova-chat-messages { overflow-y: auto; min-height: 80px; max-height: 280px; }
-.nova-chat-messages p { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nova-chat-messages p {
+  width: fit-content;
+  max-width: 86%;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.nova-chat-messages .nova-chat-own { margin-inline-start: auto; }
 .nova-chat-messages strong { color: var(--accent); }
 .nova-chat-feedback { margin: 0; color: var(--muted); }
 .nova-chat-feedback:empty { display: none; }

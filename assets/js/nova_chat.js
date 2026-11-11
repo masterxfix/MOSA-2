@@ -21,8 +21,9 @@
     send.disabled = !connected || !csrf || busy || inFlight;
   }
 
-  function append(label, text) {
+  function append(label, text, own = false) {
     const row = document.createElement("p");
+    if (own) row.className = "nova-chat-own";
     const name = document.createElement("strong");
     name.textContent = label + " ";
     row.append(name, text);
@@ -40,7 +41,7 @@
       lastView = view;
       log.replaceChildren();
       for (const item of data.messages) {
-        append("Du", item.text);
+        append("Du", item.text, true);
         if (item.reply) append(item.state === "done" ? "NOVA" : "Hinweis", item.reply);
         else append("NOVA", item.state === "running" ? "Antwort wird erstellt …" : "Nachricht wartet …");
       }
