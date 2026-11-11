@@ -19,6 +19,7 @@
   let pending = null;
   let view = 0;
   if (!current || !main) return;
+  const initialUrl = new URL(location.href);
 
   // Use the full header height for both native anchors and scrollIntoView,
   // including when the navigation wraps at a narrower width.
@@ -45,6 +46,7 @@
     Promise.allSettled([documentReady, ...sessions.map(session => session.ready)]).then(async () => {
       await paint();
       if (id !== view) return;
+      if (id === 1) alignInitialFragment();
       const ms = Math.round(performance.now() - started);
       const value = ms >= 1000 ? (ms / 1000).toLocaleString("de-DE", {
         minimumFractionDigits: 2, maximumFractionDigits: 2
@@ -59,6 +61,14 @@
     if (!url.hash) return null;
     try { return document.getElementById(decodeURIComponent(url.hash.slice(1))); }
     catch { return null; }
+  }
+
+  function alignInitialFragment() {
+    if (!initialUrl.hash || view !== 1 || pending || location.href !== initialUrl.href) return;
+    const target = hashTarget(initialUrl);
+    if (!target) return;
+    const top = target.getBoundingClientRect().top - header.getBoundingClientRect().bottom - 8;
+    if (Math.abs(top) > 1) window.scrollBy({top, behavior: "instant"});
   }
 
   function position(url) {
@@ -140,13 +150,8 @@
   });
 
   mount(0);
-  const initialUrl = new URL(location.href);
   if (initialUrl.hash) {
-    // The browser can scroll to the initial fragment before the header is measured.
-    documentReady.then(paint).then(() => {
-      if (view !== 1 || pending || location.href !== initialUrl.href) return;
-      updateHeaderOffset();
-      hashTarget(initialUrl)?.scrollIntoView();
-    });
+    // Correct the native fragment jump at load, then again after initial data has rendered.
+    documentReady.then(paint).then(alignInitialFragment);
   }
 }());
