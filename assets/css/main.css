@@ -201,6 +201,10 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
   .market-placeholder td { display: block; }
   .market-placeholder td::before { content: none; }
 }
+@media (max-width: 365px) {
+  .brand { gap: 2px; letter-spacing: .04em; }
+  .brand-symbol { margin-right: 0; }
+}
 @media (prefers-reduced-motion: no-preference) {
   a, button { transition: color .18s ease, background-color .18s ease, border-color .18s ease; }
 }
