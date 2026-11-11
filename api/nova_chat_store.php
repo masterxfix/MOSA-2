@@ -9,7 +9,11 @@ const HOST = 'mosa2-test.scharwerk.de';
 const WORKER_USER = 'mosa2-nova-worker';
 const FRESH = 20;
 const MAX_RUN = 100;
-const MAX_BYTES = 262144;
+const MAX_BYTES = 1048576;
+const MAX_TEXT_BYTES = 12000;
+const MAX_REPLY_BYTES = 8000;
+const MAX_REQUEST_BYTES = 65536;
+const MAX_HISTORY_BYTES = 32768;
 
 function privateDirectory(): string
 {
@@ -112,13 +116,9 @@ function running(array $data, int $now): bool
 
 function acceptsText(mixed $text): bool
 {
-    if (!is_string($text) || strlen($text) > 1000 || preg_match('/[\x00-\x08\x0b-\x1f\x7f]/', $text)) return false;
-    $greeting = '(?:hallo|hi|hey|moin|servus|guten (?:morgen|tag|abend))(?:[ \t]+nova)?';
-    if (preg_match('/\A'.$greeting.'[.!]?\z/iu', $text) === 1) return true;
-    $question = preg_replace('/\A'.$greeting.'(?:[ \t]*[,!:][ \t\n]*|[ \t\n]+)/iu', '', $text, 1);
-    // Test greetings and informational questions only. The worker additionally has no tools.
-    return $question !== null && preg_match('/\A(?:(?:test|ping)(?: [\p{L}\p{N}_ -]{1,60})?[.!]?|'
-        .'(?:was|wer|wie|warum|wann|wo|woher|wozu|welch\p{L}*|wieviele?|what|who|when|why|where|how|which)\b[^<>]{1,999}\?)\z/iu', $question) === 1;
+    return is_string($text) && strlen($text) <= MAX_TEXT_BYTES
+        && preg_match('/(*UCP)\S/u', $text) === 1
+        && preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $text) === 0;
 }
 
 function navigationLabels(string $html): array
@@ -149,11 +149,32 @@ function submit(array &$data, string $owner, array $request, int $now): int
         if (in_array($job['state'], ['queued', 'running'], true)) return 409;
     }
     if ($data['seen'] <= $now - FRESH && !running($data, $now)) return 503;
-    if (count($chat['messages']) >= 12 || (!isset($data['chats'][$owner]) && count($data['chats']) >= 5)) return 429;
     $chat['updated'] = $now;
     $chat['messages'][] = ['id' => $id, 'text' => $text, 'state' => 'queued', 'at' => $now];
-    $data['chats'][$owner] = $chat;
+    $next = $data;
+    $next['chats'][$owner] = $chat;
+    $bytes = strlen(json_encode($next, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+    foreach ($next['chats'] as $conversation) {
+        foreach ($conversation['messages'] as $job) {
+            // Reserve room for claim metadata and the largest JSON-escaped reply.
+            if (in_array($job['state'], ['queued', 'running'], true)) $bytes += 6 * MAX_REPLY_BYTES + 200;
+        }
+    }
+    if ($bytes > MAX_BYTES) return 507;
+    $data = $next;
     return 202;
+}
+
+function recentHistory(array $history): array
+{
+    $recent = [];
+    $bytes = 2; // JSON array delimiters.
+    for ($i = count($history) - 1; $i >= 0; $i--) {
+        $bytes += 1 + strlen(json_encode($history[$i], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+        if ($bytes > MAX_HISTORY_BYTES) break;
+        $recent[] = $history[$i];
+    }
+    return array_reverse($recent);
 }
 
 function worker(array &$data, array $request, int $now): array
@@ -172,7 +193,7 @@ function worker(array &$data, array $request, int $now): array
                 $job['started'] = $now;
                 $job['lease'] = bin2hex(random_bytes(16));
                 return [200, ['job' => ['id' => $job['id'], 'lease' => $job['lease'],
-                    'text' => $job['text'], 'history' => array_slice($history, -3)]]];
+                    'text' => $job['text'], 'history' => recentHistory($history)]]];
             }
             unset($job);
         }
@@ -182,7 +203,7 @@ function worker(array &$data, array $request, int $now): array
     $reply = $request['reply'] ?? null;
     if (($request['action'] ?? '') !== 'complete' || !is_string($lease)
         || preg_match('/\A[a-f0-9]{32}\z/', $lease) !== 1
-        || !is_bool($request['ok'] ?? null) || !is_string($reply) || strlen($reply) > 2400
+        || !is_bool($request['ok'] ?? null) || !is_string($reply) || strlen($reply) > MAX_REPLY_BYTES
         || ($request['ok'] && trim($reply) === '')) return [422, []];
     foreach ($data['chats'] as &$chat) {
         foreach ($chat['messages'] as &$job) {

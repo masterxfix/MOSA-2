@@ -14,6 +14,8 @@ import urllib.request
 ENDPOINT = "https://mosa2-test.scharwerk.de/api/nova-transport/worker.php"
 WORKER_USER = "mosa2-nova-worker"
 VERSION = "mosa2_nova_chat_v1"
+MAX_REPLY_BYTES = 8000
+MAX_RESPONSE_BYTES = 98304
 CONFIG = Path.home() / ".config" / "mosa2-nova-chat.json"
 TEXT_INFERENCE = """
 import { readFileSync } from "node:fs";
@@ -48,7 +50,10 @@ def credentials():
 def exchange(opener, headers, payload):
     request = urllib.request.Request(ENDPOINT, json.dumps(payload).encode(), headers, method="POST")
     with opener.open(request, timeout=8) as response:
-        result = json.loads(response.read(24577))
+        body = response.read(MAX_RESPONSE_BYTES + 1)
+    if len(body) > MAX_RESPONSE_BYTES:
+        raise ValueError("M2 response too large")
+    result = json.loads(body)
     if result.get("contract_version") != VERSION:
         raise ValueError("Unexpected M2 response")
     return result
@@ -56,12 +61,12 @@ def exchange(opener, headers, payload):
 
 def answer(job, cli):
     prompt = (
-        "Du bist NOVA im Textchat von MOSA 2. Antworte kurz in der Sprache der Frage. "
+        "Du bist NOVA im Textchat von MOSA 2. Antworte in der Sprache der Nachricht und passe die Länge an die Aufgabe an. "
         "Du hast in diesem Chat keine Werkzeuge und kannst keine Aktionen durchführen. "
         "Wenn die Frage die Seiten von M2 betrifft, nutze die Hauptnavigation aus den JSON-Daten. "
-        "Die übrigen JSON-Daten enthalten Gesprächsverlauf und die aktuelle Test- oder Informationsfrage.\n"
+        "Die übrigen JSON-Daten enthalten den Gesprächsverlauf und die aktuelle Nachricht.\n"
         + json.dumps({"m2_hauptnavigation": job.get("navigation", []),
-                      "verlauf": job["history"], "frage": job["text"]}, ensure_ascii=False)
+                      "verlauf": job["history"], "nachricht": job["text"]}, ensure_ascii=False)
     )
     result = subprocess.run(
         ["node", "--input-type=module", "-e", TEXT_INFERENCE, cli],
@@ -75,7 +80,7 @@ def answer(job, cli):
     text = envelope["outputs"][0]["text"].strip()
     if not text:
         raise ValueError("OpenClaw did not return text")
-    return text.encode()[:2400].decode(errors="ignore")
+    return text.encode()[:MAX_REPLY_BYTES].decode(errors="ignore")
 
 
 def main():

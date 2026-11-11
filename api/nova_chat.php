@@ -39,8 +39,8 @@ try {
     $request = [];
     if ($method === 'POST') {
         if (($_SERVER['CONTENT_TYPE'] ?? '') !== 'application/json') reply(415);
-        $body = file_get_contents('php://input', false, null, 0, 8193);
-        if (!is_string($body) || strlen($body) > 8192) reply(413);
+        $body = file_get_contents('php://input', false, null, 0, MAX_REQUEST_BYTES + 1);
+        if (!is_string($body) || strlen($body) > MAX_REQUEST_BYTES) reply(413);
         try {
             $request = json_decode($body, true, 8, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {

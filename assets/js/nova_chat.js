@@ -70,9 +70,10 @@
           401: "Bitte melde dich erneut auf der Testseite an.",
           403: "Die Sitzung ist abgelaufen. Lade die Seite neu.",
           409: "Eine Anfrage wird bereits bearbeitet.",
-          422: "Erlaubt sind Testnachrichten und Informationsfragen, zum Beispiel „Wie funktioniert …?“",
-          429: "Das Limit für diese Unterhaltung ist erreicht.",
-          503: "Die Verbindung zu NOVA ist derzeit nicht verfügbar."
+          413: "Die Nachricht ist zu lang.",
+          422: "Bitte sende gültigen Text mit höchstens 12 KB.",
+          503: "Die Verbindung zu NOVA ist derzeit nicht verfügbar.",
+          507: "Der Chat-Speicher ist derzeit voll. Versuche es später erneut."
         };
         feedback.textContent = errors[response.status] || "Die Anfrage konnte nicht verarbeitet werden.";
         if (response.status === 503 || response.status === 401 || response.status === 403) connected = false;
@@ -119,6 +120,10 @@
     event.preventDefault();
     const text = input.value.trim();
     if (send.disabled || !text) return;
+    if (new TextEncoder().encode(text).length > 12000) {
+      feedback.textContent = "Die Nachricht ist zu lang (maximal 12 KB).";
+      return;
+    }
     feedback.textContent = "";
     if (retry?.text !== text) retry = {text, id: crypto.randomUUID().replaceAll("-", "")};
     request(retry);

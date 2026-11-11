@@ -28,7 +28,7 @@ def render(filename):
     stored = " data-isin-stored-quotes" if key == "market" else ""
     latency = ' inkl. Daten' if key == "fundamentals" else ''
     scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'reader_status.js?v=reader-status-2',
-               'nova_chat.js?v=nova-chat-1',
+               'nova_chat.js?v=nova-chat-2',
                'market.js?v=page-shell-1',
                'isin_quotes.js?v=overview-market-1', 'fundamentals.js?v=page-shell-1',
                'navigation.js?v=overview-market-1']
@@ -64,7 +64,7 @@ def render(filename):
         <div class="nova-chat-messages" data-nova-chat-messages role="log" aria-label="Unterhaltung"></div>
         <p class="nova-chat-feedback" data-nova-chat-feedback role="status"></p>
         <form class="nova-chat-form">
-          <textarea name="message" aria-label="Nachricht an NOVA" placeholder="Testnachricht oder Frage" rows="2" maxlength="500" required></textarea>
+          <textarea name="message" aria-label="Nachricht an NOVA" placeholder="Nachricht an NOVA" rows="2" required></textarea>
           <button type="submit" disabled>Senden</button>
         </form>
       </dialog>
