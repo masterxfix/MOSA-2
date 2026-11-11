@@ -271,4 +271,3 @@ h3 { font-size: 1rem; font-weight: 550; line-height: 1.5; }
 .asset-index small { display: block; margin-top: 5px; font-size: .68rem; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
 .asset-index .isin-empty { display: block; color: var(--muted); font-size: .85rem; }
 @media (max-width: 760px) { .isin-form-row { gap: 8px; } .isin-form-row input { width: 100%; } }
-
