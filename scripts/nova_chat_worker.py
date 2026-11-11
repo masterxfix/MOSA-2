@@ -41,7 +41,8 @@ def credentials():
         (config["basic_user"] + ":" + config["basic_password"]).encode()
     ).decode()
     return {"Authorization": "Basic " + basic, "X-M2-Nova-Worker": config["worker_token"],
-            "Content-Type": "application/json", "Accept": "application/json"}
+            "Content-Type": "application/json", "Accept": "application/json",
+            "User-Agent": "MOSA2-NOVA-Transport/1.0"}
 
 
 def exchange(opener, headers, payload):
