@@ -20,6 +20,7 @@ jobs:
           php -l tests/test_twelve_data_provider.php
           php -l api/market_core/twelve_data.php
           php tests/test_twelve_data_provider.php
+          php -l api/isin_quote.php
           php tests/test_market_tick_sources.php
           php tests/test_m2_native_quote_route.php
           php tests/test_market_batch_scope.php
