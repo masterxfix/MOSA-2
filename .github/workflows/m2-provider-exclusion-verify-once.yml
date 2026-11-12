@@ -1,5 +1,5 @@
-name: Verify M2 excluded market providers without deployment
-# Retry against updated historical adapter regression expectations.
+name: Verify six M2 data source candidates without deployment
+# Candidate-registration only: no provider HTTP, no Dogado, no DB writes.
 on:
   push:
     branches: [main]
@@ -7,7 +7,7 @@ on:
 permissions: {contents: read}
 jobs:
   verify-exclusion:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify M2 excluded market providers without deployment'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify six pending M2 data providers without activation'
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
@@ -19,10 +19,12 @@ jobs:
           extensions: pdo_mysql,curl,dom
           coverage: none
           tools: none
-      - name: Validate excluded providers and existing source-collector contract
+      - name: Validate candidate status and unchanged active source-collector contract
         run: |
           set -euo pipefail
           php -l api/market_sources.php
+          php -l tests/test_m2_excluded_providers.php
+          php -l tests/test_market_tick_sources.php
           php -l scripts/market_collector/mosa_tick.php
           php -d zend.assertions=1 tests/test_m2_excluded_providers.php
           php -d zend.assertions=1 tests/test_market_tick_sources.php
@@ -31,4 +33,15 @@ jobs:
           php -d zend.assertions=1 tests/test_eodhd_provider.php
           php -d zend.assertions=1 tests/test_m2_native_quote_route.php
           python3 scripts/build_pages.py --check
-          echo 'M2_MARKET_PROVIDER_EXCLUSION_VERIFIED_3_ACTIVE_2_EXCLUDED'
+          python3 - <<'PY'
+          from pathlib import Path
+          page=Path("docs/M2_MARKTDATEN_ANBIETER.md").read_text()
+          keys=("Euronext","Nasdaq Nordic","London Stock Exchange","Deutsche Börse",
+                "gettex","OpenFIGI")
+          for key in keys:
+              assert key in page, key
+          assert page.count("**ZU PRÜFEN**") == 6
+          assert "OpenFIGI" in page and "keine Kurse" in page
+          print("M2_RESEARCH_CANDIDATES_DOCUMENTED",len(keys))
+          PY
+          echo 'M2_SOURCE_RESEARCH_VERIFIED_3_ACTIVE_2_EXCLUDED_6_CANDIDATES'
