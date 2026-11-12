@@ -1,4 +1,4 @@
-name: M2 live market data field coverage audit (read-only once)
+name: M2 enriched market schema preflight read-only
 on:
   push:
     branches: [main]
@@ -6,14 +6,14 @@ on:
 permissions: {contents: read}
 jobs:
   inspect:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect live M2 market columns read-only without changing data'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Audit M2 enriched market schema preflight read-only'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {persist-credentials: false}
       - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
-      - name: Read the actual M2 market schema with dedicated read-only database user
+      - name: Read actual M2 field, index, migration and usage metadata; no DDL or DML
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
@@ -25,47 +25,68 @@ jobs:
           python3 -B - <<'PY'
           import json,sys
           sys.path.insert(0,'scripts')
-          import collector_actions as ssh
-          import collector_db_locality as remote
-          import deploy_test_sftp as profile
+          import collector_actions as ssh, collector_db_locality as remote, deploy_test_sftp as dep
           import paramiko
-          php=r"""
+          src = r"""
           $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
           $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
-          if(($cfg['dsn']??null)!==$dsn||($cfg['user']??null)!=='h29077_mosa2_read')
-              throw new RuntimeException('M2_READ_ACCOUNT');
-          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+          if(($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)
+              throw new RuntimeException('DB_READER_ACCOUNT');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[
+              PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
               PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
           unset($cfg);
           $db->exec('SET SESSION TRANSACTION READ ONLY');
           $db->beginTransaction();
           if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
               ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
-              throw new RuntimeException('DB_READONLY');
-          $rows=$db->query("SELECT TABLE_NAME,COLUMN_NAME,DATA_TYPE,IS_NULLABLE
-              FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE()
-              AND TABLE_NAME IN ('m2_market_current','m2_market_observations','m2_market_bars')
-              ORDER BY TABLE_NAME,ORDINAL_POSITION")->fetchAll();
+              throw new RuntimeException('DB_READER_READONLY');
+          $tables=[
+              'm2_market_current','m2_market_observations','m2_market_bars',
+              'm2_assets','m2_asset_identifiers','m2_asset_source_routes',
+              'm2_provider_fetches','m2_files','m2_units','m2_sources','m2_collector_requests'];
+          $placeholders=implode(',',array_fill(0,count($tables),'?'));
+          $query=$db->prepare("SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE
+             FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE()
+             AND TABLE_NAME IN (".$placeholders.") ORDER BY TABLE_NAME,ORDINAL_POSITION");
+          $query->execute($tables);
           $cols=[];
-          foreach($rows as $row){
-              $table=$row['TABLE_NAME'];
-              $cols[$table][$row['COLUMN_NAME']]=['type'=>$row['DATA_TYPE'],'nullable'=>$row['IS_NULLABLE']];
-          }
+          foreach($query->fetchAll() as $row)
+              $cols[$row['TABLE_NAME']][$row['COLUMN_NAME']]=[
+                'type'=>$row['COLUMN_TYPE'],'nullable'=>$row['IS_NULLABLE']];
+          $query=$db->prepare("SELECT TABLE_NAME,INDEX_NAME,COLUMN_NAME,SEQ_IN_INDEX,NON_UNIQUE
+             FROM information_schema.statistics WHERE TABLE_SCHEMA=DATABASE()
+             AND TABLE_NAME IN (".$placeholders.")
+             ORDER BY TABLE_NAME,INDEX_NAME,SEQ_IN_INDEX");
+          $query->execute($tables);
+          $indexes=[];
+          foreach($query->fetchAll() as $row)
+              $indexes[$row['TABLE_NAME']][$row['INDEX_NAME']][(int)$row['SEQ_IN_INDEX']]=[
+               'field'=>$row['COLUMN_NAME'],'non_unique'=>(int)$row['NON_UNIQUE']];
+          $ledger=$db->query("SELECT version,migration_key FROM m2_schema_migrations ORDER BY version")->fetchAll();
           $counts=[];
-          foreach(['m2_market_current','m2_market_observations','m2_market_bars'] as $table)
+          foreach(['m2_market_current','m2_market_observations','m2_market_bars',
+            'm2_provider_fetches','m2_files'] as $table)
               $counts[$table]=(int)$db->query('SELECT COUNT(*) FROM '.$table)->fetchColumn();
+          $counts['registered_isins']=(int)$db->query("SELECT COUNT(*) FROM m2_asset_identifiers
+              WHERE identifier_type='isin' AND scope_key='' AND is_primary=1 AND valid_to IS NULL")->fetchColumn();
+          $units=$db->query("SELECT dimension_key,status,COUNT(*) AS count
+              FROM m2_units GROUP BY dimension_key,status ORDER BY dimension_key,status")->fetchAll();
           $db->rollBack();
-          echo json_encode(['checked_at_utc'=>gmdate('c'),'readonly'=>true,
-              'table_columns'=>$cols,'row_counts'=>$counts],JSON_THROW_ON_ERROR);
+          echo json_encode(['readonly'=>true,'checked_utc'=>gmdate('c'),'columns'=>$cols,
+              'indexes'=>$indexes,'ledger'=>$ledger,'counts'=>$counts,'units'=>$units],
+              JSON_THROW_ON_ERROR);
           """
-          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
-              phpbin,_=remote.capability(t)
-              rc,out,err,_=remote.remote_call(t,remote.command(phpbin,remote.BOOTSTRAP),
-                  json.dumps({'source':php}).encode(),timeout=45)
-              if rc or err: raise RuntimeError('M2_LIVE_SCHEMA_READ_FAILED')
+          with ssh.ssh_client(dep.configuration(),{},paramiko) as transport:
+              phpbin,_=remote.capability(transport)
+              rc,out,err,_=remote.remote_call(transport,
+                  remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':src}).encode(),timeout=45)
+              if rc or err:raise RuntimeError('M2_ENRICHMENT_DB_READ_FAILED')
               data=json.loads(out)
-              expected={'m2_market_current','m2_market_observations','m2_market_bars'}
-              if not data.get('readonly') or set(data.get('table_columns',{}))!=expected:
-                  raise RuntimeError('M2_TABLES_OR_READONLY_NOT_CONFIRMED')
-              print('M2_MARKET_DB_SCHEMA_READONLY '+json.dumps(data,ensure_ascii=False),flush=True)
+              needed=['m2_market_observations','m2_market_current','m2_asset_identifiers',
+                  'm2_provider_fetches','m2_market_bars','m2_files']
+              if not data.get('readonly') or not all(x in data['columns'] for x in needed):
+                  raise RuntimeError('M2_ENRICHMENT_SCHEMA_INCOMPLETE')
+              print('M2_ENRICHMENT_SCHEMA '+json.dumps(data,ensure_ascii=False),flush=True)
           PY
