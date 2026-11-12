@@ -167,7 +167,7 @@
     const actions=tbody.dataset.isinActions!==undefined;
     const existing=new Map(Array.from(tbody.children,row=>[row.dataset.isinRow,row]));
     let next=tbody.firstElementChild;
-    for(const [key,status,values,removeIsin] of rows){
+    for(const [key,status,values,removeIsin,dbIsin] of rows){
       let row=existing.get(key);
       existing.delete(key);
       if(!row){
@@ -192,16 +192,28 @@
       if(status && row.dataset.status!==status)row.dataset.status=status;
       values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
       if(actions && key!=="empty"){
-        const cell=row.cells[values.length], button=cell.firstElementChild;
-        if(!removeIsin)button?.remove();
-        else if(!button){
-          const remove=document.createElement("button");
-          remove.type="button";
-          remove.className="isin-delete";
-          remove.dataset.isinRemove=removeIsin;
-          remove.textContent="Entfernen";
-          remove.setAttribute("aria-label",removeIsin+" entfernen");
-          cell.append(remove);
+        const cell=row.cells[values.length];
+        let local=cell.querySelector("[data-isin-remove]");
+        if(!removeIsin)local?.remove();
+        else if(!local){
+          local=document.createElement("button");
+          local.type="button";
+          local.className="isin-delete";
+          local.dataset.isinRemove=removeIsin;
+          local.textContent="Entfernen";
+          local.setAttribute("aria-label",removeIsin+" nur aus diesem Browser entfernen");
+          cell.append(local);
+        }
+        let remote=cell.querySelector("[data-isin-db-delete]");
+        if(!dbIsin)remote?.remove();
+        else if(!remote){
+          remote=document.createElement("button");
+          remote.type="button";
+          remote.className="isin-delete";
+          remote.dataset.isinDbDelete=dbIsin;
+          remote.textContent="Aus DB löschen";
+          remote.setAttribute("aria-label",dbIsin+" und alle zugehörigen Daten aus der Testdatenbank löschen");
+          cell.append(remote);
         }
       }
       if(row===next)next=next.nextElementSibling;
@@ -210,7 +222,7 @@
     for(const row of existing.values())row.remove();
   }
   function syncDeleteButtons() {
-    for (const button of root.querySelectorAll("[data-isin-remove]")) button.disabled = busy;
+    for (const button of root.querySelectorAll("[data-isin-remove], [data-isin-db-delete]")) button.disabled = busy;
     for (const button of root.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
   }
   function paint() {
@@ -239,6 +251,7 @@
           for(const error of entry.errors||[])rows.push(errorRow(entry,error));
         }
         if(ownIsins.has(entry.isin))rows[first][3]=entry.isin;
+        if(marketView && registeredAssets.has(entry.isin))rows[first][4]=entry.isin;
       }
       if(!rows.length)rows.push(["empty",null,["Noch keine ISIN eingegeben."]]);
       reconcileRows(tbody,rows);
@@ -285,6 +298,44 @@
     const index=entries.findIndex(entry=>entry.isin===isin);
     if (index<0) return;
     entries.splice(index,1);save();paint();
+  }
+  async function deleteFromDatabase(code) {
+    if(busy || !marketView || !registeredAssets.has(code))return;
+    if(!window.confirm(code+" und alle zugehörigen Daten vollständig aus der MOSA-2-Testdatenbank löschen?"))return;
+    const form=forms[0];
+    showError(form);
+    setBusy(true);
+    try{
+      const tokenReply=await fetch("api/market_registry.php",{
+        method:"GET",credentials:"same-origin",cache:"no-store",headers:{"Accept":"application/json"}
+      });
+      if(!tokenReply.ok)throw Error("DB-Zugriff derzeit nicht verfügbar");
+      const token=await tokenReply.json();
+      if(token.status!=="ok" || typeof token.csrf!=="string")throw Error("DB-Sitzung ungültig");
+      const response=await fetch("api/market_registry.php",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"Accept":"application/json","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+        body:JSON.stringify({action:"purge",isin:code,csrf:token.csrf})
+      });
+      if(!response.ok)throw Error("Datenbanklöschung fehlgeschlagen ("+response.status+")");
+      const result=await response.json();
+      if(!["deleted","absent"].includes(result.status)||result.isin!==code)throw Error("Ungültige Löschbestätigung");
+      storedQuotes.delete(code);
+      registeredAssets.delete(code);
+      entries=entries.filter(entry=>entry.isin!==code);
+      save();
+    }catch(error){
+      showError(form,error.message||"Datenbanklöschung nicht bestätigt");
+      return;
+    }finally{
+      setBusy(false);
+      paint();
+    }
+    // An independent database read, not only the DELETE response, proves absence.
+    nextStoredAt=null;
+    await loadStoredQuotes();
+    if(storedStatus!=="ok" || registeredAssets.has(code) || storedQuotes.has(code))
+      showError(form,"Löschung ausgeführt, aber unabhängige Datenbankprüfung noch offen.");
   }
   function clearEntries() {
     if (busy || !entries.length || !window.confirm("Alle gespeicherten ISINs in diesem Browser löschen?")) return;
@@ -452,6 +503,8 @@
   for(const table of root.querySelectorAll("[data-isin-table]")) table.addEventListener("click",event=>{
     const button=event.target.closest("[data-isin-remove]");
     if(button) removeEntry(button.dataset.isinRemove);
+    const remote=event.target.closest("[data-isin-db-delete]");
+    if(remote)deleteFromDatabase(remote.dataset.isinDbDelete);
   },listeners);
   for(const button of root.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries,listeners);
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();},listeners);
