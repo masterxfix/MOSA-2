@@ -5,7 +5,7 @@ on:
     inputs:
       mode:
         type: choice
-        options: [install, relay]
+        options: [install]
         required: true
       expected_commit:
         type: string
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   collector:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main'
+    if: inputs.mode == 'install' && github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
