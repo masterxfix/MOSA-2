@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with: {persist-credentials: false}
+        with: {persist-credentials: false, fetch-depth: 50}
       - name: Install existing pinned host-key-verified SSH client
         run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Verify new release, entitlement gate, M2 live collector and old cron, switch only the M2 pin and independently read back
