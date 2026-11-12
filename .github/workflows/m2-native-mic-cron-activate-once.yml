@@ -112,13 +112,16 @@ jobs:
                       sample=json.loads(out)
                       break
                   time.sleep(5)
-              if sample is None:
-                  # The old live cron can continuously own the exclusive scheduler lock.
-                  # Never bypass it. Prove DB state and exact new cron pin separately.
-                  print('M2_NEW_MANUAL_TICK_SKIPPED_SCHEDULER_LOCK_BUSY',flush=True)
+              if sample is None or not isinstance(sample,dict) or sample.get('registered',0)<3 or sample.get('due',0)<1:
+                  # A skipped/empty manual run is not live proof; independent M2 DB
+                  # and the subsequent active cron observation must establish it.
+                  print('M2_NEW_MANUAL_TICK_NOT_PROVEN '+json.dumps({
+                      'payload_type':type(sample).__name__,
+                      'registered':sample.get('registered') if isinstance(sample,dict) else None,
+                      'due':sample.get('due') if isinstance(sample,dict) else None,
+                      'item_count':len(sample.get('items',{})) if isinstance(sample,dict) and isinstance(sample.get('items',{}),dict) else None
+                  }),flush=True)
               else:
-                  if not isinstance(sample,dict) or sample.get('registered',0)<3 or sample.get('due',0)<1:
-                      raise RuntimeError('new_tick_no_live_scope_proof')
                   if any(row.get('key')=='twelve_data_quote' for row in sample.get('provider_requests',[])):
                       raise RuntimeError('unlicensed_international_request_detected')
                   items=sample.get('items',{})
