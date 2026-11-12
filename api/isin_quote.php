@@ -276,8 +276,18 @@ function previewAll(string $input,callable $emit,?callable $transport=null,?Date
         },$now);
     $captured=($now??new DateTimeImmutable())->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
     $items=[];$success=0;
-    // The vendored MOSA source engine, not a second list, defines its result scopes.
-    foreach(array_keys($lab['sources']??[]) as $key){
+    // Use the source core's dynamic scopes and the shared provider ordering.
+    // Quotes precede trades within one provider; no second source-key registry.
+    $keys=array_keys($lab['sources']??[]);
+    $providerRank=array_flip(array_keys(\Mosa2\MarketSources\catalog()));
+    usort($keys,static function(string $left,string $right)use($lab,$providerRank):int{
+        $a=$lab['sources'][$left];$b=$lab['sources'][$right];
+        $order=($providerRank[$a['provider_key']??'']??999)<=>
+            ($providerRank[$b['provider_key']??'']??999);
+        return $order?:((($a['data_type']??'')==='quote'?0:1)<=>
+            (($b['data_type']??'')==='quote'?0:1));
+    });
+    foreach($keys as $key){
         $source=$lab['sources'][$key]??[];
         $requestKey=match($key){
             'lang_schwarz_quote','lang_schwarz_trade'=>isset($received['lang_schwarz_page'])?'lang_schwarz_page':'lang_schwarz_search',
