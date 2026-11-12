@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='market-registry-live-2';
 for(const file of ['marktdaten.html','index.html','fundamentaldaten.html']){
+  const cacheVersion=file==='marktdaten.html'?'market-registry-live-10':'market-registry-live-2';
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
 }
