@@ -30,6 +30,7 @@ jobs:
           result=subprocess.run(cmd,capture_output=True,text=True,timeout=95)
           if result.returncode:raise RuntimeError('Headless Chrome exited '+str(result.returncode))
           page=result.stdout
+          print('M2_CHROME_DIAGNOSTIC_LEN',len(page),'PREVIEW',repr(page[:1000]),'STDERR',repr(result.stderr[-950:]),flush=True)
           rows=re.findall(r'<tr\b[^>]*>(.*?)</tr>',page,re.S|re.I)
           parsed=[]
           for row in rows:
