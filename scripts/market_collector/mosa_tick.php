@@ -197,7 +197,7 @@ function syncIdentity(PDO $db,string $isin,array $evidence):array {
         $check=$db->prepare("SELECT display_name,asset_class FROM m2_assets WHERE entity_id=? AND status='active'");
         $check->execute([$row['entity_id']]);
         $saved=$check->fetch(PDO::FETCH_ASSOC);
-        same($saved!==false,'identity_readback');
+        check($saved!==false,'identity_readback');
         same($saved['display_name'],$next['name'],'identity_name_readback');
         same($saved['asset_class'],$next['asset_class'],'identity_type_readback');
         return ['status'=>$changed?'UPDATED':'UNCHANGED','name'=>$next['name'],
