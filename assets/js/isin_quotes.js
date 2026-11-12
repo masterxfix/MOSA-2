@@ -131,7 +131,7 @@
         registeredAssets.clear();
         for(const asset of result.registered || []) {
           if(!asset || !valid(asset.isin) || typeof asset.name!=="string" || !asset.name.trim())continue;
-          const instrument_type=asset.asset_class==="equity"?"stock":asset.asset_class==="etf"?"etf":"unknown";
+          const instrument_type=({equity:"stock",etf:"etf",fund:"fund",other:"other"})[asset.asset_class] || "unknown";
           registeredAssets.set(asset.isin,{isin:asset.isin,name:asset.name,instrument_type,quotes:[]});
         }
         storedQuotes.clear();

@@ -137,6 +137,14 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   assert.equal(row.cells[2].textContent,'—');
   assert.match(row.cells[9].textContent,/In DB registriert · Kein gespeicherter Kurs/);
   assert.equal(registeredOnly.writes,0,'DB registrations never overwrite browser storage');
+  const registeredFund=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Fonds',asset_class:'fund'}]});
+  await flush();
+  assert.equal(registeredFund.table.children[0].cells[0].textContent,'Portfolio Fonds');
+  assert.equal(registeredFund.table.children[0].cells[1].textContent,'Fonds','DB fund class remains visible');
+  const registeredOther=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Zertifikat',asset_class:'other'}]});
+  await flush();
+  assert.equal(registeredOther.table.children[0].cells[1].textContent,'Sonstiges','DB other class remains visible');
+
   empty.input.value=b;empty.form.events.submit({preventDefault(){}});await flush();
   assert.equal(empty.calls[2].url,'api/isin_quote.php','The first new ISIN is queried immediately');
   assert.equal(JSON.parse(empty.storage.get(key))[0].isin,b);
