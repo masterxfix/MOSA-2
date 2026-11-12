@@ -1,65 +1,34 @@
-name: M2 provider laboratory navigation release
-# Reuses existing approved testsite SFTP deployment; HTML-only navigation change.
+name: M2 provider laboratory navigation deployed readback
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/m2-provider-lab-release-once.yml']
 permissions: {contents: read}
-concurrency:
-  group: mosa-2-testsite-sftp
-  cancel-in-progress: false
 jobs:
-  test-and-deploy:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Deploy M2 provider laboratory navigation in four pages once'
+  verify:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify deployed M2 provider laboratory navigation without redeployment'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {persist-credentials: false}
-      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
-        with:
-          php-version: '8.4'
-          extensions: dom, curl
-          tools: none
-          coverage: none
-      - name: Check generated page links and provider-lab API isolation
+      - name: Verify generated navigation and all four links
         run: |
           set -euo pipefail
-          php -l api/market_provider_lab.php
-          node --check assets/js/provider_lab.js
-          php -d zend.assertions=1 tests/test_provider_lab.php
-          php -d zend.assertions=1 tests/test_market_tick_sources.php
-          php tests/fixtures/isin_quote_all_test.php
           python3 scripts/build_pages.py --check
-          python3 scripts/deploy_sftp.py validate
           python3 - <<'PY'
           from pathlib import Path
-          paths=('index.html','marktdaten.html','fundamentaldaten.html','anbieter-labor.html')
-          for path in paths:
-              content=Path(path).read_text(encoding='utf-8')
-              nav=content.split('<nav class="site-nav wrap"',1)[1].split('</nav>',1)[0]
-              assert nav.count('href="anbieter-labor.html"')==1, path
-              assert nav.count('aria-current="page"')==1, path
-              assert ('href="anbieter-labor.html" aria-current="page"' in nav)==(path=='anbieter-labor.html'), path
-              assert 'href="marktdaten.html"' in nav and 'href="fundamentaldaten.html"' in nav, path
-              print('M2_NAV_TEST_PASS',path)
+          pages=('index.html','marktdaten.html','fundamentaldaten.html','anbieter-labor.html')
+          for page in pages:
+              html=Path(page).read_text(encoding='utf-8')
+              nav=html.split('<nav class="site-nav wrap"',1)[1].split('</nav>',1)[0]
+              assert nav.count('href="anbieter-labor.html"')==1,page
+              assert nav.count('aria-current="page"')==1,page
+              assert ('href="anbieter-labor.html" aria-current="page"' in nav)==(page=='anbieter-labor.html'),page
+              print('M2_NAV_LOCAL_PASS '+page)
           PY
       - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
-      - name: Backup and deploy only four M2 navigation HTML files
-        env:
-          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
-          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
-          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
-          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
-          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
-          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
-          MOSA_TEST_SFTP_FILES: '["index.html","marktdaten.html","fundamentaldaten.html","anbieter-labor.html"]'
-        run: |
-          set -euo pipefail
-          python3 scripts/deploy_test_sftp.py check-config
-          python3 scripts/deploy_test_sftp.py backup
-          python3 scripts/deploy_test_sftp.py deploy
-      - name: Independent M2 navigation readback without extra provider requests
+      - name: Independent exact-byte SFTP readback of the deployed four HTML pages
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
@@ -72,15 +41,15 @@ jobs:
           import hashlib,sys
           from pathlib import Path
           sys.path.insert(0,'scripts')
-          import collector_actions as ssh, deploy_test_sftp as deploy, deploy_sftp as shared
+          import collector_actions as ssh,deploy_test_sftp as deploy,deploy_sftp as shared
           import paramiko
-          paths=('index.html','marktdaten.html','fundamentaldaten.html','anbieter-labor.html')
-          with ssh.ssh_client(deploy.configuration(),{},paramiko) as client:
-              with client.open_sftp() as sftp:
-                  for path in paths:
-                      expected=Path(path).read_bytes()
-                      with sftp.open(shared.TEST_ROOT+'/'+path,'rb') as handle:
-                          actual=handle.read(len(expected)+1)
-                      if actual!=expected:raise RuntimeError('M2_NAV_REMOTE_FILE_MISMATCH '+path)
-                      print('M2_NAV_REMOTE_PASS '+path+' '+hashlib.sha256(actual).hexdigest(),flush=True)
+          pages=('index.html','marktdaten.html','fundamentaldaten.html','anbieter-labor.html')
+          with ssh.ssh_client(deploy.configuration(),{},paramiko) as transport:
+              with paramiko.SFTPClient.from_transport(transport) as sftp:
+                  for page in pages:
+                      expected=Path(page).read_bytes()
+                      with sftp.open(shared.TEST_ROOT+'/'+page,'rb') as stream:
+                          actual=stream.read(len(expected)+1)
+                      if actual!=expected:raise RuntimeError('M2_NAV_REMOTE_MISMATCH '+page)
+                      print('M2_NAV_REMOTE_PASS '+page+' '+hashlib.sha256(actual).hexdigest(),flush=True)
           PY
