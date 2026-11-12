@@ -31,7 +31,7 @@
   const dbRegistry=marketView?.dataset.marketRegistry!==undefined;
   const confirmDialog=root.querySelector("[data-isin-db-confirm]");
   let pendingDelete=null;
-  const READ_INTERVAL=60000;
+  const READ_INTERVAL=30000;
   const STORED_URL=marketView?"api/market.php?view=registered":"api/market.php?view=best";
   let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
   let cancelRead = null;

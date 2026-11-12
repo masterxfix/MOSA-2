@@ -85,7 +85,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   const inserts=m.table.insertions, before=cells.map(c=>c.textWrites);
   const secondBefore=secondCells.map(c=>c.textWrites);
   m.update([{...stored[0],price:'11.00'},stored[1]]);
-  await m.advance(59999);assert.equal(m.calls.length,1);
+  await m.advance(29999);assert.equal(m.calls.length,1);
   await m.advance(1);
   assert.deepEqual(m.table.children,[first,second]);
   assert.deepEqual(first.cells,cells);assert.deepEqual(second.cells,secondCells);
@@ -96,8 +96,8 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   m.details.events.click();
   const detailRows=[...m.table.children], detailInserts=m.table.insertions;
   m.input.value='draft ISIN';
-  await m.advance(120000);
-  assert.deepEqual(m.calls.map(call=>call.at),[0,60000,120000,180000]);
+  await m.advance(30000);
+  assert.deepEqual(m.calls.map(call=>call.at),[0,30000,30000,90000]);
   assert.deepEqual(m.table.children,detailRows);assert.equal(m.table.insertions,detailInserts);
   assert.equal(m.details.getAttribute('aria-expanded'),'true');
   assert.equal(m.input.value,'draft ISIN');
@@ -105,7 +105,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   assert.equal(m.root.dataset.isinReadCount,'4');
   assert.equal(m.root.dataset.isinReadHttp,'200');
 
-  m.hide(true);await m.advance(180000);
+  m.hide(true);await m.advance(90000);
   assert.equal(m.calls.length,4,'Hidden tab makes no new requests');
   m.status(503);m.hide(false);await m.advance(0);
   assert.equal(m.calls.length,5,'An overdue read resumes when visible');
@@ -113,23 +113,23 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   assert.deepEqual(m.table.children,detailRows);
   assert.equal(detailRows[0].cells[2].textContent,'11,00 EUR');
   assert.match(detailRows[0].cells[9].textContent,/Veraltet/);
-  m.status(200);m.hold();await m.advance(60000);await m.advance(65000);
+  m.status(200);m.hold();await m.advance(30000);await m.advance(35000);
   assert.equal(m.calls.length,6,'Slow read cannot overlap the next cycle');
   m.release();await flush();await m.advance(0);
   assert.equal(m.calls.length,7);
   assert.equal(m.maxActive,1);
   assert.equal(detailRows[0].cells[9].textContent,'Gespeichert');
 
-  m.focus(false);await m.advance(60000);
+  m.focus(false);await m.advance(30000);
   assert.equal(m.calls.length,7,'A visible but unfocused tab makes no new requests');
   assert.equal(m.root.dataset.isinTabActive,'false');
-  m.status(403);m.focus(true);await m.advance(0);await m.advance(60000);
+  m.status(403);m.focus(true);await m.advance(0);await m.advance(30000);
   assert.equal(m.calls.length,8,'An overdue read resumes on focus and stops on authorization failure');
 
-  const home=harness({market:false});await flush();await home.advance(90000);
+  const home=harness({market:false});await flush();await home.advance(45000);
   assert.deepEqual(home.calls.map(call=>call.url),['api/market.php?view=best']);
-  const empty=harness({entries:[],initialItems:[]});await flush();await empty.advance(60000);
-  assert.equal(empty.calls.length,2,'An empty personal list still reads the DB each minute');
+  const empty=harness({entries:[],initialItems:[]});await flush();await empty.advance(30000);
+  assert.equal(empty.calls.length,2,'An empty personal list still reads the DB every 30 seconds');
   const registeredOnly=harness({entries:[],initialItems:[],registered:[{isin:a,name:'DB AG',asset_class:'equity'}]});
   await flush();
   const row=registeredOnly.table.children[0];
@@ -140,9 +140,9 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   empty.input.value=b;empty.form.events.submit({preventDefault(){}});await flush();
   assert.equal(empty.calls[2].url,'api/isin_quote.php','The first new ISIN is queried immediately');
   assert.equal(JSON.parse(empty.storage.get(key))[0].isin,b);
-  await empty.advance(120000);
+  await empty.advance(30000);
   assert.equal(empty.calls[3].url,'api/market.php?view=registered');
-  assert.equal(empty.calls[4].at-empty.calls[3].at,60000);
+  assert.equal(empty.calls[4].at-empty.calls[3].at,30000);
   await empty.refresh.events.click();
   assert.equal(empty.calls.at(-1).url,'api/isin_quote.php','Manual refresh preserves the source comparison');
   assert.equal(empty.error.hidden,true);
@@ -154,11 +154,11 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   firstVisit.dispose();
   assert.equal(scoped.calls[0].opts.signal.aborted,true,'Leaving cancels the outstanding stored GET');
   scoped.release();await firstVisit.ready;
-  await scoped.advance(60000);
+  await scoped.advance(30000);
   assert.equal(scoped.calls.length,1,'Disposed Market schedules no further reads');
   const secondVisit=scoped.mount();await secondVisit.ready;
-  await scoped.advance(60000);
-  assert.equal(scoped.calls.length,3,'A new visit starts a single 60-second polling loop');
+  await scoped.advance(30000);
+  assert.equal(scoped.calls.length,3,'A new visit starts a single 30-second polling loop');
   secondVisit.dispose();
   assert.equal(scoped.writes,0,'Mounting and leaving views does not change stored ISINs');
   const mixed=harness({entries:[initial[0]],actions:true});await flush();
@@ -169,5 +169,5 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   mixed.table.events.click({target:{closest:()=>owned}});
   assert.equal(mixed.table.children.length,2,'Removing a local ISIN does not remove its database quote');
   assert.equal(mixed.table.children[0].cells[10].firstElementChild,null);
-  console.log('PASS stored-only poll: 60 s, keyed cells, visible tabs, recovery, no overlap, manual source requests');
+  console.log('PASS stored-only poll: 30 s, keyed cells, visible tabs, recovery, no overlap, manual source requests');
 })().catch(error=>{console.error(error);process.exitCode=1;});
