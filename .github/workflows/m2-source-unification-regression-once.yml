@@ -1,0 +1,32 @@
+name: M2 shared source contract regression (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-source-unification-regression-once.yml']
+permissions: {contents: read}
+jobs:
+  test:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify unified M2 provider contract'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with: {php-version: '8.4', extensions: pdo_mysql, coverage: none}
+      - name: Validate shared PHP source, complete manual source comparison, and browser flows
+        run: |
+          php -l api/market_sources.php
+          php -l api/isin_quote.php
+          php -l scripts/market_collector/mosa_tick.php
+          php tests/test_market_tick_sources.php
+          php tests/fixtures/isin_quote_test.php
+          php tests/fixtures/isin_quote_all_test.php
+          php tests/test_market_registry_model.php
+          node --check assets/js/isin_quotes.js
+          node tests/isin_automation_browser_check.cjs
+          node tests/isin_refresh_browser_check.cjs
+          node tests/isin_browser_check.cjs
+          node tests/isin_details_browser_check.cjs
+          python3 -B -m unittest discover -s tests -p 'test_isin_quote.py' -v
+          python3 scripts/build_pages.py --check
