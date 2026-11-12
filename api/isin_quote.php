@@ -185,7 +185,7 @@ function preview(string $code,string $provider,?callable $transport=null): array
         'source'=>$previews[$provider]['label'],'url'=>$url,
     ]);
 }
-/** Only the four established MOSA source providers and their documented endpoints. */
+/** Only currently approved M2 providers and documented endpoints. Yahoo Finance is excluded by user decision. */
 function sourceAllowed(array $request,string $code): bool {
     return \Mosa2\MarketSources\allowed($request,$code);
 }
@@ -196,8 +196,6 @@ function sourceTransport(array $request,string $code,callable $emit,?callable $t
     $emit(['event'=>'request','stage'=>'started','request_key'=>$key,'name'=>$title]);
     if (!sourceAllowed($request,$code)){
         $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'source_rejected'];
-    } elseif ($transport===null && str_starts_with($key,'yahoo_') && getenv('MOSA2_YAHOO_AUTOMATION_AUTHORIZED')!=='1') {
-        $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'provider_access_unconfirmed'];
     } elseif ($transport===null && ($_SESSION['quote_provider_retry_at'][parse_url($request['url'],PHP_URL_HOST)]??0)>time()) {
         $reply=['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'provider_cooldown'];
     } else {
@@ -279,6 +277,10 @@ function previewAll(string $input,callable $emit,?callable $transport=null,?Date
     $received=[];
     $lab=\fixlabRunMosaMarketSourceLab($code,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
         static function(array $request)use($code,$emit,$transport,$now,&$received):array{
+            // Vendored MOSA comparison core may still construct a historical Yahoo descriptor.
+            // Never dispatch or display excluded providers, even with a supplied test transport.
+            if(\Mosa2\MarketSources\providerOf($request['request_key']??'')===null)
+                return ['body'=>'','http_status'=>null,'latency_ms'=>0,'error_code'=>'provider_excluded'];
             $reply=sourceTransport($request,$code,$emit,$transport);
             $received[$request['request_key']]=($now??new DateTimeImmutable())->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
             return $reply;
@@ -287,8 +289,10 @@ function previewAll(string $input,callable $emit,?callable $transport=null,?Date
     $items=[];$success=0;
     // Use the source core's dynamic scopes and the shared provider ordering.
     // Quotes precede trades within one provider; no second source-key registry.
-    $keys=array_keys($lab['sources']??[]);
-    $providerRank=array_flip(array_keys(\Mosa2\MarketSources\catalog()));
+    $allowedCatalog=\Mosa2\MarketSources\catalog();
+    $keys=array_values(array_filter(array_keys($lab['sources']??[]),
+        static fn(string $key):bool=>isset($allowedCatalog[$lab['sources'][$key]['provider_key']??''])));
+    $providerRank=array_flip(array_keys($allowedCatalog));
     usort($keys,static function(string $left,string $right)use($lab,$providerRank):int{
         $a=$lab['sources'][$left];$b=$lab['sources'][$right];
         $order=($providerRank[$a['provider_key']??'']??999)<=>
@@ -313,7 +317,7 @@ function previewAll(string $input,callable $emit,?callable $transport=null,?Date
         'instrument_type'=>in_array($lab['instrument_type']??null,['stock','etf','fund','other'],true)?$lab['instrument_type']:'unknown',
         'instrument_type_source'=>is_string($lab['instrument_type_source']??null)?$lab['instrument_type_source']:null,
         'instrument_type_verified_at'=>is_string($lab['instrument_type_verified_at']??null)?$lab['instrument_type_verified_at']:null,
-        'captured_at'=>$captured,'success_count'=>$success,'records'=>$items,'request_count'=>count($lab['requests']??[])];
+        'captured_at'=>$captured,'success_count'=>$success,'records'=>$items,'request_count'=>count($received)];
 }
 function emitStream(array $event): void {
     echo json_encode($event,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
