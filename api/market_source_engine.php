@@ -541,7 +541,7 @@ function fixlabMosaMarketSourceLabSnapshot(array $result):array
 
 function fixlabMosaMarketSourceLabQuoteCandidate(string $isin,array $sources,string $assetType='stock',?DateTimeImmutable $now=null):?array
 {
-    if($assetType==='etf')return fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);return $isin==='DE0005936124'?fixlabMosaMarketQuoteRouter($sources):null;
+    if($assetType==='etf')return fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);return fixlabMosaMarketQuoteRouter($sources);
 }
 
 function fixlabMosaMarketSourceLabErrorMessage(string $code):string
@@ -562,7 +562,7 @@ function fixlabRunMosaMarketSourceIndicatorLab(mixed $indicatorKey,mixed $provid
 function fixlabRunMosaMarketSourceLab(mixed $isin,mixed $provider=FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,?callable $transport=null,?DateTimeImmutable $now=null,string $assetType='stock',?callable $lsQuoteClock=null):array
 {
     $normalized=fixlabMosaMarketSourceLabNormalizeIsin($isin);$result=fixlabMosaMarketSourceLabBase($normalized);$now=($now??new DateTimeImmutable('now',new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('UTC'));$result['requested_at']=$now->format(DateTimeInterface::ATOM);
-    if(!in_array($assetType,['stock','etf'],true))return array_replace($result,['status'=>'invalid_input','errors'=>['asset_type_invalid']]);$result['asset_type']=$assetType;if(!fixlabMosaMarketSourceLabIsinValid($normalized))return array_replace($result,['status'=>'invalid_input','errors'=>['isin_invalid']]);if($provider!==FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER)return array_replace($result,['status'=>'invalid_input','errors'=>['provider_invalid']]);$transport??='fixlabMosaMarketSourceLabLiveTransport';$responses=[];
+    if(!in_array($assetType,['stock','etf','fund','other','unknown'],true))return array_replace($result,['status'=>'invalid_input','errors'=>['asset_type_invalid']]);$result['asset_type']=$assetType;if(!fixlabMosaMarketSourceLabIsinValid($normalized))return array_replace($result,['status'=>'invalid_input','errors'=>['isin_invalid']]);if($provider!==FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER)return array_replace($result,['status'=>'invalid_input','errors'=>['provider_invalid']]);$transport??='fixlabMosaMarketSourceLabLiveTransport';$responses=[];
 
     $searchRequest=fixlabMosaMarketSourceLabLsRequest('lang_schwarz_search','L&S Instrumentensuche','/_rpc/json/.lstc/instrument/search/main',['q'=>$normalized,'localeId'=>2]);$responses['lang_schwarz_search']=fixlabMosaMarketSourceLabExecute($searchRequest,$transport);$result['external_fetch_executed']=true;$result['requests'][]=fixlabMosaMarketSourceLabPublicRequest($searchRequest,$responses['lang_schwarz_search']);$result['raw_responses']['lang_schwarz_search']=fixlabMosaMarketSourceLabRawResponse($responses['lang_schwarz_search'],true);
     $searchRows=fixlabMosaMarketSourceLabRows($responses['lang_schwarz_search']['json']);$result=array_replace($result,fixlabMosaMarketSourceLabClassifyInstruments($searchRows,$normalized,$now));$instrument=$responses['lang_schwarz_search']['ok']?fixlabMosaMarketSourceLabInstrument($searchRows,$normalized):null;$instrumentId=null;$marketId=1;
