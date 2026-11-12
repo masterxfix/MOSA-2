@@ -1,4 +1,4 @@
-name: M2 independent Yahoo exclusion proof after automatic market cron (read-only once)
+name: M2 prove shared stock and ETF pricing in active minute cron (read-only)
 on:
   push:
     branches: [main]
@@ -6,7 +6,7 @@ on:
 permissions: {contents: read}
 jobs:
   confirm:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Prove active Yahoo-free M2 cron writes valid Current after activation once'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Prove live M2 stock and ETF price updates via one collector once'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
@@ -29,7 +29,7 @@ jobs:
           import collector_db_locality as remote
           import deploy_test_sftp as profile
           import paramiko
-          expected='d1ed1b2137b7984431d0e70880a4113ca1219068'
+          expected='a82439c0ad695e30678af4ca9e34ab98abf634f2'
           source=r"""
           $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
           $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
@@ -43,8 +43,9 @@ jobs:
               throw new RuntimeException('M2_READONLY_INVARIANT');
           $count=(int)$db->query('SELECT COUNT(*) FROM m2_market_observations')->fetchColumn();
           $units=(int)$db->query('SELECT COUNT(*) FROM m2_units')->fetchColumn();
-          $last=$db->query("SELECT i.normalized_value AS isin,s.source_key,c.currency,
+          $last=$db->query("SELECT i.normalized_value AS isin,a.asset_class,s.source_key,c.currency,
               c.observed_at,c.market_at,r.quote_unit_key FROM m2_market_current c
+              JOIN m2_assets a ON a.entity_id=c.asset_id AND a.status='active'
               JOIN m2_asset_identifiers i ON i.asset_id=c.asset_id AND i.is_primary=1
               JOIN m2_sources s ON s.id=c.source_id
               JOIN m2_asset_source_routes r ON r.id=c.route_id
@@ -78,10 +79,11 @@ jobs:
                       raise RuntimeError('UNLICENSED_PROVIDER_SOURCE_PRESENT')
                   if data['yahoo_sources']!=0:
                       raise RuntimeError('YAHOO_SOURCE_STILL_REGISTERED')
-                  after=[v for v in data['current'] if v['observed_at']>'2026-11-12 19:37:11']
-                  if after:break
+                  after=[v for v in data['current'] if v['observed_at']>'2026-11-12 20:19:56']
+                  if {'equity','etf'}<=set(v['asset_class'] for v in after):break
                   time.sleep(12)
-              if not after:raise RuntimeError('M2_NO_NEW_CURRENT_SINCE_ACTIVATION')
+              if not {'equity','etf'}<=set(v['asset_class'] for v in after):
+                  raise RuntimeError('M2_STOCK_AND_ETF_BOTH_NOT_CONFIRMED_AFTER_ACTIVATION')
               print('M2_NEW_CRON_LIVE_READBACK '+json.dumps({'active_release':expected,
                    'new_current_count':len(after),'data':data},ensure_ascii=False),flush=True)
           PY
