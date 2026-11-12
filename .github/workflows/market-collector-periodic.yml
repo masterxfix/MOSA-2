@@ -31,6 +31,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/deploy_market_collector.py scripts/market_collector/gettex_tick.py
           php -l scripts/market_collector/gettex_tick.php
+          python3 -m unittest discover -s tests -p test_gettex_tick.py
           python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
       - name: Install or relay in the private M2 directory
         env:

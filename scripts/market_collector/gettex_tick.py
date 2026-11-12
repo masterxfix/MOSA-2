@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import gzip
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -29,9 +30,12 @@ def write_status(path, status):
 def process_file(root, config, slot, receipt, archive, codes):
     if not archive.is_file() or archive.is_symlink() or archive.stat().st_mode & 0o077:
         raise ValueError("private archive")
-    if not 0 < archive.stat().st_size <= MAX_FILE or hashlib.sha256(archive.read_bytes()).hexdigest() != receipt["sha256"]:
+    if not 0 < archive.stat().st_size <= MAX_FILE:
+        raise ValueError("archive size")
+    raw = archive.read_bytes()
+    if len(raw) > MAX_FILE or hashlib.sha256(raw).hexdigest() != receipt["sha256"]:
         raise ValueError("archive identity")
-    with gzip.open(archive, "rb") as source:
+    with gzip.GzipFile(fileobj=io.BytesIO(raw)) as source:
         data = source.read(MAX_EXPANDED + 1)
     if len(data) > MAX_EXPANDED:
         raise ValueError("archive size")
@@ -44,7 +48,7 @@ def process_file(root, config, slot, receipt, archive, codes):
     work = Path(tempfile.mkdtemp(prefix="slot-", dir=root / "work"))
     try:
         original = work / archive.name
-        os.link(archive, original)
+        original.write_bytes(raw)
         for index, code in enumerate(selected):
             batch = work / str(index) / "batch"
             batch.mkdir(parents=True, mode=0o700)
@@ -67,10 +71,19 @@ def process_file(root, config, slot, receipt, archive, codes):
                     if isinstance(code_value, str) and re.fullmatch(r"[a-z_]{1,80}", code_value):
                         result["last_failure"] = code_value
                     continue
-                result["observations"] += output["batch"]["insert_count"]
-                result["duplicates"] += output["batch"]["duplicate_unchanged_count"]
-            except (ValueError, KeyError, OSError, subprocess.TimeoutExpired):
+                items = output["batch"]["item_results"]
+                if len(items) != 1 or items[0].get("readback") != "PASS":
+                    raise ValueError("unverified observation")
+                writer = items[0]["writer"]
+                if writer == "INSERT":
+                    result["observations"] += 1
+                elif writer == "DUPLICATE_UNCHANGED":
+                    result["duplicates"] += 1
+                else:
+                    raise ValueError("unexpected writer outcome")
+            except (ValueError, KeyError, OSError, subprocess.TimeoutExpired) as error:
                 result["failures"] += 1
+                result["last_failure"] = type(error).__name__
         return result
     finally:
         shutil.rmtree(work)
