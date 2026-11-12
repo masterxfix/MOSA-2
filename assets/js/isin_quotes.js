@@ -193,7 +193,7 @@
       values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
       if(actions && key!=="empty"){
         const cell=row.cells[values.length];
-        let local=cell.querySelector("[data-isin-remove]");
+        let local=[...cell.children].find(child=>child.dataset.isinRemove!==undefined);
         if(!removeIsin)local?.remove();
         else if(!local){
           local=document.createElement("button");
@@ -204,7 +204,7 @@
           local.setAttribute("aria-label",removeIsin+" nur aus diesem Browser entfernen");
           cell.append(local);
         }
-        let remote=cell.querySelector("[data-isin-db-delete]");
+        let remote=[...cell.children].find(child=>child.dataset.isinDbDelete!==undefined);
         if(!dbIsin)remote?.remove();
         else if(!remote){
           remote=document.createElement("button");
