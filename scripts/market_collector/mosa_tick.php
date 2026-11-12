@@ -80,7 +80,7 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
         if ((int)$ready->fetchColumn()!==0) continue;
         foreach ($source['requests'] as $key) $allowed[$key]=$source['id'];
     }
-    if ($allowed===[]) return null;
+    if ($allowed===[]) return ['fact'=>null,'identity'=>[]];
 
     $assetType=\Mosa2\MarketSources\resolvedType($assetClass,[]);
     $requestedAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
@@ -105,9 +105,12 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
     // One MOSA router and M2 fact contract for every ISIN/asset class.
     // A last trade is eligible only as a validated same-currency fallback.
     $resolvedType=\Mosa2\MarketSources\resolvedType($assetClass,$lab);
-    return \Mosa2\MarketSources\choose(
-        $lab,$isin,$resolvedType,$registry,$captured,new DateTimeImmutable('now',new DateTimeZone('UTC'))
-    );
+    return [
+        'fact'=>\Mosa2\MarketSources\choose(
+            $lab,$isin,$resolvedType,$registry,$captured,new DateTimeImmutable('now',new DateTimeZone('UTC'))
+        ),
+        'identity'=>\Mosa2\MarketSources\identityEvidence($lab,$isin,$registry),
+    ];
 }
 
 function syncFact(callable $connect,array $config,string $password,string $isin,string $name,array $fact): array {
@@ -158,6 +161,52 @@ function syncFact(callable $connect,array $config,string $password,string $isin,
     return ['writer'=>$result['writer'],'observation_id'=>$result['observation_id'],'readback'=>'PASS'];
 }
 
+
+/**
+ * Enrich only active, uniquely registered M2 identities after quote publication.
+ * Works under the existing m2-collector-scheduler advisory lock, with
+ * transaction and strict identity/readback checks. No schema change.
+ */
+function syncIdentity(PDO $db,string $isin,array $evidence):array {
+    if(($evidence['name']??null)===null&&($evidence['asset_class']??null)===null)
+        return ['status'=>'NO_EVIDENCE'];
+    $db->beginTransaction();
+    try {
+        $select=$db->prepare("SELECT a.entity_id,a.display_name,a.asset_class
+            FROM m2_asset_identifiers i
+            JOIN m2_assets a ON a.entity_id=i.asset_id AND a.status='active'
+            JOIN m2_entities e ON e.id=a.entity_id AND e.entity_type='asset' AND e.status='active'
+            WHERE i.identifier_type='isin' AND i.normalized_value=? AND i.scope_key=''
+              AND i.is_primary=1 AND i.valid_to IS NULL
+              AND (i.valid_from IS NULL OR i.valid_from<=UTC_TIMESTAMP(6))
+            FOR UPDATE");
+        $select->execute([$isin]);
+        $rows=$select->fetchAll(PDO::FETCH_ASSOC);
+        same(count($rows),1,'identity_scope');
+        $row=$rows[0];
+        $next=\Mosa2\MarketSources\identityPatch($isin,$row['display_name'],$row['asset_class'],$evidence);
+        $changed=$next['name']!==$row['display_name']||$next['asset_class']!==$row['asset_class'];
+        if($changed){
+            $update=$db->prepare("UPDATE m2_assets
+                SET display_name=?,asset_class=?,updated_at=UTC_TIMESTAMP(6)
+                WHERE entity_id=? AND display_name=? AND asset_class=? AND status='active'");
+            $update->execute([$next['name'],$next['asset_class'],$row['entity_id'],$row['display_name'],$row['asset_class']]);
+            same($update->rowCount(),1,'identity_cas');
+        }
+        $db->commit();
+        $check=$db->prepare("SELECT display_name,asset_class FROM m2_assets WHERE entity_id=? AND status='active'");
+        $check->execute([$row['entity_id']]);
+        $saved=$check->fetch(PDO::FETCH_ASSOC);
+        same($saved!==false,'identity_readback');
+        same($saved['display_name'],$next['name'],'identity_name_readback');
+        same($saved['asset_class'],$next['asset_class'],'identity_type_readback');
+        return ['status'=>$changed?'UPDATED':'UNCHANGED','name'=>$next['name'],
+            'asset_class'=>$next['asset_class']];
+    } finally {
+        if($db->inTransaction())$db->rollBack();
+    }
+}
+
 function main(): void {
     if (PHP_SAPI!=='cli'||realpath($_SERVER['SCRIPT_FILENAME']??'')!==__FILE__) exit(1);
     ini_set('display_errors','0');
@@ -200,12 +249,21 @@ function main(): void {
             $items=[];$unavailable=[];$requests=[];
             foreach ($due as $isin=>$asset) {
                 try {
-                    $fact=acquire($db,$registry,$isin,$asset['class'],$requests);
-                    if ($fact===null) {
+                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests);
+                    $fact=$acquired['fact']??null;
+                    if($fact===null){
                         $unavailable[]=$isin;
-                        continue;
+                        $items[$isin]=['quote'=>'UNAVAILABLE'];
+                    }else{
+                        // Keep the original registered identity throughout the existing
+                        // Phase-3D market writer. Metadata is updated only afterwards.
+                        $items[$isin]=['provider'=>$fact['provider']]
+                            +syncFact($connect,$config,$password,$isin,$asset['name'],$fact);
                     }
-                    $items[$isin]=['provider'=>$fact['provider']]+syncFact($connect,$config,$password,$isin,$asset['name'],$fact);
+                    $identity=syncIdentity($db,$isin,$acquired['identity']??[]);
+                    $items[$isin]['identity']=$identity['status'];
+                    if(isset($identity['name']))$items[$isin]['name']=$identity['name'];
+                    if(isset($identity['asset_class']))$items[$isin]['asset_class']=$identity['asset_class'];
                 } catch (Throwable $error) {
                     $code=$error->getMessage();
                     $items[$isin]=['failure'=>preg_match('/^[a-z0-9_]{1,80}$/D',$code)?$code:'m2_market_write_failed'];

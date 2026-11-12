@@ -70,6 +70,68 @@ function resolvedType(string $assetClass,array $lab):string {
     $found=$lab['instrument_type']??null;
     return in_array($found,['stock','etf','fund','other'],true)?$found:'unknown';
 }
+
+/**
+ * Exact-ISIN evidence for filling *unresolved* M2 asset metadata.
+ * Both source bodies are already in the normal market collection response:
+ * no new provider request, sidecar, extra collector or per-ISIN exception.
+ */
+function identityName(mixed $input,string $isin):?string {
+    if(!is_string($input))return null;
+    $name=trim(preg_replace('/\s+/u',' ',$input)??'');
+    if(strlen($name)<5||strlen($name)>160||$name===$isin
+        ||preg_match('/[\p{C}<>]/u',$name)===1
+        ||preg_match('/^(tradegate(?: bsx)?|aktien|information|kurssuche|wertpapier|not found)$/iu',$name)===1)
+        return null;
+    return $name;
+}
+function identityEvidence(array $lab,string $isin,array $registry):array {
+    $class=($lab['instrument_type_source']??null)==='lang_schwarz'
+        ? match($lab['instrument_type']??'unknown') {
+            'stock'=>'equity','etf'=>'etf','fund'=>'fund','other'=>'other',default=>null
+          } : null;
+    $ls=null;
+    if(isset($registry['lang_schwarz'])&&($lab['instrument']['isin']??null)===$isin)
+        $ls=identityName($lab['instrument']['name']??null,$isin);
+    $name=$ls;$nameSource=$ls!==null?'lang_schwarz':null;
+    $raw=$lab['raw_responses']['tradegate_quote']??[];
+    $source=$lab['sources']['tradegate_quote']??[];
+    // The input HTML must come from the active exact-ISIN Tradegate request.
+    if(isset($registry['tradegate_bsx'])&&($raw['http_status']??null)===200
+        &&($source['isin']??null)===$isin&&is_string($raw['body']??null)
+        &&strlen($raw['body'])<=2000000){
+        try {
+            $html=$raw['body'];
+            $rows=\Mosa2\IsinQuote\rows($html);
+            if(\Mosa2\IsinQuote\column($rows,'ISIN')===$isin){
+                $found=\Mosa2\IsinQuote\column($rows,'Name');
+                if($found===null&&preg_match_all('~<h[12]\b[^>]*>(.*?)</h[12]>~si',$html,$titles)){
+                    foreach($titles[1] as $heading){
+                        $candidate=identityName(\Mosa2\IsinQuote\tdText($heading),$isin);
+                        if($candidate!==null){$found=$candidate;break;}
+                    }
+                }
+                $full=identityName($found,$isin);
+                if($full!==null){$name=$full;$nameSource='tradegate_bsx';}
+            }
+        }catch(\Throwable) {
+            // A broken provider name never affects an otherwise valid quote.
+        }
+    }
+    return ['name'=>$name,'name_source'=>$nameSource,
+        'asset_class'=>$class,'class_source'=>$class!==null?'lang_schwarz':null];
+}
+/** Only fill database placeholders; never overwrite an existing manual identity. */
+function identityPatch(string $isin,string $name,string $class,array $evidence):array {
+    $verifiedName=identityName($evidence['name']??null,$isin);
+    $candidateClass=$evidence['asset_class']??null;
+    return [
+        'name'=>$name===$isin&&$verifiedName!==null?$verifiedName:$name,
+        'asset_class'=>$class==='unknown'&&in_array($candidateClass,['equity','etf','fund','other'],true)
+            ?$candidateClass:$class,
+    ];
+}
+
 /** Return the same validated M2 writer fact for every asset and provider. */
 function fact(array $source,string $key,string $isin,array $registry,array $captured,
               DateTimeImmutable $now,int $maxAge):?array {
