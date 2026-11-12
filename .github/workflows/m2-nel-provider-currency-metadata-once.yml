@@ -1,0 +1,87 @@
+name: M2 NEL original provider currency metadata read-only evidence (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-nel-provider-currency-metadata-once.yml']
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect whether Nel NOK is supplied as metadata by existing providers once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Install pinned SSH dependency
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Inspect public L&S exact ISIN response without storage or database writes
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          source=r"""
+          $isin='NO0010081235';
+          $url='https://www.ls-tc.de/_rpc/json/.lstc/instrument/search/main?q='.$isin.'&localeId=2';
+          $ch=curl_init($url);
+          if($ch===false)throw new RuntimeException('m2_ls_curl_init_failed');
+          curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_FOLLOWLOCATION=>false,
+             CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>15,
+             CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2,
+             CURLOPT_HTTPHEADER=>['Accept: application/json',
+                'Referer: https://www.ls-tc.de/de/',
+                'User-Agent: FixLab-MOSA-Market-Source-Lab/2.0']]);
+          $body=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);
+          $err=curl_errno($ch);curl_close($ch);
+          if(!is_string($body)||strlen($body)>2000000)
+             throw new RuntimeException('m2_ls_response_invalid');
+          $json=json_decode($body,true);
+          $found=[];$currencyHits=[];$keys=[];
+          if(is_array($json)){
+             $visit=function($v,$depth)use(&$visit,&$found,&$currencyHits,&$keys,$isin){
+               if($depth>12||count($found)>20)return;
+               if(!is_array($v))return;
+               if(($v['isin']??null)===$isin||($v['ISIN']??null)===$isin){
+                 $keys[]=array_keys($v);
+                 $found[]=['has_currency'=>false,'currency_fields'=>[]];
+                 $index=count($found)-1;
+                 foreach($v as $k=>$val){
+                    if(is_string($k)&&preg_match('/currency|waehrung|währung|quote.?unit|trading.?currency/i',$k)){
+                      if(is_scalar($val)||$val===null){
+                        $found[$index]['currency_fields'][$k]=mb_substr((string)$val,0,50);
+                        if((string)$val==='NOK')$found[$index]['has_currency']=true;
+                      }
+                    }
+                 }
+               }
+               foreach($v as $k=>$child)$visit($child,$depth+1);
+             };
+             $visit($json,0);
+          }
+          $hasNok=preg_match('/(?<![A-Za-z])NOK(?![A-Za-z])/',$body)===1;
+          echo json_encode(['source'=>'Lang & Schwarz ISIN search','http_status'=>$status,
+            'curl_errno'=>$err,'body_bytes'=>strlen($body),'parsed_json'=>is_array($json),
+            'matching_isin_rows'=>count($found),'matching_row_keys'=>array_slice($keys,0,3),
+            'matching_currency_fields'=>array_slice($found,0,3),
+            'raw_payload_mentions_NOK'=>$hasNok],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as transport:
+              phpbin,_=remote.capability(transport)
+              rc,out,err,_=remote.remote_call(transport,remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':source}).encode(),timeout=70)
+              if rc or err:raise RuntimeError('M2_NEL_PROVIDER_METADATA_REMOTE_QUERY_FAILED')
+              result=json.loads(out)
+              if result.get('http_status')!=200 or not result.get('parsed_json'):
+                  raise RuntimeError('M2_NEL_PROVIDER_METADATA_UNAVAILABLE')
+              print('M2_NEL_PROVIDER_METADATA '+json.dumps(result,ensure_ascii=False),flush=True)
+          PY
