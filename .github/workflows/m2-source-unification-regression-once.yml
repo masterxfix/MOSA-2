@@ -32,3 +32,5 @@ jobs:
           python3 scripts/build_pages.py --check
 
 # Stable provider-derived quote/trade ordering regression retry.
+
+# Include the existing three-page ISIN details browser cache regression.
