@@ -39,7 +39,9 @@ def render(filename):
         current = ' aria-current="page"' if file == filename else ''
         links.append(f'      <a href="{href}" data-page="{page}" data-project-label="{escape(page_label)}"'
                      f' data-description="{escape(page_description)}"{current}>{escape(name)}</a>')
-    nav = "\n".join(links)
+    # The diagnostic lab is a separate full-page destination, not a fourth SPA Main fragment.
+    # Use one header anchor across all built pages.
+    nav = "\n".join(links + ['      <a href="anbieter-labor.html">Anbieter-Datenlabor</a>'])
     brand = "#inhalt" if key == "overview" else "./"
     stored = " data-isin-stored-quotes" if key == "market" else ""
     latency = ' inkl. Daten' if key == "fundamentals" else ''
