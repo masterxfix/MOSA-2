@@ -60,6 +60,16 @@ function allowed(array $request,string $isin):bool {
         default=>false,
     };
 }
+/** Apply MOSA's verified source classification when an M2 registration is still unknown.
+ * No ISIN allowlist or asset-specific collector; unverified/conflicting types remain unknown.
+ */
+function resolvedType(string $assetClass,array $lab):string {
+    $type=match($assetClass){'equity'=>'stock','etf'=>'etf','fund'=>'fund','other'=>'other',default=>'unknown'};
+    if($type!=='unknown')return $type;
+    if(($lab['instrument_type_source']??null)!=='lang_schwarz')return 'unknown';
+    $found=$lab['instrument_type']??null;
+    return in_array($found,['stock','etf','fund','other'],true)?$found:'unknown';
+}
 /** Return the same validated M2 writer fact for every asset and provider. */
 function fact(array $source,string $key,string $isin,array $registry,array $captured,
               DateTimeImmutable $now,int $maxAge):?array {
