@@ -1,18 +1,12 @@
 (function () {
   "use strict";
   const KEY = "mosa2-isin-lookup-v1";
-  const providers = Object.freeze([
-    {key:"lang_schwarz_quote",label:"Lang & Schwarz · Geld/Brief"},
-    {key:"lang_schwarz_trade",label:"Lang & Schwarz · letzter Handel"},
-    {key:"tradegate_quote",label:"Tradegate BSX · Geld/Brief"},
-    {key:"tradegate_trade",label:"Tradegate BSX · letzter Handel"},
-    {key:"boerse_frankfurt_trade",label:"Börse Frankfurt · letzter Handel"},
-    {key:"yahoo_home_market",label:"Yahoo Finance · Heimatmarkt"}
-  ]);
+  // No client-side provider catalog: the MOSA core defines response scopes.
+  const sourceKey = value => typeof value==="string" && /^[a-z][a-z0-9_]{2,63}$/.test(value);
   const typeLabels = Object.freeze({stock:"Aktie",etf:"ETF",fund:"Fonds",other:"Sonstiges",unknown:"Unbekannt"});
   const confirmedTypes = new Set(["stock","etf","fund","other"]);
   const valid = value => typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
-  const validQuote = (quote, isin) => Boolean(quote && quote.isin===isin && (quote.provider==="stored" || providers.some(provider=>provider.key===quote.provider))
+  const validQuote = (quote, isin) => Boolean(quote && quote.isin===isin && (quote.provider==="stored" || sourceKey(quote.provider))
     && typeof quote.price === "string" && /^\d+(?:\.\d{1,12})?$/.test(quote.price)
     && Number(quote.price)>0 && /^[A-Z]{3}$/.test(quote.currency)
     && typeof quote.market_at === "string" && Number.isFinite(Date.parse(quote.market_at))
@@ -51,7 +45,8 @@
         instrument_type_source:typeof entry.instrument_type_source === "string" && entry.instrument_type_source.length <= 80 ? entry.instrument_type_source : null,
         instrument_type_verified_at:typeof entry.instrument_type_verified_at === "string" && entry.instrument_type_verified_at.length <= 80 ? entry.instrument_type_verified_at : null,
         quotes:Array.isArray(entry.quotes)?entry.quotes.filter(q => validQuote(q,entry.isin)).slice(0,6):[],
-        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && (e.provider==="all" || providers.some(p=>p.key===e.provider)) && typeof e.code==="string").slice(0,6):[]}));
+        errors:Array.isArray(entry.errors)?entry.errors.filter(e=>e && (e.provider==="all" || sourceKey(e.provider)) && typeof e.code==="string")
+          .slice(0,12).map(e=>({...e,source:typeof e.source==="string"&&e.source.length<=160?e.source:null})):[]}));
     } catch {return [];}
   }
   let entries = restore(), busy = Boolean(manualOwner), detailsOpen = false;
@@ -352,7 +347,7 @@
   function errorRow(entry,error) {
     const missing=error.status==="unavailable";
     return [entry.isin+":error:"+error.provider,missing?"missing":"error",[
-      shortName(entry),typeLabel(entry),"—","—",sourceLabel(error.provider),"—",date(error.captured_at),"—",entry.isin,
+      shortName(entry),typeLabel(entry),"—","—",sourceLabel(error),"—",date(error.captured_at),"—",entry.isin,
       (missing?"Nicht verfügbar: ":"Fehler: ")+error.code
     ]];
   }
@@ -526,11 +521,12 @@
       return data.event==="result"?data.data:data;
     }finally{clearTimeout(timer);}
   }
-  function sourceLabel(provider) {
-    return providers.find(p=>p.key===provider)?.label || "MOSA-Quellenvergleich";
+  function sourceLabel(error) {
+    return typeof error.source==="string" && error.source.length<=160 && error.source.trim()
+      ?error.source : error.provider==="all"?"MOSA-Quellenvergleich":error.provider.replaceAll("_"," ");
   }
   function applyResult(entry,result) {
-    if(!result||result.isin!==entry.isin||!Array.isArray(result.records)||result.records.length!==providers.length)
+    if(!result||result.isin!==entry.isin||!Array.isArray(result.records)||result.records.length<1||result.records.length>16)
       throw Error("INVALID_RESULT");
     if(confirmedTypes.has(result.instrument_type) && typeof result.instrument_type_source === "string" && result.instrument_type_source !== ""){
       entry.instrument_type=result.instrument_type;
@@ -543,7 +539,7 @@
     let errors=entry.errors.filter(error=>error.provider!=="all");
     const seen=new Set();let successful=0,unchanged=0;
     for(const record of result.records){
-      if(!record||!providers.some(p=>p.key===record.provider)||seen.has(record.provider))throw Error("INVALID_PROVIDER_RESULT");
+      if(!record||!sourceKey(record.provider)||seen.has(record.provider))throw Error("INVALID_PROVIDER_RESULT");
       seen.add(record.provider);
       if(record.status==="ok" && validQuote(record,entry.isin)){
         const previous=quotes.find(quote=>quote.provider===record.provider);
@@ -556,7 +552,8 @@
         const capturedAt=typeof record.captured_at==="string"?record.captured_at:new Date().toISOString();
         quotes=quotes.map(quote=>quote.provider===record.provider?{...quote,refresh_failed_at:capturedAt}:quote);
         errors=errors.filter(error=>error.provider!==record.provider);
-        errors.push({provider:record.provider,status:record.status,code:reason,captured_at:capturedAt});
+        errors.push({provider:record.provider,source:typeof record.source==="string"&&record.source.length<=160?record.source:null,
+          status:record.status,code:reason,captured_at:capturedAt});
       }
     }
     entry.quotes=quotes;entry.errors=errors;
