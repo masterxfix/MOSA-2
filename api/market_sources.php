@@ -18,10 +18,14 @@ function catalog():array {
         'tradegate_bsx'=>[
             'name'=>'Tradegate BSX','venue'=>'tradegate_bsx','url'=>'https://www.tradegatebsx.com/',
             'requests'=>['tradegate_quote','tradegate_trade'],'scheduled'=>true,
+            'preview_alias'=>'tradegate','preview_request'=>'tradegate_quote',
+            'preview_label'=>'Tradegate BSX · Mid',
         ],
         'boerse_frankfurt_api'=>[
             'name'=>'Börse Frankfurt','venue'=>'boerse_frankfurt','url'=>'https://api.live.deutsche-boerse.com/v1/',
             'requests'=>['boerse_frankfurt_trade'],'scheduled'=>true,
+            'preview_alias'=>'frankfurt','preview_request'=>'boerse_frankfurt_trade',
+            'preview_label'=>'Börse Frankfurt · XFRA · Last',
         ],
         'yahoo_finance_chart'=>[
             'name'=>'Yahoo Finance','venue'=>'home_market','url'=>'https://query1.finance.yahoo.com/',
@@ -30,6 +34,17 @@ function catalog():array {
             'scheduled'=>false,
         ],
     ];
+}
+/** Single-provider aliases derive from the same scheduled-source catalog. */
+function singlePreview():array {
+    $out=[];
+    foreach(catalog() as $key=>$provider){
+        if(!isset($provider['preview_alias'],$provider['preview_request'],$provider['preview_label']))continue;
+        $out[$provider['preview_alias']]=[
+            'request_key'=>$provider['preview_request'],'label'=>$provider['preview_label'],'source'=>$key,
+        ];
+    }
+    return $out;
 }
 function scheduled():array {
     return array_filter(catalog(),static fn(array $p):bool=>$p['scheduled']===true);
