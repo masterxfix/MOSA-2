@@ -148,7 +148,9 @@ function syncFact(callable $connect,array $config,string $password,string $isin,
     $provider=$fact['provider'];
     $manifest=quoteManifest($state,['isin'=>$isin,'name'=>$name,
         'quote_unit_key'=>$fact['quote_unit_key']??'EUR','currency'=>$fact['currency']],[
-        'source_key'=>$provider,'reference_key'=>$provider,'venue_key'=>\Mosa2\MarketSources\catalog()[$provider]['venue'],'family'=>'mosa_live_quote',
+        'source_key'=>$provider,'reference_key'=>$provider,
+        'venue_key'=>$fact['venue_key']??\Mosa2\MarketSources\catalog()[$provider]['venue'],
+        'family'=>'mosa_live_quote',
         'reference'=>'M2 acquisition using the MOSA source adapter and quote router',
         'provider_key'=>$provider,'adapter_module'=>'m2_market_observation','adapter_class'=>'MarketObservation',
     ]);
@@ -164,7 +166,7 @@ function syncFact(callable $connect,array $config,string $password,string $isin,
     }
 
     $toWrite=$fact;
-    unset($toWrite['quote_unit_key']); // The native unit belongs to the physical route, not the raw fact.
+    unset($toWrite['quote_unit_key'],$toWrite['venue_key']); // Unit/venue bind the route, not the raw fact.
     $invoke=static function(array $runtime,array $request) use($toWrite,$isin): array {
         if ($request['action']==='fetch') return ['m2_market_observation'=>$toWrite,'instrument'=>$isin];
         return bridge($runtime,$request);
