@@ -1,0 +1,82 @@
+name: M2 gated generic international delayed quote rollout (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-delayed-global-gated-release-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: mosa2-universal-market-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Deploy gated generic international delayed source with existing M2 cron unchanged once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: local-test-only-secret
+          MYSQL_DATABASE: m2_unit_test
+        ports: ['3307:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -plocal-test-only-secret"
+          --health-interval=3s
+          --health-timeout=3s
+          --health-retries=25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with: {php-version: '8.4', extensions: pdo_mysql, coverage: none}
+      - name: All targeted M2 provider, native quote, TTL, budget, UI and persistence regressions
+        env:
+          M2_LOCAL_MYSQL_DSN: mysql:host=127.0.0.1;port=3307;dbname=m2_unit_test;charset=utf8mb4
+          M2_LOCAL_MYSQL_PASSWORD: local-test-only-secret
+        run: |
+          php -l api/market_core/twelve_data.php
+          php -l api/market_sources.php
+          php -l api/isin_quote.php
+          php -l scripts/market_collector/mosa_tick.php
+          php -l scripts/market_collector/actions_acceptance.php
+          php tests/test_twelve_data_provider.php
+          php tests/test_eodhd_provider.php
+          php tests/test_market_tick_sources.php
+          php tests/test_m2_native_quote_route.php
+          php tests/test_twelve_data_budget_mysql.php
+          php tests/test_eodhd_mysql.php
+          php tests/test_market_batch_scope.php
+          php tests/test_market_registry_model.php
+          php tests/fixtures/isin_quote_all_test.php
+          node tests/isin_automation_browser_check.cjs
+          node tests/isin_refresh_browser_check.cjs
+          node tests/isin_details_browser_check.cjs
+          python3 -B -m unittest discover -s tests -p 'test_isin_quote.py' -v
+          python3 -B -m unittest discover -s tests -p 'test_market_onboarding.py' -v
+          python3 scripts/build_pages.py --check
+          python3 scripts/deploy_sftp.py validate
+      - name: Install only verified SFTP/SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Install exact private M2 collector revision; cron unchanged
+        env:
+          M2_EXPECTED_COMMIT: ${{ github.sha }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: python3 -B scripts/deploy_market_collector.py install
+      - name: Backup and deploy only shared PHP web files (no DOM changes)
+        env:
+          MOSA_TEST_SFTP_FILES: '["api/market_sources.php"]'
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B scripts/deploy_test_sftp.py check-config
+          python3 -B scripts/deploy_test_sftp.py backup
+          python3 -B scripts/deploy_test_sftp.py deploy
