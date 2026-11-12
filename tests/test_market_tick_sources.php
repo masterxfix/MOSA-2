@@ -69,4 +69,45 @@ sameValue('fund',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=
 sameValue('unknown',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=>'etf','instrument_type_source'=>'lang_schwarz_conflict']),'conflicting class stays unknown');$n++;
 sameValue('etf',\Mosa2\MarketSources\resolvedType('etf',[]),'declared ETF remains authoritative');$n++;
 sameValue('unknown',\Mosa2\MarketSources\resolvedType('unknown',[]),'unclassified identity remains unknown');$n++;
+// Exact-ISIN identity enrichment uses the same successful provider responses.
+// No name is accepted from an unrelated ISIN, blocked source, or conflicting type.
+$identityIsin='SE0000115446';
+$tradegateHtml='<table><tr><th>Name</th><th>ISIN</th></tr><tr><td>General Example Holdings AB</td><td>'.$identityIsin.'</td></tr></table>';
+$identityLab=[
+    'instrument_type'=>'stock','instrument_type_source'=>'lang_schwarz',
+    'instrument'=>['isin'=>$identityIsin,'name'=>'GENERAL EXAMPLE'],
+    'sources'=>['tradegate_quote'=>['isin'=>$identityIsin]],
+    'raw_responses'=>['tradegate_quote'=>['http_status'=>200,'body'=>$tradegateHtml]],
+];
+$identity=\Mosa2\MarketSources\identityEvidence($identityLab,$identityIsin,$active);
+sameValue('General Example Holdings AB',$identity['name'],'trusted full name from matching Tradegate');$n++;
+sameValue('tradegate_bsx',$identity['name_source'],'explicit name origin');$n++;
+sameValue('equity',$identity['asset_class'],'verified stock class is equity in M2');$n++;
+sameValue('lang_schwarz',$identity['class_source'],'verified type provenance');$n++;
+sameValue(['name'=>'General Example Holdings AB','asset_class'=>'equity'],
+    \Mosa2\MarketSources\identityPatch($identityIsin,$identityIsin,'unknown',$identity),'fills only unknowns');$n++;
+sameValue(['name'=>'Manual Preferred Name','asset_class'=>'etf'],
+    \Mosa2\MarketSources\identityPatch($identityIsin,'Manual Preferred Name','etf',$identity),'preserves existing curated name and class');$n++;
+sameValue(['name'=>'General Example Holdings AB','asset_class'=>'etf'],
+    \Mosa2\MarketSources\identityPatch($identityIsin,$identityIsin,'etf',$identity),'does not overwrite existing class');$n++;
+$other=$identityLab;
+$other['raw_responses']['tradegate_quote']['body']=str_replace($identityIsin,'NO0010081235',$tradegateHtml);
+sameValue('GENERAL EXAMPLE',\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['name'],'reject mismatched Tradegate ISIN');$n++;
+$other=$identityLab;$other['raw_responses']['tradegate_quote']['http_status']=503;
+sameValue('GENERAL EXAMPLE',\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['name'],'reject unsuccessful provider fetch');$n++;
+$onlyLs=['lang_schwarz'=>$active['lang_schwarz']];
+sameValue('GENERAL EXAMPLE',\Mosa2\MarketSources\identityEvidence($identityLab,$identityIsin,$onlyLs)['name'],'disabled Tradegate cannot supply names');$n++;
+$other=$identityLab;$other['instrument_type']='etf';
+sameValue('etf',\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['asset_class'],'ETF classified from same search');$n++;
+$other=$identityLab;$other['instrument_type_source']='lang_schwarz_conflict';
+sameValue(null,\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['asset_class'],'ambiguous class never persisted');$n++;
+$other=$identityLab;$other['instrument']['name']='<script>spoof</script>';
+$other['raw_responses']['tradegate_quote']['body']=str_replace('General Example Holdings AB','<script>spoof</script>',$tradegateHtml);
+sameValue(null,\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['name'],'unsafe names rejected');$n++;
+sameValue(['name'=>$identityIsin,'asset_class'=>'unknown'],
+    \Mosa2\MarketSources\identityPatch($identityIsin,$identityIsin,'unknown',['name'=>null,'asset_class'=>null]),
+    'no evidence means no metadata guess');$n++;
+sameValue(false,str_contains(file_get_contents(dirname(__DIR__).'/scripts/market_collector/mosa_tick.php'),'UPDATE m2_entities'),
+    'stable ISIN entity identity never renamed');$n++;
+
 echo 'PASS '.$n.'/'.$n." unified M2 market source scenarios\n";
