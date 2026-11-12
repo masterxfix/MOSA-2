@@ -1,0 +1,44 @@
+name: M2 international ISIN route and quota MySQL regression (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-international-route-quota-test-once.yml']
+permissions: {contents: read}
+jobs:
+  verify:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify M2 universal international route quota and exact native time'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: local-test-only-secret
+          MYSQL_DATABASE: m2_unit_test
+        ports: ['3307:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -plocal-test-only-secret"
+          --health-interval=3s
+          --health-timeout=3s
+          --health-retries=25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with: {php-version: '8.4', extensions: pdo_mysql, coverage: none}
+      - name: Native MIC/price identity, isolated MySQL quota, existing EUR and registration
+        env:
+          M2_LOCAL_MYSQL_DSN: mysql:host=127.0.0.1;port=3307;dbname=m2_unit_test;charset=utf8mb4
+          M2_LOCAL_MYSQL_PASSWORD: local-test-only-secret
+        run: |
+          php -l api/market_core/twelve_data.php
+          php -l api/market_sources.php
+          php -l scripts/market_collector/mosa_tick.php
+          php tests/test_twelve_data_provider.php
+          php tests/test_market_tick_sources.php
+          php tests/test_m2_native_quote_route.php
+          php tests/test_twelve_data_budget_mysql.php
+          php tests/fixtures/isin_quote_all_test.php
+          php tests/test_market_registry_model.php
+          node tests/isin_automation_browser_check.cjs
+          python3 scripts/build_pages.py --check
