@@ -34,6 +34,7 @@ jobs:
           php -l api/market_sources.php
           php -l tests/test_market_tick_sources.php
           php -l api/isin_quote.php
+          python3 -m py_compile tests/test_isin_quote.py
           php -l tests/fixtures/isin_quote_all_test.php
           php -l api/market_core/eodhd.php
           php -l scripts/market_collector/mosa_tick.php
