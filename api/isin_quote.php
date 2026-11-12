@@ -223,6 +223,15 @@ function sourceTransport(array $request,string $code,callable $emit,?callable $t
     return $reply;
 }
 function asPrice(mixed $price): ?string {
+    // Providers commonly return exact monetary decimal strings. Preserve
+    // those original digits instead of forcing them through binary float.
+    if(is_string($price)){
+        if(preg_match('/^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,10})?$/D',$price)!==1)return null;
+        $parts=explode('.',$price,2);
+        $value=$parts[0].(isset($parts[1])?'.'.rtrim($parts[1],'0'):'');
+        $value=rtrim($value,'.');
+        return $value==='0'?null:$value;
+    }
     if (!is_float($price)&&!is_int($price))return null;
     if (!is_finite((float)$price)||$price<=0||$price>=1000000000000000)return null;
     $value=rtrim(rtrim(sprintf('%.10f',(float)$price),'0'),'.');
