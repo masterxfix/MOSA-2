@@ -4,14 +4,6 @@
 
 > **Wichtig:** „Anbieter erreichbar“ ist nicht dasselbe wie „Kurs gespeichert“. Die internationale Heimatmarktversorgung ist noch nicht vollständig live abgenommen.
 
-## Verbindliche Entscheidung: Yahoo Finance aus MOSA 2 ausgeschlossen
-
-**Entscheidungsdatum: 12.11.2026.** Yahoo Finance ist **kein nutzbarer M2-Kurslieferant** für die beabsichtigte automatische und dauerhafte ISIN-Kursversorgung. Ohne ausdrücklich gewährte Rechte für automatisierte Abfragen und Speicherung ist dieser Weg ausgeschlossen.
-
-**Folgen:** Keine Yahoo-Finance-Quellen im zentralen M2-Anbieterkatalog, keine Auswahl als Kursquelle und keine Yahoo-Abfragen im Minutenjob oder manuellen M2-Quellenvergleich. Keine Rückkehr über NEL.OL, NOKEUR=X, einen separaten Collector oder historische MOSA-Kompatibilitätsfunktionen. Bereits bekannte Yahoo-Implementierungen dürfen nur als **historischer Entwicklungsnachweis** betrachtet werden, nicht als aktiver Datenweg von M2.
-
-**Wiederaufnahme nur nach neuer ausdrücklicher Nutzerentscheidung und verifizierter Freigabe** für die konkrete automatisierte Nutzung. Die aktuelle M2-Datenversorgung umfasst die nachfolgend beschriebenen **fünf** Anbieter: **drei** automatisch aktive und **zwei** nur mit berechtigtem privatem Zugang aktivierbare internationale Quellen.
-
 ## 1. Wer liefert was?
 
 | Kursanbieter | Aufgabe in MOSA 2 | Automatische ISIN-Abfrage | Unter welchen Bedingungen wird er bevorzugt? |
@@ -19,8 +11,11 @@
 | **Lang & Schwarz (TradeCenter)** | ISIN-Suche, Instrumentendetails/Namensinformation, Geld-/Brief-Offerte und Handelswerte | **Aktiv** | Bei normalen Aktien, wenn seine vollständige Offerte im gemeinsamen EUR-Quotenvergleich gewinnt; bei ETFs vor allem **Ausweichquelle**, falls Tradegate nicht geeignet ist |
 | **Tradegate BSX** | ISIN-bezogene Geld-/Brief-Offerte und letzte Umsätze | **Aktiv** | Bei normalen Aktien **kein pauschaler Vorrang**, sondern Bewertung der Quotenqualität; bei ETFs **erste Wahl** innerhalb der speziellen deutschen EUR-ETF-Regel |
 | **Börse Frankfurt** | Letzter Kurs vom gezielt abgefragten Handelsplatz **XFRA** | **Aktiv** | Bei Nicht-ETFs als gültiger **Last-Trade-Fallback**, wenn keine geeignete vollständige Geld-/Brief-Offerte ausgewählt wird |
+| **Yahoo Finance** | Früher für internationale Kurse (z. B. NEL in NOK) genutzt; heute nur historischer Entwicklungsnachweis | **AUSGESCHLOSSEN** (12.11.2026) | **Keine Nutzung in M2:** weder automatische noch manuelle Kursabfrage; keine Auswahl oder Speicherung |
 | **Twelve Data** | Optionaler internationaler Last-Trade anhand der ISIN, mit Originalwährung und Handelsplatz-MIC | **Deaktiviert**, bis private Rechte und Quoten eingerichtet sind | Nach Aktivierung **vor EODHD und deutschen Quellen**, wenn MIC, Währung und Zeitstempel qualifiziert sind; Marktalter höchstens **5 Minuten** |
 | **EODHD** | Optionale exakte ISIN-Suche, Zuordnung zu Börsenticker und Handelsplatz-MIC, verzögerter letzter Kurs in Originalwährung | **Deaktiviert**, bis private Rechte und Quoten eingerichtet sind | Nach Aktivierung **nach Twelve Data, aber vor deutschen Quellen**, wenn Zuordnung eindeutig und Marktalter höchstens **30 Minuten** ist |
+
+**Klarstellung zur Tabelle:** Fünf Anbieter sind als aktive oder bedingt freigebbare Kursquellen vorgesehen; **Yahoo Finance steht bewusst weiterhin in der Übersicht, ist aber ausgeschlossen**. Wiederaufnahme nur nach neuer ausdrücklicher Nutzerentscheidung und nachgewiesenen Nutzungsrechten.
 
 **Zuletzt nachgewiesener M2-Testbetrieb (12.11.2026):** Lang & Schwarz, Tradegate BSX und Börse Frankfurt lieferten bei den echten ISIN-Abfragen HTTP 200. Auf der M2-Marktdatenseite wurden für **NEL ASA** und **DroneShield** die gespeicherten **EUR-Geld-/Brief-Mittelkurse von Tradegate BSX** angezeigt. **0** registrierte Twelve-Data-/EODHD-Quellen in der unabhängigen Datenbankprüfung; **keine** nachgewiesenen AUD- oder JPY-Heimatmarktkurse. Dieser Befund ist datiert und **keine Live-Statusabfrage**.
 
@@ -79,7 +74,7 @@ Beim normalen EUR-Vergleich akzeptiert die Auswahl in der Regel höchstens **300
 - Die drei tatsächlich **automatisch aktivierten** traditionellen Quellen sind **Lang & Schwarz**, **Tradegate BSX** und **Börse Frankfurt**. Der **einzige** Collector und derselbe Observation-/Current-Writer übernehmen die Speicherung.
 - **Twelve Data** bleibt ohne privaten API-Zugang, bestätigte Markt- und **ISIN-Datenrechte** sowie echte Limits aus. Die im Code vorhandene Integration ist keine Marktdatenlizenz.
 - **EODHD** bleibt ohne bestätigte private Nutzungsrechte und Kontingente aus. Bei Freischaltung wird die ISIN generisch einem eindeutigen Börsenticker/MIC zugeordnet. Positive Zuordnungen werden **14 Tage**, negative/mehrdeutige Zuordnungen **6 Stunden** in bestehenden M2-Checkpoints zwischengespeichert. Anbieteraufrufe belasten die genehmigten Tages-/Minutenbudgets.
-- **Yahoo Finance ist auf ausdrückliche Nutzerentscheidung als M2-Kursanbieter ausgeschlossen.** Nicht aktiver oder optionaler Anbieter. Wiederaufnahme nur nach neuer Nutzerentscheidung und nachgewiesenen Rechten zur automatisierten Nutzung und Speicherung. Historische Parser/Fixtures aus MOSA sind keine M2-Freigabe.
+- **Yahoo Finance: AUSGESCHLOSSEN** (siehe Tabelle). Historische MOSA-Parser/Tests bleiben ausschließlich technische Altnachweise, keine M2-Freigabe.
 - Nach Quellenfehlern **401/403/429** gibt es Abkühlphasen; ohne gültigen neuen Marktpreis gibt es **keinen fingierten neuen Current**. Die vorhandenen deutschen Quellen bleiben als Rückfall erhalten.
 
 ## 5. Bewusst dokumentierte Schwachstellen / noch keine Gesamtfreigabe
