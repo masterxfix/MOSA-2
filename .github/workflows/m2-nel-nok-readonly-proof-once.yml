@@ -1,0 +1,90 @@
+name: M2 NEL NOK stored-currency proof (read-only, one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-nel-nok-readonly-proof-once.yml']
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Check whether Nel NOK quotes are actually stored in M2 once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Install pinned SSH dependency
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Inspect only NEL units, observations, routes and current using existing strict read account
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          sql=r"""
+          $root='/var/www/vhosts/web213.server10.configcenter.info';
+          $cfg=require $root.'/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(!is_array($cfg)||($cfg['dsn']??null)!==$dsn||($cfg['user']??null)!=='h29077_mosa2_read')
+              throw new RuntimeException('m2_readonly_scope');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+              PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');
+          $db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+             ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('m2_readonly_assert');
+          $isin='NO0010081235';
+          $id=$db->prepare("SELECT a.entity_id
+            FROM m2_assets a JOIN m2_asset_identifiers i ON i.asset_id=a.entity_id
+            WHERE i.identifier_type='isin' AND i.scope_key='' AND i.normalized_value=?
+              AND i.is_primary=1 AND i.valid_to IS NULL AND a.status='active'");
+          $id->execute([$isin]);$ids=$id->fetchAll();
+          if(count($ids)!==1)throw new RuntimeException('m2_nel_not_exactly_registered_once');
+          $assetId=$ids[0]['entity_id'];
+          $unit=$db->query("SELECT unit_key,unit_version,status,monetary_currency_code
+              FROM m2_units WHERE unit_key='NOK' ORDER BY unit_version")->fetchAll();
+          $o=$db->prepare("SELECT o.currency,r.quote_unit_key,s.source_key,
+              COUNT(*) AS row_count,MAX(o.market_at) AS newest_market
+              FROM m2_market_observations o
+              JOIN m2_asset_source_routes r ON r.id=o.route_id
+              JOIN m2_sources s ON s.id=o.source_id
+              WHERE o.asset_id=?
+              GROUP BY o.currency,r.quote_unit_key,s.source_key
+              ORDER BY o.currency,s.source_key,r.quote_unit_key");
+          $o->execute([$assetId]);$observations=$o->fetchAll();
+          $c=$db->prepare("SELECT c.currency,c.price,c.market_at,c.observed_at,
+                r.quote_unit_key,s.source_key
+              FROM m2_market_current c JOIN m2_asset_source_routes r ON r.id=c.route_id
+              JOIN m2_sources s ON s.id=c.source_id WHERE c.asset_id=?");
+          $c->execute([$assetId]);$current=$c->fetchAll();
+          $r=$db->prepare("SELECT r.quote_unit_key,s.source_key,COUNT(*) AS count_routes
+              FROM m2_asset_source_routes r JOIN m2_sources s ON s.id=r.source_id
+              WHERE r.asset_id=? GROUP BY r.quote_unit_key,s.source_key
+              ORDER BY r.quote_unit_key,s.source_key");
+          $r->execute([$assetId]);$routes=$r->fetchAll();
+          $db->rollBack();
+          echo json_encode(['read_only'=>true,'checked_at_utc'=>gmdate('c'),'isin'=>$isin,
+             'registered'=>count($ids),'nok_unit'=>$unit,'observations'=>$observations,
+             'current'=>$current,'routes'=>$routes],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              phpbin,_=remote.capability(t)
+              rc,out,err,_=remote.remote_call(t,remote.command(phpbin,remote.BOOTSTRAP),
+                json.dumps({'source':sql}).encode(),timeout=60)
+              if rc or err:raise RuntimeError('M2_NEL_NOK_READONLY_PROOF_FAILED')
+              result=json.loads(out)
+              if result.get('read_only') is not True or result.get('isin')!='NO0010081235':
+                  raise RuntimeError('M2_NEL_READBACK_UNVERIFIED')
+              print('M2_NEL_NOK_READONLY '+json.dumps(result,ensure_ascii=False),flush=True)
+          PY
