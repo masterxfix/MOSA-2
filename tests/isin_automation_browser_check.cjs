@@ -141,7 +141,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   assert.deepEqual(home.calls.map(call=>call.url),['api/market.php?view=best']);
   const empty=harness({entries:[],initialItems:[]});await flush();await empty.advance(30000);
   assert.equal(empty.calls.length,2,'An empty personal list still reads the DB every 30 seconds');
-  const registeredOnly=harness({entries:[],actions:true,initialItems:[],registered:[{isin:a,name:'DB AG',asset_class:'equity'}]});
+  const registeredOnly=harness({entries:[],actions:true,dbRegistry:true,initialItems:[],registered:[{isin:a,name:'DB AG',asset_class:'equity'}]});
   await flush();
   const row=registeredOnly.table.children[0];
   assert.equal(row.cells.length,2,'Pending ISIN uses one descriptive cell plus existing DB delete action');
