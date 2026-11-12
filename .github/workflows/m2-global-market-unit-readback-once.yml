@@ -1,0 +1,55 @@
+name: M2 global market native-unit inventory (one-time read-only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-global-market-unit-readback-once.yml']
+permissions:
+  contents: read
+jobs:
+  read_only:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect M2 native market unit gates read only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Verified M2 read-only currency and source inventory
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,json
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          sql=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)throw new RuntimeException('M2_READ_ONLY_ACCOUNT');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);$db->exec('SET SESSION TRANSACTION READ ONLY');$db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+              ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)throw new RuntimeException('M2_READ_ONLY_REQUIRED');
+          $units=$db->query('SELECT unit_key,unit_version,monetary_currency_code,status FROM m2_units ORDER BY unit_key,unit_version')->fetchAll();
+          $sources=$db->query("SELECT source_key,enabled,source_type FROM m2_sources WHERE source_key LIKE 'provider:%' ORDER BY source_key")->fetchAll();
+          $routes=$db->query("SELECT quote_unit_key,COUNT(*) AS routes FROM m2_asset_source_routes GROUP BY quote_unit_key")->fetchAll();
+          $registered=(int)$db->query("SELECT COUNT(*) FROM m2_asset_identifiers WHERE identifier_type='isin' AND scope_key='' AND is_primary=1 AND valid_to IS NULL")->fetchColumn();
+          $db->rollBack();
+          echo json_encode(['checked_at_utc'=>gmdate('c'),'read_only'=>true,'units'=>$units,'sources'=>$sources,'routes'=>$routes,'registered'=>$registered],JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as connection:
+              phpbin,_=remote.capability(connection)
+              rc,out,err,_=remote.remote_call(connection,remote.command(phpbin,remote.BOOTSTRAP),json.dumps({'source':sql}).encode(),timeout=40)
+              if rc or err:raise RuntimeError('READ_ONLY_QUERY_FAILED')
+              o=json.loads(out)
+              if o.get('read_only') is not True:raise RuntimeError('READ_ONLY_GUARD')
+              print('M2_NATIVE_UNIT_READBACK '+json.dumps(o),flush=True)
+          PY
