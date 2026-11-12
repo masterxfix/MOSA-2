@@ -96,8 +96,8 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   m.details.events.click();
   const detailRows=[...m.table.children], detailInserts=m.table.insertions;
   m.input.value='draft ISIN';
-  await m.advance(30000);
-  assert.deepEqual(m.calls.map(call=>call.at),[0,30000,30000,90000]);
+  await m.advance(60000);
+  assert.deepEqual(m.calls.map(call=>call.at),[0,30000,60000,90000]);
   assert.deepEqual(m.table.children,detailRows);assert.equal(m.table.insertions,detailInserts);
   assert.equal(m.details.getAttribute('aria-expanded'),'true');
   assert.equal(m.input.value,'draft ISIN');
@@ -140,7 +140,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   empty.input.value=b;empty.form.events.submit({preventDefault(){}});await flush();
   assert.equal(empty.calls[2].url,'api/isin_quote.php','The first new ISIN is queried immediately');
   assert.equal(JSON.parse(empty.storage.get(key))[0].isin,b);
-  await empty.advance(30000);
+  await empty.advance(60000);
   assert.equal(empty.calls[3].url,'api/market.php?view=registered');
   assert.equal(empty.calls[4].at-empty.calls[3].at,30000);
   await empty.refresh.events.click();

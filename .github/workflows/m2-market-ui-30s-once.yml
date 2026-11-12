@@ -39,3 +39,5 @@ jobs:
           python3 scripts/deploy_test_sftp.py check-config
           python3 scripts/deploy_test_sftp.py backup
           python3 scripts/deploy_test_sftp.py deploy
+
+# Targeted timer fixture correction; deploy only after all tests pass.
