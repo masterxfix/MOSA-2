@@ -8,6 +8,8 @@ use PDO;
 use RuntimeException;
 use Throwable;
 
+require_once __DIR__.'/market_sources.php';
+
 /** Explicit, provider-neutral on-demand preview; no database/collector writes. */
 const SOURCES = ['tradegate' => 'Tradegate BSX · Mid', 'frankfurt' => 'Börse Frankfurt · XFRA · Last'];
 const MAX_BYTES = 2000000;
@@ -203,24 +205,7 @@ function preview(string $code,string $provider,?callable $transport=null): array
 
 /** Only the four established MOSA source providers and their documented endpoints. */
 function sourceAllowed(array $request,string $code): bool {
-    $key=$request['request_key']??null;$url=$request['url']??null;
-    if (!is_string($key)||!is_string($url)||strlen($url)>500)return false;
-    $parts=parse_url($url);
-    if (!is_array($parts)||($parts['scheme']??null)!=='https'||(isset($parts['user'])||isset($parts['pass']))
-        ||isset($parts['fragment'])||!in_array($parts['port']??443,[443],true))return false;
-    $host=$parts['host']??'';$path=$parts['path']??'';
-    return match($key) {
-        'lang_schwarz_search' => $url==='https://www.ls-tc.de/_rpc/json/.lstc/instrument/search/main?q='.$code.'&localeId=2',
-        'lang_schwarz_page' => $host==='www.ls-tc.de' && preg_match('~^/de/(aktie|etf)/[1-9][0-9]{0,18}$~D',$path)===1 && !isset($parts['query']),
-        'tradegate_quote' => $url==='https://www.tradegatebsx.com/orderbuch.php?isin='.$code,
-        'tradegate_trade' => $url==='https://www.tradegatebsx.com/orderbuch_umsaetze.php?isin='.$code,
-        'boerse_frankfurt_trade' => $url==='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$code.'&mic=XFRA',
-        'yahoo_home_search' => $url==='https://query1.finance.yahoo.com/v1/finance/search?q='.$code.'&quotesCount=10&newsCount=0',
-        'yahoo_home_market' => $host==='query1.finance.yahoo.com'
-            && preg_match('~^/v8/finance/chart/[a-zA-Z0-9._%=-]{1,128}$~D',$path)===1
-            && ($parts['query']??null)==='range=1d&interval=1d&includePrePost=false',
-        default => false,
-    };
+    return \Mosa2\MarketSources\allowed($request,$code);
 }
 /** A safe observable wrapper around the proven read-only MOSA source transport. */
 function sourceTransport(array $request,string $code,callable $emit,?callable $transport=null): array {
