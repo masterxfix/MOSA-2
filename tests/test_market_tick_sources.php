@@ -110,4 +110,6 @@ sameValue(['name'=>$identityIsin,'asset_class'=>'unknown'],
 sameValue(false,str_contains(file_get_contents(dirname(__DIR__).'/scripts/market_collector/mosa_tick.php'),'UPDATE m2_entities'),
     'stable ISIN entity identity never renamed');$n++;
 
+sameValue(true,str_contains($tick,"check(\$saved!==false,'identity_readback')"),
+    'M2 identity writer uses a boolean check instead of mismatched equality arity');$n++;
 echo 'PASS '.$n.'/'.$n." unified M2 market source scenarios\n";
