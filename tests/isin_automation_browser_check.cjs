@@ -9,7 +9,7 @@ const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Trade
   observed_at:'2026-11-08 11:59:10.000000Z',status:'stored'});
 const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
 const flush=()=>new Promise(setImmediate);
-function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRegistry=false,registered=[],initialItems=stored}={}){
+function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRegistry=false,registered=[],initialItems=stored,clock=base}={}){
   let ms=0,timerId=0,http=200,items=initialItems,hold=false,release,active=0,maxActive=0,writes=0,focused=true;
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
@@ -30,7 +30,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
     '[data-isin-details-toggle]':market?details:null,
     '[data-site-shell]':lifecycle?root:null
   }[selector]??null),createElement:tag=>new E(tag),addEventListener:(name,fn)=>{events[name]=fn;}};
-  class TestDate extends Date {constructor(...args){super(...(args.length?args:[TestDate.now()]));} static now(){return base+ms;}}
+  class TestDate extends Date {constructor(...args){super(...(args.length?args:[TestDate.now()]));} static now(){return clock+ms;}}
   const setTimeout=(fn,delay)=>{timers.set(++timerId,{at:ms+delay,fn});return timerId;};
   const clearTimeout=id=>timers.delete(id);
   async function advance(delay){
@@ -91,6 +91,37 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
 (async()=>{
   const m=harness();await flush();
   assert.equal(m.root.dataset.dataSuccess,'true');
+  // Compare Berlin calendar days, not the rounded "Datenalter" field.
+  const today=m.table.children[0];
+  assert.match(today.cells[5].textContent,/^12:59:00 Uhr$/,'Todays market time is clock only');
+  assert.match(today.cells[6].textContent,/^12:59:10 Uhr$/,'Todays retrieval time is clock only');
+  const midnight=harness({
+    clock:Date.parse('2026-11-08T23:00:05Z'),
+    entries:[],
+    registered:[{isin:a,name:'Verified Corp.',asset_class:'equity'}],
+    initialItems:[{...asset(a,'Verified Corp.','10.00'),
+      market_at:'2026-11-08 22:59:59.000000Z',
+      observed_at:'2026-11-08 23:00:04.000000Z'}]
+  });
+  await flush();
+  const acrossMidnight=midnight.table.children[0];
+  assert.match(acrossMidnight.cells[5].textContent,/08\\.11\\.26, 23:59:59 Uhr/,
+    'Yesterday market time must retain date despite age 0 min after midnight');
+  assert.equal(acrossMidnight.cells[6].textContent,'00:00:04 Uhr',
+    'Todays retrieval time omits date although market time is yesterday');
+  assert.equal(acrossMidnight.cells[7].textContent,'0 Min.',
+    'Midnight boundary is independent of rounded data age');
+  const older=harness({clock:Date.parse('2026-11-12T14:55:00Z'),entries:[],
+    registered:[{isin:a,name:'Verified Corp.',asset_class:'equity'}],
+    initialItems:[{...asset(a,'Verified Corp.','10.00'),
+      market_at:'2026-11-11 12:30:04.000000Z',
+      observed_at:'2026-11-11 12:30:08.000000Z'}]});
+  await flush();
+  assert.match(older.table.children[0].cells[5].textContent,/11\\.11\\.26, 13:30:04 Uhr/,
+    'Previous day market timestamp retains full date');
+  assert.match(older.table.children[0].cells[6].textContent,/11\\.11\\.26, 13:30:08 Uhr/,
+    'Previous day captured timestamp retains full date');
+
   assert.deepEqual(m.calls.map(call=>call.at),[0]);
   assert.equal(m.table.children.length,2);
   const [first,second]=m.table.children, cells=[...first.cells], secondCells=[...second.cells];

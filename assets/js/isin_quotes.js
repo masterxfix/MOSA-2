@@ -61,6 +61,8 @@
   } catch { /* Browser storage is optional. */ }};
   const priceFormat=new Intl.NumberFormat("de-DE",{minimumFractionDigits:2,maximumFractionDigits:10});
   const dateFormat=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin",dateStyle:"short",timeStyle:"medium"});
+  const clockFormat=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin",timeStyle:"medium"});
+  const berlinDay=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Berlin",year:"numeric",month:"2-digit",day:"2-digit"});
   const fmtPrice = p => {
     const num=Number(p);
     return typeof p==="string" && /^\d+(?:\.\d{1,12})?$/.test(p) && Number.isFinite(num)
@@ -68,7 +70,11 @@
   };
   function date(value) {
     const stamp=Date.parse(value);
-    return Number.isFinite(stamp) ? dateFormat.format(stamp)+" Uhr" : "—";
+    if(!Number.isFinite(stamp))return "—";
+    // The same calendar day in Berlin needs only the clock time.
+    // Previous-day data still gets its date even at age 0 min around midnight.
+    const sameBerlinDay=berlinDay.format(stamp)===berlinDay.format(Date.now());
+    return (sameBerlinDay?clockFormat:dateFormat).format(stamp)+" Uhr";
   }
   function old(quote) {
     const stamp=Date.parse(quote.market_at);
