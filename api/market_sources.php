@@ -233,6 +233,16 @@ function choose(array $lab,string $isin,string $assetType,array $registry,array 
                 DateTimeImmutable $now,?array $units=null):?array {
     $units??=defaultUnits();
     $sources=is_array($lab['sources']??null)?$lab['sources']:[];
+    // When licensed international evidence includes an exact physical MIC,
+    // prefer that genuine local-market trade over fresher German EUR listings.
+    // The existing EUR router remains the fallback when the native quote is
+    // unavailable, stale, or has no verified exchange identity.
+    $native=$sources['twelve_data_quote']??null;
+    if(is_array($native)&&is_string($native['venue_key']??null)
+        &&preg_match('/^[A-Z0-9]{4}$/D',$native['venue_key'])===1){
+        $nativeFact=fact($native,'twelve_data_quote',$isin,$registry,$captured,$now,300,$units);
+        if($nativeFact!==null)return $nativeFact;
+    }
     if($assetType==='etf') {
         // Keep the productive MOSA EUR ETF cross-check as first choice.
         $etf=\fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);
