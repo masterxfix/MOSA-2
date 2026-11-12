@@ -77,7 +77,6 @@ function fetchSource(array $request,array &$requests): array {
  * physical ISIN route and MySQL quota. The credential is never included in logs. */
 function eodhdFetch(PDO $db,string $isin,string $sourceId,array $cfg,
                     string $kind,string $value,array &$requests):?array {
-    $api='\\Mosa2\\MarketInternational\\Eodhd\\';
     if(!\Mosa2\MarketInternational\Eodhd\reserve(
         $db,$sourceId,$cfg,new DateTimeImmutable('now',new DateTimeZone('UTC'))))return null;
     $request=\Mosa2\MarketInternational\Eodhd\request($kind,$value,$cfg['api_token']);
@@ -169,10 +168,12 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
                     $route=\Mosa2\MarketInternational\Eodhd\resolve($isin,$search,$exchangeList);
                     if($route!==null)
                         \Mosa2\MarketInternational\Eodhd\saveRoute($db,$id,$isin,$route,$now);
+                    elseif(array_is_list($search)&&array_is_list($exchangeList))
+                        \Mosa2\MarketInternational\Eodhd\saveUnavailable($db,$id,$isin,$now);
                 }
             }
         }
-        if(is_array($route)){
+        if(is_array($route)&&($route['unavailable']??null)!==true){
             $payload=eodhdFetch($db,$isin,$id,$eodhd,'eodhd_delayed',$route['ticker'],$requests);
             if($payload!==null){
                 $captured['eodhd_delayed']=(new DateTimeImmutable('now',new DateTimeZone('UTC')))
