@@ -1,4 +1,4 @@
-name: Secure Dashboard collectors inventory read-only
+name: Secure Dashboard collector entrypoint audit read-only
 on:
   push:
     branches: [main]
@@ -6,7 +6,7 @@ on:
 permissions: {contents: read}
 jobs:
   inventory:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Inventory Secure Dashboard scheduled collectors read-only'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Audit Secure Dashboard collector entrypoints read-only'
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     steps:
@@ -14,7 +14,7 @@ jobs:
         with: {persist-credentials: false}
       - name: Install existing verified SSH transport
         run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
-      - name: Inspect only Secure Dashboard job triggers and directory, read-only
+      - name: Inspect Secure Dashboard entrypoints and all matching Cron, no external GET
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
@@ -24,32 +24,47 @@ jobs:
           MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
         run: |
           python3 -B - <<'PY'
-          import re,sys,json
+          import re,sys,hashlib,json
           sys.path.insert(0,'scripts')
           import collector_actions as remote, collector_db_locality as call, deploy_test_sftp as cfg
           import paramiko
           root='/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/securedashboard'
+          def safely(code,limit=260):
+              v=re.sub(r'''(['"])(?:\\.|(?!\1).)*?\1''', '[string]',code)
+              return v[:limit]
           with remote.ssh_client(cfg.configuration(),{},paramiko) as s:
-              rc,out,err,_=call.remote_call(s,'/usr/bin/crontab -l',timeout=20)
+              rc,out,err,_=call.remote_call(s,'/usr/bin/crontab -l',timeout=22)
               if rc:raise RuntimeError('CRON_READ_FAILED')
               lines=out.decode('utf-8','replace').splitlines()
-              selected=[]
               for i,line in enumerate(lines,1):
-                  candidate=(not line.strip().startswith('#') and re.search(r'(?i)(?:secure.?dashboard|collector_nel\.php)',line))
-                  if candidate:selected.append({'line':i,'sha256':__import__('hashlib').sha256(line.encode()).hexdigest(),
-                      'command_excerpt':line[:500]})
-              print('SECUREDASHBOARD_CRON_MATCHES '+json.dumps(selected,ensure_ascii=False),flush=True)
-              print('TOTAL_CRON_LINES',len(lines),'ACTIVE_NONCOMMENT_LINES',
-                    sum(1 for x in lines if x.strip() and not x.lstrip().startswith('#')),flush=True)
+                  if not line.strip() or line.lstrip().startswith('#'):continue
+                  hint='secure_dashboard' if re.search(r'(?i)secure.?dashboard|collector_[\w-]+\.php',line) else 'other_job'
+                  print('CRON_JOB',i,hint,'hash',hashlib.sha256(line.encode()).hexdigest()[:12],flush=True)
               with paramiko.SFTPClient.from_transport(s) as sf:
-                  for relative in ('','php','data','api','cron','collectors'):
+                  for relative in ('php','modules','assets',''):
                       p=root+('/'+relative if relative else '')
+                      try:arr=sf.listdir_attr(p)
+                      except OSError:continue
+                      print('DIR',relative or '/','total',len(arr),'files',','.join(x.filename for x in arr[:100]),flush=True)
+                  p=root+'/php'
+                  arr=sf.listdir_attr(p)
+                  collectors=[x.filename for x in arr if re.fullmatch(r'collector_[\w&-]+\.php',x.filename)]
+                  print('COLLECTOR_FILES',len(collectors),','.join(sorted(collectors)),flush=True)
+                  for name in sorted(collectors):
+                      with sf.open(p+'/'+name,'rb') as stream: raw=stream.read(3600)
+                      lines=raw.decode('utf-8','replace').splitlines()
+                      pre=lines[:min(8,len(lines))]
+                      print('HEAD',name,'|'.join(safely(x,130) for x in pre),flush=True)
+                  with sf.open(p+'/collector_runner.php','rb') as stream:source=stream.read(15000).decode('utf-8','replace')
+                  for i,line in enumerate(source.splitlines(),1):
+                      if (re.search(r'(?i)(collector_|require|include|POST|GET|\$_SERVER|CRON|file_get_contents|fopen|secret|function |HEADER|exit|defined|job|auth)',line)
+                         or i<=17):
+                          print('RUNNER',i,safely(line,420),flush=True)
+                  for name in ['.htaccess','index.php','index.html']:
                       try:
-                          a=sf.listdir_attr(p)
-                      except OSError as e:
-                          print('SECUREDASHBOARD_DIRECTORY',relative or '/', 'not-listable',type(e).__name__,flush=True)
-                          continue
-                      entries=[{'name':x.filename,'dir':bool(x.st_mode&0o040000),'bytes':x.st_size} for x in a
-                               if relative=='' or re.search('(?i)(collect|cron|job|sched|nel|refresh|market|data|status)',x.filename)]
-                      print('SECUREDASHBOARD_DIRECTORY',relative or '/',json.dumps(entries[:80],ensure_ascii=False),flush=True)
+                          with sf.open(root+'/'+name,'rb') as stream:raw=stream.read(4000).decode('utf-8','replace')
+                      except OSError:continue
+                      print('ROOT_FILE',name,'bytes_visible',len(raw),'lines',len(raw.splitlines()))
+                      if name=='.htaccess':
+                          for i,x in enumerate(raw.splitlines(),1):print('HTACCESS',i,safely(x,250))
           PY
