@@ -1,0 +1,26 @@
+name: M2 verified native MIC price selection before EUR fallback (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-native-mic-priority-test-once.yml']
+permissions: {contents: read}
+jobs:
+  verify:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify global native MIC preference and EUR fallback once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with: {php-version: '8.4', coverage: none}
+      - name: Verify native-first, stale/MIC fallback, unified market and writer regression
+        run: |
+          php -l api/market_sources.php
+          php -l tests/test_twelve_data_provider.php
+          php tests/test_twelve_data_provider.php
+          php tests/test_market_tick_sources.php
+          php tests/test_m2_native_quote_route.php
+          php tests/test_market_batch_scope.php
+          php tests/fixtures/isin_quote_all_test.php
+          python3 scripts/build_pages.py --check
