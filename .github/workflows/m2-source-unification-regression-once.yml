@@ -49,3 +49,5 @@ jobs:
 # Execute parameterized test fixtures via their proper Python harnesses.
 
 # Physical-route GBP, GBX, EUR, fund, other and unsupported USD assertions.
+
+# Re-run shared stock/ETF fallback acceptance after correcting the obsolete ETF-only assertion.
