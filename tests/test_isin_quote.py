@@ -50,7 +50,7 @@ class IsinQuoteTests(unittest.TestCase):
         self.assertIn('data-isin-table data-isin-actions', market)
         self.assertIn('data-isin-clear', market)
         self.assertIn('<th scope="col">Wertpapier</th><th scope="col">Typ</th>', market)
-        self.assertIn('assets/js/isin_quotes.js?v=market-registry-live-8', market)
+        self.assertIn('assets/js/isin_quotes.js?v=market-registry-live-9', market)
         self.assertNotIn('assets/js/observations.js', market)
         self.assertIn('--bg: #10151c;', style)
         self.assertIn('--accent: #a5c9d9;', style)

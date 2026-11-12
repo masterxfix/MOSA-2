@@ -362,26 +362,59 @@
     if (index<0) return;
     entries.splice(index,1);save();paint();
   }
-  async function registryCall(action, code) {
+  // The collector owns the global advisory lock while collecting.
+  // A 409 COLLECTOR_BUSY is temporary, not a locked database or invalid ISIN.
+  // Keep the current CSRF token, retain the protected writer lock and retry
+  // only registration; other conflicts and destructive requests never retry.
+  function waitForCollector(ms) {
+    return new Promise((resolve,reject)=>{
+      if(scope.signal.aborted){reject(Error("Registrierung abgebrochen."));return;}
+      const onAbort=()=>{clearTimeout(timer);reject(Error("Registrierung abgebrochen."));};
+      const timer=setTimeout(()=>{
+        scope.signal.removeEventListener("abort",onAbort);
+        resolve();
+      },ms);
+      scope.signal.addEventListener("abort",onAbort,{once:true});
+    });
+  }
+  async function registryCall(action, code, onBusy=null) {
     const endpoint="api/market_registry.php";
     const tokenReply=await fetch(endpoint,{
-      method:"GET",credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json"}
+      method:"GET",credentials:"same-origin",cache:"no-store",signal:scope.signal,
+      headers:{Accept:"application/json"}
     });
     if(!tokenReply.ok)throw Error("DB-Zugriff derzeit nicht verfügbar.");
     const token=await tokenReply.json();
     if(token.status!=="ok" || typeof token.csrf!=="string")throw Error("DB-Sitzung ungültig.");
-    const response=await fetch(endpoint,{
-      method:"POST",credentials:"same-origin",cache:"no-store",
-      headers:{Accept:"application/json","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
-      body:JSON.stringify({action,isin:code,csrf:token.csrf})
-    });
-    const result=await response.json();
-    if(!response.ok) {
-      if(response.status===422 && action==="register")throw Error("Die ISIN-Prüfziffer stimmt nicht.");
-      if(response.status===409)throw Error("Die Datenbank ist belegt oder die ISIN ist gesperrt. Bitte später erneut versuchen.");
-      throw Error("Datenbankvorgang fehlgeschlagen ("+response.status+").");
+    const started=performance.now(),maxRetryMs=90000;
+    for(;;){
+      if(scope.signal.aborted)throw Error("Registrierung abgebrochen.");
+      const response=await fetch(endpoint,{
+        method:"POST",credentials:"same-origin",cache:"no-store",signal:scope.signal,
+        headers:{Accept:"application/json","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+        body:JSON.stringify({action,isin:code,csrf:token.csrf})
+      });
+      const result=await response.json();
+      if(response.status===409 && result.code==="COLLECTOR_BUSY" && action==="register"){
+        const left=maxRetryMs-(performance.now()-started);
+        if(left<=0)throw Error("Der Kurs-Collector ist weiterhin beschäftigt. Die ISIN wurde nicht registriert. Bitte erneut versuchen.");
+        onBusy?.();
+        await waitForCollector(Math.min(3000,left));
+        continue;
+      }
+      if(!response.ok){
+        if(response.status===422 && action==="register")throw Error("Die ISIN-Prüfziffer stimmt nicht.");
+        if(response.status===409){
+          if(result.code==="INACTIVE_IDENTITY")throw Error("Die ISIN ist bereits inaktiv registriert. Bitte diesen Eintrag gesondert prüfen.");
+          if(result.code==="COLLECTOR_BUSY")throw Error("Der Kurs-Collector arbeitet gerade. Der Vorgang wurde nicht ausgeführt.");
+          if(["COLLECTOR_NOT_IDLE","ASSET_HAS_PENDING_WORK"].includes(result.code))
+            throw Error("Für dieses Wertpapier läuft noch eine Verarbeitung. Löschen ist derzeit nicht möglich.");
+          throw Error("Die ISIN kann aufgrund eines Registrierungskonflikts nicht verarbeitet werden.");
+        }
+        throw Error("Datenbankvorgang fehlgeschlagen ("+response.status+").");
+      }
+      return result;
     }
-    return result;
   }
   async function reloadDatabase() {
     nextStoredAt=null;
@@ -394,7 +427,8 @@
     let result;
     try{
       if(storedRead)await storedRead;
-      result=await registryCall(action,code);
+      result=await registryCall(action,code,()=>showError(form,
+        "Der Kurs-Collector arbeitet gerade. Die ISIN ist noch nicht registriert; M2 versucht es automatisch erneut …"));
       const expected=action==="register"?["registered","existing"]:["deleted","absent"];
       if(!expected.includes(result.status)||(action!=="purge_all"&&result.isin!==code))
         throw Error("Ungültige Datenbankbestätigung.");
@@ -410,6 +444,7 @@
       paint();
     }
     await reloadDatabase();
+    showError(form);
     if(result.readback!=="passed" || storedStatus!=="ok"
         || (action==="purge"&&(registeredAssets.has(code)||storedQuotes.has(code)))
         || (action==="register"&&!registeredAssets.has(code))
