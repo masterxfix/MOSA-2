@@ -82,7 +82,7 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
     }
     if ($allowed===[]) return null;
 
-    $assetType=match($assetClass){'equity'=>'stock','etf'=>'etf','fund'=>'fund','other'=>'other',default=>'unknown'};
+    $assetType=\Mosa2\MarketSources\resolvedType($assetClass,[]);
     $requestedAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
     $captured=[];
     $lab=\fixlabRunMosaMarketSourceLab($isin,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
@@ -104,8 +104,9 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
             \fixlabMosaMarketSourceLabLsDatedQuote($clock,$now)??\fixlabMosaMarketSourceLabLocalClock($clock,$now));
     // One MOSA router and M2 fact contract for every ISIN/asset class.
     // A last trade is eligible only as a validated same-currency fallback.
+    $resolvedType=\Mosa2\MarketSources\resolvedType($assetClass,$lab);
     return \Mosa2\MarketSources\choose(
-        $lab,$isin,$assetType,$registry,$captured,new DateTimeImmutable('now',new DateTimeZone('UTC'))
+        $lab,$isin,$resolvedType,$registry,$captured,new DateTimeImmutable('now',new DateTimeZone('UTC'))
     );
 }
 
