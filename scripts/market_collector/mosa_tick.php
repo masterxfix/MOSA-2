@@ -17,13 +17,14 @@ require_once __DIR__.'/../market_current/refresh.php';
 require_once dirname(__DIR__,2).'/api/market_source_engine.php';
 require_once dirname(__DIR__,2).'/api/isin_quote.php';
 require_once dirname(__DIR__,2).'/api/market_core/twelve_data.php';
+require_once dirname(__DIR__,2).'/api/market_core/eodhd.php';
 
 // One common provider catalog for every registered ISIN and every object class.
 // No extra provider-specific or security-specific scheduled collectors.
-function sourceRegistry(PDO $db,bool $internationalAuthorized=false): array {
+function sourceRegistry(PDO $db,bool $internationalAuthorized=false,bool $eodhdAuthorized=false): array {
     $registry=[];
     $read=$db->prepare('SELECT id,enabled,source_type FROM m2_sources WHERE source_key=?');
-    foreach (\Mosa2\MarketSources\scheduled($internationalAuthorized) as $provider=>$source) {
+    foreach (\Mosa2\MarketSources\scheduled($internationalAuthorized,$eodhdAuthorized) as $provider=>$source) {
         $read->execute(['provider:'.$provider]);
         $row=$read->fetch();
         if ($row===false) {
@@ -72,7 +73,29 @@ function fetchSource(array $request,array &$requests): array {
     return $response;
 }
 
-function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &$requests,array $units,?array $international=null): ?array {
+/** All delayed-provider requests share the same M2 source registry, scheduler lock,
+ * physical ISIN route and MySQL quota. The credential is never included in logs. */
+function eodhdFetch(PDO $db,string $isin,string $sourceId,array $cfg,
+                    string $kind,string $value,array &$requests):?array {
+    $api='\\Mosa2\\MarketInternational\\Eodhd\\';
+    if(!\Mosa2\MarketInternational\Eodhd\reserve(
+        $db,$sourceId,$cfg,new DateTimeImmutable('now',new DateTimeZone('UTC'))))return null;
+    $request=\Mosa2\MarketInternational\Eodhd\request($kind,$value,$cfg['api_token']);
+    if(!sourceAllowed($request,$isin)
+       ||!\Mosa2\MarketInternational\Eodhd\approvedRequest($request,$kind,$value,$cfg['api_token']))
+        throw new \RuntimeException('eodhd_source_scope');
+    $response=fetchSource($request,$requests);
+    $status=$response['http_status']??null;
+    if(in_array($status,[401,402,403,429],true)){
+        deferSource($db,$sourceId,($status===429||$status===402)?429:403,$response['retry_after']??null);
+        return null;
+    }
+    if($status!==200||!is_string($response['body']??null))return null;
+    $data=json_decode($response['body'],true);
+    return is_array($data)?$data:null;
+}
+
+function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &$requests,array $units,?array $international=null,?array $eodhd=null): ?array {
     $ready=$db->prepare("SELECT COUNT(*) FROM m2_sync_checkpoints WHERE source_id=?
         AND stream_key='scheduled_market_cooldown' AND watermark_at>UTC_TIMESTAMP(6)");
     $allowed=[];
@@ -129,6 +152,34 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
             $lab['sources'][$internationalKey]=\Mosa2\MarketInternational\TwelveData\source(
                 $isin,$status===200?$payload:null,new DateTimeImmutable('now',new DateTimeZone('UTC'))
             );
+        }
+    }
+    // Additional delayed provider: look up the native ticker by exact ISIN
+    // and obtain a *unique* physical MIC from the vendor exchanges metadata.
+    // Provider identity remains cached in M2's existing sync checkpoints.
+    if($eodhd!==null&&isset($registry['eodhd'],$allowed['eodhd_delayed'])){
+        $id=$registry['eodhd']['id'];
+        $now=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+        $route=\Mosa2\MarketInternational\Eodhd\cachedRoute($db,$id,$isin,$now);
+        if($route===null){
+            $search=eodhdFetch($db,$isin,$id,$eodhd,'eodhd_search',$isin,$requests);
+            if($search!==null){
+                $exchangeList=eodhdFetch($db,$isin,$id,$eodhd,'eodhd_exchange','',$requests);
+                if($exchangeList!==null){
+                    $route=\Mosa2\MarketInternational\Eodhd\resolve($isin,$search,$exchangeList);
+                    if($route!==null)
+                        \Mosa2\MarketInternational\Eodhd\saveRoute($db,$id,$isin,$route,$now);
+                }
+            }
+        }
+        if(is_array($route)){
+            $payload=eodhdFetch($db,$isin,$id,$eodhd,'eodhd_delayed',$route['ticker'],$requests);
+            if($payload!==null){
+                $captured['eodhd_delayed']=(new DateTimeImmutable('now',new DateTimeZone('UTC')))
+                    ->format('Y-m-d H:i:s.u');
+                $lab['sources']['eodhd_delayed']=\Mosa2\MarketInternational\Eodhd\source(
+                    $isin,$route,$payload,new DateTimeImmutable('now',new DateTimeZone('UTC')));
+            }
         }
     }
     // One MOSA router and M2 fact contract for every ISIN/asset class.
@@ -260,6 +311,7 @@ function main(): void {
         $password=$credentials['password'];
         unset($credentials);
         $international=\Mosa2\MarketInternational\TwelveData\authorization($subscription);
+        $eodhd=\Mosa2\MarketInternational\Eodhd\authorization($subscription);
         $connect=static fn()=>connection($password);
         $db=$connect();
         if ((int)$db->query("SELECT GET_LOCK('m2-collector-scheduler',0)")->fetchColumn()!==1) return;
@@ -272,7 +324,7 @@ function main(): void {
                 ORDER BY i.normalized_value")->fetchAll(PDO::FETCH_ASSOC);
             $registered=[];
             foreach($rows as $row)$registered[$row['isin']]=['name'=>$row['name'],'class'=>$row['asset_class']];
-            $registry=$registered===[]?[]:sourceRegistry($db,$international!==null);
+            $registry=$registered===[]?[]:sourceRegistry($db,$international!==null,$eodhd!==null);
             $unitRegistry=$registered===[]?[]:\Mosa2\MarketSources\persistedUnitRegistry($db);
             $batches=array_chunk($registered,2,true);
             $due=$batches===[]?[]:$batches[intdiv(time(),60)%count($batches)];
@@ -285,7 +337,7 @@ function main(): void {
             $items=[];$unavailable=[];$requests=[];
             foreach ($due as $isin=>$asset) {
                 try {
-                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests,$unitRegistry,$international);
+                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests,$unitRegistry,$international,$eodhd);
                     $fact=$acquired['fact']??null;
                     if($fact===null){
                         $unavailable[]=$isin;
