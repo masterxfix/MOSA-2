@@ -76,7 +76,7 @@ function source(string $isin,mixed $payload,DateTimeImmutable $now):array {
     $venue=$payload['mic_code']??null;
     if(!is_string($venue)||preg_match('/^[A-Z0-9]{4}$/D',$venue)!==1){
         $venue=$payload['exchange']??null;
-        if(!is_string($venue)||!preg_match('/^[\p{L}\p{N} ._/-]{2,50}$/uD',$venue))
+        if(!is_string($venue)||!preg_match('~^[\p{L}\p{N} ._/-]{2,50}$~uD',$venue))
             $venue='Internationale Börse';
     }
     return array_replace($unavailable,[
