@@ -1,0 +1,42 @@
+name: M2 market provider rollout (one-time)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m2-market-provider-rollout-once.yml'
+permissions:
+  contents: read
+concurrency:
+  group: mosa2-private-market-install
+  cancel-in-progress: false
+jobs:
+  install:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'M2 market provider rollout 2026-11-12'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Focused generic market source regression
+        run: |
+          php -l scripts/market_collector/mosa_tick.php
+          php -l api/market_source_engine.php
+          php tests/test_market_tick_sources.php
+          php tests/test_market_batch_scope.php
+          python3 -m py_compile scripts/deploy_market_collector.py
+          python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Install exact pinned M2-only private release
+        env:
+          M2_EXPECTED_COMMIT: ${{ github.sha }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: python3 -B scripts/deploy_market_collector.py install

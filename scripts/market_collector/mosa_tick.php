@@ -25,6 +25,10 @@ const SOURCES=[
         'name'=>'Lang & Schwarz','venue'=>'lang_schwarz_tradecenter','url'=>'https://www.ls-tc.de/de/',
         'requests'=>['lang_schwarz_search','lang_schwarz_page'],
     ],
+    'tradegate_bsx'=>[
+        'name'=>'Tradegate BSX','venue'=>'tradegate_bsx','url'=>'https://www.tradegatebsx.com/',
+        'requests'=>['tradegate_quote'],
+    ],
 ];
 
 function sourceRegistry(PDO $db): array {
@@ -234,4 +238,4 @@ function main(): void {
         exit(1);
     }
 }
-main();
+if (realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__) main();
