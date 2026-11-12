@@ -1,0 +1,180 @@
+name: M2 missing frozen native currencies - additive seed (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-native-currency-seed-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: mosa2-universal-market-release
+  cancel-in-progress: false
+jobs:
+  seed:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Seed verified M2 native currency units once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Validate frozen manifest and complete M2 unit catalog without credentials
+        run: |
+          python3 scripts/phase3l/unit_seed.py api/market_core/native_currency_units.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('api/market_core/native_currency_units.json').read_text())
+          assert x['package_sha256']=='cb10f40f582d8b7f26428ca1de6ff0eb72acb0616b740ddc89ba63b6d9bea0d2'
+          assert len(x['definitions'])==15
+          assert len({(u['unit_key'],u['unit_version']) for u in x['definitions']})==15
+          assert all(u['unit_key']==u['base_unit_key']==u['monetary_currency_code'] for u in x['definitions'])
+          assert all(u['scale_numerator']==u['scale_denominator']=='1' for u in x['definitions'])
+          print('PASS 15/15 frozen native-unit definitions; no provider or instrument special cases')
+          PY
+          python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Insert missing currency definitions into M2 only; verify via independent read-only account
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,json
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          release='/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector/periodic/releases/deb9cf03c9988ca5e5080f2952d08ed9fca0d6e2/'
+          script=r"""
+          $manifestFile='<RELEASE>api/market_core/native_currency_units.json';
+          if(!is_file($manifestFile)||is_link($manifestFile))throw new RuntimeException('immutable_manifest_missing');
+          $manifest=json_decode(file_get_contents($manifestFile),true,32,JSON_THROW_ON_ERROR);
+          if(($manifest['package_sha256']??null)!=='cb10f40f582d8b7f26428ca1de6ff0eb72acb0616b740ddc89ba63b6d9bea0d2'
+              ||($manifest['package_version']??null)!=='1'||count($manifest['definitions']??[])!==15)
+              throw new RuntimeException('native_manifest_not_approved');
+          $root='/var/www/vhosts/web213.server10.configcenter.info/';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          $writeCfg=require $root.'mosa2-market-write-private/access.php';
+          if(!is_array($writeCfg)||($writeCfg['dsn']??null)!==$dsn
+              ||($writeCfg['user']??null)!=='h29077_mosa2_test')throw new RuntimeException('m2_write_scope');
+          $db=new PDO($dsn,$writeCfg['user'],$writeCfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+              PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($writeCfg);
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test')
+              throw new RuntimeException('db_identity');
+          $locked=false;$seedLocked=false;$committed=false;
+          $fields=['unit_key','unit_version','unit_contract_version','dimension_key','base_unit_key',
+              'base_unit_version','monetary_currency_code','scale_numerator','scale_denominator','status'];
+          $sql="SELECT ".implode(',',$fields).",LOWER(HEX(definition_sha256)) AS definition_sha256,created_at
+              FROM m2_units ORDER BY unit_key,unit_version";
+          $read=static fn(PDO $conn)=>$conn->query($sql)->fetchAll();
+          $index=static function(array $records):array {
+              $out=[];foreach($records as $r){$key=$r['unit_key'].'@'.$r['unit_version'];
+                  if(isset($out[$key]))throw new RuntimeException('duplicate_unit_key');$out[$key]=$r;}
+              return $out;
+          };
+          $equal=static function(array $existing,array $reference)use($fields):bool {
+              foreach($fields as $field)if(($existing[$field]===null?null:(string)$existing[$field])
+                  !==($reference[$field]===null?null:(string)$reference[$field]))return false;
+              return strtolower((string)$existing['definition_sha256'])===strtolower((string)$reference['definition_sha256']);
+          };
+          try {
+              if((int)$db->query("SELECT GET_LOCK('m2-collector-scheduler',45)")->fetchColumn()!==1)
+                  throw new RuntimeException('active_collector_busy');
+              $locked=true;
+              if((int)$db->query("SELECT GET_LOCK('mosa2-unit-seeds-v1',0)")->fetchColumn()!==1)
+                  throw new RuntimeException('unit_seed_busy');
+              $seedLocked=true;
+              $db->exec('SET SESSION innodb_lock_wait_timeout=6');
+              $db->beginTransaction();
+              $db->query('SELECT unit_key FROM m2_units FOR UPDATE')->fetchAll();
+              $original=$index($read($db));
+              $base=json_decode(file_get_contents('<RELEASE>docs/database/seeds/0001_market_units_v1.json'),
+                  true,32,JSON_THROW_ON_ERROR);
+              if(count($original)!==4||count($base['definitions'])!==4)
+                  throw new RuntimeException('unexpected_existing_unit_inventory');
+              foreach($base['definitions'] as $b){
+                  $key=$b['unit_key'].'@'.$b['unit_version'];
+                  if(!isset($original[$key])||!$equal($original[$key],$b))
+                      throw new RuntimeException('legacy_unit_mismatch');
+              }
+              $beforeCounts=[];
+              foreach(['m2_assets','m2_asset_identifiers','m2_market_observations',
+                  'm2_market_current','m2_asset_source_routes','m2_schema_migrations'] as $table){
+                  $beforeCounts[$table]=(int)$db->query("SELECT COUNT(*) FROM ".$table)->fetchColumn();
+              }
+              $insert=$db->prepare("INSERT INTO m2_units (".implode(',',$fields).",definition_sha256,created_at)
+                  VALUES (".implode(',',array_fill(0,count($fields),'?')).",UNHEX(?),UTC_TIMESTAMP(6))");
+              $new=[];
+              foreach($manifest['definitions'] as $unit){
+                  $key=$unit['unit_key'].'@'.$unit['unit_version'];
+                  if(isset($original[$key])||isset($new[$key]))throw new RuntimeException('unintended_unit_overlap');
+                  if($unit['unit_key']!==$unit['base_unit_key']
+                      ||$unit['unit_key']!==$unit['monetary_currency_code']
+                      ||$unit['unit_version']!=='1'
+                      ||$unit['base_unit_version']!=='1'
+                      ||$unit['status']!=='frozen'
+                      ||$unit['scale_numerator']!=='1'||$unit['scale_denominator']!=='1')
+                      throw new RuntimeException('unsupported_native_unit');
+                  if(!preg_match('/^[A-Z]{3}$/D',$unit['unit_key'])
+                      ||!preg_match('/^[a-f0-9]{64}$/D',$unit['definition_sha256']))
+                      throw new RuntimeException('invalid_native_unit_hash');
+                  $args=[];foreach($fields as $field)$args[]=$unit[$field];
+                  $args[]=$unit['definition_sha256'];
+                  $insert->execute($args);
+                  if($insert->rowCount()!==1)throw new RuntimeException('native_unit_not_inserted');
+                  $new[$key]=$unit;
+              }
+              $after=$index($read($db));
+              if(count($after)!==19)throw new RuntimeException('native_unit_count_mismatch');
+              foreach($original as $key=>$row)if($after[$key]!==$row)
+                  throw new RuntimeException('old_unit_changed_in_transaction');
+              foreach($new as $key=>$u)if(!isset($after[$key])||!$equal($after[$key],$u))
+                  throw new RuntimeException('native_unit_insert_readback');
+              foreach($beforeCounts as $table=>$value)
+                  if((int)$db->query("SELECT COUNT(*) FROM ".$table)->fetchColumn()!==$value)
+                      throw new RuntimeException('unexpected_nonunit_mutation');
+              if(!$db->commit())throw new RuntimeException('native_unit_commit_failed');
+              $committed=true;
+              // Second independent, strictly read-only database identity and row readback.
+              $rc=require $root.'mosa2-market-read-private/access.php';
+              if(($rc['dsn']??null)!==$dsn||($rc['user']??null)!=='h29077_mosa2_read')
+                  throw new RuntimeException('native_readback_account_wrong');
+              $reader=new PDO($dsn,$rc['user'],$rc['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+              unset($rc);
+              $reader->exec('SET SESSION TRANSACTION READ ONLY');
+              $reader->beginTransaction();
+              if($reader->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+                  ||(int)$reader->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+                  throw new RuntimeException('native_readback_not_readonly');
+              $independent=$index($read($reader));
+              if(count($independent)!==19||$independent!==$after)
+                  throw new RuntimeException('independent_native_unit_readback_mismatch');
+              foreach($beforeCounts as $table=>$value)
+                  if((int)$reader->query("SELECT COUNT(*) FROM ".$table)->fetchColumn()!==$value)
+                      throw new RuntimeException('independent_nonunit_count_changed');
+              $reader->rollBack();
+              echo json_encode(['status'=>'PASS','readback'=>'INDEPENDENT_READ_ONLY',
+                  'legacy_units_unchanged'=>count($original),'native_units_added'=>count($new),
+                  'unit_rows_after'=>count($independent),'native_keys'=>array_keys($new),
+                  'other_tables_unchanged'=>array_keys($beforeCounts),'committed'=>$committed],
+                  JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          } finally {
+              if($db->inTransaction())$db->rollBack();
+              if($seedLocked)$db->query("SELECT RELEASE_LOCK('mosa2-unit-seeds-v1')");
+              if($locked)$db->query("SELECT RELEASE_LOCK('m2-collector-scheduler')");
+          }
+          """.replace('<RELEASE>',release)
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as connection:
+              phpbin,_=remote.capability(connection)
+              rc,out,err,_=remote.remote_call(connection,remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':script}).encode(),timeout=130)
+              if rc or err:raise RuntimeError('M2_NATIVE_UNIT_SEED_FAILED')
+              result=json.loads(out)
+              if result.get('status')!='PASS' or result.get('unit_rows_after')!=19 or result.get('native_units_added')!=15:
+                  raise RuntimeError('M2_NATIVE_UNIT_READBACK_FAILED')
+              print('M2_NATIVE_UNITS_PERSISTED '+json.dumps(result,ensure_ascii=False),flush=True)
+          PY
