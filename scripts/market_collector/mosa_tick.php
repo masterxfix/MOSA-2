@@ -71,7 +71,7 @@ function fetchSource(array $request,array &$requests): array {
     return $response;
 }
 
-function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &$requests): ?array {
+function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &$requests,array $units): ?array {
     $ready=$db->prepare("SELECT COUNT(*) FROM m2_sync_checkpoints WHERE source_id=?
         AND stream_key='scheduled_market_cooldown' AND watermark_at>UTC_TIMESTAMP(6)");
     $allowed=[];
@@ -107,7 +107,7 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
     $resolvedType=\Mosa2\MarketSources\resolvedType($assetClass,$lab);
     return [
         'fact'=>\Mosa2\MarketSources\choose(
-            $lab,$isin,$resolvedType,$registry,$captured,new DateTimeImmutable('now',new DateTimeZone('UTC'))
+            $lab,$isin,$resolvedType,$registry,$captured,new DateTimeImmutable('now',new DateTimeZone('UTC')),$units
         ),
         'identity'=>\Mosa2\MarketSources\identityEvidence($lab,$isin,$registry),
     ];
@@ -117,7 +117,8 @@ function syncFact(callable $connect,array $config,string $password,string $isin,
     $contract=$config['state_contract'];
     $state=capture($connect,$contract);
     $provider=$fact['provider'];
-    $manifest=quoteManifest($state,['isin'=>$isin,'name'=>$name],[
+    $manifest=quoteManifest($state,['isin'=>$isin,'name'=>$name,
+        'quote_unit_key'=>$fact['quote_unit_key']??'EUR','currency'=>$fact['currency']],[
         'source_key'=>$provider,'reference_key'=>$provider,'venue_key'=>\Mosa2\MarketSources\catalog()[$provider]['venue'],'family'=>'mosa_live_quote',
         'reference'=>'M2 acquisition using the MOSA source adapter and quote router',
         'provider_key'=>$provider,'adapter_module'=>'m2_market_observation','adapter_class'=>'MarketObservation',
@@ -133,8 +134,10 @@ function syncFact(callable $connect,array $config,string $password,string $isin,
         return ['writer'=>'UNCHANGED'];
     }
 
-    $invoke=static function(array $runtime,array $request) use($fact,$isin): array {
-        if ($request['action']==='fetch') return ['m2_market_observation'=>$fact,'instrument'=>$isin];
+    $toWrite=$fact;
+    unset($toWrite['quote_unit_key']); // The native unit belongs to the physical route, not the raw fact.
+    $invoke=static function(array $runtime,array $request) use($toWrite,$isin): array {
+        if ($request['action']==='fetch') return ['m2_market_observation'=>$toWrite,'instrument'=>$isin];
         return bridge($runtime,$request);
     };
     // The private acquisition above supplies the validated quote to the existing Schema-6 writer.
@@ -238,6 +241,7 @@ function main(): void {
             $registered=[];
             foreach($rows as $row)$registered[$row['isin']]=['name'=>$row['name'],'class'=>$row['asset_class']];
             $registry=$registered===[]?[]:sourceRegistry($db);
+            $unitRegistry=$registered===[]?[]:\Mosa2\MarketSources\persistedUnitRegistry($db);
             $batches=array_chunk($registered,2,true);
             $due=$batches===[]?[]:$batches[intdiv(time(),60)%count($batches)];
             $config=[
@@ -249,7 +253,7 @@ function main(): void {
             $items=[];$unavailable=[];$requests=[];
             foreach ($due as $isin=>$asset) {
                 try {
-                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests);
+                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests,$unitRegistry);
                     $fact=$acquired['fact']??null;
                     if($fact===null){
                         $unavailable[]=$isin;

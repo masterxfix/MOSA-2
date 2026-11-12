@@ -39,10 +39,25 @@ function quoteManifest(array $state,array $selection,array $provider): array {
     $identity=['canonical_name'=>$entities[0]['canonical_name'],'display_name'=>$assets[0]['display_name'],'asset_class'=>$assets[0]['asset_class'],
         'identifier_type'=>'isin','identifier_value'=>$isin,'normalized_value'=>$isin,'scope_key'=>'','is_primary'=>1];
     same(planAssetIdentity($state,$identity)['decision'],'EXISTING_MATCH','scope_identity_conflict');
+    $unitKey=$selection['quote_unit_key']??'EUR';
+    $currency=$selection['currency']??'EUR';
+    check(is_string($unitKey)&&preg_match('/^[A-Z]{3}$/D',$unitKey)===1,'quote_native_unit');
+    check(is_string($currency)&&preg_match('/^[A-Z]{3}$/D',$currency)===1,'quote_native_currency');
+    if(isset($selection['quote_unit_key'])){
+        require_once dirname(__DIR__,2).'/api/market_core/selection.php';
+        $definition=\Mosa2\QuoteSelection\unit(\Mosa2\QuoteSelection\catalog(),$unitKey,'1');
+        same($definition['monetary_currency_code'],$currency,'quote_native_currency_contract');
+        $available=array_values(array_filter($state['m2_units']??[],static fn($row)=>
+            ($row['unit_key']??null)===$unitKey
+            &&(string)($row['unit_version']??'')==='1'
+            &&($row['status']??null)==='frozen'
+            &&($row['monetary_currency_code']??null)===$currency));
+        same(count($available),1,'quote_native_unit_in_database');
+    }
     $units=array_fill_keys(\Mosa2\MarketIdentity\UNIT_FIELDS,null);
-    $units['unit_contract_version']='mosa2-market-unit-v1';$units['quote_unit_key']='EUR';$units['quote_unit_version']='1';
+    $units['unit_contract_version']='mosa2-market-unit-v1';$units['quote_unit_key']=$unitKey;$units['quote_unit_version']='1';
     $evidence=['sample_id'=>'LIVE-'.substr(hash('sha256',$isin),0,10),'source_reference'=>'qualified:'.$provider['reference_key'].':'.$isin,'family'=>$provider['family'],
-        'row'=>['isin'=>$isin,'provider_key'=>$provider['source_key'],'venue_key'=>$provider['venue_key'],'currency'=>'EUR','quote_variant'=>null,'series'=>'snapshot','observation_kind'=>'market_quote'],
+        'row'=>['isin'=>$isin,'provider_key'=>$provider['source_key'],'venue_key'=>$provider['venue_key'],'currency'=>$currency,'quote_variant'=>null,'series'=>'snapshot','observation_kind'=>'market_quote'],
         'proof'=>['external_identity'=>['isin'=>$isin,'venue'=>$provider['venue_key']],'route_reference'=>$provider['reference'],
             'unit_class'=>'currency_per_instrument']];
     $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']==='provider:'.$provider['source_key']));

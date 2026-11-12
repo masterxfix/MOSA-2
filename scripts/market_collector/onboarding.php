@@ -33,7 +33,7 @@ function qualifiedIdentity(array $q): array {
     $keys=['canonical_name','display_name','asset_class','identifier_type','identifier_value','normalized_value','scope_key','is_primary'];
     same(array_diff(array_keys($q),$keys),[],'identity_fields');same(array_diff($keys,array_keys($q)),[],'identity_fields');
     foreach(['canonical_name','display_name'] as $k)check(is_string($q[$k])&&trim($q[$k])===$q[$k]&&$q[$k]!==''&&strlen($q[$k])<=160,'qualified_name');
-    check(in_array($q['asset_class'],['equity','etf','unknown'],true),'qualified_class');
+    check(in_array($q['asset_class'],['equity','etf','fund','other','unknown'],true),'qualified_class');
     same($q['identifier_type'],'isin','qualified_identifier');same($q['scope_key'],'','global_scope');
     check(\Mosa2\Phase3D\isinValid($q['normalized_value']),'qualified_isin');same($q['identifier_value'],$q['normalized_value'],'canonical_identifier');
     check(in_array($q['is_primary'],[1,'1'],true),'primary_identifier');$q['is_primary']=1;return $q;
