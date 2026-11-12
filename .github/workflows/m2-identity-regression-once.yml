@@ -32,3 +32,5 @@ jobs:
           python3 -B -m unittest discover -s tests -p 'test_isin_quote.py' -v
           node tests/isin_automation_browser_check.cjs
           node tests/isin_refresh_browser_check.cjs
+
+# Retry after isolated name-sanitization fixture adjustment.
