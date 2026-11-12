@@ -196,6 +196,10 @@ function fact(array $source,string $key,string $isin,array $registry,array $capt
         ||($source['available']??false)!==true||($source['source_key']??null)!==$key
         ||!is_string($quoteUnit)||!isset($units[$quoteUnit])
         ||(isset($source['isin'])&&$source['isin']!==$isin))return null;
+    // Physical international routing cannot use a synthetic or unknown venue.
+    if($provider==='twelve_data'
+        &&(!is_string($source['venue_key']??null)
+            ||preg_match('/^[A-Z0-9]{4}$/D',$source['venue_key'])!==1))return null;
     $unit=$units[$quoteUnit];
     $observed=null;
     foreach($registry[$provider]['requests'] as $requestKey)
