@@ -13,6 +13,10 @@ sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api'],array_keys($ac
 sameValue(false,$all['yahoo_finance_chart']['scheduled'],'no unauthorized Yahoo automation');$n++;
 sameValue('boerse_frankfurt_api',providerOf('boerse_frankfurt_trade'),'shared Frankfurt key');$n++;
 sameValue(['tradegate_quote','tradegate_trade'],$active['tradegate_bsx']['requests'],'shared Tradegate request keys');$n++;
+sameValue('tradegate_quote',\Mosa2\MarketSources\singlePreview()['tradegate']['request_key'],'manual Tradegate uses shared provider catalog');$n++;
+sameValue('boerse_frankfurt_trade',\Mosa2\MarketSources\singlePreview()['frankfurt']['request_key'],'manual Frankfurt uses shared provider catalog');$n++;
+sameValue(false,str_contains(file_get_contents(dirname(__DIR__).'/api/isin_quote.php'),'const SOURCES ='),'no duplicate PHP preview provider array');$n++;
+sameValue(false,str_contains(file_get_contents(dirname(__DIR__).'/assets/js/isin_quotes.js'),'const providers ='),'no duplicate browser provider array');$n++;
 $isin='SE0000115446';
 $tradegate='https://www.tradegatebsx.com/orderbuch.php?isin='.$isin;
 sameValue(true,\Mosa2\IsinQuote\sourceAllowed(['request_key'=>'tradegate_quote','url'=>$tradegate],$isin),'approved Tradegate host');$n++;
