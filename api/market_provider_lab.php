@@ -133,7 +133,8 @@ function inspect(string $input,?callable $transport=null,?DateTimeImmutable $now
             if($inventory['truncated'])$truncated[]=$requestKey;
         }
         foreach($lab['sources']??[] as $sourceKey=>$source){
-            if(\Mosa2\MarketSources\providerOf($sourceKey)!==$key||!is_array($source))continue;
+            if(!is_array($source)||($source['provider_key']??null)!==$key
+                ||($source['source_key']??null)!==$sourceKey)continue;
             foreach($source as $field=>$value){
                 if($field==='telemetry'||is_array($value))continue;
                 $fields[]=['field'=>$field,'role'=>$sourceKey,'value'=>safeText($value)];
