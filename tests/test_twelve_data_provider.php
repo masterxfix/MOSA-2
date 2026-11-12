@@ -55,6 +55,32 @@ equalIntl('JPY',$selected['quote_unit_key']??null,'physical JPY route derived fr
 equalIntl('2741.25',$selected['price']??null,'complete native source observation');$n++;
 equalIntl('twelve_data',$selected['provider']??null,'one provider within common writer');$n++;
 equalIntl('XTKS',$selected['venue_key']??null,'verified native venue travels with selected quote');$n++;
+// A German EUR midpoint can be newer than a valid native-market trade.
+// Native exchange quotes must still win, regardless of ISIN or asset class.
+$eurSource=[
+    'source_key'=>'tradegate_quote','provider_key'=>'tradegate_bsx',
+    'venue_key'=>'tradegate_bsx','available'=>true,'isin'=>$isin,
+    'currency'=>'EUR','data_type'=>'quote','mid'=>'100.00',
+    'bid'=>'99.90','ask'=>'100.10','quoted_at'=>'2026-11-12T12:04:06+00:00',
+];
+$combinedRegistry=$tdRegistry+['tradegate_bsx'=>catalog()['tradegate_bsx']+['id'=>'92']];
+$combinedUnits=$units+['EUR'=>['quote_unit_key'=>'EUR','quote_unit_version'=>'1','currency'=>'EUR']];
+$combinedCaptured=['twelve_data_quote'=>'2026-11-12 12:04:06.000000',
+    'tradegate_quote'=>'2026-11-12 12:04:07.000000'];
+$combinedLab=['sources'=>['tradegate_quote'=>$eurSource,'twelve_data_quote'=>$row]];
+$primaryStock=choose($combinedLab,$isin,'stock',$combinedRegistry,$combinedCaptured,$now,$combinedUnits);
+equalIntl('twelve_data',$primaryStock['provider']??null,'verified native MIC outranks German EUR stock quote');$n++;
+equalIntl('JPY',$primaryStock['currency']??null,'no EUR relabel of selected stock quote');$n++;
+$primaryEtf=choose($combinedLab,$isin,'etf',$combinedRegistry,$combinedCaptured,$now,$combinedUnits);
+equalIntl('twelve_data',$primaryEtf['provider']??null,'verified native MIC outranks German ETF quotation');$n++;
+$withoutMic=$row;$withoutMic['venue_key']='international_isin';
+$withoutMicLab=['sources'=>['tradegate_quote'=>$eurSource,'twelve_data_quote'=>$withoutMic]];
+$euroFallback=choose($withoutMicLab,$isin,'stock',$combinedRegistry,$combinedCaptured,$now,$combinedUnits);
+equalIntl('tradegate_bsx',$euroFallback['provider']??null,'unverified native exchange falls back to EUR');$n++;
+$staleNative=$row;$staleNative['quoted_at']='2026-11-12T11:04:05+00:00';
+$staleNativeLab=['sources'=>['tradegate_quote'=>$eurSource,'twelve_data_quote'=>$staleNative]];
+$staleFallback=choose($staleNativeLab,$isin,'stock',$combinedRegistry,$combinedCaptured,$now,$combinedUnits);
+equalIntl('tradegate_bsx',$staleFallback['provider']??null,'stale native quote falls back to EUR');$n++;
 $etfSelected=choose(['sources'=>['twelve_data_quote'=>$row]],$isin,'etf',
     $tdRegistry,['twelve_data_quote'=>'2026-11-12 12:04:06.000000'],$now,$units);
 equalIntl('JPY',$etfSelected['currency']??null,'generic ETF supports independently validated native quote');$n++;
