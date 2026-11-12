@@ -43,6 +43,7 @@ jobs:
           php tests/test_market_batch_scope.php
           php tests/test_market_registry_model.php
           php tests/test_twelve_data_budget_mysql.php
+          php tests/test_eodhd_mysql.php
           php tests/fixtures/isin_quote_all_test.php
           node tests/isin_automation_browser_check.cjs
           python3 scripts/build_pages.py --check
