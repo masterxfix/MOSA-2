@@ -1,0 +1,67 @@
+name: M2 scheduled market readback diagnostic (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-market-scheduled-readback-once.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.repository == 'masterxfix/MOSA-2' && github.event.head_commit.message == 'M2 read-only cron and Current proof 2026-11-12'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Install pinned verified SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Verify active M2 cron and source facts without DB or provider writes
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          target='da145dbdfdb4c21ef933e3094163eecc982f0080'
+          source="""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(!is_array($cfg)||($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)throw new RuntimeException('target');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');$db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+             ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)throw new RuntimeException('not_readonly');
+          $rows=$db->query("SELECT s.source_key,s.enabled,COUNT(o.id) AS observations,MAX(o.observed_at) AS last_at
+             FROM m2_sources s LEFT JOIN m2_market_observations o ON o.source_id=s.id
+             WHERE s.source_key IN ('provider:lang_schwarz','provider:tradegate_bsx','provider:boerse_frankfurt_api')
+             GROUP BY s.id,s.source_key,s.enabled ORDER BY s.source_key")->fetchAll();
+          $current=$db->query('SELECT COUNT(*) FROM m2_market_current')->fetchColumn();
+          $registered=$db->query("SELECT COUNT(*) FROM m2_asset_identifiers WHERE identifier_type='isin' AND scope_key='' AND is_primary=1 AND valid_to IS NULL")->fetchColumn();
+          $busy=$db->query("SELECT IS_USED_LOCK('m2-collector-scheduler')")->fetchColumn();
+          $db->rollBack();
+          echo json_encode(['read_only'=>true,'sources'=>$rows,'current_count'=>(int)$current,'registered'=>(int)$registered,'scheduler_lock_held'=>$busy!==null&&$busy!==false],JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              code,out,err,_=remote.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if code or err: raise RuntimeError('CRON_UNREADABLE')
+              active=[line for line in out.decode().splitlines() if '/scripts/market_collector/mosa_tick.php' in line and not line.lstrip().startswith('#')]
+              if len(active)!=1 or ('/releases/'+target+'/') not in active[0]:
+                  raise RuntimeError('ACTIVE_CRON_RELEASE_DRIFT')
+              phpbin,_=remote.capability(t)
+              code,out,err,_=remote.remote_call(t,remote.command(phpbin,remote.BOOTSTRAP),json.dumps({'source':source}).encode(),timeout=45)
+              if code or err: raise RuntimeError('READBACK_DB_COMMAND_FAILED')
+              report=json.loads(out)
+              if report.get('read_only') is not True or report['current_count']<1:
+                  raise RuntimeError('READBACK_INVALID')
+              print(json.dumps({'cron_release_exact':target,'cron_verified':True,'M2_DB':report},ensure_ascii=False),flush=True)
+          PY
