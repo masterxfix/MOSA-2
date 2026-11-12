@@ -8,11 +8,13 @@ function sameValue(mixed $expected,mixed $actual,string $case):void {
 }
 $n=0;
 $all=catalog();$active=scheduled();
-sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','yahoo_finance_chart','twelve_data','eodhd'],array_keys($all),'one source catalog');$n++;
+sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','twelve_data','eodhd'],array_keys($all),'one source catalog');$n++;
 sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api'],array_keys($active),'scheduled sources');$n++;
 sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','twelve_data'],array_keys(\Mosa2\MarketSources\scheduled(true)),'private entitlement adds generic international source');$n++;
 sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','eodhd'],array_keys(\Mosa2\MarketSources\scheduled(false,true)),'only separately entitled delayed provider joins shared collector');$n++;
-sameValue(false,$all['yahoo_finance_chart']['scheduled'],'no unauthorized Yahoo automation');$n++;
+sameValue(null,providerOf('yahoo_home_market'),'Yahoo excluded from M2 provider catalog');$n++;
+sameValue(false,\Mosa2\MarketSources\allowed(['request_key'=>'yahoo_home_search',
+    'url'=>'https://query1.finance.yahoo.com/v1/finance/search?q=SE0000115446&quotesCount=10&newsCount=0'],'SE0000115446'),'Yahoo search never reauthorized');$n++;
 sameValue('boerse_frankfurt_api',providerOf('boerse_frankfurt_trade'),'shared Frankfurt key');$n++;
 sameValue(['tradegate_quote','tradegate_trade'],$active['tradegate_bsx']['requests'],'shared Tradegate request keys');$n++;
 sameValue('tradegate_quote',\Mosa2\MarketSources\singlePreview()['tradegate']['request_key'],'manual Tradegate uses shared provider catalog');$n++;
