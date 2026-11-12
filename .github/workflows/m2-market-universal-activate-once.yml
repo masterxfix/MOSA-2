@@ -1,4 +1,4 @@
-name: M2 unified market collector activation and live acceptance (one-time)
+name: M2 activate shared ETF and stock market price choice in existing cron
 on:
   push:
     branches: [main]
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   activate:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Activate verified M2 universal market collector once'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Activate shared stock ETF quote choice in existing M2 minute cron'
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     steps:
@@ -37,11 +37,11 @@ jobs:
           import deploy_test_sftp as profile
           import deploy_sftp as web
           import paramiko
-          OLD='10321579aef436d62661a8f50f06692c181bcee9';NEW='deb9cf03c9988ca5e5080f2952d08ed9fca0d6e2'
+          OLD='d1ed1b2137b7984431d0e70880a4113ca1219068';NEW='a82439c0ad695e30678af4ca9e34ab98abf634f2'
           root=release.PERIODIC+'/releases/'+NEW+'/'
           path=root+'scripts/market_collector/mosa_tick.php'
-          webfiles=['api/market_sources.php','api/isin_quote.php','assets/js/isin_quotes.js','marktdaten.html']
-          privatefiles=['api/market_sources.php','api/isin_quote.php','scripts/market_collector/mosa_tick.php',
+          webfiles=['api/market_sources.php','api/market_source_engine.php']
+          privatefiles=['api/market_sources.php','api/market_source_engine.php','api/isin_quote.php','scripts/market_collector/mosa_tick.php',
               'scripts/market_collector/actions_acceptance.php','scripts/market_collector/onboarding.php']
           sql=r"""
           $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
@@ -95,6 +95,8 @@ jobs:
                   time.sleep(8) # Regular old job may briefly own the same scheduler advisory lock.
               if not isinstance(result,dict) or result.get('due',0)<1:
                   raise RuntimeError('NEW_M2_COLLECTOR_NOT_OBSERVED')
+              if any(str(req.get('key','')).startswith('yahoo_') for req in result.get('provider_requests',[]) if isinstance(req,dict)):
+                  raise RuntimeError('EXCLUDED_YAHOO_PROVIDER_IN_M2_RUN')
               items=result.get('items',{})
               if not isinstance(items,dict) or len(items)<1 or any(not isinstance(v,dict) or 'failure' in v or
                   (v.get('writer') not in ('INSERT','UPDATE','UNCHANGED') and v.get('quote')!='UNAVAILABLE')
