@@ -170,7 +170,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
     'One new Current/registry read reveals the full verified asset without extra collector');
   assert.equal(incompleteWithQuote.table.children[0].cells[1].textContent,'Aktie');
   assert.equal(incompleteWithQuote.table.children[0].dataset.status,'stored');
-  assert.equal(incompleteWithQuote.table.children[0].cells.length,11,'Pending single cell becomes the normal data row');
+  assert.equal(incompleteWithQuote.table.children[0].cells.length,10,'Non-action table restores all ten quote columns');
   const directlyRegistered=harness({market:true,entries:[],actions:true,dbRegistry:true,registered:[],initialItems:[]});
   await flush();
   directlyRegistered.input.value=a;
