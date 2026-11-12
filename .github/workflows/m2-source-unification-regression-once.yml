@@ -30,3 +30,5 @@ jobs:
           node tests/isin_details_browser_check.cjs
           python3 -B -m unittest discover -s tests -p 'test_isin_quote.py' -v
           python3 scripts/build_pages.py --check
+
+# Stable provider-derived quote/trade ordering regression retry.
