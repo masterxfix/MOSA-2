@@ -1,0 +1,34 @@
+name: M2 general identity enrichment regression (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-identity-regression-once.yml']
+permissions:
+  contents: read
+jobs:
+  tests:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Test M2 verified identity enrichment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: PHP and shared market identity regressions
+        run: |
+          php -l api/market_sources.php
+          php -l scripts/market_collector/mosa_tick.php
+          php -l api/isin_quote.php
+          php -l api/market_source_engine.php
+          php tests/test_market_tick_sources.php
+          php tests/test_market_registry_model.php
+          php tests/test_market_batch_scope.php
+          php tests/fixtures/isin_quote_all_test.php
+          php tests/fixtures/isin_quote_test.php
+          python3 -B -m unittest discover -s tests -p 'test_isin_quote.py' -v
+          node tests/isin_automation_browser_check.cjs
+          node tests/isin_refresh_browser_check.cjs
