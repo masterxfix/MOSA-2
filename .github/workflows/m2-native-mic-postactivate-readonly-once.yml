@@ -1,0 +1,84 @@
+name: M2 native MIC priority post-activation live cron proof (read-only once)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-native-mic-postactivate-readonly-once.yml']
+permissions: {contents: read}
+jobs:
+  confirm:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify live M2 native MIC priority cron and Current after activation once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Verify M2-only cron and new market facts with strict read-only account
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,re,sys,time
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          expected='74b453f841b235183f0b8ada18d17fb0d6c44d27'
+          source=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)
+              throw new RuntimeException('M2_ISOLATED_READ');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');$db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+              ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('M2_READONLY_INVARIANT');
+          $count=(int)$db->query('SELECT COUNT(*) FROM m2_market_observations')->fetchColumn();
+          $units=(int)$db->query('SELECT COUNT(*) FROM m2_units')->fetchColumn();
+          $last=$db->query("SELECT i.normalized_value AS isin,s.source_key,c.currency,
+              c.observed_at,c.market_at,r.quote_unit_key FROM m2_market_current c
+              JOIN m2_asset_identifiers i ON i.asset_id=c.asset_id AND i.is_primary=1
+              JOIN m2_sources s ON s.id=c.source_id
+              JOIN m2_asset_source_routes r ON r.id=c.route_id
+              ORDER BY c.observed_at DESC LIMIT 10")->fetchAll();
+          $registered=(int)$db->query("SELECT COUNT(*) FROM m2_asset_identifiers
+              WHERE identifier_type='isin' AND scope_key='' AND is_primary=1 AND valid_to IS NULL")->fetchColumn();
+          $native=(int)$db->query("SELECT COUNT(*) FROM m2_sources WHERE source_key='provider:twelve_data'")->fetchColumn();
+          $db->rollBack();
+          echo json_encode(['readonly'=>true,'checked_at_utc'=>gmdate('c'),'obs_count'=>$count,
+              'units'=>$units,'registered'=>$registered,'native_sources'=>$native,'current'=>$last],JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              rc,out,err,_=remote.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if rc or err or not out:raise RuntimeError('crontab_unreadable')
+              lines=[v.decode() for v in out.splitlines()
+                  if b'/scripts/market_collector/mosa_tick.php' in v and not v.lstrip().startswith(b'#')]
+              if len(lines)!=1 or ('/releases/'+expected+'/') not in lines[0]:
+                  raise RuntimeError('m2_cron_release_wrong')
+              phpbin,_=remote.capability(t)
+              data=None
+              after=[]
+              for attempt in range(10):
+                  rc,out,err,_=remote.remote_call(t,remote.command(phpbin,remote.BOOTSTRAP),
+                      json.dumps({'source':source}).encode(),timeout=45)
+                  if rc or err:raise RuntimeError('M2_DB_READ_FAILURE')
+                  data=json.loads(out)
+                  if not data.get('readonly') or data['units']!=19 or data['registered']<1 or not data['current']:
+                      raise RuntimeError('M2_DB_SCOPE_CHANGED')
+                  if data['native_sources']!=0:
+                      raise RuntimeError('UNLICENSED_PROVIDER_SOURCE_PRESENT')
+                  after=[v for v in data['current'] if v['observed_at']>'2026-11-12 17:26:14']
+                  if after:break
+                  time.sleep(12)
+              if not after:raise RuntimeError('M2_NO_NEW_CURRENT_SINCE_ACTIVATION')
+              print('M2_NEW_CRON_LIVE_READBACK '+json.dumps({'active_release':expected,
+                   'new_current_count':len(after),'data':data},ensure_ascii=False),flush=True)
+          PY
