@@ -2,6 +2,12 @@
 
 MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des MOSA-Dashboards.
 
+## Kursanbieter: Aufgaben, Prioritäten und Betriebsstatus
+
+**Aktueller Überblick (12.11.2026):** [M2-Kursanbieter – wer liefert was, wann wird welche Quelle bevorzugt?](docs/M2_MARKTDATEN_ANBIETER.md).
+
+Die eigene Dokumentationsseite beschreibt alle sechs registrierten Quellen, ihre tatsächlichen Aktivierungsbedingungen, die **separate ETF-Auswahl**, die internationale Anbieter-Priorität, Frischegrenzen und offene Abnahmepunkte. Der **M2-Minutenjob ist aktiv**; die historischen Angaben vom 31.10.2026 unten sind nicht der heutige Betriebsstatus.
+
 ## Aktueller Stand und nächster Abschlussabschnitt
 
 **31.10.2026:** [Tradegate-Kursmodul](docs/database/TRADEGATE_CURRENT_PILOT.md) erfolgreich bis zur sichtbaren Fünferabnahme geführt. Der Lauf [41198494118](https://github.com/masterxfix/MOSA-2/actions/runs/41198494118) auf Commit `87ed391d67f315a9a884556ab1363e7cd3809dcb` endete mit **COMPLETE**: fünf damals ausgewählte Wertpapiere wurden über `Tradegate · XGAT · Mid` gespeichert, Current aktualisiert und im Browser sichtbar geprüft. Observation-, Current-, Web- und Release-Readbacks bestanden; 5/5 Provideranfragen wurden genau einmal verbraucht. Der automatische Dauerbetrieb bleibt deaktiviert. Nächste fachliche Priorität ist die vollständige Übernahme der kostenlos verfügbaren relevanten Marktdaten ohne Verlust bekannter oder später nutzbarer Anbieterinformationen, bei unverändertem Performance-Budget.
