@@ -1,0 +1,73 @@
+name: M2 global ISIN coverage evidence from existing sources (one-time, no DB writes)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-global-market-coverage-probe-once.yml']
+permissions: {contents: read}
+jobs:
+  read_only:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Probe registered M2 sources for international ISINs read only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Inspect existing provider coverage for AU, JP, CN and a European ETF
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          release='/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector/periodic/releases/deb9cf03c9988ca5e5080f2952d08ed9fca0d6e2/'
+          script=r"""
+          require '<RELEASE>scripts/market_collector/mosa_tick.php';
+          $isins=['AU000000DRO2','JP3633400001','CNE100000296','IE00BMYDM794'];
+          $report=[];
+          foreach($isins as $isin){
+              $requests=[];
+              $lab=fixlabRunMosaMarketSourceLab($isin,FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
+                  static function(array $request)use($isin,&$requests):array{
+                      $key=$request['request_key'];
+                      $provider=\Mosa2\MarketSources\providerOf($key);
+                      $catalog=\Mosa2\MarketSources\catalog();
+                      if($provider===null||($catalog[$provider]['scheduled']??false)!==true
+                          ||!\Mosa2\MarketSources\allowed($request,$isin))
+                          return ['body'=>'','http_status'=>null,'error_code'=>'provider_not_authorized'];
+                      return \Mosa2\MosaMarket\fetchSource($request,$requests);
+                  },new DateTimeImmutable('now',new DateTimeZone('UTC')),
+                  assetType:'unknown');
+              $available=[];
+              foreach(($lab['sources']??[]) as $key=>$source){
+                  if(($source['available']??false)!==true)continue;
+                  $available[]=['key'=>$key,'currency'=>$source['currency']??null,
+                      'kind'=>$source['data_type']??null,'venue'=>$source['venue_label']??null,
+                      'timestamp_present'=>isset($source['quoted_at'])];
+              }
+              $report[]=['isin'=>$isin,'type'=>$lab['instrument_type']??null,
+                  'type_source'=>$lab['instrument_type_source']??null,
+                  'provider_http'=>$requests,'available'=>$available];
+          }
+          echo json_encode(['mode'=>'provider_read_only_no_DB','checked_at_utc'=>gmdate('c'),'results'=>$report],
+              JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+          """.replace('<RELEASE>',release)
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as connection:
+              phpbin,_=remote.capability(connection)
+              rc,out,err,_=remote.remote_call(connection,remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':script}).encode(),timeout=185)
+              if rc or err:raise RuntimeError('GLOBAL_M2_PROVIDER_PROBE_FAILED')
+              result=json.loads(out)
+              if result.get('mode')!='provider_read_only_no_DB' or len(result.get('results',[]))!=4:
+                  raise RuntimeError('PROBE_RESULT_INCOMPLETE')
+              print('M2_GLOBAL_ISIN_COVERAGE '+json.dumps(result,ensure_ascii=False),flush=True)
+          PY
