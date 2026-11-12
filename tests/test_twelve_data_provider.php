@@ -55,6 +55,18 @@ equalIntl('JPY',$selected['quote_unit_key']??null,'physical JPY route derived fr
 equalIntl('2741.25',$selected['price']??null,'complete native source observation');$n++;
 equalIntl('twelve_data',$selected['provider']??null,'one provider within common writer');$n++;
 equalIntl('XTKS',$selected['venue_key']??null,'verified native venue travels with selected quote');$n++;
+$etfSelected=choose(['sources'=>['twelve_data_quote'=>$row]],$isin,'etf',
+    $tdRegistry,['twelve_data_quote'=>'2026-11-12 12:04:06.000000'],$now,$units);
+equalIntl('JPY',$etfSelected['currency']??null,'generic ETF supports independently validated native quote');$n++;
+$asiaTrading=new DateTimeImmutable('2026-11-12T02:00:05Z');
+$asiaPayload=$quote;$asiaPayload['last_quote_at']=(new DateTimeImmutable('2026-11-12T02:00:03Z'))->getTimestamp();
+$asiaPayload['timestamp']=$asiaPayload['last_quote_at'];
+$asiaQuote=source($isin,$asiaPayload,$asiaTrading);
+$asiaFact=choose(['sources'=>['twelve_data_quote'=>$asiaQuote]],$isin,'etf',$tdRegistry,
+    ['twelve_data_quote'=>'2026-11-12 02:00:04.000000'],$asiaTrading,$units);
+equalIntl('JPY',$asiaFact['currency']??null,'Tokyo-morning ETF quote works during Berlin night');$n++;
+equalIntl('XTKS',$asiaFact['venue_key']??null,'Asia-hours ETF retains exact venue');$n++;
+
 equalIntl(null,choose(['sources'=>['twelve_data_quote'=>$row]],$isin,'stock',
     $tdRegistry,['twelve_data_quote'=>'2026-11-12 12:04:06.000000'],$now,
     ['EUR'=>['quote_unit_key'=>'EUR','quote_unit_version'=>'1','currency'=>'EUR']]),
