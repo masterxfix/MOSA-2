@@ -65,6 +65,81 @@ Freigaben durch ChatGPT, sondern müssen den tatsächlichen Accountrechten
 entsprechen. Bei unsicherer Datei oder fehlendem Recht verweigert der Adapter
 den Start bzw. bleibt deaktiviert.
 
+## Zweiter ISIN-generischer Provider: EODHD (verzögert)
+
+Die M2-eigene Integration `api/market_core/eodhd.php` ist in den **einen**
+bestehenden Minuten-Collector integriert. Das ist weder ein zweiter Collector
+noch eine Länder-, ISIN- oder ETF-Sonderlösung. Sie verwendet dieselbe
+`api/market_sources.php`-Quelle, denselben Schema-6-Observation-/Current-Writer
+und die bestehende Scheduler-Sperre.
+
+Die EODHD-Suchantwort wird **auf die exakte ISIN** geprüft; der Markt-Ticker
+und die Originalwährung stammen aus deren verifizierbaren Datenfeldern.
+Die Exchange-Metadaten müssen einen eindeutigen realen MIC liefern.
+Mehrdeutige Primärnotierungen, Exchange-Codes mit mehreren MICs, abweichende
+ISIN, andere Ticker im Kurs-Response, ungültiger Preis oder über 30 Minuten
+alter Marktzeitstempel werden abgelehnt. Der Anbieter nennt für seine
+Live-REST-Preise in der Regel 15–20 Minuten Verzögerung; die **unveränderte
+Marktzeit** und das tatsächliche Alter bleiben sichtbar. Ein verzögerter
+Kurs wird nicht als Echtzeitangebot etikettiert. Die Marktkennzeichnung des
+Instruments ist kein universeller Beweis dafür, dass alle Preisbestandteile
+direkt von dieser Börse stammen; der Anbieter beschreibt zum Teil indikative
+aggregierte Quellen.
+
+Die Routenauflösung wird im **bestehenden** M2-`m2_sync_checkpoints`-Speicher
+ohne Zugangsdaten auf 14 Tage begrenzt wiederverwendet. Negative/mehrdeutige
+ISIN-Abfragen werden für maximal sechs Stunden zurückgestellt. Sowohl
+Routenrecherche als auch Kursabruf reservieren tatsächliche UTC-Minuten-
+und Tagesbudgets vor jeder externen Anfrage. Kein schleichendes Überziehen
+des Kontingents; der kostenlose EODHD-Tarif umfasst laut Anbieter nur
+20 Calls pro Tag. Für viele Werte ist damit keine Minutentakt-Versorgung
+möglich. Bestehende EUR-Quellen bleiben unabhängig aktiv.
+
+**Sichere Aktivierung:** Nur mit echtem privaten API-Konto und tatsächlichen
+Rechten auf vertrauliche, persönliche Anzeige. EODHD verlangt technisch den
+Token als `api_token` in der HTTPS-Provideranfrage; er bleibt daher
+ausschließlich auf dem privaten Dogado-Laufzeitpfad und darf niemals
+in GitHub, Browser, Logdateien oder M2-Datenbank gelangen. Die Owner-Datei
+liegt außerhalb des Webroots unter
+`/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-eodhd-private/access.php`;
+Verzeichnis `0700`, Datei `0600`. Beispielstruktur **ohne echten Schlüssel**:
+
+```php
+<?php
+return [
+    'enabled' => true,
+    'personal_or_internal_rights_confirmed' => true,
+    'private_display_only' => true,
+    'api_token' => '<ECHTER PRIVATER EODHD-ACCOUNT-TOKEN>',
+    'max_daily_requests' => 20,
+    'max_minute_requests' => 2,
+];
+```
+
+Limits sind **nur Beispiele**: Maßgeblich sind die im persönlichen Konto
+wirklich freigeschalteten Rechte und Kontingente. Der Code prüft die Flags,
+nicht eigenständig die vom Anbieter erteilte Lizenz. Ohne die Datei wird
+**kein zusätzlicher GET und keine neue Provider-DB-Route** erzeugt.
+
+**Bekannte Grenze:** EODHD deckt zahlreiche Heimatmärkte (darunter ASX),
+aber laut aktueller veröffentlichter Exchange-Liste nicht alle Börsen,
+insbesondere ist Tokio dort nicht aufgeführt. Diese Integration allein
+erfüllt deshalb **nicht** die Gesamtforderung nach internationaler
+Live-Versorgung jeder ISIN. Die optionale Twelve-Data-Quelle deckt
+zusätzliche Märkte ab, setzt aber ihre eigenen Markt- und ISIN-Rechte voraus.
+Solange die tatsächliche Lizenz, echte Antworten in Originalwährung,
+DB-Readback, Marktzeitzonen und sichtbare M2-Anzeige fehlen, bleibt die
+Gesamtabnahme ausdrücklich **offen**.
+
+Offizielle Quellen:
+- https://eodhd.com/financial-apis/search-api-for-stocks-etfs-mutual-funds
+- https://eodhd.com/financial-apis/live-ohlcv-stocks-api
+- https://eodhd.com/financial-apis/exchanges-api-list-of-tickers-and-trading-hours
+- https://eodhd.com/financial-apis/our-data-sources-and-data-partners
+- https://eodhd.com/financial-apis/api-limits
+- https://eodhd.com/help/personal-use
+- https://eodhd.com/list-of-stock-markets
+
 ## Gemeinsame Sicherheits- und Datenverträge
 
 - Nur eine exakte HTTPS-ISIN-Adresse: `api.twelvedata.com/quote?isin=<ISIN>`.
