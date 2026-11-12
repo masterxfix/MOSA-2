@@ -39,3 +39,5 @@ jobs:
           python3 -B scripts/deploy_test_sftp.py check-config
           python3 -B scripts/deploy_test_sftp.py backup
           python3 -B scripts/deploy_test_sftp.py deploy
+
+# Retry after registry-action fixture correction; deploy only when all checks pass.
