@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PERIODIC = shared.TEST_ROOT.rsplit("/", 1)[0] + "/private/mosa2-collector/periodic"
 EXTRAS = (
     "api/market_source_engine.php",
+    "api/market_sources.php",
     "api/isin_quote.php",
     "api/market_core/native_currency_units.json",
     "scripts/market_collector/gettex_delayed.py",
