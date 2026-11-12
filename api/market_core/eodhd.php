@@ -133,6 +133,12 @@ function cachedRoute(PDO $db,string $id,string $isin,DateTimeImmutable $now):?ar
     $raw=$q->fetchColumn();
     if(!is_string($raw)||strlen($raw)>512)return null;
     $route=json_decode($raw,true);
+    if(is_array($route)&&($route['isin']??null)===$isin
+       &&($route['unavailable']??null)===true
+       &&is_int($route['cached_at']??null)
+       &&$route['cached_at']<=$now->getTimestamp()
+       &&$now->getTimestamp()-$route['cached_at']<=6*3600)
+        return ['isin'=>$isin,'unavailable'=>true];
     if(!is_array($route)||($route['isin']??null)!==$isin
        ||!validTicker((string)($route['ticker']??''))
        ||!preg_match('/^[A-Z0-9]{4}$/D',(string)($route['mic']??''))
@@ -150,6 +156,18 @@ function saveRoute(PDO $db,string $id,string $isin,array $route,DateTimeImmutabl
     $data=$route+['cached_at'=>$now->getTimestamp()];
     $json=json_encode($data,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
     if(strlen($json)>512)throw new InvalidArgumentException('eodhd_route_too_long');
+    $q=$db->prepare("INSERT INTO m2_sync_checkpoints
+        (source_id,stream_key,cursor_value,watermark_at,updated_at)
+        VALUES (?,?,?,NULL,UTC_TIMESTAMP(6))
+        ON DUPLICATE KEY UPDATE cursor_value=VALUES(cursor_value),updated_at=UTC_TIMESTAMP(6)");
+    $q->execute([$id,'eodhd_route_v1_'.$isin,$json]);
+}
+/** Temporarily remember a genuine unsupported/ambiguous ISIN to protect
+ * low-volume accounts from retrying provider lookups every minute. */
+function saveUnavailable(PDO $db,string $id,string $isin,DateTimeImmutable $now):void {
+    if(!validIsin($isin))throw new InvalidArgumentException('eodhd_unavailable_isin_invalid');
+    $json=json_encode(['isin'=>$isin,'unavailable'=>true,'cached_at'=>$now->getTimestamp()],
+        JSON_THROW_ON_ERROR);
     $q=$db->prepare("INSERT INTO m2_sync_checkpoints
         (source_id,stream_key,cursor_value,watermark_at,updated_at)
         VALUES (?,?,?,NULL,UTC_TIMESTAMP(6))
