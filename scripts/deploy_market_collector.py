@@ -178,8 +178,10 @@ def main():
     if os.environ.get("GITHUB_REPOSITORY") != "masterxfix/MOSA-2" or os.environ.get("GITHUB_REF") != "refs/heads/main" \
             or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
         raise ValueError("Exact M2 main required")
-    if args.mode == "relay" and os.environ.get("MOSA_MARKET_GETTEX_PRIVATE_USE") != "1":
-        raise ValueError("Private gettex use not enabled")
+    gettex_enabled = os.environ.get("MOSA_MARKET_GETTEX_PRIVATE_USE") == "1"
+    nordic_enabled = os.environ.get("MOSA_MARKET_NASDAQ_NORDIC_PRIVATE_USE") == "1"
+    if args.mode == "relay" and not (gettex_enabled or nordic_enabled):
+        raise ValueError("No private source enabled")
     if args.mode == "relay_nordic" and os.environ.get("MOSA_MARKET_NASDAQ_NORDIC_PRIVATE_USE") != "1":
         raise ValueError("Private Nasdaq Nordic use not enabled")
     if args.mode == "install" and sha != os.environ.get("M2_EXPECTED_COMMIT"):
@@ -197,7 +199,16 @@ def main():
             elif args.mode == "relay_nordic":
                 relay_nordic(sftp)
             else:
-                relay(sftp)
+                failures = []
+                for enabled, provider in ((gettex_enabled, relay), (nordic_enabled, relay_nordic)):
+                    if enabled:
+                        try:
+                            provider(sftp)
+                        except (ValueError, OSError) as error:
+                            failures.append(provider.__name__)
+                            print(provider.__name__ + " failed: " + type(error).__name__, flush=True)
+                if failures:
+                    raise ValueError("Private source relay failed")
 
 
 if __name__ == "__main__":

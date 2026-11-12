@@ -61,7 +61,7 @@ function scopeSql(): string {
 }
 
 /** Publication starts only from an explicitly projected Current row, never the registry. */
-function publishedSql(): string {
+function publishedSql(bool $after=false): string {
     $sql=scopeSql();
     $select=substr($sql,0,strpos($sql,'FROM m2_asset_identifiers'));
     $select=str_replace('a.asset_class,','a.asset_class,a.display_name,e.status AS entity_status,',$select);
@@ -72,7 +72,7 @@ function publishedSql(): string {
         LEFT JOIN m2_sources s ON s.id=c.source_id
         LEFT JOIN m2_asset_source_routes r ON r.id=c.route_id AND r.asset_id=c.asset_id AND r.source_id=c.source_id
         LEFT JOIN m2_units u ON u.unit_key=r.quote_unit_key AND u.unit_version=r.quote_unit_version AND u.unit_contract_version=r.unit_contract_version
-        ORDER BY c.asset_id";
+        ".($after?"WHERE c.asset_id > ?":"")." ORDER BY c.asset_id LIMIT 11";
 }
 function readTransaction(\PDO $p,callable $reader): mixed {
     $p->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
