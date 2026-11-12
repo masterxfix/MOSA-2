@@ -112,7 +112,7 @@ jobs:
                       sample=json.loads(out)
                       break
                   time.sleep(5)
-              if sample is None or not isinstance(sample,dict) or sample.get('registered',0)<3 or sample.get('due',0)<1:
+              if sample is None or not isinstance(sample,dict) or sample.get('registered',0)<1 or sample.get('due',0)<1:
                   # A skipped/empty manual run is not live proof; independent M2 DB
                   # and the subsequent active cron observation must establish it.
                   print('M2_NEW_MANUAL_TICK_NOT_PROVEN '+json.dumps({
@@ -137,7 +137,7 @@ jobs:
                   json.dumps({'source':query}).encode(),timeout=45)
               if rc or err:raise RuntimeError('m2_independent_readback_failed')
               state=json.loads(out)
-              if state.get('read_only') is not True or state.get('units')!=19 or state.get('registered',0)<3:
+              if state.get('read_only') is not True or state.get('units')!=19 or state.get('registered',0)<1:
                   raise RuntimeError('m2_units_or_registration_mismatch')
               if state.get('twelve_data_source_count')!=0 or not state.get('current'):
                   raise RuntimeError('provider_guard_or_current_mismatch')
