@@ -41,6 +41,7 @@ $row=source($isin,$quote,$now);
 equalIntl(true,$row['available'],'native source ready');$n++;
 equalIntl('JPY',$row['currency'],'native Japanese quote');$n++;
 equalIntl('XTKS',$row['venue_label'],'verified exchange MIC');$n++;
+equalIntl('XTKS',$row['venue_key'],'physical route uses verified MIC');$n++;
 equalIntl('2741.25',$row['price'],'no FX price rewrite');$n++;
 equalIntl('last_trade',$row['data_type'],'market observation kind');$n++;
 equalIntl('2026-11-12T12:04:05+00:00',$row['quoted_at'],'source UTC time');$n++;
@@ -53,6 +54,7 @@ equalIntl('JPY',$selected['currency']??null,'native currency in shared M2 writer
 equalIntl('JPY',$selected['quote_unit_key']??null,'physical JPY route derived from approved unit');$n++;
 equalIntl('2741.25',$selected['price']??null,'complete native source observation');$n++;
 equalIntl('twelve_data',$selected['provider']??null,'one provider within common writer');$n++;
+equalIntl('XTKS',$selected['venue_key']??null,'verified native venue travels with selected quote');$n++;
 equalIntl(null,choose(['sources'=>['twelve_data_quote'=>$row]],$isin,'stock',
     $tdRegistry,['twelve_data_quote'=>'2026-11-12 12:04:06.000000'],$now,
     ['EUR'=>['quote_unit_key'=>'EUR','quote_unit_version'=>'1','currency'=>'EUR']]),
@@ -69,6 +71,7 @@ $corrupt=$quote;$corrupt['status']='error';
 equalIntl(false,source($isin,$corrupt,$now)['available'],'vendor entitlement error cannot be a price');$n++;
 $corrupt=$quote;$corrupt['mic_code']='<>bad';$corrupt['exchange']='Tokyo Stock Exchange';
 equalIntl('Tokyo Stock Exchange',source($isin,$corrupt,$now)['venue_label'],'non-MIC market name is validated');$n++;
+equalIntl('international_isin',source($isin,$corrupt,$now)['venue_key'],'non-MIC fallback does not invent exchange identity');$n++;
 $corrupt=$quote;$corrupt['mic_code']='<>bad';$corrupt['exchange']='<script>';
 equalIntl('Internationale Börse',source($isin,$corrupt,$now)['venue_label'],'no HTML source injection');$n++;
 $stale=source($isin,$quote,new DateTimeImmutable('2026-11-12T13:00:00Z'));
