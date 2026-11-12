@@ -25,6 +25,7 @@ jobs:
         env: {PYTHONPATH: '.:tests'}
         run: |
           php -l api/market_sources.php
+          php -l api/market_registry_model.php
           php -l api/isin_quote.php
           php -l api/market_source_engine.php
           php -l scripts/market_collector/mosa_tick.php
