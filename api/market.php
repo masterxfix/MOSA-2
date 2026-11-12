@@ -7,7 +7,7 @@ header('Cache-Control: no-store, private');
 header('X-Content-Type-Options: nosniff');
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET'){http_response_code(405);header('Allow: GET');echo '{"status":"error"}';exit;}
 $view=$_GET['view']??'current';
-if(!is_string($view)||!in_array($view,['current','observations','best'],true)){http_response_code(400);echo '{"status":"error"}';exit;}
+if(!is_string($view)||!in_array($view,['current','observations','best','registered'],true)){http_response_code(400);echo '{"status":"error"}';exit;}
 try{
     // Fixed subscription-private location, outside every public document root.
     $path=dirname(__DIR__,2).'/mosa2-market-read-private/access.php';
@@ -17,6 +17,10 @@ try{
     unset($config['password']);
     $reader=$view!=='current'?'Mosa2\\ObservationRead\\read':'Mosa2\\MarketRead\\read';
     $now=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
-    $result=$view==='best'?\Mosa2\ObservationRead\read($pdo,$config,$now,true):$reader($pdo,$config,$now);
+    $result=match($view){
+        'best' => \Mosa2\ObservationRead\read($pdo,$config,$now,true),
+        'registered' => \Mosa2\ObservationRead\read($pdo,$config,$now,true,true),
+        default => $reader($pdo,$config,$now),
+    };
     $pdo=null;echo json_encode($result,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
 }catch(Throwable $error){http_response_code(503);echo '{"status":"error","message":"Marktdaten sind gerade nicht verfügbar."}';}

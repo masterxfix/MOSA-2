@@ -28,10 +28,20 @@ function latest(array $rows,array $route,string $isin,string $now,int $stale): a
     return $base+$item+['observation_id'=>$r['id'],'age_seconds'=>\Mosa2\QuoteSelection\age($r,$now)];
 }
 
-function read(PDO $p,array $config,string $now,bool $preferCurrent=false): array {
+function registeredAssets(PDO $p): array {
+    return $p->query("SELECT /*+ MAX_EXECUTION_TIME(1500) */ i.normalized_value AS isin, a.display_name AS name, a.asset_class
+        FROM m2_asset_identifiers i
+        JOIN m2_assets a ON a.entity_id=i.asset_id AND a.status='active'
+        JOIN m2_entities e ON e.id=a.entity_id AND e.entity_type='asset' AND e.status='active'
+        WHERE i.identifier_type='isin' AND i.scope_key='' AND i.is_primary=1
+          AND (i.valid_from IS NULL OR i.valid_from<=UTC_TIMESTAMP(6)) AND i.valid_to IS NULL
+        ORDER BY a.display_name,i.normalized_value")->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function read(PDO $p,array $config,string $now,bool $preferCurrent=false,bool $includeRegistry=false): array {
     $stale=$config['stale_seconds']??null;checked(is_int($stale)&&$stale>=60&&$stale<=86400);timestamp($now);
     require_once __DIR__.'/current_read.php';
-    $items=readTransaction($p,static function()use($p,$now,$stale,$preferCurrent){
+    $result=readTransaction($p,static function()use($p,$now,$stale,$preferCurrent,$includeRegistry){
         $published=\Mosa2\CurrentRead\published($p,$now,$stale);
         $facts=$p->prepare('SELECT /*+ MAX_EXECUTION_TIME(1500) */ id,'.implode(',',FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_hex
             FROM m2_market_observations WHERE asset_id=? AND source_id=? ORDER BY market_at DESC,id DESC LIMIT 101');
@@ -43,7 +53,9 @@ function read(PDO $p,array $config,string $now,bool $preferCurrent=false): array
             $current=$entry['item']+['isin'=>$r['isin']]+sourceDetails($r['source_key']);
             $items[]=($observation['market_at']??'')>=($current['market_at']??'')?$observation:$current;
         }
-        return $items;
+        $result=['items'=>$items];
+        if($includeRegistry)$result['registered']=registeredAssets($p);
+        return $result;
     });
-    return ['status'=>'ok','as_of'=>$now.'Z','stale_seconds'=>$stale,'items'=>$items];
+    return ['status'=>'ok','as_of'=>$now.'Z','stale_seconds'=>$stale]+$result;
 }

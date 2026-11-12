@@ -25,9 +25,11 @@
   const listeners = {signal:scope.signal};
   const detailsToggle = root.querySelector("[data-isin-details-toggle]");
   const storedQuotes = new Map();
+  const registeredAssets = new Map();
   const storedRoot=root===document ? document.querySelector("[data-isin-stored-quotes]") : root;
   const marketView=root.querySelector("[data-isin-market-view]");
-  const READ_INTERVAL=30000, STORED_URL="api/market.php?view=best";
+  const READ_INTERVAL=60000;
+  const STORED_URL=marketView?"api/market.php?view=registered":"api/market.php?view=best";
   let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
   let cancelRead = null;
   function restore() {
@@ -90,7 +92,7 @@
     if(scope.signal.aborted || !marketView || !storedRoot)return;
     const active=tabActive();
     if(storedRoot.dataset.isinTabActive!==String(active))storedRoot.dataset.isinTabActive=String(active);
-    if(storedStopped || !active || busy || storedRead || (nextStoredAt!==null && !entries.length))return;
+    if(storedStopped || !active || busy || storedRead)return;
     storedTimer=setTimeout(()=>{
       storedTimer=null;
       loadStoredQuotes();
@@ -114,13 +116,19 @@
         if(httpStatus===401 || httpStatus===403)storedStopped=true;
         if(!response.ok)throw Error("MARKET_READ");
         const result=await response.json();
-        if(result.status!=="ok" || !Array.isArray(result.items))throw Error("MARKET_READ");
+        if(result.status!=="ok" || !Array.isArray(result.items) || (marketView && !Array.isArray(result.registered)))throw Error("MARKET_READ");
         const fresh=new Map();
         for(const item of result.items) {
           if(!item || !["stored","stale"].includes(item.status) || !valid(item.isin))continue;
           const utc=value=>typeof value==="string"?value.replace(" ","T"):"";
           const quote={...item,source:item.source+" · "+item.venue,provider:"stored",captured_at:utc(item.observed_at),market_at:utc(item.market_at)};
           if(validQuote(quote,item.isin))fresh.set(item.isin,quote);
+        }
+        registeredAssets.clear();
+        for(const asset of result.registered || []) {
+          if(!asset || !valid(asset.isin) || typeof asset.name!=="string" || !asset.name.trim())continue;
+          const instrument_type=asset.asset_class==="equity"?"stock":asset.asset_class==="etf"?"etf":"unknown";
+          registeredAssets.set(asset.isin,{isin:asset.isin,name:asset.name,instrument_type,quotes:[]});
         }
         storedQuotes.clear();
         for(const [isin,quote] of fresh)storedQuotes.set(isin,quote);
@@ -207,18 +215,22 @@
   }
   function paint() {
     if(scope.signal.aborted)return;
-    const number=root.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(entries.length).padStart(2,"0");
+    const ownIsins=new Set(entries.map(entry=>entry.isin));
+    const visibleIsins=new Set([...ownIsins,...registeredAssets.keys(),...storedQuotes.keys()]);
+    const number=root.querySelector("[data-isin-count]");if(number) number.firstChild.textContent=String(marketView?visibleIsins.size:entries.length).padStart(2,"0");
     for (const tbody of root.querySelectorAll("[data-isin-table]")) {
       const rows=[];
-      const ownIsins=new Set(entries.map(entry=>entry.isin));
-      const displayed=[...entries,...[...storedQuotes.values()]
-        .filter(quote=>!ownIsins.has(quote.isin))
+      const displayed=[...entries.map(entry=>{
+        const registered=registeredAssets.get(entry.isin);
+        return registered?{...entry,name:registered.name,instrument_type:registered.instrument_type}:entry;
+      }),...[...registeredAssets.values()].filter(asset=>!ownIsins.has(asset.isin)),...[...storedQuotes.values()]
+        .filter(quote=>!ownIsins.has(quote.isin) && !registeredAssets.has(quote.isin))
         .map(quote=>({isin:quote.isin,name:quote.name,quotes:[]}))];
       for(const entry of displayed){
         const main=entry.isin+":main";
         const first=rows.length;
         if(!detailsOpen){
-          const latest=best(entry);
+          const latest=(marketView?storedQuotes.get(entry.isin):null) || best(entry);
           rows.push(latest?quoteRow(main,entry,latest,true):missingRow(main,entry));
         }else{
           const quotes=availableQuotes(entry);
@@ -237,7 +249,8 @@
       if(detailsToggle.getAttribute("aria-expanded")!==String(detailsOpen))
         detailsToggle.setAttribute("aria-expanded",String(detailsOpen));
     }
-    const summary=entries.length+" ISIN"+(entries.length===1?"":"s")+
+    const count=marketView?visibleIsins.size:entries.length;
+    const summary=count+" ISIN"+(count===1?"":"s")+
       (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
         ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
     for(const label of root.querySelectorAll("[data-isin-summary]")){
@@ -257,7 +270,8 @@
     ]];
   }
   function missingRow(key,entry) {
-    return [key,"missing",[entry.name||entry.isin,typeLabel(entry),"—","—","—","—","—","—",entry.isin,"Kein erfolgreicher Kurs vorhanden"]];
+    const status=registeredAssets.has(entry.isin)?"In DB registriert · Kein gespeicherter Kurs":"Kein erfolgreicher Kurs vorhanden";
+    return [key,"missing",[entry.name||entry.isin,typeLabel(entry),"—","—","—","—","—","—",entry.isin,status]];
   }
   function errorRow(entry,error) {
     const missing=error.status==="unavailable";
