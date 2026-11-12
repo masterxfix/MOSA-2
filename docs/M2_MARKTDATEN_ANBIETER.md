@@ -129,3 +129,59 @@ Freischaltung erfordert eine separate bewusste Entscheidung und Live-Abnahme.
 OpenFIGI wird ausschließlich als Kennungsdienst geprüft, nicht als Kursanbieter.
 
 **Kritisch:** Die Lizenz einer offiziellen verzögerten Datei ist nicht automatisch die Lizenz einer anderen Website oder Echtzeit-API desselben Anbieters. Vor Integration Datenfelder, Aktualität, MIC, ISIN, Nutzungsrechte, Rate-Limits, Host-Erreichbarkeit, unveränderte Originalwährung und korrekten Source-Current/History-Readback prüfen. Keine Anbieter-Sonderkollektoren, keine unbegrenzten Downloads.
+
+## 8. Einzelprüfung NZX Neuseeland – 12.11.2026
+
+**Prüfergebnis:** **NZX DIREKT: öffentlich einsehbar, für den kostenlosen automatischen
+M2-Collector nicht freigegeben/nicht nachgewiesen.** Nur Recherche,
+**keine** Integration, DB-Speicherung, Collectoränderung oder Aktivierung. Dies ist
+eine zusätzliche Einzelprüfung und **nicht** einer der sechs bereits vorgemerkten
+Börsen-/Kennungskandidaten.
+
+**Echte öffentliche Einzelwertprobe:** [NZX / Meridian Energy MEL](https://www.nzx.com/instruments/MEL)
+mit ISIN **NZMELE0002S7**, Kurs-/Handelswährung **NZD**,
+**20 Minuten** Börsenwebsite-Verzögerung und einem tatsächlich datierten
+Börsenstand am **13.11.2026 um 10:29 NZDT**. Die Website zeigte:
+Kurs **5,76 NZD**, Tageseröffnung **5,76 NZD**, Tageshoch **5,85 NZD**,
+Tagestief **5,76 NZD**, Volumen **33.621 Stück**, Umsatz
+**193.934,48 NZD**, **100 Trades**, "High Bid" **5,76 NZD** und
+"Low Offer" **5,85 NZD**. Weiterhin ISIN, Wertpapierart,
+Marktkapitalisierung (ausgewiesen in Tausendern), ausgegebene Aktien,
+KGV, EPS, NTA, Bruttodividendenrendite und historische Dividenden.
+Dies beweist **sichtbare Felder eines Instruments**, keinen gesicherten
+maschinenlesbaren Datenfeed und keine Vollständigkeit für jede ISIN.
+
+**NZX-Rechte und offizieller Feed:**
+- [NZX Website-Nutzungsbedingungen](https://www.nzx.com/meta-pages/terms-of-use):
+  Webseite/Informationen nur zum Ansehen; keine pauschale Erlaubnis, den
+  HTML-Inhalt automatisch in M2 zu kopieren und dauerhaft zu speichern.
+- [NZX Data & Connectivity](https://www.nzx.com/services/products-tools/data-connectivity):
+  ITCH/MDF-Marktdaten, verzögerte Daten, Tick-Daten und NZX TransferHub/SFTP
+  sind gesonderte, lizenzierte Datenprodukte.
+- [NZX Data Licensing](https://www.nzx.com/services/products-tools/data-connectivity/nzx-market-data/data-licensing):
+  eigene Rechte für non-display-Anwendungen/abgeleitete Daten.
+- [NZX Data Products](https://new.nzx.com/services/data-connectivity/nzx-market-data/data-products):
+  CSV-/SFTP-Historien-/Tagesdateien als abonnierbare Produkte; kein
+  nachgewiesenes kostenloses maschinenlesbares M2-Minutenprodukt.
+
+**Unabhängige, noch nicht integrierte Alternative: NZXplorer**
+([API-Dokumentation](https://nzxplorer.co.nz/developers),
+[Nutzungsbedingungen](https://nzxplorer.co.nz/terms)).
+NZXplorer ist **nicht** die NZX-Börse. Laut eigener Dokumentation gibt es
+einen kostenlosen API-Key mit **10 Requests/Minute**, **250/Tag**, JSON-
+Endpunkte unter anderem **/api/v1/companies/{ticker}** und
+**/api/v1/prices/{ticker}**, ISIN-/Ticker-Identität, **tägliche** OHLCV-
+Kursreihen und Bekanntmachungen. Der Anbieter beschreibt Kursreihen als
+**täglich aktualisiert**, nicht als 20-minütige Intraday-Feed-Zusage.
+Zudem verbieten dessen Bedingungen systematisches Speichern zur Erstellung
+konkurrierender Datenbanken/Services. Ohne Account, echte Response, rechtliche
+Einordnung privater M2-Speicherung und Verfügbarkeitstests **keine**
+Collectoraktivierung. Das Freikontingent allein ist kein Beleg für nutzbare
+intraday-kursfähige Daten.
+
+**Statusentscheidung:** NZX als offizielle frei nutzbare *Anzeige*
+belegt; als kostenlose kontinuierliche M2-API **nicht geeignet/belegt**.
+NZXplorer höchstens für separate **Tagesdaten-/Identitätsprüfung offen**;
+keine Alternative für das Ziel einer minütlichen Originalwährungsabfrage.
+M2-Quellenkatalog, Cron, DB und die sechs priorisierten Kandidaten
+bleiben unverändert. Keine stille NZX-Website-Scraping-Lösung.
