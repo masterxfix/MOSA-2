@@ -1,0 +1,105 @@
+name: M2 resumed international delivery status (read-only once)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-universal-resume-readonly-once.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Read live M2 international delivery state only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Install pinned SSH transport
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Verify active cron, private release, source rights presence, and M2-only DB
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,re,sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_market_collector as release
+          import deploy_test_sftp as profile
+          import deploy_sftp as web
+          import paramiko
+          OLD='deb9cf03c9988ca5e5080f2952d08ed9fca0d6e2'
+          STAGED='68a4d4ef88a78f73af1c1acb57b0cf7dc8c2ad5d'
+          sql=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($cfg['dsn']??null)!==$dsn||($cfg['user']??null)!=='h29077_mosa2_read')
+              throw new RuntimeException('db_scope_invalid');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');$db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+            ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+            throw new RuntimeException('db_not_readonly');
+          $units=(int)$db->query('SELECT COUNT(*) FROM m2_units')->fetchColumn();
+          $registered=(int)$db->query("SELECT COUNT(*) FROM m2_asset_identifiers
+              WHERE identifier_type='isin' AND is_primary=1 AND scope_key='' AND valid_to IS NULL")->fetchColumn();
+          $observations=(int)$db->query('SELECT COUNT(*) FROM m2_market_observations')->fetchColumn();
+          $current=(int)$db->query('SELECT COUNT(*) FROM m2_market_current')->fetchColumn();
+          $recent=$db->query("SELECT i.normalized_value AS isin,s.source_key,c.currency,
+              r.quote_unit_key,c.market_at FROM m2_market_current c
+              JOIN m2_asset_identifiers i ON i.asset_id=c.asset_id AND i.is_primary=1
+              JOIN m2_sources s ON s.id=c.source_id
+              JOIN m2_asset_source_routes r ON r.id=c.route_id
+              ORDER BY i.normalized_value LIMIT 10")->fetchAll();
+          $native=(int)$db->query("SELECT COUNT(*) FROM m2_sources WHERE source_key='provider:twelve_data'")->fetchColumn();
+          $db->rollBack();
+          echo json_encode(['read_only'=>true,'units'=>$units,'registered'=>$registered,
+              'observations'=>$observations,'current'=>$current,'native_provider_rows'=>$native,
+              'current_rows'=>$recent],JSON_THROW_ON_ERROR);
+          """
+          readCfg=r"""
+          $root='/var/www/vhosts/web213.server10.configcenter.info';
+          $path=$root.'/mosa2-market-twelvedata-private/access.php';
+          $exists=is_file($path);
+          $safe=$exists&&!is_link($path)&&(fileperms($path)&0077)===0;
+          echo json_encode(['provider_private_file_exists'=>$exists,'safe_permissions'=>$safe],JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              with paramiko.SFTPClient.from_transport(t) as sftp:
+                  root=release.PERIODIC+'/releases/'+STAGED+'/'
+                  checks=[]
+                  for file in ['api/market_core/twelve_data.php','api/market_sources.php',
+                       'scripts/market_collector/mosa_tick.php']:
+                      expected=Path(file).read_bytes()
+                      with sftp.open(root+file,'rb') as handle:actual=handle.read(len(expected)+1)
+                      if actual!=expected:raise RuntimeError('staged_release_drift_'+file)
+                      checks.append(file)
+              rc,out,err,_=remote.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if rc or err or not out:raise RuntimeError('read_cron_failed')
+              entries=[x.decode() for x in out.splitlines()
+                  if b'/scripts/market_collector/mosa_tick.php' in x and not x.lstrip().startswith(b'#')]
+              if len(entries)!=1:raise RuntimeError('not_one_m2_cron')
+              match=re.search(r'/releases/([0-9a-f]{40})/scripts/market_collector/mosa_tick.php',entries[0])
+              if match is None:raise RuntimeError('unknown_cron_release_path')
+              active=match.group(1)
+              phpbin,_=remote.capability(t)
+              def eval_read(source):
+                  c,o,e,_=remote.remote_call(t,remote.command(phpbin,remote.BOOTSTRAP),
+                      json.dumps({'source':source}).encode(),timeout=45)
+                  if c or e:raise RuntimeError('remote_read_failed')
+                  return json.loads(o)
+              db=eval_read(sql)
+              flags=eval_read(readCfg)
+              if db.get('read_only') is not True or db.get('units')!=19:
+                  raise RuntimeError('m2_db_readback_invalid')
+              print('M2_RESUME_READ_ONLY '+json.dumps({'active_release':active,
+                  'staged_release_verified':STAGED,'staged_file_count':len(checks),
+                  'active_was_previous':active==OLD,'db':db,'rights_file':flags},ensure_ascii=False),flush=True)
+          PY
