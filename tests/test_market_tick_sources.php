@@ -64,4 +64,9 @@ $tick=file_get_contents(dirname(__DIR__).'/scripts/market_collector/mosa_tick.ph
 sameValue(false,str_contains($engine,"return \$isin==='DE0005936124'"),'remove one-ISIN pilot switch');$n++;
 sameValue(false,str_contains($tick,'const SOURCES='),'no second scheduled source list');$n++;
 sameValue(true,str_contains($tick,'a.asset_class AS asset_class'),'asset classification taken from catalog');$n++;
+sameValue('etf',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=>'etf','instrument_type_source'=>'lang_schwarz']),'verified unclassified ETF');$n++;
+sameValue('fund',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=>'fund','instrument_type_source'=>'lang_schwarz']),'verified unclassified fund');$n++;
+sameValue('unknown',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=>'etf','instrument_type_source'=>'lang_schwarz_conflict']),'conflicting class stays unknown');$n++;
+sameValue('etf',\Mosa2\MarketSources\resolvedType('etf',[]),'declared ETF remains authoritative');$n++;
+sameValue('unknown',\Mosa2\MarketSources\resolvedType('unknown',[]),'unclassified identity remains unknown');$n++;
 echo 'PASS '.$n.'/'.$n." unified M2 market source scenarios\n";
