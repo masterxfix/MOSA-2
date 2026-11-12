@@ -541,7 +541,9 @@ function fixlabMosaMarketSourceLabSnapshot(array $result):array
 
 function fixlabMosaMarketSourceLabQuoteCandidate(string $isin,array $sources,string $assetType='stock',?DateTimeImmutable $now=null):?array
 {
-    if($assetType==='etf')return fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);return fixlabMosaMarketQuoteRouter($sources);
+    // Asset class is metadata. All securities share the same quote router.
+    // Historical ETF-only shadow helpers are not part of M2 quote selection.
+    return fixlabMosaMarketQuoteRouter($sources);
 }
 
 function fixlabMosaMarketSourceLabErrorMessage(string $code):string
