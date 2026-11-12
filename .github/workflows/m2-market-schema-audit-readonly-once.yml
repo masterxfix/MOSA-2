@@ -1,0 +1,71 @@
+name: M2 live market data field coverage audit (read-only once)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-market-schema-audit-readonly-once.yml']
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect live M2 market columns read-only without changing data'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Read the actual M2 market schema with dedicated read-only database user
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_test_sftp as profile
+          import paramiko
+          php=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($cfg['dsn']??null)!==$dsn||($cfg['user']??null)!=='h29077_mosa2_read')
+              throw new RuntimeException('M2_READ_ACCOUNT');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+              PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');
+          $db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+              ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('DB_READONLY');
+          $rows=$db->query("SELECT TABLE_NAME,COLUMN_NAME,DATA_TYPE,IS_NULLABLE
+              FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE()
+              AND TABLE_NAME IN ('m2_market_current','m2_market_observations','m2_market_bars')
+              ORDER BY TABLE_NAME,ORDINAL_POSITION")->fetchAll();
+          $cols=[];
+          foreach($rows as $row){
+              $table=$row['TABLE_NAME'];
+              $cols[$table][$row['COLUMN_NAME']]=['type'=>$row['DATA_TYPE'],'nullable'=>$row['IS_NULLABLE']];
+          }
+          $counts=[];
+          foreach(['m2_market_current','m2_market_observations','m2_market_bars'] as $table)
+              $counts[$table]=(int)$db->query('SELECT COUNT(*) FROM '.$table)->fetchColumn();
+          $db->rollBack();
+          echo json_encode(['checked_at_utc'=>gmdate('c'),'readonly'=>true,
+              'table_columns'=>$cols,'row_counts'=>$counts],JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              phpbin,_=remote.capability(t)
+              rc,out,err,_=remote.remote_call(t,remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':php}).encode(),timeout=45)
+              if rc or err: raise RuntimeError('M2_LIVE_SCHEMA_READ_FAILED')
+              data=json.loads(out)
+              expected={'m2_market_current','m2_market_observations','m2_market_bars'}
+              if not data.get('readonly') or set(data.get('table_columns',{}))!=expected:
+                  raise RuntimeError('M2_TABLES_OR_READONLY_NOT_CONFIRMED')
+              print('M2_MARKET_DB_SCHEMA_READONLY '+json.dumps(data,ensure_ascii=False),flush=True)
+          PY
