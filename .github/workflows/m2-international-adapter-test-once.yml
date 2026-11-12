@@ -33,3 +33,5 @@ jobs:
           python3 -B -m unittest discover -s tests -p 'test_market_onboarding.py' -v
           python3 scripts/build_pages.py --check
           python3 -B -m unittest discover -s tests -p 'test_deploy*.py' -v
+
+# Retry after preserving exact string monetary prices through the shared quote validator.
