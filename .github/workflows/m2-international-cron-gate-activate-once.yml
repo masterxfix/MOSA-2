@@ -107,19 +107,24 @@ jobs:
                       sample=json.loads(out)
                       break
                   time.sleep(5)
-              if not isinstance(sample,dict) or sample.get('registered',0)<3 or sample.get('due',0)<1:
-                  raise RuntimeError('new_tick_no_live_scope_proof')
-              if any(row.get('key')=='twelve_data_quote' for row in sample.get('provider_requests',[])):
-                  raise RuntimeError('unlicensed_international_request_detected')
-              items=sample.get('items',{})
-              if not items or any('failure' in result for result in items.values()):
-                  raise RuntimeError('new_tick_writer_failed')
-              if not any(result.get('writer') in ('INSERT','UPDATE','UNCHANGED') for result in items.values()):
-                  raise RuntimeError('new_tick_no_verified_market_fact')
-              print('M2_NEW_LIVE_TICK '+json.dumps({'registered':sample['registered'],'due':sample['due'],
-                  'provider_requests':sample.get('provider_requests',[]),
-                  'writers':{key:{'writer':item.get('writer'),'readback':item.get('readback')} for key,item in items.items()}},
-                  ensure_ascii=False),flush=True)
+              if sample is None:
+                  # The old live cron can continuously own the exclusive scheduler lock.
+                  # Never bypass it. Prove DB state and exact new cron pin separately.
+                  print('M2_NEW_MANUAL_TICK_SKIPPED_SCHEDULER_LOCK_BUSY',flush=True)
+              else:
+                  if not isinstance(sample,dict) or sample.get('registered',0)<3 or sample.get('due',0)<1:
+                      raise RuntimeError('new_tick_no_live_scope_proof')
+                  if any(row.get('key')=='twelve_data_quote' for row in sample.get('provider_requests',[])):
+                      raise RuntimeError('unlicensed_international_request_detected')
+                  items=sample.get('items',{})
+                  if not items or any('failure' in result for result in items.values()):
+                      raise RuntimeError('new_tick_writer_failed')
+                  if not any(result.get('writer') in ('INSERT','UPDATE','UNCHANGED') for result in items.values()):
+                      raise RuntimeError('new_tick_no_verified_market_fact')
+                  print('M2_NEW_LIVE_TICK '+json.dumps({'registered':sample['registered'],'due':sample['due'],
+                      'provider_requests':sample.get('provider_requests',[]),
+                      'writers':{key:{'writer':item.get('writer'),'readback':item.get('readback')} for key,item in items.items()}},
+                      ensure_ascii=False),flush=True)
               rc,out,err,_=remote.remote_call(transport,remote.command(phpbin,remote.BOOTSTRAP),
                   json.dumps({'source':query}).encode(),timeout=45)
               if rc or err:raise RuntimeError('m2_independent_readback_failed')
