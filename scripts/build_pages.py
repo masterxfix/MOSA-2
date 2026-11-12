@@ -65,7 +65,7 @@ def render(filename):
   <a class="skip-link" href="#inhalt">Zum Inhalt</a>
   <header>
     <div class="topbar wrap">
-      <a class="brand" href="{brand}" aria-label="MOSA 2 – Projektüberblick"><span class="brand-symbol" aria-hidden="true">m</span>MOSA <span class="brand-version">2</span></a>
+      <a class="brand" href="{brand}" aria-label="MOSA 2 – Projektüberblick"><span class="brand-symbol" aria-hidden="true">m</span><span>MOSA<sup class="brand-version">2</sup></span></a>
       <span class="project-label"><span data-project-label-text>{label}</span> <span class="dot" aria-hidden="true"></span> Testumgebung</span>
       <span class="ai-symbols">
         <button class="codex-status-symbol" type="button" data-codex-status data-state="unavailable" aria-haspopup="dialog" aria-controls="codex-chat" aria-expanded="false" aria-label="Codex-Status unbekannt" title="Codex-Status unbekannt"></button>
@@ -81,7 +81,7 @@ def render(filename):
   </header>
 {fragment}
   <footer class="wrap footer">
-    <span>MOSA 2 · Auf verlässlichen Grundlagen aufgebaut.</span>
+    <span>MOSA<sup>2</sup> · Auf verlässlichen Grundlagen aufgebaut.</span>
     <span class="footer-latency"><span data-latency-label>Seitenladezeit{latency} · </span><span data-page-load-time aria-label="Seitenladezeit wird gemessen">— ms</span></span>
     <span class="footer-release">Entwicklung · Keine Produktivfreigabe</span>
   </footer>
