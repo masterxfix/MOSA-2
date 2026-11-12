@@ -106,7 +106,8 @@ function acquire(PDO $db,array $registry,string $isin,array &$requests): ?array 
                 $allowed=array_filter($allowed,static fn($sourceId)=>$sourceId!==$id);
             }
             return $response;
-        });
+        },lsQuoteClock:static fn(?string $clock,DateTimeImmutable $now)=>
+            \fixlabMosaMarketSourceLabLsDatedQuote($clock,$now)??\fixlabMosaMarketSourceLabLocalClock($clock,$now));
     // Reuse the productive quote router for every ISIN. The lab's optional
     // pilot-only recommendation is deliberately outside this entry point.
     $quote=\fixlabMosaMarketQuoteRouter($lab['sources'])['selected_quote']??null;
