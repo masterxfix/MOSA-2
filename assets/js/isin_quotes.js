@@ -181,6 +181,18 @@
     if(core.length<5 || core===entry.isin)return full;
     return core+variant;
   }
+  // Market registry is not a published quote: wait for an actual Current quote
+  // and resolved DB identity before drawing the ordinary multi-column row.
+  function marketReady(entry,quote) {
+    return validQuote(quote,entry.isin)
+      && typeof entry.name==="string" && entry.name.trim()!=="" && entry.name.trim()!==entry.isin
+      && confirmedTypes.has(entry.instrument_type);
+  }
+  function pendingRow(entry) {
+    return [entry.isin+":pending","pending",[
+      "ISIN "+entry.isin+" registriert · Name, Typ und Kurs stehen noch aus. Automatische Aktualisierung aktiv."
+    ]];
+  }
   const headings=["Wertpapier","Typ","Kurs","Währung / Einheit","Quelle / Handelsplatz","Marktzeit","Abgerufen","Datenalter","ISIN","Status"];
   function reconcileRows(tbody, rows, fullNames) {
     const actions=tbody.dataset.isinActions!==undefined;
@@ -193,10 +205,12 @@
         row=document.createElement("tr");
         row.dataset.isinRow=key;
         if(key==="empty")row.className="market-placeholder";
+        if(status==="pending")row.className="market-pending";
         for(let i=0;i<values.length;i++){
           const cell=document.createElement("td");
-          cell.dataset.label=key==="empty"?"ISIN":headings[i];
+          cell.dataset.label=key==="empty"?"ISIN":status==="pending"?"Registrierung":headings[i];
           if(key==="empty")cell.colSpan=actions?11:10;
+          if(status==="pending")cell.colSpan=actions?10:10;
           if(i===2)cell.className="market-price";
           if(actions && i===headings.length-1)cell.className="isin-quote-status";
           row.append(cell);
@@ -210,7 +224,7 @@
       }
       if(status && row.dataset.status!==status)row.dataset.status=status;
       values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
-      if(key!=="empty"){
+      if(key!=="empty" && status!=="pending"){
         const original=fullNames.get(values[8])||"";
         const tooltip=original && original!==values[0]?original:"";
         if(row.cells[0].title!==tooltip)row.cells[0].title=tooltip;
@@ -269,8 +283,13 @@
       for(const entry of displayed){
         const main=entry.isin+":main";
         const first=rows.length;
-        if(!detailsOpen){
-          const latest=(marketView?storedQuotes.get(entry.isin):null) || best(entry);
+        const stored=storedQuotes.get(entry.isin);
+        if(marketView && registeredAssets.has(entry.isin) && !marketReady(entry,stored)){
+          // A confirmed registration is not a quote. Keep deletion available,
+          // but do not publish an ISIN/unknown/empty-price row as a result.
+          rows.push(pendingRow(entry));
+        }else if(!detailsOpen){
+          const latest=(marketView?stored:null) || best(entry);
           rows.push(latest?quoteRow(main,entry,latest,true):missingRow(main,entry));
         }else{
           const quotes=availableQuotes(entry);
@@ -291,9 +310,12 @@
         detailsToggle.setAttribute("aria-expanded",String(detailsOpen));
     }
     const count=marketView?visibleIsins.size:entries.length;
+    const pending=marketView?[...registeredAssets.values()]
+      .filter(entry=>!marketReady(entry,storedQuotes.get(entry.isin))).length:0;
     const summary=count+" ISIN"+(count===1?"":"s")+
       (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
-        ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
+        ?" · Gespeicherte Kurse derzeit nicht verfügbar":pending
+          ?" · "+pending+" noch ohne vollständige Kursdaten":" · Abgefragte und gespeicherte Kurse");
     for(const label of root.querySelectorAll("[data-isin-summary]")){
       if(label.textContent!==summary)label.textContent=summary;
     }

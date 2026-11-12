@@ -133,17 +133,34 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   const registeredOnly=harness({entries:[],initialItems:[],registered:[{isin:a,name:'DB AG',asset_class:'equity'}]});
   await flush();
   const row=registeredOnly.table.children[0];
-  assert.equal(row.cells[0].textContent,'DB AG');
-  assert.equal(row.cells[2].textContent,'—');
-  assert.match(row.cells[9].textContent,/In DB registriert · Kein gespeicherter Kurs/);
+  assert.equal(row.cells.length,2,'Pending ISIN uses one descriptive cell plus existing DB delete action');
+  assert.equal(row.cells[0].colSpan,10,'Pending row occupies the quote columns without placeholders');
+  assert.match(row.cells[0].textContent,/registriert.*Name, Typ und Kurs stehen noch aus/);
+  assert.equal(row.cells[1].firstElementChild.dataset.isinDbDelete,a,'Pending ISIN can still be deleted');
+  assert.match(registeredOnly.summary.textContent,/noch ohne vollständige Kursdaten/);
+  assert.equal(row.dataset.status,'pending');
+  const incompleteWithQuote=harness({entries:[],initialItems:[asset(a,a,'10.00')],
+    registered:[{isin:a,name:a,asset_class:'unknown'}]});
+  await flush();
+  assert.equal(incompleteWithQuote.table.children[0].dataset.status,'pending',
+    'Valid price alone is not a completed identity');
+  assert.equal(incompleteWithQuote.table.children[0].cells[0].textContent.includes('Unbekannt'),false,
+    'Incomplete asset is never presented with unknown type and empty columns');
+  incompleteWithQuote.update([asset(a,'Fully Verified Corp.','10.00')]);
+  // The same registry + Current read atomically replaces the pending state.
+  incompleteWithQuote.status(200);
+  // A fake source update alone does not change registration identity.
+  await incompleteWithQuote.advance(30000);
+  assert.equal(incompleteWithQuote.table.children[0].dataset.status,'pending',
+    'Unverified DB identity cannot be bypassed by a quote');
   assert.equal(registeredOnly.writes,0,'DB registrations never overwrite browser storage');
   const registeredFund=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Fonds',asset_class:'fund'}]});
   await flush();
-  assert.equal(registeredFund.table.children[0].cells[0].textContent,'Portfolio Fonds');
-  assert.equal(registeredFund.table.children[0].cells[1].textContent,'Fonds','DB fund class remains visible');
+  assert.match(registeredFund.table.children[0].cells[0].textContent,/registriert/);
+  assert.equal(registeredFund.table.children[0].dataset.status,'pending','No fund without a stored quote is shown as complete');
   const registeredOther=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Zertifikat',asset_class:'other'}]});
   await flush();
-  assert.equal(registeredOther.table.children[0].cells[1].textContent,'Sonstiges','DB other class remains visible');
+  assert.equal(registeredOther.table.children[0].dataset.status,'pending','No other security without a stored quote is shown as complete');
 
   const etfIsin='IE00BMYDM794';
   const fullEtf='L&G Hydrogen Economy UCITS ETF - USD Acc ETF Class';
