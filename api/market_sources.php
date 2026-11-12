@@ -147,14 +147,48 @@ function identityPatch(string $isin,string $name,string $class,array $evidence):
     ];
 }
 
+/**
+ * The normalized quote unit is determined by a versioned, frozen M2 unit.
+ * Unseeded currencies are not eligible for the M2 writer, even if the
+ * vendored parser recognizes the quote. Never treat GBX as GBP by guessing.
+ */
+function unitRegistry(array $databaseRows):array {
+    require_once __DIR__.'/market_core/selection.php';
+    $reference=\Mosa2\QuoteSelection\catalog();
+    $result=[];
+    foreach($databaseRows as $row){
+        $key=$row['unit_key']??null;$version=(string)($row['unit_version']??'');
+        $money=$row['monetary_currency_code']??null;
+        if(!is_string($key)||($row['status']??null)!=='frozen'||$version!=='1'
+            ||!is_string($money)||!preg_match('/^[A-Z]{3}$/D',$money))continue;
+        try {
+            $unit=\Mosa2\QuoteSelection\unit($reference,$key,$version);
+            if($unit['dimension_key']!=='monetary'
+                ||$unit['monetary_currency_code']!==$money)continue;
+            $result[$key]=['quote_unit_key'=>$key,'quote_unit_version'=>'1','currency'=>$money];
+        }catch(\Throwable) {continue;}
+    }
+    return $result;
+}
+function persistedUnitRegistry(\PDO $db):array {
+    $rows=$db->query("SELECT unit_key,unit_version,monetary_currency_code,status
+        FROM m2_units WHERE status='frozen' ORDER BY unit_key,unit_version")->fetchAll(\PDO::FETCH_ASSOC);
+    return unitRegistry($rows);
+}
+/** Existing EUR behavior for offline tests; runtime passes its verified DB units. */
+function defaultUnits():array {return ['EUR'=>['quote_unit_key'=>'EUR','quote_unit_version'=>'1','currency'=>'EUR']];}
+
 /** Return the same validated M2 writer fact for every asset and provider. */
 function fact(array $source,string $key,string $isin,array $registry,array $captured,
-              DateTimeImmutable $now,int $maxAge):?array {
+              DateTimeImmutable $now,int $maxAge,?array $units=null):?array {
     $provider=$source['provider_key']??null;
+    $units??=defaultUnits();
+    $quoteUnit=$source['currency']??null;
     if(!is_string($provider)||!isset($registry[$provider])
         ||($source['available']??false)!==true||($source['source_key']??null)!==$key
-        ||($source['currency']??null)!=='EUR'
+        ||!is_string($quoteUnit)||!isset($units[$quoteUnit])
         ||(isset($source['isin'])&&$source['isin']!==$isin))return null;
+    $unit=$units[$quoteUnit];
     $observed=null;
     foreach($registry[$provider]['requests'] as $requestKey)
         if(isset($captured[$requestKey]))$observed=$captured[$requestKey];
@@ -171,7 +205,9 @@ function fact(array $source,string $key,string $isin,array $registry,array $capt
         ||(float)$source['ask']<(float)$source['bid']))return null;
     return [
         'provider'=>$provider,'market_at'=>$market->format('Y-m-d H:i:s.u'),
-        'observed_at'=>$received->format('Y-m-d H:i:s.u'),'currency'=>'EUR','price'=>$price,
+        'observed_at'=>$received->format('Y-m-d H:i:s.u'),
+        'currency'=>$unit['currency'],'quote_unit_key'=>$unit['quote_unit_key'],
+        'price'=>$price,
         'bid'=>$quote?\Mosa2\IsinQuote\asPrice($source['bid']):null,
         'ask'=>$quote?\Mosa2\IsinQuote\asPrice($source['ask']):null,
         'volume'=>null,
@@ -183,27 +219,43 @@ function fact(array $source,string $key,string $isin,array $registry,array $capt
  * conversion or invent bid/ask. All decisions are independent of the ISIN.
  */
 function choose(array $lab,string $isin,string $assetType,array $registry,array $captured,
-                DateTimeImmutable $now):?array {
+                DateTimeImmutable $now,?array $units=null):?array {
+    $units??=defaultUnits();
     $sources=is_array($lab['sources']??null)?$lab['sources']:[];
     if($assetType==='etf') {
         $etf=\fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);
         if(($etf['automatic_release']??false)!==true)return null;
         $key=$etf['selected_source_key'];
         return is_string($key)&&isset($sources[$key])
-            ?fact($sources[$key],$key,$isin,$registry,$captured,$now,300):null;
+            ?fact($sources[$key],$key,$isin,$registry,$captured,$now,300,$units):null;
     }
-    $router=\fixlabMosaMarketQuoteRouter($sources);
-    $key=$router['selected_quote']['source_key']??null;
-    if(is_string($key)&&isset($sources[$key])) {
-        $selected=fact($sources[$key],$key,$isin,$registry,$captured,$now,300);
-        if($selected!==null)return $selected;
+    // Route independent complete quotes per native unit, not by comparing
+    // raw prices in mutually inconvertible currencies.
+    $groups=[];
+    foreach($sources as $key=>$source){
+        if(($source['data_type']??null)!=='quote'||!is_string($source['currency']??null)
+            ||!isset($units[$source['currency']]))continue;
+        $groups[$source['currency']][$key]=$source;
+    }
+    $qualifiedQuotes=[];
+    foreach($groups as $group){
+        $router=\fixlabMosaMarketQuoteRouter($group);
+        $key=$router['selected_quote']['source_key']??null;
+        if(!is_string($key)||!isset($group[$key]))continue;
+        $chosen=fact($group[$key],$key,$isin,$registry,$captured,$now,300,$units);
+        if($chosen!==null)$qualifiedQuotes[]=$chosen;
+    }
+    if($qualifiedQuotes!==[]){
+        usort($qualifiedQuotes,static fn(array $a,array $b):int=>
+            strcmp($b['market_at'],$a['market_at'])?:strcmp($a['provider'],$b['provider']));
+        return $qualifiedQuotes[0];
     }
     $alternatives=[];
     foreach(['lang_schwarz_trade','tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'] as $key) {
         if(!isset($sources[$key])||!in_array($sources[$key]['data_type']??null,['last_trade','market_snapshot'],true))continue;
         // Tradegate trades require the same validated ISIN as its quote page.
         if($key==='tradegate_trade'&&($sources['tradegate_quote']['isin']??null)!==$isin)continue;
-        $v=fact($sources[$key],$key,$isin,$registry,$captured,$now,300);
+        $v=fact($sources[$key],$key,$isin,$registry,$captured,$now,300,$units);
         if($v!==null)$alternatives[]=$v;
     }
     usort($alternatives,static fn(array $a,array $b):int=>strcmp($b['market_at'],$a['market_at'])?:strcmp($a['provider'],$b['provider']));
