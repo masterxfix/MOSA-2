@@ -41,8 +41,8 @@ jobs:
           import deploy_sftp as web
           import paramiko
 
-          OLD='4d35f3e1a3abe8d0266f602d9909f3a495fa2684'
-          NEW='397a188585ec5372b316234e1342e3e5ed5b01f8'
+          OLD='397a188585ec5372b316234e1342e3e5ed5b01f8'
+          NEW='da145dbdfdb4c21ef933e3094163eecc982f0080'
           path=release.PERIODIC+'/releases/'+NEW+'/scripts/market_collector/mosa_tick.php'
           files=['api/market_source_engine.php','api/market_sources.php','api/isin_quote.php']
           def remote_cron(t):
