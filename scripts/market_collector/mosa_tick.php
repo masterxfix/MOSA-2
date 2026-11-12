@@ -7,108 +7,147 @@ use DateTimeZone;
 use PDO;
 use Throwable;
 use function Mosa2\Phase2\{check,connection,same};
-use function Mosa2\MarketLive\{snapshot,proofRun,bridge,completePlan};
-use function Mosa2\MarketAcceptance\{capture,manifest,quoteManifest};
+use function Mosa2\MarketLive\{proofRun,bridge,completePlan};
+use function Mosa2\MarketAcceptance\{capture,quoteManifest};
+use function Mosa2\IsinQuote\{asPrice,sourceAllowed};
 
 require_once __DIR__.'/actions_acceptance.php';
 require_once __DIR__.'/../market_current/refresh.php';
 
-/** The deployed MOSA scheduler remains the only process that acquires provider quotes. */
-function observations(string $mosa,array $registered): array {
-    require_once $mosa.'/php/mosa_market_source_registry.php';
-    require_once $mosa.'/php/mosa_market_live_quote_runner.php';
-    require_once $mosa.'/php/mosa_market_control_board_read_model.php';
-    $registry=\fixlabReadMosaMarketSourceRegistry($mosa);
-    check(\fixlabValidateMosaMarketSourceRegistry($registry),'mosa_registry_unavailable');
-    $assets=\fixlabMosaMarketLiveQuoteAssets(
-        $registry['registrations'],\fixlabMosaEtfReadStore($mosa),\fixlabReadMosaRelationshipStore($mosa));
-    $isinByKey=[];
-    foreach ($assets as $asset) {
-        if (!isset($registered[$asset['isin']])) continue;
-        $key=$asset['asset_key'];
-        check(!isset($isinByKey[$key])||$isinByKey[$key]===$asset['isin'],'mosa_asset_key_ambiguous');
-        $isinByKey[$key]=$asset['isin'];
-    }
+require_once dirname(__DIR__,2).'/api/market_source_engine.php';
+require_once dirname(__DIR__,2).'/api/isin_quote.php';
 
-    $observations=[];
-    $now=new DateTimeImmutable('now',new DateTimeZone('UTC'));
-    foreach (array_chunk(array_keys($isinByKey),10) as $keys) {
-        $data=\fixlabMosaMarketControlBoardDatabaseReader($mosa)($keys);
-        foreach ($keys as $key) {
-            $selected=\fixlabMosaMarketControlBoardSelectObservation($data['observations'],$key,$now);
-            if ($selected===null) continue;
-            foreach ($data['observations'] as $row) {
-                if ($row['asset_key']!==$key||$row['source_key']!==$selected['source_key']) continue;
-                $fact=\fixlabMosaMarketControlBoardObservation($row,$key,$now);
-                if ($fact===null) continue;
-                $isin=$isinByKey[$key];
-                $candidate=[
-                    'provider'=>$fact['provider_key'],'market_at'=>$fact['_quoted']->format('Y-m-d H:i:s.u'),
-                    'observed_at'=>$fact['_collected']->format('Y-m-d H:i:s.u'),'currency'=>$row['currency'],
-                    'price'=>$fact['price_eur'],'bid'=>$fact['bid_eur'],'ask'=>$fact['ask_eur'],'volume'=>null,
-                ];
-                check(!isset($observations[$isin])||$observations[$isin]===$candidate,'mosa_isin_ambiguous');
-                $observations[$isin]=$candidate;
-            }
+// Scheduled permissions are independent of the manual preview. The provider
+// publishes these quotes for private display and non-display use.
+// https://www.ls-tc.de/media/site/service/wissen/Marktdatenstrategie.pdf
+const SOURCES=[
+    'lang_schwarz'=>[
+        'name'=>'Lang & Schwarz','venue'=>'lang_schwarz_tradecenter','url'=>'https://www.ls-tc.de/de/',
+        'requests'=>['lang_schwarz_search','lang_schwarz_page'],
+    ],
+];
+
+function sourceRegistry(PDO $db): array {
+    $registry=[];
+    $read=$db->prepare('SELECT id,enabled,source_type FROM m2_sources WHERE source_key=?');
+    foreach (SOURCES as $provider=>$source) {
+        $read->execute(['provider:'.$provider]);
+        $row=$read->fetch();
+        if ($row===false) {
+            $insert=$db->prepare("INSERT INTO m2_sources
+                (source_key,source_type,display_name,base_url,enabled,created_at,updated_at)
+                VALUES (?,'market_data',?,?,1,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))");
+            $insert->execute(['provider:'.$provider,$source['name'],$source['url']]);
+            $row=['id'=>$db->lastInsertId(),'enabled'=>1,'source_type'=>'market_data'];
+        }
+        if ((int)$row['enabled']===1 && $row['source_type']==='market_data') {
+            $registry[$provider]=$source+['id'=>(string)$row['id']];
         }
     }
-    return $observations;
+    return $registry;
 }
 
-/** Map the existing MOSA provider identity to M2's physical Source and route. */
-function sourceManifest(callable $connect,array $contract,string $isin,string $name,array $fact): array {
-    $provider=$fact['provider'];
-    $venue=match($provider) {
-        'lang_schwarz'=>'lang_schwarz_tradecenter',
-        'tradegate_bsx'=>'tradegate_bsx',
-        'boerse_frankfurt_api'=>'boerse_frankfurt',
-    };
-    $db=$connect();
-    $state=snapshot($db,$contract);
-    $source='provider:'.$provider;
-    if (!in_array($source,array_column($state['m2_sources'],'source_key'),true)) {
-        $db->beginTransaction();
-        try {
-            $now=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
-            $store=new \Mosa2\MarketIdentity\PdoStore($db);
-            $store->insert('m2_sources',[
-                'source_key'=>$source,'source_type'=>'market_data',
-                'display_name'=>\fixlabMosaMarketControlBoardProviderName($provider),
-                'base_url'=>null,'enabled'=>'1','created_at'=>$now,'updated_at'=>$now,
-            ]);
-            same($db->commit(),true,'mosa_source_commit');
-        } finally {
-            if ($db->inTransaction()) $db->rollBack();
-        }
-        $state=capture($connect,$contract);
+function deferSource(PDO $db,string $sourceId,int $status,mixed $retryAfter): void {
+    $now=time();
+    $retry=is_string($retryAfter)&&ctype_digit($retryAfter)?$now+min((float)$retryAfter,31536000):
+        (is_string($retryAfter)?strtotime($retryAfter):false);
+    $until=max($now+($status===429?60:86400),$retry?:0);
+    $query=$db->prepare("INSERT INTO m2_sync_checkpoints (source_id,stream_key,watermark_at,updated_at)
+        VALUES (?,'scheduled_market_cooldown',?,UTC_TIMESTAMP(6))
+        ON DUPLICATE KEY UPDATE watermark_at=GREATEST(COALESCE(watermark_at,UTC_TIMESTAMP(6)),?),updated_at=UTC_TIMESTAMP(6)");
+    $stamp=gmdate('Y-m-d H:i:s',(int)$until);
+    $query->execute([$sourceId,$stamp,$stamp]);
+}
+
+function fetchSource(array $request,array &$requests): array {
+    $request['follow_redirects']=false;
+    $response=\fixlabMosaMarketSourceLabLiveTransport($request);
+    $key=$request['request_key'];
+    $requests[]=['key'=>$key,'status'=>$response['http_status']??null];
+    $location=$response['location']??null;
+    // L&S redirects its verified numeric instrument URL to its canonical slug.
+    // Keep the provider and category fixed and permit only this one redirect.
+    if ($key==='lang_schwarz_page' && in_array($response['http_status']??null,[301,302,307,308],true)
+        && is_string($location)
+        && preg_match('~^https://www\\.ls-tc\\.de/de/(aktie|etf)/[0-9]+$~D',$request['url'],$numeric)
+        && preg_match('~^https://www\\.ls-tc\\.de/de/(aktie|etf)/[a-z0-9][a-z0-9-]{0,180}$~D',$location,$canonical)
+        && $numeric[1]===$canonical[1]) {
+        $request['url']=$location;
+        $response=\fixlabMosaMarketSourceLabLiveTransport($request);
+        $requests[]=['key'=>$key,'status'=>$response['http_status']??null];
     }
-    $selection=['isin'=>$isin,'name'=>$name];
-    if ($provider==='boerse_frankfurt_api') return manifest($state,$selection);
-    return quoteManifest($state,$selection,[
-        'source_key'=>$provider,'reference_key'=>$provider,'venue_key'=>$venue,'family'=>'mosa_live_quote',
-        'reference'=>'MOSA live quote router selected observation with original market and collection timestamps',
-        'provider_key'=>$provider,'adapter_module'=>'mosa_saved_observation','adapter_class'=>'MosaSavedObservation',
-    ]);
+    return $response;
+}
+
+function acquire(PDO $db,array $registry,string $isin,array &$requests): ?array {
+    $ready=$db->prepare("SELECT COUNT(*) FROM m2_sync_checkpoints WHERE source_id=?
+        AND stream_key='scheduled_market_cooldown' AND watermark_at>UTC_TIMESTAMP(6)");
+    $allowed=[];
+    foreach ($registry as $source) {
+        $ready->execute([$source['id']]);
+        if ((int)$ready->fetchColumn()!==0) continue;
+        foreach ($source['requests'] as $key) $allowed[$key]=$source['id'];
+    }
+    if ($allowed===[]) return null;
+
+    $captured=[];
+    $lab=\fixlabRunMosaMarketSourceLab($isin,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
+        static function(array $request) use($db,$isin,&$allowed,&$requests,&$captured): array {
+            $key=$request['request_key'];
+            if (!isset($allowed[$key])||!sourceAllowed($request,$isin)) {
+                return ['body'=>'','http_status'=>null,'error_code'=>'provider_not_enabled'];
+            }
+            $response=fetchSource($request,$requests);
+            $captured[$key]=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
+            $status=$response['http_status']??null;
+            if (in_array($status,[401,403,429],true)) {
+                $id=$allowed[$key];
+                deferSource($db,$id,$status,$response['retry_after']??null);
+                $allowed=array_filter($allowed,static fn($sourceId)=>$sourceId!==$id);
+            }
+            return $response;
+        });
+    // Reuse the productive quote router for every ISIN. The lab's optional
+    // pilot-only recommendation is deliberately outside this entry point.
+    $quote=\fixlabMosaMarketQuoteRouter($lab['sources'])['selected_quote']??null;
+    if ($quote===null) return null;
+    $provider=$quote['provider_key'];
+    $observedAt=null;
+    foreach ($registry[$provider]['requests'] as $requestKey) {
+        if (isset($captured[$requestKey])) $observedAt=$captured[$requestKey];
+    }
+    $marketAt=(new DateTimeImmutable($quote['quoted_at']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s.u');
+    $price=asPrice($quote['mid']);
+    if ($observedAt===null||$marketAt>$observedAt||$price===null) return null;
+    return ['provider'=>$provider,'market_at'=>$marketAt,'observed_at'=>$observedAt,'currency'=>$quote['currency'],
+        'price'=>$price,'bid'=>asPrice($quote['bid']),'ask'=>asPrice($quote['ask']),'volume'=>null];
 }
 
 function syncFact(callable $connect,array $config,string $password,string $isin,string $name,array $fact): array {
     $contract=$config['state_contract'];
-    $manifest=sourceManifest($connect,$contract,$isin,$name,$fact);
     $state=capture($connect,$contract);
+    $provider=$fact['provider'];
+    $manifest=quoteManifest($state,['isin'=>$isin,'name'=>$name],[
+        'source_key'=>$provider,'reference_key'=>$provider,'venue_key'=>SOURCES[$provider]['venue'],'family'=>'mosa_live_quote',
+        'reference'=>'M2 acquisition using the MOSA source adapter and quote router',
+        'provider_key'=>$provider,'adapter_module'=>'m2_market_observation','adapter_class'=>'MarketObservation',
+    ]);
     $plan=completePlan($state,$manifest);
     $assetId=$plan['asset']['asset_id'];
     $current=null;
     foreach ($state['m2_market_current'] as $row) if ($row['asset_id']===$assetId) $current=$row;
     if ($current!==null && $current['route_id']===($plan['route']['route_id']??null)
-        && $current['market_at']===$fact['market_at'] && $current['observed_at']===$fact['observed_at']) {
+        && $current['market_at']===$fact['market_at']
+        && asPrice((float)$current['price'])===$fact['price']
+        && asPrice((float)$current['bid'])===$fact['bid'] && asPrice((float)$current['ask'])===$fact['ask']) {
         return ['writer'=>'UNCHANGED'];
     }
 
-    $invoke=static function(array $runtime,array $request) use($fact): array {
-        if ($request['action']==='fetch') return ['mosa_observation'=>$fact];
+    $invoke=static function(array $runtime,array $request) use($fact,$isin): array {
+        if ($request['action']==='fetch') return ['m2_market_observation'=>$fact,'instrument'=>$isin];
         return bridge($runtime,$request);
     };
-    // The input is a stored observation produced by MOSA. There is no provider request here.
+    // The private acquisition above supplies the validated quote to the existing Schema-6 writer.
     $result=proofRun($config['private_root'],$password,$config,$manifest,static function(array $runtime) {
         same($runtime['state_contract']['schema_version'],6,'mosa_schema_version');
     },$connect,$invoke);
@@ -160,25 +199,31 @@ function main(): void {
                 WHERE i.identifier_type='isin' AND i.scope_key='' AND i.is_primary=1 AND i.valid_to IS NULL
                   AND (i.valid_from IS NULL OR i.valid_from<=UTC_TIMESTAMP(6))
                 ORDER BY i.normalized_value")->fetchAll(PDO::FETCH_KEY_PAIR);
-            $facts=$registered===[]?[]:observations($subscription.'/httpdocs/scharwerk.de/dashboard_neu',$registered);
+            $registry=$registered===[]?[]:sourceRegistry($db);
+            $batches=array_chunk($registered,2,true);
+            $due=$batches===[]?[]:$batches[intdiv(time(),60)%count($batches)];
             $config=[
                 'project'=>$project,'python'=>'/opt/alt/python311/bin/python3.11','php'=>PHP_BINARY,
                 'runtime_path'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin','private_root'=>$periodic.'/work',
                 'db_host'=>'127.0.0.1','db_port'=>3307,'allow_duplicate'=>true,
                 'state_contract'=>['schema_version'=>6,'allow_current'=>true],
             ];
-            $items=[];
-            foreach ($facts as $isin=>$fact) {
-                try { $receipt=syncFact($connect,$config,$password,$isin,$registered[$isin],$fact); }
-                catch (Throwable $error) {
+            $items=[];$unavailable=[];$requests=[];
+            foreach ($due as $isin=>$name) {
+                try {
+                    $fact=acquire($db,$registry,$isin,$requests);
+                    if ($fact===null) {
+                        $unavailable[]=$isin;
+                        continue;
+                    }
+                    $items[$isin]=['provider'=>$fact['provider']]+syncFact($connect,$config,$password,$isin,$name,$fact);
+                } catch (Throwable $error) {
                     $code=$error->getMessage();
-                    $receipt=['failure'=>preg_match('/^[a-z0-9_]{1,80}$/D',$code)?$code:'mosa_sync_failed'];
+                    $items[$isin]=['failure'=>preg_match('/^[a-z0-9_]{1,80}$/D',$code)?$code:'m2_market_write_failed'];
                 }
-                $items[$isin]=['provider'=>$fact['provider']]+$receipt;
             }
-            echo json_encode(['checked_at'=>gmdate('c'),'registered'=>count($registered),
-                'unavailable'=>array_values(array_diff(array_keys($registered),array_keys($facts))),
-                'items'=>$items],JSON_THROW_ON_ERROR).PHP_EOL;
+            echo json_encode(['checked_at'=>gmdate('c'),'registered'=>count($registered),'due'=>count($due),
+                'provider_requests'=>$requests,'unavailable'=>$unavailable,'items'=>$items],JSON_THROW_ON_ERROR).PHP_EOL;
         } finally {
             $db->query("SELECT RELEASE_LOCK('m2-collector-scheduler')");
         }

@@ -1,4 +1,4 @@
-"""Install the private MOSA market integration for the M2 test database."""
+"""Install the standalone collector for the MOSA 2 test database."""
 import argparse
 import json
 import os
@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # Keep the subscription path POSIX even when the command is inspected on Windows.
 PERIODIC = shared.TEST_ROOT.rsplit("/", 1)[0] + "/private/mosa2-collector/periodic"
 EXTRAS = (
+    "api/market_source_engine.php",
+    "api/isin_quote.php",
     "api/market_core/native_currency_units.json",
     "scripts/market_collector/gettex_delayed.py",
     "scripts/market_collector/mosa_tick.php",

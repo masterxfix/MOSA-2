@@ -1,4 +1,4 @@
-name: Install private MOSA market integration
+name: Install private MOSA 2 market collector
 
 on:
   workflow_dispatch:

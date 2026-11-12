@@ -85,28 +85,27 @@ def run(data):
                     market_at=normalized['market_at'], observed_at=normalized['observed_at'])
     if action == 'plan':
         acquired = data['acquired']
-        if 'mosa_observation' in acquired:
-            binding = data['route']
-            raw = {key: acquired['mosa_observation'][key] for key in
+        binding = data['route']
+        catalog = writer.observation.catalog_module.runtime_catalog()
+        existing = restore(data['existing'])
+        if 'm2_market_observation' in acquired:
+            fact = acquired['m2_market_observation']
+            raw = {key: fact[key] for key in
                    ('currency', 'market_at', 'observed_at', 'price', 'bid', 'ask', 'volume')}
             raw.update(asset_id=binding['asset_id'], source_id=binding['source_id'], route_id=binding['id'])
             raw.update({key: binding[key] for key in writer.UNIT_FIELDS})
-            planner = writer.WriterPlanner(writer.observation.catalog_module.runtime_catalog(),
-                [dict(format_version=2, route=binding)], restore(data['existing']))
+            route = RouteContract(fact['provider'], acquired['instrument'], 2, binding)
+            planner = writer.WriterPlanner(catalog, [route.envelope()], existing)
             plan = planner.plan(raw, format_version=2, intent='NEW_NATIVE_V2', created_at=data['created_at'])
-            if plan['decision'] not in ('INSERT', 'DUPLICATE_UNCHANGED'):
-                raise ValueError('stored MOSA observation')
-            return dict(ok=True, plan=transport(plan))
-        adapter = getattr(importlib.import_module(acquired['adapter_module']), acquired['adapter_class'])()
-        binding = data['route']
-        request = Request(acquired['provider_key'], binding['source_id'], binding['id'],
-            acquired['request_key'], acquired['requested_at'], acquired['instrument'])
-        response = TransportResponse(**restore(acquired['response']))
-        route = RouteContract(request.provider_key, request.instrument, 2, binding)
-        catalog = writer.observation.catalog_module.runtime_catalog()
-        existing = restore(data['existing'])
-        result = pipeline(request, route, FixtureTransport({request: response}), [adapter],
-            catalog=catalog, created_at=data['created_at'], existing=existing)
+            result = dict(decision=plan['decision'], writer_plan=plan)
+        else:
+            adapter = getattr(importlib.import_module(acquired['adapter_module']), acquired['adapter_class'])()
+            request = Request(acquired['provider_key'], binding['source_id'], binding['id'],
+                acquired['request_key'], acquired['requested_at'], acquired['instrument'])
+            response = TransportResponse(**restore(acquired['response']))
+            route = RouteContract(request.provider_key, request.instrument, 2, binding)
+            result = pipeline(request, route, FixtureTransport({request: response}), [adapter],
+                catalog=catalog, created_at=data['created_at'], existing=existing)
         if result['decision'] == 'INSERT' and data.get('allow_duplicate') is True:
             candidate = result['writer_plan']['normalized']
             matches = [fact['payload'] for fact in existing if fact['format_version'] == 2 and

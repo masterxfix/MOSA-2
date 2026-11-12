@@ -336,13 +336,14 @@ function fixlabMosaMarketSourceLabLiveTransport(array $request):array
 {
     if(!function_exists('curl_init'))return ['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'curl_unavailable'];$handle=curl_init($request['url']);if($handle===false)return ['body'=>'','http_status'=>null,'latency_ms'=>null,'error_code'=>'curl_init_failed'];
     $options=[CURLOPT_RETURNTRANSFER=>true,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>12,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2,CURLOPT_HTTPHEADER=>$request['headers']];if(($request['follow_redirects']??false)===true){$options[CURLOPT_FOLLOWLOCATION]=true;$options[CURLOPT_MAXREDIRS]=2;if(defined('CURLOPT_REDIR_PROTOCOLS')&&defined('CURLPROTO_HTTPS'))$options[constant('CURLOPT_REDIR_PROTOCOLS')]=constant('CURLPROTO_HTTPS');}curl_setopt_array($handle,$options);
-    $retryAfter=null;
-    curl_setopt($handle,CURLOPT_HEADERFUNCTION,static function($handle,string $line)use(&$retryAfter):int{
+    $retryAfter=null;$location=null;
+    curl_setopt($handle,CURLOPT_HEADERFUNCTION,static function($handle,string $line)use(&$retryAfter,&$location):int{
         if(str_starts_with(strtolower($line),'retry-after:'))$retryAfter=trim(substr($line,12,128));
+        if(str_starts_with(strtolower($line),'location:'))$location=trim(substr($line,9,512));
         return strlen($line);
     });
     $started=hrtime(true);$body=curl_exec($handle);$latency=max(0,(int)round((hrtime(true)-$started)/1000000));$status=(int)curl_getinfo($handle,CURLINFO_RESPONSE_CODE);$curlError=curl_errno($handle);curl_close($handle);if(!is_string($body))$body='';
-    if(strlen($body)>FIXLAB_MOSA_MARKET_SOURCE_LAB_MAX_RESPONSE_BYTES)return ['body'=>'','http_status'=>$status>0?$status:null,'latency_ms'=>$latency,'error_code'=>'response_too_large'];return ['body'=>$body,'http_status'=>$status>0?$status:null,'latency_ms'=>$latency,'error_code'=>$curlError===0?null:'transport_error','retry_after'=>$retryAfter];
+    if(strlen($body)>FIXLAB_MOSA_MARKET_SOURCE_LAB_MAX_RESPONSE_BYTES)return ['body'=>'','http_status'=>$status>0?$status:null,'latency_ms'=>$latency,'error_code'=>'response_too_large'];return ['body'=>$body,'http_status'=>$status>0?$status:null,'latency_ms'=>$latency,'error_code'=>$curlError===0?null:'transport_error','retry_after'=>$retryAfter,'location'=>$location];
 }
 
 function fixlabMosaMarketSourceLabExecute(array $request,callable $transport,bool $expectsJson=true):array
