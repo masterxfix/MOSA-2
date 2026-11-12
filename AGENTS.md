@@ -45,7 +45,32 @@ Wird die Grenze überschritten, muss die Ursache behoben werden, bevor die Ände
 
 **Grundsatz:** Das funktionierende Ergebnis zählt, nicht die Anzahl der Arbeitsschritte, Tests oder Dokumentationen.
 
-## 3. Lessons Learned
+## 3. Nachgewiesene Zugriffswege – vor „Das kann ich nicht“ prüfen
+
+**Verbindlicher Grundsatz:** ChatGPT darf einen M2-Auftrag nicht mit einer pauschalen Behauptung wie „Ich habe keinen Zugriff“, „Das kann ich nicht“ oder „Nur Codex kann das“ abbrechen, bevor die **in dieser Sitzung tatsächlich verfügbaren Werkzeuge** und die bestehenden autorisierten indirekten Zugriffswege geprüft wurden. Ein fehlender direkter Plesk-/SSH-Button bedeutet **nicht**, dass Deployment, DB-Prüfung oder Cron-Pflege unmöglich sind. Keine Zugriffsrechte oder verfügbaren Werkzeuge behaupten, ohne sie konkret geprüft zu haben.
+
+### Am 12.11.2026 tatsächlich genutzte Wege
+
+1. **GitHub direkt durch ChatGPT:** Das Repository `masterxfix/MOSA-2` wurde über die verbundene GitHub-Schnittstelle gelesen und auf `main` geändert – ohne Codex.
+2. **Dogado-Deployment indirekt über GitHub Actions:** Vorhandene autorisierte Workflow-Secrets und die geprüfte SFTP-/SSH-Verbindung ermöglichten den Upload eines privaten M2-Collector-Releases samt exaktem Datei-Readback. ChatGPT konnte die benötigten Workflows über GitHub vorbereiten und auslösen, ohne Zugangsdaten auszulesen oder offenzulegen.
+3. **Plesk-Minutenjob über den Dogado-SSH-Zugang:** Der bestehende M2-Crontab-Eintrag wurde nach Vergleich des Zielpfads gezielt auf die neue geprüfte Release-Version umgestellt und unabhängig zurückgelesen. Das war **keine Bedienung der grafischen Plesk-Oberfläche** und keine Änderung an MOSA.
+4. **Datenbank-/Laufzeitnachweise:** Über denselben autorisierten Dogado-Weg waren echte M2-Collector-Läufe und unabhängige, transaktional read-only Datenbankprüfungen möglich. Getestet wurden Lang & Schwarz und Tradegate BSX mit echten Abrufen; beide ISINs wurden im M2-Lauf verarbeitet.
+5. **Browser-Lesezugang:** Die vorhandene Browser-Anbindung konnte den Inhalt des tatsächlich geöffneten M2-Tabs und dessen angezeigte Ladezeit auslesen. Das ist eine **Inhalts-/DOM-Prüfung**, nicht automatisch eine visuelle Screenshot-Prüfung.
+
+### Verbindliches Vorgehen bei vermeintlichen Zugriffshindernissen
+
+- Zuerst verfügbare Werkzeuge prüfen: GitHub Lesen/Schreiben, bestehende GitHub Actions, Dogado-SFTP/SSH über vorhandene autorisierte Secrets, read-only DB-Zugänge und erreichbare Chrome-/Browsersteuerung. Nur Wege im genehmigten Umfang verwenden. Toolverfügbarkeit kann je Sitzung variieren.
+- Wenn direkter Zugriff fehlt, einen **funktionierenden indirekten Weg** über bereits autorisierte Infrastruktur prüfen; denselben Fehler nicht mit neuen Sonderlösungen, Zugangsdatenkopien oder öffentlichen Endpunkten umgehen.
+- Ist auch der indirekte Weg tatsächlich blockiert, **präzise** benennen, welcher konkrete Schritt an welcher nachgewiesenen Grenze scheitert, was bereits erledigt ist und welcher zulässige Folgeweg bleibt. Keine generische Unmöglichkeitsbehauptung.
+- **Sichtprüfung ist ein eigener Abnahmeschritt:** Die visuelle Darstellung muss in einem tatsächlich gerenderten Browserfenster bzw. anhand eines aktuellen Screenshots geprüft werden (Layout, Lesbarkeit, Zustände). Bloß ausgelesener Seitentext, DOM und Ladezeit genügen dafür **nicht**. Fehlt der visuelle Zugang, das als offen melden und über die erlaubte Chrome-Steuerung/Codex-Übergabe nachholen; niemals als visuell geprüft behaupten.
+- **Beleg statt Versprechen:** Repository-Commit, erfolgreicher Workflow, verifizierte aktive Cron-Release-Version, echter Quellenabruf, Speicherung/Readback sowie Browser- und visuelle Abnahme jeweils getrennt nachweisen. Ein erfolgreiches Deployment ist allein kein Funktionsnachweis.
+- Die bekannten Grenzen bleiben unverändert: `E:` ist tabu; kein unerlaubter PC-/Desktop-Zugriff, keine Offenlegung von Secrets und keine Änderung an MOSA oder fremden Produktivsystemen.
+
+**Korrektur einer früheren Fehleinschätzung:** Die pauschale Aussage von ChatGPT, Dogado-Deployment und Plesk-Collector seien mangels direkten Zugriffs nicht selbst möglich, war zu weitgehend. Die oben beschriebenen **indirekten, autorisierten** Wege haben am 12.11.2026 tatsächlich funktioniert. Daraus folgt keine Garantie, dass sie in jeder späteren Sitzung verfügbar sind – sie müssen vor einer Ablehnung geprüft werden.
+
+**Sichtprüfungs-Evidenz vom 12.11.2026:** M2-Tab-Inhalt einschließlich Kurszeilen und einer angezeigten Ladezeit von 162 ms wurde gelesen; **ein tatsächlicher Screenshot wurde dabei nicht visuell geprüft**. Diesen Nachweis nicht rückwirkend als erledigt ausgeben.
+
+## 4. Lessons Learned
 
 Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funktioniert hat und welche Fehler aufgetreten sind. Daraus leiten wir konkrete Verbesserungen ab und aktualisieren `AGENTS.md`, damit sich Fehler nicht wiederholen. Die Zwischenziele bestimmen wir im weiteren Projektverlauf gemeinsam.
 
