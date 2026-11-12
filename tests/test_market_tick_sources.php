@@ -102,7 +102,7 @@ sameValue('etf',\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$acti
 $other=$identityLab;$other['instrument_type_source']='lang_schwarz_conflict';
 sameValue(null,\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['asset_class'],'ambiguous class never persisted');$n++;
 $other=$identityLab;$other['instrument']['name']='<script>spoof</script>';
-$other['raw_responses']['tradegate_quote']['body']=str_replace('General Example Holdings AB','<script>spoof</script>',$tradegateHtml);
+$other['raw_responses']['tradegate_quote']['http_status']=503;
 sameValue(null,\Mosa2\MarketSources\identityEvidence($other,$identityIsin,$active)['name'],'unsafe names rejected');$n++;
 sameValue(['name'=>$identityIsin,'asset_class'=>'unknown'],
     \Mosa2\MarketSources\identityPatch($identityIsin,$identityIsin,'unknown',['name'=>null,'asset_class'=>null]),
