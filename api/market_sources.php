@@ -34,7 +34,7 @@ function catalog():array {
             'scheduled'=>false,
         ],
         'twelve_data'=>[
-            'name'=>'Twelve Data','venue'=>'home_market','url'=>'https://api.twelvedata.com/',
+            'name'=>'Twelve Data','venue'=>'international_isin','url'=>'https://api.twelvedata.com/',
             'requests'=>['twelve_data_quote'],'scheduled'=>false,
             // Explicit private entitlement + bounded quota are mandatory.
             'private_entitlement_required'=>true,
@@ -215,6 +215,9 @@ function fact(array $source,string $key,string $isin,array $registry,array $capt
         'provider'=>$provider,'market_at'=>$market->format('Y-m-d H:i:s.u'),
         'observed_at'=>$received->format('Y-m-d H:i:s.u'),
         'currency'=>$unit['currency'],'quote_unit_key'=>$unit['quote_unit_key'],
+        'venue_key'=>is_string($source['venue_key']??null)
+            &&preg_match('/^[A-Z0-9]{4}$/D',$source['venue_key'])===1
+            ?$source['venue_key']:null,
         'price'=>$price,
         'bid'=>$quote?\Mosa2\IsinQuote\asPrice($source['bid']):null,
         'ask'=>$quote?\Mosa2\IsinQuote\asPrice($source['ask']):null,
