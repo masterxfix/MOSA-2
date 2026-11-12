@@ -14,7 +14,7 @@ function answer(int $code,array $body): never {
     exit;
 }
 $host=strtolower(explode(':',(string)($_SERVER['HTTP_HOST']??''),2)[0]);
-if($host!=='mosa2-test.scharwerk.de'||strtolower((string)($_SERVER['SERVER_NAME']??''))!=='mosa2-test.scharwerk.de')
+if(($_SERVER['HTTPS']??'')!=='on'||$host!=='mosa2-test.scharwerk.de'||strtolower((string)($_SERVER['SERVER_NAME']??''))!=='mosa2-test.scharwerk.de')
     answer(403,['status'=>'error','code'=>'TESTSITE_ONLY']);
 $method=$_SERVER['REQUEST_METHOD']??'';
 if(!in_array($method,['GET','POST'],true)){header('Allow: GET, POST');answer(405,['status'=>'error']);}
@@ -42,29 +42,33 @@ try {
     if(!is_string($raw)||strlen($raw)>2048)answer(413,['status'=>'error','code'=>'REQUEST_TOO_LARGE']);
     $input=json_decode($raw,true,8,JSON_THROW_ON_ERROR);
     if(!is_array($input)||array_keys($input)!==['action','isin','csrf']
-        ||($input['action']??null)!=='purge'
+        ||!in_array($input['action']??null,['register','purge','purge_all'],true)
         ||!is_string($input['isin']??null)||!is_string($input['csrf']??null)
         ||!hash_equals($csrf,$input['csrf']))answer(403,['status'=>'error','code'=>'INVALID_ACTION']);
-    $code=\Mosa2\MarketRegistry\isin($input['isin']);
-    // The writer config is provisioned *privately* by the Dogado deployment, never by a web request.
-    $path=dirname(__DIR__,2).'/mosa2-market-write-private/access.php';
-    if(!is_file($path)||is_link($path)||(fileperms($path)&0077)!==0)
-        answer(503,['status'=>'error','code'=>'WRITER_NOT_CONFIGURED']);
-    $config=require $path;
-    if(!is_array($config)||!isset($config['dsn'],$config['user'],$config['password']))
-        answer(503,['status'=>'error','code'=>'WRITER_NOT_CONFIGURED']);
-    $db=new \PDO($config['dsn'],$config['user'],$config['password'],
-        [\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,
-         \PDO::ATTR_EMULATE_PREPARES=>false,\PDO::ATTR_DEFAULT_FETCH_MODE=>\PDO::FETCH_ASSOC,
-         \PDO::ATTR_TIMEOUT=>3]);
-    unset($config);
-    if((string)$db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test')
-        answer(503,['status'=>'error','code'=>'WRONG_DATABASE']);
-    $result=\Mosa2\MarketRegistry\purge($db,$code);
+    $action=$input['action'];
+    $code=$action==='purge_all'?'':\Mosa2\MarketRegistry\isin($input['isin']);
+    if($action==='purge_all' && $input['isin']!=='ALLE TEST-MARKTDATEN')
+        answer(422,['status'=>'error','code'=>'CONFIRMATION_REQUIRED']);
+    $root=dirname(__DIR__,2);
+    $db=\Mosa2\MarketRegistry\connection('write',$root);
+    $result=match($action){
+        'register'=>\Mosa2\MarketRegistry\register($db,$code),
+        'purge'=>\Mosa2\MarketRegistry\purge($db,$code),
+        'purge_all'=>\Mosa2\MarketRegistry\purgeMarketData($db),
+    };
     $db=null;
-    // Committed deletes are never reported as verified until an independent SELECT-only readback.
-    answer(200,$result+['readback'=>'pending']);
-}catch(\Throwable $e){
-    answer(in_array($e->getMessage(),['COLLECTOR_BUSY','COLLECTOR_NOT_IDLE','ASSET_HAS_PENDING_WORK'],true)?409:503,
-        ['status'=>'error','code'=>'PURGE_UNAVAILABLE']);
+    try {
+        $verified=\Mosa2\MarketRegistry\verify(\Mosa2\MarketRegistry\connection('read',$root),$action,$code,$result);
+    } catch(\Throwable) {
+        $verified=false;
+    }
+    answer(200,$result+['readback'=>$verified?'passed':'pending']);
+}catch(\Throwable $error){
+    $reason=$error->getMessage();
+    $code=match($reason){
+        'INVALID_ISIN'=>422,
+        'COLLECTOR_BUSY','COLLECTOR_NOT_IDLE','ASSET_HAS_PENDING_WORK','INACTIVE_IDENTITY'=>409,
+        default=>503,
+    };
+    answer($code,['status'=>'error','code'=>$code===503?'REGISTRY_UNAVAILABLE':$reason]);
 }

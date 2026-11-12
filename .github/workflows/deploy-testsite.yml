@@ -29,6 +29,11 @@ on:
         type: string
         required: false
 
+      market_writer:
+        description: Provision the existing test-only DB identity in the private Dogado runtime
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -71,6 +76,8 @@ jobs:
           php -l api/codex_status_ingest.php
           php -l api/fundamentals_history.php
           php -l api/isin_quote.php
+          php -l api/market_registry.php
+          php -d zend.assertions=1 tests/test_market_registry_model.php
           node tests/isin_automation_browser_check.cjs
           php tests/test_nova_chat.php
           php tests/test_nova_chat.php codex
@@ -96,6 +103,8 @@ jobs:
           if-no-files-found: error
       - name: SFTP testsite only
         env:
+          MOSA_TEST_PROVISION_MARKET_WRITER: ${{ inputs.market_writer }}
+          MOSA_TEST_MARKET_WRITER: ${{ inputs.market_writer && secrets.MOSA_TEST_DB_PASSWORD || '' }}
           MOSA_TEST_CODEX_WORKER_SHA256: ${{ inputs.codex_worker_sha256 }}
           MOSA_TEST_NOVA_WORKER_SHA256: ${{ inputs.nova_worker_sha256 }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}

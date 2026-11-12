@@ -46,7 +46,7 @@ def render(filename):
     scripts = ['codex_status.js?v=20261110', 'nova_status.js?v=nova-status-1', 'reader_status.js?v=reader-status-2',
                'nova_chat.js?v=m2-chat-1',
                'market.js?v=page-shell-1',
-               'isin_quotes.js?v=registered-market-1', 'fundamentals.js?v=page-shell-1',
+               'isin_quotes.js?v=market-registry-live-1', 'fundamentals.js?v=page-shell-1',
                'navigation.js?v=overview-market-1']
     scripts = "\n".join(f'  <script src="assets/js/{src}" defer></script>' for src in scripts)
     return f'''<!doctype html>

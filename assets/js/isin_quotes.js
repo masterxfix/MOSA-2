@@ -28,6 +28,7 @@
   const registeredAssets = new Map();
   const storedRoot=root===document ? document.querySelector("[data-isin-stored-quotes]") : root;
   const marketView=root.querySelector("[data-isin-market-view]");
+  const dbRegistry=marketView?.dataset.marketRegistry!==undefined;
   const READ_INTERVAL=60000;
   const STORED_URL=marketView?"api/market.php?view=registered":"api/market.php?view=best";
   let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
@@ -222,8 +223,11 @@
     for(const row of existing.values())row.remove();
   }
   function syncDeleteButtons() {
-    for (const button of root.querySelectorAll("[data-isin-remove], [data-isin-db-delete]")) button.disabled = busy;
+    for (const selector of ["[data-isin-remove]", "[data-isin-db-delete]"]) {
+      for (const button of root.querySelectorAll(selector)) button.disabled = busy;
+    }
     for (const button of root.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
+    for (const button of root.querySelectorAll("[data-isin-db-clear]")) button.disabled = busy || storedStatus!=="ok";
   }
   function paint() {
     if(scope.signal.aborted)return;
@@ -251,7 +255,7 @@
           for(const error of entry.errors||[])rows.push(errorRow(entry,error));
         }
         if(ownIsins.has(entry.isin))rows[first][3]=entry.isin;
-        if(marketView && registeredAssets.has(entry.isin))rows[first][4]=entry.isin;
+        if(dbRegistry && registeredAssets.has(entry.isin))rows[first][4]=entry.isin;
       }
       if(!rows.length)rows.push(["empty",null,["Noch keine ISIN eingegeben."]]);
       reconcileRows(tbody,rows);
@@ -299,43 +303,70 @@
     if (index<0) return;
     entries.splice(index,1);save();paint();
   }
-  async function deleteFromDatabase(code) {
-    if(busy || !marketView || !registeredAssets.has(code))return;
-    if(!window.confirm(code+" und alle zugehörigen Daten vollständig aus der MOSA-2-Testdatenbank löschen?"))return;
-    const form=forms[0];
+  async function registryCall(action, code) {
+    const endpoint="api/market_registry.php";
+    const tokenReply=await fetch(endpoint,{
+      method:"GET",credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json"}
+    });
+    if(!tokenReply.ok)throw Error("DB-Zugriff derzeit nicht verfügbar.");
+    const token=await tokenReply.json();
+    if(token.status!=="ok" || typeof token.csrf!=="string")throw Error("DB-Sitzung ungültig.");
+    const response=await fetch(endpoint,{
+      method:"POST",credentials:"same-origin",cache:"no-store",
+      headers:{Accept:"application/json","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
+      body:JSON.stringify({action,isin:code,csrf:token.csrf})
+    });
+    const result=await response.json();
+    if(!response.ok) {
+      if(response.status===422 && action==="register")throw Error("Die ISIN-Prüfziffer stimmt nicht.");
+      if(response.status===409)throw Error("Die Datenbank ist belegt oder die ISIN ist gesperrt. Bitte später erneut versuchen.");
+      throw Error("Datenbankvorgang fehlgeschlagen ("+response.status+").");
+    }
+    return result;
+  }
+  async function reloadDatabase() {
+    nextStoredAt=null;
+    await loadStoredQuotes();
+  }
+  async function changeRegistry(form,action,code) {
+    if(busy || !dbRegistry)return;
     showError(form);
     setBusy(true);
+    let result;
     try{
-      const tokenReply=await fetch("api/market_registry.php",{
-        method:"GET",credentials:"same-origin",cache:"no-store",headers:{"Accept":"application/json"}
-      });
-      if(!tokenReply.ok)throw Error("DB-Zugriff derzeit nicht verfügbar");
-      const token=await tokenReply.json();
-      if(token.status!=="ok" || typeof token.csrf!=="string")throw Error("DB-Sitzung ungültig");
-      const response=await fetch("api/market_registry.php",{
-        method:"POST",credentials:"same-origin",cache:"no-store",
-        headers:{"Accept":"application/json","Content-Type":"application/json","X-Requested-With":"XMLHttpRequest"},
-        body:JSON.stringify({action:"purge",isin:code,csrf:token.csrf})
-      });
-      if(!response.ok)throw Error("Datenbanklöschung fehlgeschlagen ("+response.status+")");
-      const result=await response.json();
-      if(!["deleted","absent"].includes(result.status)||result.isin!==code)throw Error("Ungültige Löschbestätigung");
-      storedQuotes.delete(code);
-      registeredAssets.delete(code);
-      entries=entries.filter(entry=>entry.isin!==code);
-      save();
+      if(storedRead)await storedRead;
+      result=await registryCall(action,code);
+      const expected=action==="register"?["registered","existing"]:["deleted","absent"];
+      if(!expected.includes(result.status)||(action!=="purge_all"&&result.isin!==code))
+        throw Error("Ungültige Datenbankbestätigung.");
+      if(action==="purge"){
+        entries=entries.filter(entry=>entry.isin!==code);
+        save();
+      }
     }catch(error){
-      showError(form,error.message||"Datenbanklöschung nicht bestätigt");
+      showError(form,error.message||"Datenbankvorgang fehlgeschlagen.");
       return;
     }finally{
       setBusy(false);
       paint();
     }
-    // An independent database read, not only the DELETE response, proves absence.
-    nextStoredAt=null;
-    await loadStoredQuotes();
-    if(storedStatus!=="ok" || registeredAssets.has(code) || storedQuotes.has(code))
-      showError(form,"Löschung ausgeführt, aber unabhängige Datenbankprüfung noch offen.");
+    await reloadDatabase();
+    if(result.readback!=="passed" || storedStatus!=="ok"
+        || (action==="purge"&&(registeredAssets.has(code)||storedQuotes.has(code)))
+        || (action==="register"&&!registeredAssets.has(code))
+        || (action==="purge_all"&&storedQuotes.size!==0))
+      showError(form,"Änderung ausgeführt, aber die unabhängige Datenbankprüfung ist noch offen.");
+    else if(action==="register")form.querySelector("[data-isin-input]").value="";
+  }
+  function deleteFromDatabase(code) {
+    if(busy || !dbRegistry || !registeredAssets.has(code))return;
+    if(window.confirm(code+" und alle zugehörigen Daten vollständig aus der MOSA-2-Testdatenbank löschen?"))
+      return changeRegistry(forms[0],"purge",code);
+  }
+  function clearDatabaseMarketData() {
+    if(busy || !dbRegistry)return;
+    if(window.prompt("Alle gespeicherten Testkurse und ihre Historie löschen? Die registrierten ISINs bleiben erhalten. Zur Bestätigung ALLE TEST-MARKTDATEN eingeben.")==="ALLE TEST-MARKTDATEN")
+      return changeRegistry(forms[0],"purge_all","ALLE TEST-MARKTDATEN");
   }
   function clearEntries() {
     if (busy || !entries.length || !window.confirm("Alle gespeicherten ISINs in diesem Browser löschen?")) return;
@@ -446,6 +477,7 @@
     const code=form.querySelector("[data-isin-input]").value.trim().toUpperCase();
     showError(form);
     if(!valid(code)){showError(form,"Ungültige ISIN. Bitte zwölf Zeichen einschließlich Prüfziffer eingeben.");return;}
+    if(dbRegistry)return changeRegistry(form,"register",code);
     let entry=entries.find(e=>e.isin===code);
     if(!entry){
       if(entries.length>=30){showError(form,"Die Liste enthält bereits 30 ISINs.");return;}
@@ -470,6 +502,7 @@
   }
   async function refreshAll() {
     if(busy || manualOwner)return false;
+    if(dbRegistry)return reloadDatabase();
     entries=restore();paint();
     const form=forms[0];
     showError(form);
@@ -507,6 +540,7 @@
     if(remote)deleteFromDatabase(remote.dataset.isinDbDelete);
   },listeners);
   for(const button of root.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries,listeners);
+  for(const button of root.querySelectorAll("[data-isin-db-clear]")) button.addEventListener("click",clearDatabaseMarketData,listeners);
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();},listeners);
   if(marketView){
     document.addEventListener("visibilitychange",scheduleStoredRead,listeners);

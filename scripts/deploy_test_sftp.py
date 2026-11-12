@@ -131,7 +131,42 @@ def provision_chat(sftp, digest, agent):
     print("Private " + agent + " chat verifier: PASS")
 
 
-def execute(config, operation, files=None, nova_digest="", codex_digest=""):
+def provision_market_writer(sftp, secret):
+    if not isinstance(secret, str) or not 1 <= len(secret) <= 512:
+        raise ValueError("Missing dedicated test database credential")
+    root = posixpath.dirname(shared.TEST_ROOT)
+    directory = root + "/mosa2-market-write-private"
+    if sftp.normalize(root) != root:
+        raise ValueError("Unexpected private market writer parent")
+    if shared.remote_kind(sftp, directory) is None:
+        sftp.mkdir(directory, mode=0o700)
+    info = sftp.lstat(directory)
+    if not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700 or sftp.normalize(directory) != directory:
+        raise ValueError("Invalid private market writer directory")
+    password = base64.b64encode(secret.encode("utf-8")).decode("ascii")
+    body = ("<?php\nreturn ['dsn'=>'mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4',"
+            "'user'=>'h29077_mosa2_test','password'=>base64_decode('" + password + "',true)];\n").encode()
+    target = directory + "/access.php"
+    if shared.remote_kind(sftp, target) is None:
+        temporary = directory + "/.access-" + uuid.uuid4().hex
+        try:
+            with sftp.open(temporary, "wx") as stream:
+                sftp.chmod(temporary, 0o600)
+                stream.write(body)
+            sftp.rename(temporary, target)
+        finally:
+            if shared.remote_kind(sftp, temporary) is not None:
+                sftp.remove(temporary)
+    info = sftp.lstat(target)
+    if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
+        raise ValueError("Invalid private market writer file")
+    with sftp.open(target, "rb") as stream:
+        if stream.read(len(body) + 1) != body:
+            raise ValueError("Market writer configuration differs; refusing replacement")
+    print("Private M2 test-database writer verified")
+
+
+def execute(config, operation, files=None, nova_digest="", codex_digest="", market_writer=""):
     import paramiko
 
     class PinnedHostKey(paramiko.MissingHostKeyPolicy):
@@ -167,6 +202,8 @@ def execute(config, operation, files=None, nova_digest="", codex_digest=""):
                     provision_chat(sftp, nova_digest, "nova")
                 if codex_digest:
                     provision_chat(sftp, codex_digest, "codex")
+                if market_writer:
+                    provision_market_writer(sftp, market_writer)
                 shared.upload(sftp, shared.TEST_ROOT, files, profile="test")
                 for name,data in files:
                     shared.check_remote(sftp,shared.TEST_ROOT,name,scoped=True)
@@ -195,7 +232,12 @@ def main():
     if codex_digest and (args.operation != "deploy" or re.fullmatch(r"[0-9a-f]{64}", codex_digest) is None
             or "api/codex-transport/worker.php" not in dict(files or [])):
         raise ValueError("Codex verifier provisioning requires the Codex chat testsite deployment")
-    execute(config, args.operation, files, nova_digest, codex_digest)
+    writer = os.environ.get("MOSA_TEST_MARKET_WRITER", "")
+    if writer and (args.operation != "deploy" or not {"api/market_registry.php", "api/market_registry_model.php"} <= dict(files or []).keys()):
+        raise ValueError("Market writer provisioning requires the exact registry deployment")
+    if os.environ.get("MOSA_TEST_PROVISION_MARKET_WRITER") == "true" and not writer:
+        raise ValueError("Test database writer secret unavailable")
+    execute(config, args.operation, files, nova_digest, codex_digest, writer)
 
 
 if __name__ == "__main__":
