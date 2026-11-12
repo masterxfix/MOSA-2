@@ -27,12 +27,6 @@ function catalog():array {
             'preview_alias'=>'frankfurt','preview_request'=>'boerse_frankfurt_trade',
             'preview_label'=>'Börse Frankfurt · XFRA · Last',
         ],
-        'yahoo_finance_chart'=>[
-            'name'=>'Yahoo Finance','venue'=>'home_market','url'=>'https://query1.finance.yahoo.com/',
-            'requests'=>['yahoo_home_search','yahoo_home_market'],
-            // Automated use remains forbidden until its source rights are confirmed.
-            'scheduled'=>false,
-        ],
         'twelve_data'=>[
             'name'=>'Twelve Data','venue'=>'international_isin','url'=>'https://api.twelvedata.com/',
             'requests'=>['twelve_data_quote'],'scheduled'=>false,
@@ -100,10 +94,6 @@ function allowed(array $request,string $isin):bool {
         'boerse_frankfurt_trade'=>$url==='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$isin.'&mic=XFRA',
         'twelve_data_quote'=>$url==='https://api.twelvedata.com/quote?isin='.$isin,
         'eodhd_search','eodhd_exchange','eodhd_delayed'=>allowedEodhd($p,$key,$isin),
-        'yahoo_home_search'=>$url==='https://query1.finance.yahoo.com/v1/finance/search?q='.$isin.'&quotesCount=10&newsCount=0',
-        'yahoo_home_market'=>$host==='query1.finance.yahoo.com'
-            &&preg_match('~^/v8/finance/chart/[a-zA-Z0-9._%=-]{1,128}$~D',$path)===1
-            &&($p['query']??null)==='range=1d&interval=1d&includePrePost=false',
         default=>false,
     };
 }
@@ -312,7 +302,7 @@ function choose(array $lab,string $isin,string $assetType,array $registry,array 
         return $qualifiedQuotes[0];
     }
     $alternatives=[];
-    foreach(['lang_schwarz_trade','tradegate_trade','boerse_frankfurt_trade','twelve_data_quote','yahoo_home_market'] as $key) {
+    foreach(['lang_schwarz_trade','tradegate_trade','boerse_frankfurt_trade','twelve_data_quote'] as $key) {
         if(!isset($sources[$key])||!in_array($sources[$key]['data_type']??null,['last_trade','market_snapshot'],true))continue;
         // Tradegate trades require the same validated ISIN as its quote page.
         if($key==='tradegate_trade'&&($sources['tradegate_quote']['isin']??null)!==$isin)continue;
