@@ -14,7 +14,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
   const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
-  const table=new E('tbody'),details=new E('button'),root=new E('body'),summary=new E('span');
+  const table=new E('tbody'),details=new E('button'),root=new E('body'),summary=new E('span'),countdown=new E('span');
   if(actions)table.dataset.isinActions='';
   const marketNode=market?new E('section'):null;
   if(dbRegistry && marketNode)marketNode.dataset.marketRegistry='';
@@ -26,6 +26,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
     '[data-isin-summary]':market?[summary]:[]
   }[selector]??[]),querySelector:selector=>({
     '[data-isin-stored-quotes]':root,'[data-isin-market-view]':marketNode,
+    '[data-isin-next-check]':market?countdown:null,
     '[data-isin-details-toggle]':market?details:null,
     '[data-site-shell]':lifecycle?root:null
   }[selector]??null),createElement:tag=>new E(tag),addEventListener:(name,fn)=>{events[name]=fn;}};
@@ -78,7 +79,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   vm.runInNewContext(script,sandbox);
   root.querySelector=document.querySelector;
   root.querySelectorAll=document.querySelectorAll;
-  return {table,input,form,refresh,details,root,summary,calls,error,storage,advance,
+  return {table,input,form,refresh,details,root,summary,countdown,calls,error,storage,advance,
     mount(){return sandbox.MosaIsinLookup.mount(root);},
     get writes(){return writes;},get maxActive(){return maxActive;},
     hide(value){document.hidden=value;events.visibilitychange();},
@@ -95,13 +96,18 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   const [first,second]=m.table.children, cells=[...first.cells], secondCells=[...second.cells];
   const inserts=m.table.insertions, before=cells.map(c=>c.textWrites);
   const secondBefore=secondCells.map(c=>c.textWrites);
+  assert.equal(m.countdown.textContent,'Nächste automatische Aktualisierung in 30 s');
+  await m.advance(1000);
+  assert.equal(m.countdown.textContent,'Nächste automatische Aktualisierung in 29 s');
   m.update([{...stored[0],price:'11.00'},stored[1]]);
-  await m.advance(29999);assert.equal(m.calls.length,1);
+  await m.advance(28999);assert.equal(m.calls.length,1);
   await m.advance(1);
   assert.deepEqual(m.table.children,[first,second]);
   assert.deepEqual(first.cells,cells);assert.deepEqual(second.cells,secondCells);
   assert.equal(m.table.insertions,inserts);
   assert.equal(cells[2].textContent,'11,00 EUR');
+  assert.equal(m.countdown.textContent,'Nächste automatische Aktualisierung in 30 s',
+    'The deadline restarts after the actual stored GET, not after a made-up collector tick');
   assert.deepEqual(cells.map((cell,i)=>cell.textWrites-before[i]),[0,0,1,0,0,0,0,1,0,0]);
   assert.deepEqual(secondCells.map((cell,i)=>cell.textWrites-secondBefore[i]),[0,0,0,0,0,0,0,1,0,0]);
   m.details.events.click();
@@ -116,9 +122,13 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   assert.equal(m.root.dataset.isinReadCount,'4');
   assert.equal(m.root.dataset.isinReadHttp,'200');
 
-  m.hide(true);await m.advance(90000);
+  m.hide(true);
+  assert.match(m.countdown.textContent,/pausiert.*Tab inaktiv/,'No imaginary countdown while hidden');
+  await m.advance(90000);
   assert.equal(m.calls.length,4,'Hidden tab makes no new requests');
   m.status(503);m.hide(false);await m.advance(0);
+  assert.equal(m.countdown.textContent,'Nächste automatische Aktualisierung in 30 s',
+    'Overdue read is performed on tab resume and the timer resets');
   assert.equal(m.calls.length,5,'An overdue read resumes when visible');
   assert.equal(m.root.dataset.isinReadHttp,'503');
   assert.deepEqual(m.table.children,detailRows);
@@ -135,72 +145,76 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   assert.equal(m.calls.length,7,'A visible but unfocused tab makes no new requests');
   assert.equal(m.root.dataset.isinTabActive,'false');
   m.status(403);m.focus(true);await m.advance(0);await m.advance(30000);
+  assert.equal(m.countdown.textContent,'Automatische Aktualisierung angehalten',
+    'Authorization denial must stop the countdown');
   assert.equal(m.calls.length,8,'An overdue read resumes on focus and stops on authorization failure');
 
   const home=harness({market:false});await flush();await home.advance(45000);
   assert.deepEqual(home.calls.map(call=>call.url),['api/market.php?view=best']);
   const empty=harness({entries:[],initialItems:[]});await flush();await empty.advance(30000);
   assert.equal(empty.calls.length,2,'An empty personal list still reads the DB every 30 seconds');
-  const registeredOnly=harness({entries:[],actions:true,dbRegistry:true,initialItems:[],registered:[{isin:a,name:'DB AG',asset_class:'equity'}]});
+
+  const registeredOnly=harness({entries:[],actions:true,dbRegistry:true,initialItems:[],
+    registered:[{isin:a,name:'DB AG',asset_class:'equity'}]});
   await flush();
   const row=registeredOnly.table.children[0];
-  assert.equal(row.cells.length,2,'Pending ISIN uses one descriptive cell plus existing DB delete action');
-  assert.equal(row.cells[0].colSpan,10,'Pending row occupies the quote columns without placeholders');
-  assert.match(row.cells[0].textContent,/registriert.*Name, Typ und Kurs stehen noch aus/);
-  assert.equal(row.cells[1].firstElementChild.dataset.isinDbDelete,a,'Pending ISIN can still be deleted');
-  assert.match(registeredOnly.summary.textContent,/noch ohne vollständige Kursdaten/);
-  assert.equal(row.dataset.status,'pending');
+  assert.equal(row.cells.length,11,'Original table columns remain visible immediately after registration');
+  assert.equal(row.cells[0].textContent,'DB AG');
+  assert.equal(row.cells[1].textContent,'Aktie');
+  assert.equal(row.cells[2].textContent,'—');
+  assert.equal(row.cells[8].textContent,a);
+  assert.match(row.cells[9].textContent,/In DB registriert · Kein gespeicherter Kurs/);
+  assert.equal(row.cells[10].firstElementChild.dataset.isinDbDelete,a);
+  assert.match(registeredOnly.summary.textContent,/Abgefragte und gespeicherte Kurse/);
+  assert.equal(registeredOnly.writes,0,'DB registrations never overwrite browser storage');
   const incompleteWithQuote=harness({entries:[],initialItems:[asset(a,a,'10.00')],
     registered:[{isin:a,name:a,asset_class:'unknown'}]});
   await flush();
-  assert.equal(incompleteWithQuote.table.children[0].dataset.status,'pending',
-    'Valid price alone is not a completed identity');
-  assert.equal(incompleteWithQuote.table.children[0].cells[0].textContent.includes('Unbekannt'),false,
-    'Incomplete asset is never presented with unknown type and empty columns');
+  assert.equal(incompleteWithQuote.table.children[0].cells[0].textContent,a,'ISIN placeholder remains visible');
+  assert.equal(incompleteWithQuote.table.children[0].cells[1].textContent,'Unbekannt',
+    'Unverified asset class is honestly shown as unknown');
+  assert.equal(incompleteWithQuote.table.children[0].cells[2].textContent,'10,00 EUR',
+    'A real stored quote is not hidden just because metadata is incomplete');
   incompleteWithQuote.update([asset(a,'Fully Verified Corp.','10.00')]);
-  // The same registry + Current read atomically replaces the pending state.
-  incompleteWithQuote.status(200);
-  // A fake source update alone does not change registration identity.
   await incompleteWithQuote.advance(30000);
-  assert.equal(incompleteWithQuote.table.children[0].dataset.status,'pending',
-    'Unverified DB identity cannot be bypassed by a quote');
+  assert.equal(incompleteWithQuote.table.children[0].cells[1].textContent,'Unbekannt',
+    'Provider quote alone must not silently rewrite registry metadata');
   incompleteWithQuote.setRegistered([{isin:a,name:'Fully Verified Corp.',asset_class:'equity'}]);
   await incompleteWithQuote.advance(30000);
-  assert.equal(incompleteWithQuote.table.children[0].cells[0].textContent,'Fully Verified Corp.',
-    'One new Current/registry read reveals the full verified asset without extra collector');
+  assert.equal(incompleteWithQuote.table.children[0].cells[0].textContent,'Fully Verified Corp.');
   assert.equal(incompleteWithQuote.table.children[0].cells[1].textContent,'Aktie');
-  assert.equal(incompleteWithQuote.table.children[0].dataset.status,'stored');
-  assert.equal(incompleteWithQuote.table.children[0].cells.length,10,'Non-action table restores all ten quote columns');
+  assert.equal(incompleteWithQuote.table.children[0].cells[2].textContent,'10,00 EUR');
   const directlyRegistered=harness({market:true,entries:[],actions:true,dbRegistry:true,registered:[],initialItems:[]});
   await flush();
   directlyRegistered.input.value=a;
   directlyRegistered.form.events.submit({preventDefault(){}});
   await flush();await flush();await flush();
-  assert.equal(directlyRegistered.table.children[0].dataset.status,'pending',
-    'Immediately after OK no unknown security row with blank quote columns is rendered');
-  assert.equal(directlyRegistered.table.children[0].cells.length,2,
-    'After OK the provisional state consists of one message and its delete control');
-  assert.equal(directlyRegistered.table.children[0].cells[1].firstElementChild.dataset.isinDbDelete,a,
-    'The existing delete control remains available while collecting');
-  assert.equal(directlyRegistered.input.value,'','Form is cleared after a successful independent readback');
-  const verifiedQuote=asset(a,'Fully Verified Corp.','10.00');
-  directlyRegistered.update([verifiedQuote]);
+  assert.equal(directlyRegistered.table.children[0].cells.length,11,
+    'After OK the complete original table layout is present, including all empty quote columns');
+  assert.equal(directlyRegistered.table.children[0].cells[0].textContent,a);
+  assert.equal(directlyRegistered.table.children[0].cells[1].textContent,'Unbekannt');
+  assert.equal(directlyRegistered.table.children[0].cells[2].textContent,'—');
+  assert.match(directlyRegistered.table.children[0].cells[9].textContent,/Kein gespeicherter Kurs/);
+  assert.equal(directlyRegistered.table.children[0].cells[10].firstElementChild.dataset.isinDbDelete,a);
+  assert.equal(directlyRegistered.input.value,'','The input resets after registration readback');
+  assert.equal(directlyRegistered.countdown.textContent,'Nächste automatische Aktualisierung in 30 s',
+    'Visible seconds countdown starts from the real 30-second read deadline');
+  directlyRegistered.update([asset(a,'Fully Verified Corp.','10.00')]);
   directlyRegistered.setRegistered([{isin:a,name:'Fully Verified Corp.',asset_class:'equity'}]);
   await directlyRegistered.advance(30000);
   assert.equal(directlyRegistered.table.children[0].cells[0].textContent,'Fully Verified Corp.',
-    'After background collection the existing Current read produces the complete row');
-  assert.equal(directlyRegistered.table.children[0].cells[2].textContent,'10,00 EUR');
+    'Next stored-data read replaces placeholders with complete verified asset');
   assert.equal(directlyRegistered.table.children[0].cells[1].textContent,'Aktie');
+  assert.equal(directlyRegistered.table.children[0].cells[2].textContent,'10,00 EUR');
   assert.equal(directlyRegistered.table.children[0].cells[10].firstElementChild.dataset.isinDbDelete,a);
-
-  assert.equal(registeredOnly.writes,0,'DB registrations never overwrite browser storage');
   const registeredFund=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Fonds',asset_class:'fund'}]});
   await flush();
-  assert.match(registeredFund.table.children[0].cells[0].textContent,/registriert/);
-  assert.equal(registeredFund.table.children[0].dataset.status,'pending','No fund without a stored quote is shown as complete');
+  assert.equal(registeredFund.table.children[0].cells[0].textContent,'Portfolio Fonds');
+  assert.equal(registeredFund.table.children[0].cells[1].textContent,'Fonds');
+  assert.equal(registeredFund.table.children[0].cells[2].textContent,'—');
   const registeredOther=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Zertifikat',asset_class:'other'}]});
   await flush();
-  assert.equal(registeredOther.table.children[0].dataset.status,'pending','No other security without a stored quote is shown as complete');
+  assert.equal(registeredOther.table.children[0].cells[1].textContent,'Sonstiges');
 
   const etfIsin='IE00BMYDM794';
   const fullEtf='L&G Hydrogen Economy UCITS ETF - USD Acc ETF Class';
