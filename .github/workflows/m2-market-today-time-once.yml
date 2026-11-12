@@ -40,3 +40,5 @@ jobs:
           python3 -B scripts/deploy_test_sftp.py check-config
           python3 -B scripts/deploy_test_sftp.py backup
           python3 -B scripts/deploy_test_sftp.py deploy
+
+# Repeat once after correcting midnight fixture assertions; publication remains test-gated.
