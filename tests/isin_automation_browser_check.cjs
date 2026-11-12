@@ -105,7 +105,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   });
   await flush();
   const acrossMidnight=midnight.table.children[0];
-  assert.match(acrossMidnight.cells[5].textContent,/08\\.11\\.26, 23:59:59 Uhr/,
+  assert.equal(acrossMidnight.cells[5].textContent,'08.11.26, 23:59:59 Uhr',
     'Yesterday market time must retain date despite age 0 min after midnight');
   assert.equal(acrossMidnight.cells[6].textContent,'00:00:04 Uhr',
     'Todays retrieval time omits date although market time is yesterday');
@@ -117,9 +117,9 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
       market_at:'2026-11-11 12:30:04.000000Z',
       observed_at:'2026-11-11 12:30:08.000000Z'}]});
   await flush();
-  assert.match(older.table.children[0].cells[5].textContent,/11\\.11\\.26, 13:30:04 Uhr/,
+  assert.equal(older.table.children[0].cells[5].textContent,'11.11.26, 13:30:04 Uhr',
     'Previous day market timestamp retains full date');
-  assert.match(older.table.children[0].cells[6].textContent,/11\\.11\\.26, 13:30:08 Uhr/,
+  assert.equal(older.table.children[0].cells[6].textContent,'11.11.26, 13:30:08 Uhr',
     'Previous day captured timestamp retains full date');
 
   assert.deepEqual(m.calls.map(call=>call.at),[0]);
