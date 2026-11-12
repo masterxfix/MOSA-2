@@ -1,0 +1,55 @@
+name: Secure Dashboard collectors inventory read-only
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/secure-dashboard-collector-inventory-once.yml']
+permissions: {contents: read}
+jobs:
+  inventory:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Inventory Secure Dashboard scheduled collectors read-only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Install existing verified SSH transport
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Inspect only Secure Dashboard job triggers and directory, read-only
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import re,sys,json
+          sys.path.insert(0,'scripts')
+          import collector_actions as remote, collector_db_locality as call, deploy_test_sftp as cfg
+          import paramiko
+          root='/var/www/vhosts/web213.server10.configcenter.info/httpdocs/scharwerk.de/securedashboard'
+          with remote.ssh_client(cfg.configuration(),{},paramiko) as s:
+              rc,out,err,_=call.remote_call(s,'/usr/bin/crontab -l',timeout=20)
+              if rc:raise RuntimeError('CRON_READ_FAILED')
+              lines=out.decode('utf-8','replace').splitlines()
+              selected=[]
+              for i,line in enumerate(lines,1):
+                  candidate=(not line.strip().startswith('#') and re.search(r'(?i)(?:secure.?dashboard|collector_nel\.php)',line))
+                  if candidate:selected.append({'line':i,'sha256':__import__('hashlib').sha256(line.encode()).hexdigest(),
+                      'command_excerpt':line[:500]})
+              print('SECUREDASHBOARD_CRON_MATCHES '+json.dumps(selected,ensure_ascii=False),flush=True)
+              print('TOTAL_CRON_LINES',len(lines),'ACTIVE_NONCOMMENT_LINES',
+                    sum(1 for x in lines if x.strip() and not x.lstrip().startswith('#')),flush=True)
+              with paramiko.SFTPClient.from_transport(s) as sf:
+                  for relative in ('','php','data','api','cron','collectors'):
+                      p=root+('/'+relative if relative else '')
+                      try:
+                          a=sf.listdir_attr(p)
+                      except OSError as e:
+                          print('SECUREDASHBOARD_DIRECTORY',relative or '/', 'not-listable',type(e).__name__,flush=True)
+                          continue
+                      entries=[{'name':x.filename,'dir':bool(x.st_mode&0o040000),'bytes':x.st_size} for x in a
+                               if relative=='' or re.search('(?i)(collect|cron|job|sched|nel|refresh|market|data|status)',x.filename)]
+                      print('SECUREDASHBOARD_DIRECTORY',relative or '/',json.dumps(entries[:80],ensure_ascii=False),flush=True)
+          PY
