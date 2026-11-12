@@ -1,6 +1,6 @@
 # MOSA 2 – Kursanbieter: Aufgaben und tatsächliche Auswahlregeln
 
-**Dokumentationsstand:** 12.11.2026. **Kurslogik auf main:** identischer ISIN-Kursauswahlweg für Aktien und ETFs (Codeänderung `580acb0`/`5c46ff9`); Live-Umstellung und Abnahme werden getrennt nachgewiesen. Dies ist die Dokumentation des tatsächlichen Implementierungsstands, keine Zusage universeller internationaler Börsenabdeckung.
+**Dokumentationsstand:** 12.11.2026. **Aktiver M2-Collector:** `a82439c0`; ein gemeinsamer ISIN-Kursauswahlweg für Aktien und ETFs, live nachgewiesen. Die internationale Originalwährungsabdeckung ist weiterhin keine freigegebene Gesamtfunktion.
 
 > **Wichtig:** „Anbieter erreichbar“ ist nicht dasselbe wie „Kurs gespeichert“. Die internationale Heimatmarktversorgung ist noch nicht vollständig live abgenommen.
 
@@ -17,9 +17,9 @@
 
 **Klarstellung zur Tabelle:** Fünf Anbieter sind als aktive oder bedingt freigebbare Kursquellen vorgesehen; **Yahoo Finance steht bewusst weiterhin in der Übersicht, ist aber ausgeschlossen**. Wiederaufnahme nur nach neuer ausdrücklicher Nutzerentscheidung und nachgewiesenen Nutzungsrechten.
 
-**Zuletzt nachgewiesener M2-Testbetrieb (12.11.2026):** Lang & Schwarz, Tradegate BSX und Börse Frankfurt lieferten bei den echten ISIN-Abfragen HTTP 200. Auf der M2-Marktdatenseite wurden für **NEL ASA** und **DroneShield** die gespeicherten **EUR-Geld-/Brief-Mittelkurse von Tradegate BSX** angezeigt. **0** registrierte Twelve-Data-/EODHD-Quellen in der unabhängigen Datenbankprüfung; **keine** nachgewiesenen AUD- oder JPY-Heimatmarktkurse. Dieser Befund ist datiert und **keine Live-Statusabfrage**.
+**Aktueller Abnahmenachweis (12.11.2026, 20:21 UTC):** Die aktive private Collector-Version `a82439c0` verarbeitet im selben Minutenjob **Aktien und ETFs** mit **derselben Kursauswahl** und dem gemeinsamen M2-Writer. Nach der Umschaltung wurden sowohl **DroneShield (Aktie, Tradegate BSX, EUR)** als auch **iShares Automation & Robotics (ETF, Lang & Schwarz, EUR)** erneut als Current gespeichert. Der ETF erhielt damit nach dem Entfernen des pauschalen Tradegate-Vorrangs einen tatsächlich anders gewählten Anbieter. Unabhängiger Read-only-DB-Readback: **3 ISINs, 19 Währungseinheiten, 0 Yahoo-Quellen, 0 freigeschaltete internationale Quellen**. Der geöffnete M2-Marktdaten-Tab zeigte beide aktualisierten Werte und **233 ms** angezeigte Seitenladezeit; das war eine **DOM-/Textprüfung, kein visueller Screenshot**. **Internationale native Live-Kurse bleiben ungetestet, weil die Anbieterrechte noch fehlen.**
 
-Belege: [Collector mit internationalen Adaptern aktiviert](https://github.com/masterxfix/MOSA-2/actions/runs/43272934165) · [Unabhängiger Cron-/DB-Livenachweis](https://github.com/masterxfix/MOSA-2/actions/runs/43273617957).
+Belege: [Aktiver Collector/Unveränderter übriger Cron](https://github.com/masterxfix/MOSA-2/actions/runs/43298963840) · [Unabhängiger Live-Readback: Aktie + ETF](https://github.com/masterxfix/MOSA-2/actions/runs/43299387626) · [Gemeinsame Kursauswahl: 83/83 Tests](https://github.com/masterxfix/MOSA-2/actions/runs/43297929873).
 
 ## 2. Welche Quelle wird WANN tatsächlich ausgewählt?
 
