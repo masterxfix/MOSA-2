@@ -11,18 +11,18 @@ $assert=static function(mixed $expected,mixed $actual,string $label)use(&$n):voi
 $isin='AU000000DRO2';
 $token='m2-test-no-real-token-123456789';
 $assert(false,isset(scheduled()['eodhd']),'private provider disabled by default');
-$assert(true,isset(scheduled(false,true)['eodhd']),'gated registry provider generic');
+$assert(false,isset(scheduled(false,true)['eodhd']),'excluded provider cannot reenter registry through old entitlement');
 $search=request('eodhd_search',$isin,$token);
-$assert(true,allowed($search,$isin),'exact HTTPS host and ISIN search request');
+$assert(false,allowed($search,$isin),'excluded provider ISIN search rejected');
 $assert(true,approvedRequest($search,'eodhd_search',$isin,$token),'exact private search/token binding');
 $assert(false,allowed($search,'NO0010081235'),'search not usable for other ISIN');
 $evil=$search;$evil['url']=str_replace('https://eodhd.com/','https://evil.example/',$search['url']);
 $assert(false,allowed($evil,$isin),'no host spoofing');
 $assert(false,str_contains($search['request_type'],$token),'no key in request label');
 $exchangeReq=request('eodhd_exchange','',$token);
-$assert(true,allowed($exchangeReq,$isin),'fixed exchange metadata host');
+$assert(false,allowed($exchangeReq,$isin),'excluded provider exchange metadata rejected');
 $quoteReq=request('eodhd_delayed','DRO.AU',$token);
-$assert(true,allowed($quoteReq,$isin),'exact ticker format');
+$assert(false,allowed($quoteReq,$isin),'excluded provider quote rejected');
 $assert(false,validTicker('DRO.AU@evil.com'),'foreign URL prohibited');
 $assert(false,approvedRequest($quoteReq,'eodhd_delayed','OTHER.AU',$token),'ticker binding enforced');
 $results=[
