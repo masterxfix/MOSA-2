@@ -1,0 +1,168 @@
+name: M2 activate gated universal delayed international adapter in existing minute cron (one-time)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-delayed-global-cron-activate-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: mosa2-universal-market-release
+  cancel-in-progress: false
+jobs:
+  activate:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Activate gated delayed ISIN provider in existing M2 cron without licence once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false, fetch-depth: 50}
+      - name: Install existing pinned host-key-verified SSH client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Verify new release, entitlement gate, M2 live collector and old cron, switch only the M2 pin and independently read back
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,shlex,subprocess,sys,time
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh
+          import collector_db_locality as remote
+          import deploy_market_collector as release
+          import deploy_test_sftp as profile
+          import deploy_sftp as web
+          import paramiko
+          OLD='74b453f841b235183f0b8ada18d17fb0d6c44d27'
+          NEW='1b53be087955eba488a429fe168339394db5db33'
+          base=release.PERIODIC+'/releases/'+NEW+'/'
+          tick=base+'scripts/market_collector/mosa_tick.php'
+          entitlement='/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-twelvedata-private/access.php'
+          eodhd_entitlement='/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-eodhd-private/access.php'
+          files=['api/market_sources.php','api/isin_quote.php','api/market_core/twelve_data.php',
+                 'api/market_core/eodhd.php',
+                 'scripts/market_collector/mosa_tick.php','scripts/market_collector/actions_acceptance.php']
+          query=r"""
+          $p='/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $c=require $p;
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($c['dsn']??null)!==$dsn||($c['user']??null)!=='h29077_mosa2_read')
+              throw new RuntimeException('m2_read_account_invalid');
+          $db=new PDO($dsn,$c['user'],$c['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+              PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($c);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');
+          $db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+              ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('m2_db_readonly_required');
+          $units=(int)$db->query("SELECT COUNT(*) FROM m2_units WHERE status='frozen'")->fetchColumn();
+          $badSource=(int)$db->query("SELECT COUNT(*) FROM m2_sources WHERE source_key='provider:twelve_data'")->fetchColumn();
+          $registered=(int)$db->query("SELECT COUNT(*) FROM m2_assets a JOIN m2_asset_identifiers i
+              ON i.asset_id=a.entity_id AND i.identifier_type='isin' AND i.is_primary=1
+              WHERE a.status='active' AND i.valid_to IS NULL")->fetchColumn();
+          $current=$db->query("SELECT c.currency,r.quote_unit_key,c.market_at,c.price,s.source_key
+              FROM m2_market_current c JOIN m2_asset_source_routes r ON r.id=c.route_id
+              JOIN m2_sources s ON s.id=c.source_id ORDER BY c.market_at DESC LIMIT 10")->fetchAll();
+          $db->rollBack();
+          echo json_encode(['read_only'=>true,'units'=>$units,'twelve_data_source_count'=>$badSource,
+              'registered'=>$registered,'current'=>$current],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          """
+          def read_cron(transport):
+              rc,out,err,_=remote.remote_call(transport,'/usr/bin/crontab -l',timeout=25)
+              if rc or err or not out or len(out)>32768:raise RuntimeError('m2_cron_read_invalid')
+              return out
+          def absent(sftp):
+              try:
+                  sftp.stat(entitlement)
+              except OSError as exc:
+                  if getattr(exc,'errno',None)==2:return True
+                  raise RuntimeError('international_entitlement_state_unreadable') from None
+              return False
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as transport:
+              with paramiko.SFTPClient.from_transport(transport) as sftp:
+                  for path in files:
+                      expected=subprocess.check_output(['git','show',NEW+':'+path])
+                      with sftp.open(base+path,'rb') as stream:
+                          actual=stream.read(len(expected)+1)
+                      if expected!=actual:raise RuntimeError('new_m2_release_file_mismatch_'+path.replace('/','_'))
+                  expected_web=subprocess.check_output(['git','show',NEW+':api/market_sources.php'])
+                  with sftp.open(web.TEST_ROOT+'/api/market_sources.php','rb') as handle:
+                      actual_web=handle.read(len(expected_web)+1)
+                  if expected_web!=actual_web:raise RuntimeError('m2_public_web_source_release_mismatch')
+                  if not absent(sftp):raise RuntimeError('international_entitlement_file_present_do_not_activate_without_license_proof')
+                  original_entitlement=entitlement
+                  entitlement=eodhd_entitlement
+                  if not absent(sftp):raise RuntimeError('eodhd_private_credential_already_present_license_state_unverified')
+                  entitlement=original_entitlement
+                  print('PASS new collector files verified; optional paid ISIN source is not configured',flush=True)
+              before=read_cron(transport)
+              lines=before.splitlines(keepends=True)
+              found=[n for n,line in enumerate(lines) if b'/scripts/market_collector/mosa_tick.php' in line and not line.lstrip().startswith(b'#')]
+              if len(found)!=1:raise RuntimeError('m2_cron_not_unique')
+              i=found[0]
+              if lines[i].count(OLD.encode())!=1 or NEW.encode() in before:
+                  raise RuntimeError('m2_cron_no_longer_matches_baseline')
+              if OLD.encode() not in lines[i]:raise RuntimeError('m2_old_cron_missing')
+              phpbin,_=remote.capability(transport)
+              rc,out,err,_=remote.remote_call(transport,shlex.join([phpbin,'-l',tick]),timeout=25)
+              if rc or err or b'No syntax errors' not in out:raise RuntimeError('new_tick_remote_php_lint_failed')
+              sample=None
+              for attempt in range(5):
+                  rc,out,err,_=remote.remote_call(transport,shlex.join([phpbin,tick]),timeout=145)
+                  if rc or err:raise RuntimeError('new_tick_live_execution_failed')
+                  if out.strip():
+                      sample=json.loads(out)
+                      break
+                  time.sleep(5)
+              if sample is None or not isinstance(sample,dict) or sample.get('registered',0)<1 or sample.get('due',0)<1:
+                  # A skipped/empty manual run is not live proof; independent M2 DB
+                  # and the subsequent active cron observation must establish it.
+                  print('M2_NEW_MANUAL_TICK_NOT_PROVEN '+json.dumps({
+                      'payload_type':type(sample).__name__,
+                      'registered':sample.get('registered') if isinstance(sample,dict) else None,
+                      'due':sample.get('due') if isinstance(sample,dict) else None,
+                      'item_count':len(sample.get('items',{})) if isinstance(sample,dict) and isinstance(sample.get('items',{}),dict) else None
+                  }),flush=True)
+              else:
+                  if any(row.get('key')=='twelve_data_quote' for row in sample.get('provider_requests',[])):
+                      raise RuntimeError('unlicensed_international_request_detected')
+                  items=sample.get('items',{})
+                  if not items or any('failure' in result for result in items.values()):
+                      raise RuntimeError('new_tick_writer_failed')
+                  if not any(result.get('writer') in ('INSERT','UPDATE','UNCHANGED') for result in items.values()):
+                      raise RuntimeError('new_tick_no_verified_market_fact')
+                  print('M2_NEW_LIVE_TICK '+json.dumps({'registered':sample['registered'],'due':sample['due'],
+                      'provider_requests':sample.get('provider_requests',[]),
+                      'writers':{key:{'writer':item.get('writer'),'readback':item.get('readback')} for key,item in items.items()}},
+                      ensure_ascii=False),flush=True)
+              rc,out,err,_=remote.remote_call(transport,remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':query}).encode(),timeout=45)
+              if rc or err:raise RuntimeError('m2_independent_readback_failed')
+              state=json.loads(out)
+              if state.get('read_only') is not True or state.get('units')!=19 or state.get('registered',0)<1:
+                  raise RuntimeError('m2_units_or_registration_mismatch')
+              if state.get('twelve_data_source_count')!=0 or not state.get('current'):
+                  raise RuntimeError('provider_guard_or_current_mismatch')
+              if any(row['currency']!='EUR' or row['quote_unit_key']!='EUR' for row in state['current']):
+                  raise RuntimeError('existing_quote_unit_mismatch')
+              print('M2_INDEPENDENT_DB_READBACK '+json.dumps(state,ensure_ascii=False),flush=True)
+              with paramiko.SFTPClient.from_transport(transport) as sftp:
+                  if not absent(sftp):raise RuntimeError('international_entitlement_changed_during_preflight')
+                  entitlement=eodhd_entitlement
+                  if not absent(sftp):raise RuntimeError('eodhd_entitlement_changed_during_preflight')
+              if read_cron(transport)!=before:raise RuntimeError('m2_cron_changed_during_preflight')
+              lines[i]=lines[i].replace(OLD.encode(),NEW.encode(),1)
+              updated=b''.join(lines)
+              rc,out,err,_=remote.remote_call(transport,'/usr/bin/crontab -',updated,timeout=25)
+              if rc or err:raise RuntimeError('m2_cron_update_failed')
+              after=read_cron(transport)
+              if after!=updated:
+                  remote.remote_call(transport,'/usr/bin/crontab -',before,timeout=25)
+                  if read_cron(transport)!=before:raise RuntimeError('m2_cron_restore_not_confirmed')
+                  raise RuntimeError('m2_cron_readback_failed_restored')
+              print('PASS exact M2 cron pinned to '+NEW+'; all other cron entries byte-identical',flush=True)
+          PY
