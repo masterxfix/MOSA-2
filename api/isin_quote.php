@@ -11,7 +11,7 @@ use Throwable;
 require_once __DIR__.'/market_sources.php';
 
 /** Explicit, provider-neutral on-demand preview; no database/collector writes. */
-const SOURCES = ['tradegate' => 'Tradegate BSX · Mid', 'frankfurt' => 'Börse Frankfurt · XFRA · Last'];
+// The single-source preview aliases come exclusively from MarketSources\singlePreview().
 const MAX_BYTES = 2000000;
 
 final class QuoteFailure extends RuntimeException {}
@@ -141,42 +141,6 @@ function frankfurt(string $body,string $code): array {
     return ['name'=>$name,'price'=>$price,'bid'=>null,'ask'=>null,'currency'=>'EUR',
         'quote_type'=>'Letzter Kurs','market_at'=>timeUtc($date),'venue'=>'Börse Frankfurt · XFRA'];
 }
-/** Existing MOSA Frankfurt descriptor constants, identical request semantics. */
-function descriptor(string $code,string $provider): array {
-    if ($provider==='tradegate') return ['url'=>'https://www.tradegatebsx.com/orderbuch.php?isin='.$code,
-        'headers'=>['Accept: text/html,application/xhtml+xml','Referer: https://www.tradegatebsx.com/',
-            'User-Agent: FixLab-MOSA-Market-Source-Lab/2.0']];
-    if ($provider==='frankfurt') {
-        $local=new DateTimeImmutable('now',new DateTimeZone('Europe/Berlin'));
-        $date=$local->format('Y-m-d\TH:i:sP');
-        $url='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$code.'&mic=XFRA';
-        return ['url'=>$url,'headers'=>['Accept: application/json','Client-Date: '.$date,
-            'X-Client-TraceId: '.md5($date.$url.'af5a8d16eb5dc49f8a72b26fd9185475c7a'),
-            'X-Security: '.md5($local->format('YmdHi')),
-            'User-Agent: FixLab-MOSA-Frankfurt/1.0']];
-    }
-    fail('SOURCE_UNSUPPORTED');
-}
-/** Fixed HTTPS hosts only, no redirect, proxy, cookies, retry or authentication. */
-function fetch(string $url,array $headers): string {
-    if (!str_starts_with($url,'https://www.tradegatebsx.com/orderbuch.php?isin=') &&
-        !str_starts_with($url,'https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin=')) fail('SOURCE_UNSUPPORTED');
-    $context=stream_context_create(['http'=>['method'=>'GET','timeout'=>8,'ignore_errors'=>true,
-        'follow_location'=>0,'max_redirects'=>0,'header'=>implode("\r\n",$headers)],
-        'ssl'=>['verify_peer'=>true,'verify_peer_name'=>true]]);
-    $stream=@fopen($url,'rb',false,$context);
-    if (!$stream) fail('SOURCE_UNAVAILABLE');
-    try{
-        $meta=stream_get_meta_data($stream);
-        $responseHeaders=$meta['wrapper_data']??[];
-        $status=preg_match('/^HTTP\/\S+\s+(\d{3})\b/',(string)($responseHeaders[0]??''),$m)?(int)$m[1]:0;
-        if ($status!==200) fail('SOURCE_HTTP_'.$status);
-        $body=stream_get_contents($stream,MAX_BYTES+1);
-        if(stream_get_meta_data($stream)['timed_out']??false)fail('SOURCE_TIMEOUT');
-        if (!is_string($body) || strlen($body)>MAX_BYTES) fail('SOURCE_TOO_LARGE');
-        return $body;
-    }finally{fclose($stream);}
-}
 /** Optional read-only name resolution for already registered assets. */
 function registeredName(string $code): ?string {
     try{
@@ -195,9 +159,10 @@ function registeredName(string $code): ?string {
  */
 function preview(string $code,string $provider,?callable $transport=null): array {
     $code=isin($code);
-    if(!isset(SOURCES[$provider]))fail('SOURCE_UNSUPPORTED');
+    $previews=\Mosa2\MarketSources\singlePreview();
+    if(!isset($previews[$provider]))fail('SOURCE_UNSUPPORTED');
     require_once __DIR__.'/market_source_engine.php';
-    $target=$provider==='tradegate'?'tradegate_quote':'boerse_frankfurt_trade';
+    $target=$previews[$provider]['request_key'];
     $url=null;
     $clock=new DateTimeImmutable('now',new DateTimeZone('UTC'));
     $lab=\fixlabRunMosaMarketSourceLab($code,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
@@ -217,7 +182,7 @@ function preview(string $code,string $provider,?callable $transport=null): array
     $name=registeredName($code)??($lab['instrument']['name']??null);
     return array_replace($record,[
         'status'=>'ok','isin'=>$code,'name'=>$name,'provider'=>$provider,
-        'source'=>SOURCES[$provider],'url'=>$url,
+        'source'=>$previews[$provider]['label'],'url'=>$url,
     ]);
 }
 /** Only the four established MOSA source providers and their documented endpoints. */
@@ -311,8 +276,8 @@ function previewAll(string $input,callable $emit,?callable $transport=null,?Date
         },$now);
     $captured=($now??new DateTimeImmutable())->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
     $items=[];$success=0;
-    foreach(['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote','tradegate_trade',
-        'boerse_frankfurt_trade','yahoo_home_market'] as $key){
+    // The vendored MOSA source engine, not a second list, defines its result scopes.
+    foreach(array_keys($lab['sources']??[]) as $key){
         $source=$lab['sources'][$key]??[];
         $requestKey=match($key){
             'lang_schwarz_quote','lang_schwarz_trade'=>isset($received['lang_schwarz_page'])?'lang_schwarz_page':'lang_schwarz_search',
@@ -361,7 +326,7 @@ function main(): void {
         $payload=json_decode((string)$wire,true,4,JSON_THROW_ON_ERROR);
         if (!is_array($payload)||array_keys($payload)!==['isin','provider']||!is_string($payload['isin'])||!is_string($payload['provider'])) fail('INVALID_REQUEST');
         $code=isin($payload['isin']);$provider=$payload['provider'];
-        if (!isset(SOURCES[$provider])&&$provider!=='all') fail('SOURCE_UNSUPPORTED');
+        if (!isset(\Mosa2\MarketSources\singlePreview()[$provider])&&$provider!=='all') fail('SOURCE_UNSUPPORTED');
         // The user explicitly starts one provider GET per button activation; short session limit prevents accidental loops.
         session_name('MOSA2_ISIN');session_set_cookie_params(['secure'=>true,'httponly'=>true,'samesite'=>'Strict','path'=>'/']);
         if (!session_start()) fail('SESSION_UNAVAILABLE');
