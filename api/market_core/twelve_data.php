@@ -54,6 +54,7 @@ function source(string $isin,mixed $payload,DateTimeImmutable $now):array {
     $unavailable=[
         'source_key'=>'twelve_data_quote','provider_key'=>'twelve_data',
         'provider_label'=>'Twelve Data','venue_label'=>'Internationale Börse',
+        'venue_key'=>'international_isin',
         'data_type'=>'last_trade','isin'=>$isin,'available'=>false,
         'price'=>null,'currency'=>null,'quoted_at'=>null,
     ];
@@ -74,13 +75,15 @@ function source(string $isin,mixed $payload,DateTimeImmutable $now):array {
     $now=$now->setTimezone(new DateTimeZone('UTC'));
     if($time>$now->getTimestamp()+1)return $unavailable;
     $venue=$payload['mic_code']??null;
-    if(!is_string($venue)||preg_match('/^[A-Z0-9]{4}$/D',$venue)!==1){
+    $venueKey='international_isin';
+    if(is_string($venue)&&preg_match('/^[A-Z0-9]{4}$/D',$venue)===1)$venueKey=$venue;
+    else{
         $venue=$payload['exchange']??null;
         if(!is_string($venue)||!preg_match('~^[\p{L}\p{N} ._/-]{2,50}$~uD',$venue))
             $venue='Internationale Börse';
     }
     return array_replace($unavailable,[
-        'available'=>true,'venue_label'=>$venue,'currency'=>$currency,
+        'available'=>true,'venue_label'=>$venue,'venue_key'=>$venueKey,'currency'=>$currency,
         'quoted_at'=>(new DateTimeImmutable('@'.$time))->setTimezone(new DateTimeZone('UTC'))->format(DATE_ATOM),
         'price'=>$price,'market_open'=>($payload['is_market_open']??null),
     ]);
