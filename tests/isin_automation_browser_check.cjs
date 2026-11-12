@@ -145,6 +145,36 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   await flush();
   assert.equal(registeredOther.table.children[0].cells[1].textContent,'Sonstiges','DB other class remains visible');
 
+  const etfIsin='IE00BMYDM794';
+  const fullEtf='L&G Hydrogen Economy UCITS ETF - USD Acc ETF Class';
+  const compact=harness({entries:[],initialItems:[asset(etfIsin,fullEtf,'6.06')],
+    registered:[{isin:etfIsin,name:fullEtf,asset_class:'etf'}]});
+  await flush();
+  assert.equal(compact.table.children[0].cells[0].textContent,'L&G Hydrogen Economy (Acc)',
+    'One general ETF display rule, no ISIN-specific branch');
+  assert.equal(compact.table.children[0].cells[0].title,fullEtf,'Full provider name remains accessible');
+  assert.equal(compact.table.children[0].cells[8].textContent,etfIsin,'ISIN identity is unchanged');
+  assert.equal(compact.table.children[0].cells[1].textContent,'ETF','Asset classification remains unchanged');
+  assert.equal(compact.writes,0,'Compact display never modifies locally stored asset identities');
+  const distributing=harness({entries:[],initialItems:[asset(etfIsin,'iShares Core MSCI World UCITS ETF EUR Dist','6.06')],
+    registered:[{isin:etfIsin,name:'iShares Core MSCI World UCITS ETF EUR Dist',asset_class:'etf'}]});
+  await flush();
+  assert.equal(distributing.table.children[0].cells[0].textContent,'iShares Core MSCI World (Dist)',
+    'A different ETF uses the same rule, retaining its distributing share class');
+  const nameAlreadyShort=harness({entries:[],initialItems:[asset(etfIsin,'L&G Hydrogen Economy (Acc)','6.06')],
+    registered:[{isin:etfIsin,name:'L&G Hydrogen Economy (Acc)',asset_class:'etf'}]});
+  await flush();
+  assert.equal(nameAlreadyShort.table.children[0].cells[0].textContent,'L&G Hydrogen Economy (Acc)',
+    'Already concise ETF labels do not get duplicate accumulation suffixes');
+  const stockFull='ETF Global Investments Inc.';
+  const unchangedStock=harness({entries:[],initialItems:[asset(a,stockFull,'10.00')],
+    registered:[{isin:a,name:stockFull,asset_class:'equity'}]});
+  await flush();
+  assert.equal(unchangedStock.table.children[0].cells[0].textContent,stockFull,
+    'Company names are not edited by fund suffix rules');
+  assert.equal(unchangedStock.table.children[0].cells[0].title,'','Unchanged names need no extra tooltip');
+
+
   empty.input.value=b;empty.form.events.submit({preventDefault(){}});await flush();
   assert.equal(empty.calls[2].url,'api/isin_quote.php','The first new ISIN is queried immediately');
   assert.equal(JSON.parse(empty.storage.get(key))[0].isin,b);

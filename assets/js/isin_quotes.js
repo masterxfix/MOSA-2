@@ -166,8 +166,23 @@
     return Number.isFinite(stamp) ? String(Math.max(0,Math.round((Date.now()-stamp)/60000)))+" Min." : "—";
   }
   function typeLabel(entry) {return typeLabels[entry.instrument_type] || typeLabels.unknown;}
+  // Display-only abbreviation. ISIN and the full provider name remain untouched.
+  // Fund/share-class legal suffixes are not useful as the primary table label.
+  function shortName(entry) {
+    const full=typeof entry.name==="string" && entry.name.trim()?entry.name.trim():entry.isin;
+    if(entry.instrument_type!=="etf" && entry.instrument_type!=="fund")return full;
+    const acc=/\b(?:acc|accumulating|accumulation|thesaurierend)\b/iu.test(full);
+    const dist=/\b(?:dist|distributing|distribution|ausschüttend)\b/iu.test(full);
+    const variant=acc?" (Acc)":dist?" (Dist)":"";
+    const core=full.replace(/\s+(?:UCITS\s+)?ETF\b.*$/iu,"")
+      .replace(/\s+UCITS\b.*$/iu,"")
+      .replace(/\s*[\s(,-]*(?:Acc|Dist)\)?\s*$/iu,"")
+      .replace(/[\s,\-–—]+$/u,"").trim();
+    if(core.length<5 || core===entry.isin)return full;
+    return core+variant;
+  }
   const headings=["Wertpapier","Typ","Kurs","Währung / Einheit","Quelle / Handelsplatz","Marktzeit","Abgerufen","Datenalter","ISIN","Status"];
-  function reconcileRows(tbody, rows) {
+  function reconcileRows(tbody, rows, fullNames) {
     const actions=tbody.dataset.isinActions!==undefined;
     const existing=new Map(Array.from(tbody.children,row=>[row.dataset.isinRow,row]));
     let next=tbody.firstElementChild;
@@ -195,6 +210,11 @@
       }
       if(status && row.dataset.status!==status)row.dataset.status=status;
       values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
+      if(key!=="empty"){
+        const original=fullNames.get(values[8])||"";
+        const tooltip=original && original!==values[0]?original:"";
+        if(row.cells[0].title!==tooltip)row.cells[0].title=tooltip;
+      }
       if(actions && key!=="empty"){
         const cell=row.cells[values.length];
         let local=[...cell.children].find(child=>child.dataset.isinRemove!==undefined);
@@ -245,6 +265,7 @@
       }),...[...registeredAssets.values()].filter(asset=>!ownIsins.has(asset.isin)),...[...storedQuotes.values()]
         .filter(quote=>!ownIsins.has(quote.isin) && !registeredAssets.has(quote.isin))
         .map(quote=>({isin:quote.isin,name:quote.name,quotes:[]}))];
+      const fullNames=new Map(displayed.map(entry=>[entry.isin,entry.name||entry.isin]));
       for(const entry of displayed){
         const main=entry.isin+":main";
         const first=rows.length;
@@ -261,7 +282,7 @@
         if(dbRegistry && registeredAssets.has(entry.isin))rows[first][4]=entry.isin;
       }
       if(!rows.length)rows.push(["empty",null,["Noch keine ISIN eingegeben."]]);
-      reconcileRows(tbody,rows);
+      reconcileRows(tbody,rows,fullNames);
     }
     if(detailsToggle){
       const text=detailsOpen?"Weniger anzeigen":"Alle Details anzeigen";
@@ -284,19 +305,19 @@
     if(compact && marketView && quote.provider!=="stored" && storedStatus!=="loading")
       status+=storedStatus==="ok"?" · Kein neuer gespeicherter Kurs":" · Hintergrundabruf fehlgeschlagen";
     return [key,stale?"stale":"stored",[
-      entry.name||entry.isin,typeLabel(entry),fmtPrice(quote.price)+" "+(quote.unit||quote.currency),
+      shortName(entry),typeLabel(entry),fmtPrice(quote.price)+" "+(quote.unit||quote.currency),
       (quote.unit && quote.unit!==quote.currency?quote.currency+" / "+quote.unit:quote.currency)+" · "+quote.quote_type,
       quote.source,date(quote.market_at),date(quote.captured_at),age(quote),entry.isin,(stale?"Veraltet · ":"")+status
     ]];
   }
   function missingRow(key,entry) {
     const status=registeredAssets.has(entry.isin)?"In DB registriert · Kein gespeicherter Kurs":"Kein erfolgreicher Kurs vorhanden";
-    return [key,"missing",[entry.name||entry.isin,typeLabel(entry),"—","—","—","—","—","—",entry.isin,status]];
+    return [key,"missing",[shortName(entry),typeLabel(entry),"—","—","—","—","—","—",entry.isin,status]];
   }
   function errorRow(entry,error) {
     const missing=error.status==="unavailable";
     return [entry.isin+":error:"+error.provider,missing?"missing":"error",[
-      entry.name||entry.isin,typeLabel(entry),"—","—",sourceLabel(error.provider),"—",date(error.captured_at),"—",entry.isin,
+      shortName(entry),typeLabel(entry),"—","—",sourceLabel(error.provider),"—",date(error.captured_at),"—",entry.isin,
       (missing?"Nicht verfügbar: ":"Fehler: ")+error.code
     ]];
   }
