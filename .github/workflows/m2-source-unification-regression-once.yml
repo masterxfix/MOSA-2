@@ -22,6 +22,7 @@ jobs:
           php -l scripts/market_collector/actions_acceptance.php
           php -l scripts/market_collector/onboarding.php
           php tests/test_market_tick_sources.php
+          php tests/test_m2_native_quote_route.php
           php tests/fixtures/isin_quote_test.php
           php tests/fixtures/isin_quote_all_test.php
           php tests/test_market_registry_model.php
@@ -43,3 +44,5 @@ jobs:
 # Shared native-currency route and full instrument-class regression.
 
 # Execute parameterized test fixtures via their proper Python harnesses.
+
+# Physical-route GBP, GBX, EUR, fund, other and unsupported USD assertions.
