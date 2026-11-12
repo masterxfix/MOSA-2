@@ -39,19 +39,39 @@ $quote=static fn(string $key,string $provider,float $bid,float $ask):array=>[
 $ls=$quote('lang_schwarz_quote','lang_schwarz',5.40,5.60);
 $tg=$quote('tradegate_quote','tradegate_bsx',5.49,5.51);
 $lab=['sources'=>['lang_schwarz_quote'=>$ls,'tradegate_quote'=>$tg]];
-foreach(['stock','fund','other','unknown'] as $kind) {
+foreach(['stock','etf','fund','other','unknown'] as $kind) {
     $fact=choose($lab,$isin,$kind,$active,$captured,$now);
     sameValue('tradegate_bsx',$fact['provider']??null,'generic '.$kind.' selection');$n++;
     sameValue('5.5',$fact['price']??null,'generic '.$kind.' midpoint');$n++;
 }
-$etf=choose($lab,$isin,'etf',$active,$captured,$now);
-sameValue('tradegate_bsx',$etf['provider']??null,'MOSA ETF class-wide policy');$n++;
+// The quote winner must not depend on whether the same instrument is tagged stock or ETF.
+sameValue(choose($lab,$isin,'stock',$active,$captured,$now),
+    choose($lab,$isin,'etf',$active,$captured,$now),'stock/ETF facts identical');$n++;
+$reverse=$lab;
+$reverse['sources']['lang_schwarz_quote']=$quote('lang_schwarz_quote','lang_schwarz',5.495,5.505);
+sameValue('lang_schwarz',choose($reverse,$isin,'stock',$active,$captured,$now)['provider']??null,
+    'best narrower quote beats former ETF Tradegate default');$n++;
+sameValue(choose($reverse,$isin,'stock',$active,$captured,$now),
+    choose($reverse,$isin,'etf',$active,$captured,$now),'ETF receives same Lang & Schwarz winner');$n++;
+// Berlin market closure is not a hidden exception for ETF quotes.
+$night=new DateTimeImmutable('2026-11-12T22:30:07+01:00');
+$nightLab=$lab;
+foreach($nightLab['sources'] as &$s) $s['quoted_at']='2026-11-12T22:30:04+01:00';
+unset($s);
+$nightCaptured=['lang_schwarz_page'=>'2026-11-12 21:30:05.000000',
+    'tradegate_quote'=>'2026-11-12 21:30:05.000000'];
+sameValue(choose($nightLab,$isin,'stock',$active,$nightCaptured,$night),
+    choose($nightLab,$isin,'etf',$active,$nightCaptured,$night),
+    'outside Berlin ETF shadow window, same generic quote policy');$n++;
+sameValue('tradegate_bsx',choose($nightLab,$isin,'etf',$active,$nightCaptured,$night)['provider']??null,
+    'generic ETF quote not suppressed solely by Berlin clock');$n++;
 $ls['available']=false;$tg['available']=false;
 $frankfurt=['source_key'=>'boerse_frankfurt_trade','provider_key'=>'boerse_frankfurt_api','data_type'=>'last_trade',
     'available'=>true,'currency'=>'EUR','price'=>5.52,'quoted_at'=>$ts,'age_seconds'=>3];
 $lab=['sources'=>['lang_schwarz_quote'=>$ls,'tradegate_quote'=>$tg,'boerse_frankfurt_trade'=>$frankfurt]];
 $fact=choose($lab,$isin,'stock',$active,$captured,$now);
 sameValue('boerse_frankfurt_api',$fact['provider']??null,'Frankfurt fallback');$n++;
+sameValue($fact,choose($lab,$isin,'etf',$active,$captured,$now),'same last-trade fallback for ETF');$n++;
 sameValue([null,null],[$fact['bid']??null,$fact['ask']??null],'last trade never invented midpoint');$n++;
 $frankfurt['currency']='USD';
 $lab['sources']['boerse_frankfurt_trade']=$frankfurt;
@@ -64,13 +84,17 @@ $onlyLS=['lang_schwarz'=>$active['lang_schwarz']];
 sameValue(null,choose($lab,$isin,'stock',$onlyLS,$captured,$now),'disabled provider does not leak');$n++;
 $lab['sources']['tradegate_quote']['available']=true;
 $lab['sources']['tradegate_quote']['isin']='NO0010081235';
-sameValue(null,choose($lab,$isin,'etf',$active,$captured,$now),'ETF ISIN guard');$n++;
+sameValue(null,choose($lab,$isin,'etf',$active,$captured,$now),'common exact ISIN guard for ETF');$n++;
 $lab['sources']['boerse_frankfurt_trade']['quoted_at']='2026-11-12T12:04:07+00:00';
 sameValue(null,choose($lab,$isin,'stock',$active,$captured,$now),'market timestamp after provider receipt');$n++;
 $engine=file_get_contents(dirname(__DIR__).'/api/market_source_engine.php');
 $tick=file_get_contents(dirname(__DIR__).'/scripts/market_collector/mosa_tick.php');
 sameValue(false,str_contains($engine,"return \$isin==='DE0005936124'"),'remove one-ISIN pilot switch');$n++;
 sameValue(false,str_contains($tick,'const SOURCES='),'no second scheduled source list');$n++;
+$choice=file_get_contents(dirname(__DIR__).'/api/market_sources.php');
+sameValue(false,str_contains($choice,"if(\$assetType==='etf')"),'no special ETF selection branch');$n++;
+sameValue(false,str_contains($engine,"if(\$assetType==='etf')return fixlabMosaMarketEtfShadowSelection"),
+    'vendored provider preview also uses single shared comparison');$n++;
 sameValue(true,str_contains($tick,'a.asset_class AS asset_class'),'asset classification taken from catalog');$n++;
 sameValue('etf',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=>'etf','instrument_type_source'=>'lang_schwarz']),'verified unclassified ETF');$n++;
 sameValue('fund',\Mosa2\MarketSources\resolvedType('unknown',['instrument_type'=>'fund','instrument_type_source'=>'lang_schwarz']),'verified unclassified fund');$n++;
