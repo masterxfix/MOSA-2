@@ -243,9 +243,10 @@ function fact(array $source,string $key,string $isin,array $registry,array $capt
     ];
 }
 /**
- * Prefer MOSA's production complete-quote router and class-wide ETF rule.
- * Qualify a last trade only when no eligible midpoint exists. Never forge FX
- * conversion or invent bid/ask. All decisions are independent of the ISIN.
+ * One quote-selection policy for every registered ISIN, including stocks and ETFs.
+ * Asset class remains identity metadata and never changes price-provider ranking,
+ * currency checks, quote freshness or market-hours eligibility.
+ * Prefer validated complete quotes to last trades; never invent FX or bid/ask.
  */
 function choose(array $lab,string $isin,string $assetType,array $registry,array $captured,
                 DateTimeImmutable $now,?array $units=null):?array {
@@ -261,24 +262,6 @@ function choose(array $lab,string $isin,string $assetType,array $registry,array 
             ||preg_match('/^[A-Z0-9]{4}$/D',$native['venue_key'])!==1)continue;
         $nativeFact=fact($native,$nativeKey,$isin,$registry,$captured,$now,$maxNativeAge,$units);
         if($nativeFact!==null)return $nativeFact;
-    }
-    if($assetType==='etf') {
-        // Keep the productive MOSA EUR ETF cross-check as first choice.
-        $etf=\fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);
-        if(($etf['automatic_release']??false)===true){
-            $key=$etf['selected_source_key'];
-            if(is_string($key)&&isset($sources[$key])){
-                $selected=fact($sources[$key],$key,$isin,$registry,$captured,$now,300,$units);
-                if($selected!==null)return $selected;
-            }
-        }
-        // The MOSA shadow rule uses Berlin market hours. That cannot prohibit
-        // a genuinely fresh, licensed international ETF quote while Asia trades.
-        $foreign=$sources['twelve_data_quote']??null;
-        if(is_array($foreign)&&is_string($foreign['venue_key']??null)
-            &&preg_match('/^[A-Z0-9]{4}$/D',$foreign['venue_key'])===1)
-            return fact($foreign,'twelve_data_quote',$isin,$registry,$captured,$now,300,$units);
-        return null;
     }
     // Route independent complete quotes per native unit, not by comparing
     // raw prices in mutually inconvertible currencies.
