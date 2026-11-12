@@ -23,6 +23,7 @@ jobs:
           coverage: none
       - name: Strict regression and install pinned private M2 release
         env:
+          M2_EXPECTED_COMMIT: ${{ github.sha }}
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
           MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
