@@ -30,12 +30,15 @@ function catalog():array {
         'twelve_data'=>[
             'name'=>'Twelve Data','venue'=>'international_isin','url'=>'https://api.twelvedata.com/',
             'requests'=>['twelve_data_quote'],'scheduled'=>false,
-            // Explicit private entitlement + bounded quota are mandatory.
+            // User decision 12.11.2026: EXCLUDED, not activatable even with credentials.
+            'status'=>'excluded','exclusion_reason'=>'insufficient_free_coverage_and_clarity',
             'private_entitlement_required'=>true,
         ],
         'eodhd'=>[
             'name'=>'EODHD · verzögert','venue'=>'eodhd_physical_exchange','url'=>'https://eodhd.com/api/',
             'requests'=>['eodhd_search','eodhd_exchange','eodhd_delayed'],'scheduled'=>false,
+            // User decision 12.11.2026: EXCLUDED, not activatable even with credentials.
+            'status'=>'excluded','exclusion_reason'=>'free_quota_insufficient_for_m2',
             'private_entitlement_required'=>true,
         ],
     ];
@@ -52,12 +55,16 @@ function singlePreview():array {
     return $out;
 }
 function scheduled(bool $internationalAuthorized=false,bool $eodhdAuthorized=false):array {
-    return array_filter(catalog(),static fn(array $p,string $key):bool=>
-        $p['scheduled']===true||($internationalAuthorized&&$key==='twelve_data')
-        ||($eodhdAuthorized&&$key==='eodhd'),ARRAY_FILTER_USE_BOTH);
+    // The former authorization flags are kept for compatibility with pinned callers,
+    // but cannot override an explicit, source-wide user exclusion.
+    return array_filter(catalog(),static fn(array $p):bool=>
+        $p['scheduled']===true && ($p['status']??'active')!=='excluded');
 }
 function providerOf(string $key):?string {
-    foreach(catalog() as $name=>$provider)if(in_array($key,$provider['requests'],true))return $name;
+    // Deny excluded providers at the shared URL/host request gate as well as the scheduler.
+    foreach(catalog() as $name=>$provider)
+        if(($provider['status']??'active')!=='excluded'
+            &&in_array($key,$provider['requests'],true))return $name;
     return null;
 }
 /** Private delayed API hosts are fixed; the provider token is only transport

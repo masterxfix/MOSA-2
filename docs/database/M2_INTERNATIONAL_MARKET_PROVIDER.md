@@ -1,5 +1,18 @@
 # MOSA 2 – Internationale ISIN-Kursversorgung ohne Sonder-Collector
 
+> **HISTORISCHE TECHNISCHE DOKUMENTATION – NICHT AKTIVIERBAR (Nutzerentscheidung 12.11.2026).**
+> **Twelve Data und EODHD sind in MOSA 2 AUSGESCHLOSSEN**, nicht bloß
+> mangels Credentials vorübergehend deaktiviert. Die folgenden Adapter- und
+> Zugangskonfigurationsbeispiele bleiben ausschließlich zur Dokumentation und
+> für offline durchgeführte Regressionsprüfungen. Sie sind **keine**
+> Betriebsfreigabe. Das zentrale `api/market_sources.php` blockiert beide
+> Anbieter unabhängig von alten Freigabeflags. Nur neue ausdrückliche
+> Nutzerentscheidung darf daran etwas ändern.
+>
+> Aktuelle Anbieterliste und geprüfte Alternativen:
+> [M2 Marktdatenanbieter](../M2_MARKTDATEN_ANBIETER.md).
+
+
 Stand 12.11.2026. Gilt ausschließlich für das eigenständige M2-System und die
 bestehende Dogado-Testdatenbank. MOSA-Produktion darf nicht angesprochen werden.
 

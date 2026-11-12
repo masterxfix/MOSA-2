@@ -12,10 +12,10 @@
 | **Tradegate BSX** | ISIN-bezogene Geld-/Brief-Offerte und letzte Umsätze | **Aktiv** | Für Aktien und ETFs identisch: kein typabhängiger Vorrang; Bewertung derselben Kursqualität |
 | **Börse Frankfurt** | Letzter Kurs vom gezielt abgefragten Handelsplatz **XFRA** | **Aktiv** | Für Aktien und ETFs identisch: **Last-Trade-Fallback**, wenn keine geeignete vollständige Geld-/Brief-Offerte ausgewählt wird |
 | **Yahoo Finance** | Früher für internationale Kurse (z. B. NEL in NOK) genutzt; heute nur historischer Entwicklungsnachweis | **AUSGESCHLOSSEN** (12.11.2026) | **Keine Nutzung in M2:** weder automatische noch manuelle Kursabfrage; keine Auswahl oder Speicherung |
-| **Twelve Data** | Optionaler internationaler Last-Trade anhand der ISIN, mit Originalwährung und Handelsplatz-MIC | **Deaktiviert**, bis private Rechte und Quoten eingerichtet sind | Nach Aktivierung **vor EODHD und deutschen Quellen**, wenn MIC, Währung und Zeitstempel qualifiziert sind; Marktalter höchstens **5 Minuten** |
-| **EODHD** | Optionale exakte ISIN-Suche, Zuordnung zu Börsenticker und Handelsplatz-MIC, verzögerter letzter Kurs in Originalwährung | **Deaktiviert**, bis private Rechte und Quoten eingerichtet sind | Nach Aktivierung **nach Twelve Data, aber vor deutschen Quellen**, wenn Zuordnung eindeutig und Marktalter höchstens **30 Minuten** ist |
+| **Twelve Data** | Früher vorbereiteter internationaler ISIN-Adapter; kostenfreier Umfang und Konditionen ungeeignet/undurchsichtig für M2 | **AUSGESCHLOSSEN** (12.11.2026) | Keine automatische/manuelle M2-Kursabfrage, Registrierung oder Auswahl |
+| **EODHD** | Früher vorbereiteter internationaler ISIN-Adapter; kostenloses API-Kontingent unzureichend für M2 | **AUSGESCHLOSSEN** (12.11.2026) | Keine automatische/manuelle M2-Kursabfrage, Registrierung oder Auswahl |
 
-**Klarstellung zur Tabelle:** Fünf Anbieter sind als aktive oder bedingt freigebbare Kursquellen vorgesehen; **Yahoo Finance steht bewusst weiterhin in der Übersicht, ist aber ausgeschlossen**. Wiederaufnahme nur nach neuer ausdrücklicher Nutzerentscheidung und nachgewiesenen Nutzungsrechten.
+**Klarstellung zur Tabelle:** **Drei Quellen sind tatsächlich aktiv; Yahoo Finance, Twelve Data und EODHD sind ausdrücklich ausgeschlossen.** Historische Adapter/Tests bleiben als Entwicklungsreferenz, keine Betriebsfreigabe. Wiederaufnahme ausschließlich nach neuer ausdrücklicher Nutzerentscheidung, separatem überprüftem Nutzungsrecht und erfolgreicher Live-Abnahme.
 
 **Aktueller Abnahmenachweis (12.11.2026, 20:21 UTC):** Die aktive private Collector-Version `a82439c0` verarbeitet im selben Minutenjob **Aktien und ETFs** mit **derselben Kursauswahl** und dem gemeinsamen M2-Writer. Nach der Umschaltung wurden sowohl **DroneShield (Aktie, Tradegate BSX, EUR)** als auch **iShares Automation & Robotics (ETF, Lang & Schwarz, EUR)** erneut als Current gespeichert. Der ETF erhielt damit nach dem Entfernen des pauschalen Tradegate-Vorrangs einen tatsächlich anders gewählten Anbieter. Unabhängiger Read-only-DB-Readback: **3 ISINs, 19 Währungseinheiten, 0 Yahoo-Quellen, 0 freigeschaltete internationale Quellen**. Der geöffnete M2-Marktdaten-Tab zeigte beide aktualisierten Werte und **233 ms** angezeigte Seitenladezeit; das war eine **DOM-/Textprüfung, kein visueller Screenshot**. **Internationale native Live-Kurse bleiben ungetestet, weil die Anbieterrechte noch fehlen.**
 
@@ -29,16 +29,20 @@ Belege: [Aktiver Collector/Unveränderter übriger Cron](https://github.com/mast
 - Maßgeblich sind der **gemeinsame Quellenkatalog**, die M2-Datenbank-Registrierung, die Scheduler-Sperre, der Quellencooldown und bei internationalen Anbietern zusätzlich private Rechte und Tages-/Minutenkontingente.
 - Geprüft werden insbesondere passende ISIN, zugelassene Datenquelle, Preis, echter Marktzeitpunkt und eine in M2 **eingefrorene Originalwährungseinheit**. Es erfolgt **keine erfundene Umrechnung in EUR**.
 
-### Priorität 1: Internationaler Kandidat – falls tatsächlich aktiviert
+### Internationale Kandidaten: ausdrücklich ausgeschlossen
 
-Der aktuelle Code prüft die beiden internationalen Quellen **in fester Anbieterreihenfolge**:
+**Twelve Data und EODHD dürfen nicht im M2-Collector aktiviert werden.**
+Der gemeinsame Quellkatalog `api/market_sources.php` enthält weiterhin die historischen
+Providerkennungen, liefert sie aber **nie** als aktive Quelle zurück, auch nicht
+mit alten Berechtigungs-Flags. Der Quellen-/URL-Guard weist ihre Requests ab.
+Die aktivierte private Release-Version war bereits vor dieser Entscheidung ohne
+diese Anbieter konfiguriert. Die GitHub-Regel ist für künftige Releases maßgeblich.
 
-1. **Twelve Data** gewinnt zuerst, wenn der internationale Kurs eine gültige **vierstellige Börsen-MIC** hat, die ISIN korrekt ist, die Währung qualifiziert ist und der Börsenzeitpunkt höchstens **300 Sekunden** zurückliegt.
-2. **EODHD** wird gewählt, wenn der erste Kandidat nicht qualifiziert ist. Benötigt werden eine eindeutig aufgelöste ISIN-/Ticker-/MIC-Kette, qualifizierte Währung und ein Börsenzeitpunkt von höchstens **1.800 Sekunden**.
+**Neue internationale Originalwährungsquellen** werden nach ISIN, bestätigtem
+Börsen-MIC, Originalwährung, Marktzeit und erlaubter Nutzung bewertet,
+nicht aus den ausgeschlossenen APIs übernommen.
 
-**Der erste gültige internationale Kandidat gewinnt auch gegenüber einer frischeren deutschen EUR-Offerte.** Twelve Data und EODHD werden untereinander derzeit **nicht nach derselben Qualitätsmetrik verglichen**. Diese Priorität ist eine **anbieterbezogene Regel**, noch keine vollständig neutrale Auswahl. Ein realer MIC beweist den angegebenen Handelsplatz, **aber für sich allein noch nicht die Heimatbörse** des Instruments.
-
-### Priorität 2: Deutsche Quellen, wenn kein internationaler Kandidat qualifiziert ist
+### Die drei aktiven deutschen Quellen – gemeinsame Kursauswahl
 
 **Eine gemeinsame Auswahl für Aktien, ETFs, Fonds und andere registrierte Wertpapiere:**
 
@@ -65,20 +69,20 @@ Beim normalen EUR-Vergleich akzeptiert die Auswahl in der Regel höchstens **300
 ## 4. Aktivierung und Kostenkontrolle
 
 - Die drei tatsächlich **automatisch aktivierten** traditionellen Quellen sind **Lang & Schwarz**, **Tradegate BSX** und **Börse Frankfurt**. Der **einzige** Collector und derselbe Observation-/Current-Writer übernehmen die Speicherung.
-- **Twelve Data** bleibt ohne privaten API-Zugang, bestätigte Markt- und **ISIN-Datenrechte** sowie echte Limits aus. Die im Code vorhandene Integration ist keine Marktdatenlizenz.
-- **EODHD** bleibt ohne bestätigte private Nutzungsrechte und Kontingente aus. Bei Freischaltung wird die ISIN generisch einem eindeutigen Börsenticker/MIC zugeordnet. Positive Zuordnungen werden **14 Tage**, negative/mehrdeutige Zuordnungen **6 Stunden** in bestehenden M2-Checkpoints zwischengespeichert. Anbieteraufrufe belasten die genehmigten Tages-/Minutenbudgets.
+- **Twelve Data: AUSGESCHLOSSEN** aufgrund Nutzerentscheidung. Keine M2-Nutzung; eine private Lizenzkonfiguration darf den Ausschluss nicht aufheben.
+- **EODHD: AUSGESCHLOSSEN** aufgrund Nutzerentscheidung. Keine M2-Nutzung; eine private Lizenzkonfiguration darf den Ausschluss nicht aufheben.
 - **Yahoo Finance: AUSGESCHLOSSEN** (siehe Tabelle). Historische MOSA-Parser/Tests bleiben ausschließlich technische Altnachweise, keine M2-Freigabe.
 - Nach Quellenfehlern **401/403/429** gibt es Abkühlphasen; ohne gültigen neuen Marktpreis gibt es **keinen fingierten neuen Current**. Die vorhandenen deutschen Quellen bleiben als Rückfall erhalten.
 
 ## 5. Bewusst dokumentierte Schwachstellen / noch keine Gesamtfreigabe
 
 1. **Kein verifizierter internationaler Livefeed:** Die internationalen Adapter sind programmiert und getestet, derzeit jedoch nicht mit berechtigter realer Originalwährungsquelle abgenommen.
-2. **Feste Anbieterpriorität:** Twelve Data wird vor EODHD geprüft, selbst wenn eine neutrale Qualitätsbewertung anders ausfallen könnte.
+2. **Internationale Lücke:** Nach dem Ausschluss der beiden optionalen APIs ist noch keine internationale Originalwährungsquelle produktiv. Die historische internationale Auswahl im Code ist ohne freigegebene Quellen nicht erreichbar.
 3. **MIC ist nicht automatisch Heimatbörse:** Eine durch den Anbieter belegte Handelsplatzkennung muss zur tatsächlichen Heimatmarktbehauptung zusätzlich fachlich eingeordnet werden.
 4. **Globale Handelszeiten:** Der ETF-spezifische Berliner Ausschluss ist aus der M2-Auswahl entfernt. Handelsunterbrechungen, Feiertage und internationale Sitzungskalender sind trotzdem noch nicht vollständig live abgenommen.
 5. **Abnahme offen:** Erforderlich sind echte internationale Quellenantworten aus mehreren Zeitzonen, M2-eigene Observations/Current, korrektes Kursalter, ISIN/MIC/Originalwährung und **visuelle Browserkontrolle** am tatsächlich genutzten M2-Startweg.
 
-Es gibt **keinen separaten Collector pro Land oder einzelner ISIN**. Die unterschiedlichen Provideradapter sind notwendige Schnittstellen; die darauf aufbauende Auswahl enthält aber **noch anbieterspezifische Prioritäts- und Zeitregeln**.
+Es gibt **keinen separaten Collector pro Land oder einzelner ISIN**. Die historischen internationalen Adapter bleiben nur für Offline-Regressionen erhalten und sind aus der laufzeitfähigen Quellenregistrierung ausgeschlossen. Neue Anbieteradapter brauchen dieselbe zentrale ISIN-neutrale Registrierungs- und Auswahlarchitektur.
 
 ## 6. Maßgebliche Implementierungen und Tests
 
@@ -90,3 +94,19 @@ Es gibt **keinen separaten Collector pro Land oder einzelner ISIN**. Die untersc
 - [Tests der gemeinsamen Quellenauswahl](../tests/test_market_tick_sources.php), [Twelve-Data-Tests](../tests/test_twelve_data_provider.php), [EODHD-Tests](../tests/test_eodhd_provider.php), [EODHD-MySQL-Tests](../tests/test_eodhd_mysql.php).
 
 **Pflegeregel:** Bei Änderungen der Quellenaktivierung, Kursqualitäts-/Frischeregeln oder Lizenzfreigaben diese Seite mitaktualisieren. **Diese Markdown-Seite ist nur Dokumentation; die ausführbare zentrale Quellenregistrierung bleibt allein im Code.**
+
+## 7. Weitere offizielle kostenlose Datenquellen – Kandidaten, noch nicht integriert
+
+Die drei derzeitigen aktiven deutschen Abfrageanbieter sind **nicht** die einzigen kostenfreien Quellen.
+Offizielle Datenbörsen stellen verzögerte, maschinenlesbare regulatorische Vor-/Nachhandelsdaten bereit. Dies sind **Dateidienste** (typisch bis zu 15 Minuten verzögert), keine zugesagten kostenlosen weltweiten Live-APIs.
+
+| Kandidat | Märkte | Format / Daten | Zulässigkeit und Status |
+| --- | --- | --- | --- |
+| [Euronext MiFID delayed](https://www.euronext.com/en/data/pricing-specs-agreements/mifid-ii-compliant-data) | **Oslo**, Paris, Amsterdam, Mailand u. a. | CSV; ISIN, Preis, Stück, Währung, Handel-/Veröffentlichungszeit | Kostenlos veröffentlichte Verzögerungsdaten; Bedingungen für private Verwendung/Weitergabe beachten. **Prüfkandidat für NEL-NOK**, nicht live in M2 getestet. |
+| [Nasdaq Nordic/Baltic](https://tradereports.nasdaq.com/) | Skandinavien und Baltikum | Minütliche 15-min.-verzögerte CSV-Vor-/Nachhandelsdaten | Offiziell kostenfreier Zugriff; keine Behauptung einer universellen ISIN-Live-API. Nicht integriert. |
+| [LSEG Delayed Market Data](https://dmd.lseg.com/) | XLON, Turquoise | Minütliche CSV-Vor-/Nachhandelsdaten mit UTC-Zeiten | 15-min.-verzögert, eigene Nutzung nach Bedingungen, nicht integriert. |
+| [gettex / Börse München](https://www.gettex.de/handel/delayed-data/) | MUND/MUNC | 15-min.-verzögerte CSV-Dateien, Vor-/Nachhandel | Laut BBAG für private nichtkommerzielle Verwendung frei, nicht integriert. |
+| [Deutsche Börse MiFIR](https://www.mds.deutsche-boerse.com/mds-en/real-time-data/Delayed-data) | Xetra, Frankfurt, Tradegate BSX u. a. | GZ-JSON-Pre-/Posttrade minütlich | Offiziell kostenfrei für nichtkommerzielle Verwendung nach jeweiligen Bedingungen, **separates Datenprodukt vom HTML-Scraping**. Nicht integriert. |
+| [OpenFIGI](https://www.openfigi.com/api/documentation) | International | ISIN → FIGI, Börsen-/Ticker-Referenzen | Kostenlose offene Identifikatoren, **keine Kurse**. Nicht integriert. |
+
+**Kritisch:** Die Lizenz einer offiziellen verzögerten Datei ist nicht automatisch die Lizenz einer anderen Website oder Echtzeit-API desselben Anbieters. Vor Integration Datenfelder, Aktualität, MIC, ISIN, Nutzungsrechte, Rate-Limits, Host-Erreichbarkeit, unveränderte Originalwährung und korrekten Source-Current/History-Readback prüfen. Keine Anbieter-Sonderkollektoren, keine unbegrenzten Downloads.

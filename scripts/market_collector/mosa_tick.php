@@ -311,8 +311,10 @@ function main(): void {
         same($credentials['dsn']??null,'mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4','mosa_test_database');
         $password=$credentials['password'];
         unset($credentials);
-        $international=\Mosa2\MarketInternational\TwelveData\authorization($subscription);
-        $eodhd=\Mosa2\MarketInternational\Eodhd\authorization($subscription);
+        // User decision: both providers are excluded, irrespective of any private
+        // credentials. Adapters remain only as inert historical code references.
+        $international=null;
+        $eodhd=null;
         $connect=static fn()=>connection($password);
         $db=$connect();
         if ((int)$db->query("SELECT GET_LOCK('m2-collector-scheduler',0)")->fetchColumn()!==1) return;

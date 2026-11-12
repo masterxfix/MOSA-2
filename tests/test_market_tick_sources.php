@@ -10,8 +10,17 @@ $n=0;
 $all=catalog();$active=scheduled();
 sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','twelve_data','eodhd'],array_keys($all),'one source catalog');$n++;
 sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api'],array_keys($active),'scheduled sources');$n++;
-sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','twelve_data'],array_keys(\Mosa2\MarketSources\scheduled(true)),'private entitlement adds generic international source');$n++;
-sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','eodhd'],array_keys(\Mosa2\MarketSources\scheduled(false,true)),'only separately entitled delayed provider joins shared collector');$n++;
+sameValue(array_keys($active),array_keys(\Mosa2\MarketSources\scheduled(true)),'Twelve Data excluded even with former authorization flag');$n++;
+sameValue(array_keys($active),array_keys(\Mosa2\MarketSources\scheduled(false,true)),'EODHD excluded even with former authorization flag');$n++;
+sameValue(array_keys($active),array_keys(\Mosa2\MarketSources\scheduled(true,true)),'both exclusions persist with both flags');$n++;
+sameValue('excluded',$all['twelve_data']['status']??null,'Twelve Data marked excluded');$n++;
+sameValue('excluded',$all['eodhd']['status']??null,'EODHD marked excluded');$n++;
+sameValue(null,providerOf('twelve_data_quote'),'Twelve Data request key excluded');$n++;
+sameValue(null,providerOf('eodhd_delayed'),'EODHD delayed request key excluded');$n++;
+sameValue(false,\Mosa2\MarketSources\allowed(['request_key'=>'twelve_data_quote',
+    'url'=>'https://api.twelvedata.com/quote?isin=SE0000115446'],'SE0000115446'),'Twelve Data URL rejected');$n++;
+sameValue(false,\Mosa2\MarketSources\allowed(['request_key'=>'eodhd_search',
+    'url'=>'https://eodhd.com/api/search/SE0000115446?api_token=exampletoken123&fmt=json&limit=100'],'SE0000115446'),'EODHD URL rejected');$n++;
 sameValue(null,providerOf('yahoo_home_market'),'Yahoo excluded from M2 provider catalog');$n++;
 sameValue(false,\Mosa2\MarketSources\allowed(['request_key'=>'yahoo_home_search',
     'url'=>'https://query1.finance.yahoo.com/v1/finance/search?q=SE0000115446&quotesCount=10&newsCount=0'],'SE0000115446'),'Yahoo search never reauthorized');$n++;
