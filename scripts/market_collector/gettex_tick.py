@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import timedelta
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.market_collector import nasdaq_nordic as nordic
@@ -100,40 +99,46 @@ def store_publication(root, config, slot, receipt, filename, raw, selected):
 
 
 def nordic_tick(root, config, codes, now, previous):
-    local = now.astimezone(nordic.ZoneInfo("Europe/Stockholm"))
-    if local.weekday() >= 5 or not (9 <= local.hour <= 18) or not codes:
-        return previous
-    state = root / "state"
-    if (state / "nasdaq-nordic.stop").exists():
-        return {"status": "stopped"}
-    available = nordic.publications()
-    candidates = [name for name in available if
-                  timedelta(minutes=15) <= now.replace(tzinfo=None) - nordic.publication_start(name) <= timedelta(hours=1)]
-    if not candidates:
-        return previous
-    name = candidates[0]
-    try:
-        with (state / (name + ".checked")).open("x", encoding="utf-8"):
-            pass
-    except FileExistsError:
-        return previous
-    response = nordic.fetch(nordic.download_url(name), nordic.MAX_BYTES)
-    if response.http_status in (401, 403, 429):
-        (state / "nasdaq-nordic.stop").write_text(str(response.http_status), encoding="utf-8")
-    if response.http_status != 200:
-        return {"slot": name, "failures": 1, "http_status": response.http_status}
-    registered = set(codes)
-    choices = {}
-    for isin, mic, market, _, _ in nordic.trades(response.payload_bytes, name):
-        if isin not in registered:
+    state, inbox = root / "state", root / "inbox"
+    for path in sorted(inbox.glob("NordicEquity-posttrade-*.json")):
+        name = path.stem
+        if not nordic.FILE.fullmatch(name) or path.is_symlink() or path.stat().st_size > 1024 or path.stat().st_mode & 0o077:
             continue
-        rank = (isin[:2] == nordic.MARKETS[mic][0], market, mic)
-        if isin not in choices or rank > choices[isin]:
-            choices[isin] = rank
-    selected = [(code, "provider:nasdaq_nordic_" + choices[code][2].lower() + "_delayed")
-                for code in sorted(choices)]
-    receipt = dict(sha256=hashlib.sha256(response.payload_bytes).hexdigest(), captured_at=response.collected_at)
-    return store_publication(root, config, name, receipt, name + ".csv", response.payload_bytes, selected)
+        archive = inbox / (name + ".csv")
+        try:
+            receipt = json.loads(path.read_text(encoding="utf-8"))
+            if set(receipt) != {"sha256", "captured_at"} or not re.fullmatch(r"[0-9a-f]{64}", receipt["sha256"]):
+                continue
+            captured = datetime.strptime(receipt["captured_at"], STAMP).replace(tzinfo=timezone.utc)
+            if not 0 <= (now - captured).total_seconds() <= 86400:
+                continue
+            if not archive.is_file() or archive.is_symlink() or archive.stat().st_mode & 0o077:
+                continue
+            if not 0 < archive.stat().st_size <= nordic.MAX_BYTES:
+                continue
+            raw = archive.read_bytes()
+            if len(raw) > nordic.MAX_BYTES or hashlib.sha256(raw).hexdigest() != receipt["sha256"]:
+                continue
+            with (state / (name + ".checked")).open("x", encoding="utf-8"):
+                pass
+        except (FileExistsError, ValueError, TypeError):
+            continue
+        registered = set(codes)
+        choices = {}
+        for isin, mic, market, _, _ in nordic.trades(raw, name):
+            if isin not in registered:
+                continue
+            rank = (isin[:2] == nordic.MARKETS[mic][0], market, mic)
+            if isin not in choices or rank > choices[isin]:
+                choices[isin] = rank
+        selected = [(code, "provider:nasdaq_nordic_" + choices[code][2].lower() + "_delayed")
+                    for code in sorted(choices)]
+        result = store_publication(root, config, name, receipt, archive.name, raw, selected)
+        if result["failures"] == 0:
+            path.unlink()
+            archive.unlink()
+        return result
+    return previous
 
 
 def main():
@@ -178,8 +183,7 @@ def main():
         try:
             status["nasdaq_nordic"] = nordic_tick(root, config, codes, now, previous.get("nasdaq_nordic"))
         except (KeyError, TypeError, ValueError, OSError) as error:
-            status["nasdaq_nordic"] = {"failures": 1, "reason": str(error) if type(error) is ValueError
-                                      and str(error).startswith("read_only_http_") else type(error).__name__}
+            status["nasdaq_nordic"] = {"failures": 1, "reason": type(error).__name__}
     write_status(status_path, status)
 
 

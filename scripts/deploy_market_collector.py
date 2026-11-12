@@ -122,11 +122,57 @@ def relay(sftp):
     print("Official private archive relayed: " + slot)
 
 
+def relay_nordic(sftp):
+    sys.path.insert(0, str(ROOT))
+    from datetime import timedelta
+    from scripts.market_collector import nasdaq_nordic as source
+
+    now = datetime.now(timezone.utc)
+    local = now.astimezone(ZoneInfo("Europe/Stockholm"))
+    if local.weekday() >= 5 or not (9 <= local.hour <= 18):
+        return
+    state, inbox = PERIODIC + "/state/", PERIODIC + "/inbox/"
+    stop = state + "nasdaq-nordic.stop"
+    if shared.remote_kind(sftp, stop) is not None:
+        print("Nasdaq Nordic relay paused by source response")
+        return
+    listing = source.fetch(source.BASE + "trade-reports?type=POST_TRADE&assetClass=EQUITY", 256 * 1024)
+    if listing.http_status in (401, 403, 429):
+        write(sftp, stop, str(listing.http_status).encode())
+    if listing.http_status != 200:
+        raise ValueError("Nasdaq publication list unavailable")
+    names = json.loads(listing.payload_bytes)["reports"]
+    newest = sorted({name for name in names if isinstance(name, str) and source.FILE.fullmatch(name)
+                     and timedelta(minutes=15) <= now.replace(tzinfo=None) - source.publication_start(name)
+                     <= timedelta(minutes=45)}, reverse=True)
+    for name in reversed(newest[:5]):
+        attempt = state + name + ".relay"
+        try:
+            with sftp.open(attempt, "wx") as stream:
+                sftp.chmod(attempt, 0o600)
+                stream.write(b"claimed\n")
+        except OSError:
+            if shared.remote_kind(sftp, attempt) is not None:
+                continue
+            raise
+        response = source.fetch(source.download_url(name), source.MAX_BYTES)
+        if response.http_status in (401, 403, 429):
+            write(sftp, stop, str(response.http_status).encode())
+            raise ValueError("Nasdaq relay stopped by source response")
+        if response.http_status != 200 or not response.payload_bytes:
+            raise ValueError("Nasdaq publication unavailable")
+        raw = response.payload_bytes
+        write(sftp, inbox + name + ".csv", raw)
+        write(sftp, inbox + name + ".json", json.dumps(
+            dict(sha256=hashlib.sha256(raw).hexdigest(), captured_at=response.collected_at)).encode())
+        print("Official private Nasdaq publication relayed: " + name)
+
+
 def main():
     import paramiko
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("install", "relay"))
+    parser.add_argument("mode", choices=("install", "relay", "relay_nordic"))
     args = parser.parse_args()
     sha = os.environ.get("GITHUB_SHA", "")
     if os.environ.get("GITHUB_REPOSITORY") != "masterxfix/MOSA-2" or os.environ.get("GITHUB_REF") != "refs/heads/main" \
@@ -134,6 +180,8 @@ def main():
         raise ValueError("Exact M2 main required")
     if args.mode == "relay" and os.environ.get("MOSA_MARKET_GETTEX_PRIVATE_USE") != "1":
         raise ValueError("Private gettex use not enabled")
+    if args.mode == "relay_nordic" and os.environ.get("MOSA_MARKET_NASDAQ_NORDIC_PRIVATE_USE") != "1":
+        raise ValueError("Private Nasdaq Nordic use not enabled")
     if args.mode == "install" and sha != os.environ.get("M2_EXPECTED_COMMIT"):
         raise ValueError("Installation revision differs")
     with collector_actions.ssh_client(profile.configuration(), {}, paramiko) as transport:
@@ -146,6 +194,8 @@ def main():
                 directory(sftp, PERIODIC + "/" + name)
             if args.mode == "install":
                 install(sftp, sha)
+            elif args.mode == "relay_nordic":
+                relay_nordic(sftp)
             else:
                 relay(sftp)
 

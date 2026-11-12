@@ -163,7 +163,19 @@ function register(PDO $db, string $code): array {
 
 const MARKET_TABLES = ['m2_market_current','m2_market_bars','m2_market_observations'];
 
-function purgeMarketData(PDO $db): array {
+/** The optional scope is for private acceptance against explicitly registered disposable assets. */
+function marketDataScope(?array $assetIds): string {
+    if ($assetIds===null) return '';
+    if ($assetIds===[]) throw new RuntimeException('INVALID_ASSET_SCOPE');
+    foreach ($assetIds as $id) {
+        if (!is_string($id) || preg_match('/^[1-9][0-9]*$/D',$id)!==1)
+            throw new RuntimeException('INVALID_ASSET_SCOPE');
+    }
+    return ' WHERE asset_id IN ('.implode(',',array_fill(0,count($assetIds),'?')).')';
+}
+
+function purgeMarketData(PDO $db, ?array $assetIds=null): array {
+    $scope=marketDataScope($assetIds);
     $locks=[];
     try {
         foreach (['m2-collector-scheduler','m2-current-refresh'] as $lock) { claim($db,$lock); $locks[]=$lock; }
@@ -171,7 +183,11 @@ function purgeMarketData(PDO $db): array {
         if ((int)$db->query("SELECT COUNT(*) FROM m2_collector_state WHERE status='RUNNING' OR unresolved=1")->fetchColumn()>0)
             throw new RuntimeException('COLLECTOR_NOT_IDLE');
         $deleted=[];
-        foreach (MARKET_TABLES as $table) $deleted[$table]=$db->exec('DELETE FROM '.$table);
+        foreach (MARKET_TABLES as $table) {
+            $query=$db->prepare('DELETE FROM '.$table.$scope);
+            $query->execute($assetIds??[]);
+            $deleted[$table]=$query->rowCount();
+        }
         $db->commit();
         return ['status'=>'deleted','deleted'=>$deleted];
     } finally {
@@ -180,13 +196,17 @@ function purgeMarketData(PDO $db): array {
     }
 }
 
-function verify(PDO $db, string $action, string $code, array $result): bool {
+function verify(PDO $db, string $action, string $code, array $result, ?array $assetIds=null): bool {
     $db->exec('SET SESSION TRANSACTION READ ONLY');
     $db->beginTransaction();
     try {
         if ($action==='purge_all') {
-            foreach (MARKET_TABLES as $table)
-                if ((int)$db->query('SELECT COUNT(*) FROM '.$table)->fetchColumn()!==0) return false;
+            $scope=marketDataScope($assetIds);
+            foreach (MARKET_TABLES as $table) {
+                $query=$db->prepare('SELECT COUNT(*) FROM '.$table.$scope);
+                $query->execute($assetIds??[]);
+                if ((int)$query->fetchColumn()!==0) return false;
+            }
             return true;
         }
         $asset=identity($db,$code);
