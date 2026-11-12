@@ -190,19 +190,36 @@ function registeredName(string $code): ?string {
         return count($rows)===1 ? $rows[0]['display_name'] : null;
     }catch(Throwable){return null;}
 }
+/** Both the legacy single-source preview and the multi-source comparison
+ * execute the same vendored MOSA parser; neither writes to the M2 database.
+ */
 function preview(string $code,string $provider,?callable $transport=null): array {
     $code=isin($code);
-    if (!isset(SOURCES[$provider])) fail('SOURCE_UNSUPPORTED');
-    $spec=descriptor($code,$provider);
-    $body=($transport??__NAMESPACE__.'\\fetch')($spec['url'],$spec['headers']);
-    $result=$provider==='tradegate'?tradegate($body,$code):frankfurt($body,$code);
-    $name=registeredName($code)??$result['name']??null;
-    $observed=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
-    $age=max(0,time()-(new DateTimeImmutable($result['market_at']))->getTimestamp());
-    return ['status'=>'ok','isin'=>$code,'name'=>$name,'provider'=>$provider,'source'=>SOURCES[$provider],
-        'url'=>$spec['url'],'captured_at'=>$observed,'age_seconds'=>$age,'stale'=>$age>1800]+$result;
+    if(!isset(SOURCES[$provider]))fail('SOURCE_UNSUPPORTED');
+    require_once __DIR__.'/market_source_engine.php';
+    $target=$provider==='tradegate'?'tradegate_quote':'boerse_frankfurt_trade';
+    $url=null;
+    $clock=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+    $lab=\fixlabRunMosaMarketSourceLab($code,\FIXLAB_MOSA_MARKET_SOURCE_LAB_PROVIDER,
+        static function(array $request)use($target,$code,$transport,&$url):array {
+            if($request['request_key']!==$target||!sourceAllowed($request,$code))
+                return ['body'=>'','http_status'=>null,'error_code'=>'provider_not_selected'];
+            $url=$request['url'];
+            if($transport!==null) {
+                $body=$transport($request['url'],$request['headers']);
+                return ['body'=>is_string($body)?$body:'','http_status'=>200,'error_code'=>null];
+            }
+            $request['follow_redirects']=false;
+            return \fixlabMosaMarketSourceLabLiveTransport($request);
+        },$clock);
+    $record=sourceRecord($target,$lab['sources'][$target]??[],$code,$clock->format('Y-m-d\TH:i:s.u\Z'));
+    if(($record['status']??null)!=='ok'||!is_string($url))fail('SOURCE_UNAVAILABLE');
+    $name=registeredName($code)??($lab['instrument']['name']??null);
+    return array_replace($record,[
+        'status'=>'ok','isin'=>$code,'name'=>$name,'provider'=>$provider,
+        'source'=>SOURCES[$provider],'url'=>$url,
+    ]);
 }
-
 /** Only the four established MOSA source providers and their documented endpoints. */
 function sourceAllowed(array $request,string $code): bool {
     return \Mosa2\MarketSources\allowed($request,$code);
