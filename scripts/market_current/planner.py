@@ -85,7 +85,12 @@ def previous_route(data):
             'current_previous_route_binding')
     require(route['asset_id'] == previous['asset_id'] == data['route']['asset_id'],
             'current_transition_asset')
-    require(all(route[key] == data['route'][key] for key in UNITS),
+    compare_units = UNITS
+    if data['approval'].get('allow_native_currency_transition') is True:
+        # The old and new observation are each validated with their own route.
+        # No price comparison or currency conversion is performed on a route switch.
+        compare_units = tuple(key for key in UNITS if key != 'quote_unit_key')
+    require(all(route[key] == data['route'][key] for key in compare_units),
             'current_transition_units')
     return route
 

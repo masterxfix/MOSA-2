@@ -1,4 +1,4 @@
-"""Process one fresh private gettex file through the existing Dogado market batch."""
+"""Process available post-trade publications through the common Dogado market batch."""
 from datetime import datetime, timezone
 import gzip
 import hashlib
@@ -11,6 +11,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import timedelta
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.market_collector import nasdaq_nordic as nordic
 
 
 FILE = re.compile(r"(?P<slot>\d{8}\.\d{2}\.\d{2})\.json")
@@ -42,17 +46,22 @@ def process_file(root, config, slot, receipt, archive, codes):
     # Presence only. The existing adapter still validates the complete trade and UTC slot.
     present = {line.split(b",", 1)[0] for line in data.splitlines()}
     selected = [code for code in codes if code.encode("ascii") in present]
+    return store_publication(root, config, slot, receipt, archive.name, raw,
+                             [(code, "provider:gettex_mund_delayed") for code in selected])
+
+
+def store_publication(root, config, slot, receipt, filename, raw, selected):
     result = dict(slot=slot, selected=len(selected), observations=0, duplicates=0, failures=0)
     if not selected:
         return result
     work = Path(tempfile.mkdtemp(prefix="slot-", dir=root / "work"))
     try:
-        original = work / archive.name
+        original = work / filename
         original.write_bytes(raw)
-        for index, code in enumerate(selected):
+        for index, (code, source) in enumerate(selected):
             batch = work / str(index) / "batch"
             batch.mkdir(parents=True, mode=0o700)
-            scope = dict(mode="manual", request_budget=1, source_priority=["provider:gettex_mund_delayed"],
+            scope = dict(mode="manual", request_budget=1, source_priority=[source],
                          expected_isins=[code], archive={**receipt, "slot":slot, "private_path":str(original)})
             contract = dict(python=config["python"], php=config["php"], project=config["project"],
                             runtime_path="/opt/plesk/php/8.4/bin:/usr/bin:/bin", public_root=config["web"],
@@ -67,7 +76,8 @@ def process_file(root, config, slot, receipt, archive, codes):
                 output = json.loads(child.stdout)
                 if child.returncode or child.stderr or not output.get("ok") or output.get("current", {}).get("readback") != "PASS":
                     result["failures"] += 1
-                    code_value = output.get("failure")
+                    items = (output.get("batch") or {}).get("item_results", [])
+                    code_value = (items[0].get("failure_stage") if items else None) or output.get("failure")
                     if isinstance(code_value, str) and re.fullmatch(r"[a-z_]{1,80}", code_value):
                         result["last_failure"] = code_value
                     continue
@@ -87,6 +97,43 @@ def process_file(root, config, slot, receipt, archive, codes):
         return result
     finally:
         shutil.rmtree(work)
+
+
+def nordic_tick(root, config, codes, now, previous):
+    local = now.astimezone(nordic.ZoneInfo("Europe/Stockholm"))
+    if local.weekday() >= 5 or not (9 <= local.hour <= 18) or not codes:
+        return previous
+    state = root / "state"
+    if (state / "nasdaq-nordic.stop").exists():
+        return {"status": "stopped"}
+    available = nordic.publications()
+    candidates = [name for name in available if
+                  timedelta(minutes=15) <= now.replace(tzinfo=None) - nordic.publication_start(name) <= timedelta(hours=1)]
+    if not candidates:
+        return previous
+    name = candidates[0]
+    try:
+        with (state / (name + ".checked")).open("x", encoding="utf-8"):
+            pass
+    except FileExistsError:
+        return previous
+    response = nordic.fetch(nordic.download_url(name), nordic.MAX_BYTES)
+    if response.http_status in (401, 403, 429):
+        (state / "nasdaq-nordic.stop").write_text(str(response.http_status), encoding="utf-8")
+    if response.http_status != 200:
+        return {"slot": name, "failures": 1, "http_status": response.http_status}
+    registered = set(codes)
+    choices = {}
+    for isin, mic, market, _, _ in nordic.trades(response.payload_bytes, name):
+        if isin not in registered:
+            continue
+        rank = (isin[:2] == nordic.MARKETS[mic][0], market, mic)
+        if isin not in choices or rank > choices[isin]:
+            choices[isin] = rank
+    selected = [(code, "provider:nasdaq_nordic_" + choices[code][2].lower() + "_delayed")
+                for code in sorted(choices)]
+    receipt = dict(sha256=hashlib.sha256(response.payload_bytes).hexdigest(), captured_at=response.collected_at)
+    return store_publication(root, config, name, receipt, name + ".csv", response.payload_bytes, selected)
 
 
 def main():
@@ -127,6 +174,12 @@ def main():
         except (ValueError, OSError):
             status["last_batch"] = {"slot":slot,"failures":1}
         break
+    if config.get("nasdaq_nordic_private_use") is True:
+        try:
+            status["nasdaq_nordic"] = nordic_tick(root, config, codes, now, previous.get("nasdaq_nordic"))
+        except (KeyError, TypeError, ValueError, OSError) as error:
+            status["nasdaq_nordic"] = {"failures": 1, "reason": str(error) if type(error) is ValueError
+                                      and str(error).startswith("read_only_http_") else type(error).__name__}
     write_status(status_path, status)
 
 

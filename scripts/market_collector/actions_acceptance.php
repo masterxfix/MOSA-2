@@ -28,6 +28,21 @@ function gettexManifest(array $state,array $selection): array {
         'adapter_class'=>'GettexDelayedTradeV1',
     ]);
 }
+function nordicProvider(string $mic): array {
+    $currencies=['XSTO'=>'SEK','XCSE'=>'DKK','XHEL'=>'EUR'];
+    check(isset($currencies[$mic]),'nordic_market');
+    $venue=strtolower($mic);
+    return [
+        'source_key'=>'nasdaq_nordic_'.$venue.'_delayed','reference_key'=>'nasdaq_nordic_'.$venue,
+        'venue_key'=>$venue,'family'=>'nasdaq_nordic_delayed_trade',
+        'reference'=>'Nasdaq Nordic delayed posttrade CSV; execution MIC, currency and UTC timestamps',
+        'provider_key'=>'nasdaq_nordic_delayed_v1','adapter_module'=>'scripts.market_collector.nasdaq_nordic',
+        'adapter_class'=>'NasdaqNordicTradeV1','currency'=>$currencies[$mic],
+    ];
+}
+function nordicManifest(array $state,array $selection,string $mic): array {
+    return quoteManifest($state,$selection,nordicProvider($mic));
+}
 function quoteManifest(array $state,array $selection,array $provider): array {
     $isin=$selection['isin'];check(\Mosa2\Phase3D\isinValid($isin),'scope_isin');
     $ids=array_values(array_filter($state['m2_asset_identifiers'],static fn($r)=>$r['identifier_type']==='isin'&&$r['normalized_value']===$isin&&$r['scope_key']===''));
@@ -39,10 +54,11 @@ function quoteManifest(array $state,array $selection,array $provider): array {
     $identity=['canonical_name'=>$entities[0]['canonical_name'],'display_name'=>$assets[0]['display_name'],'asset_class'=>$assets[0]['asset_class'],
         'identifier_type'=>'isin','identifier_value'=>$isin,'normalized_value'=>$isin,'scope_key'=>'','is_primary'=>1];
     same(planAssetIdentity($state,$identity)['decision'],'EXISTING_MATCH','scope_identity_conflict');
+    $currency=$provider['currency']??'EUR';
     $units=array_fill_keys(\Mosa2\MarketIdentity\UNIT_FIELDS,null);
-    $units['unit_contract_version']='mosa2-market-unit-v1';$units['quote_unit_key']='EUR';$units['quote_unit_version']='1';
+    $units['unit_contract_version']='mosa2-market-unit-v1';$units['quote_unit_key']=$currency;$units['quote_unit_version']='1';
     $evidence=['sample_id'=>'LIVE-'.substr(hash('sha256',$isin),0,10),'source_reference'=>'qualified:'.$provider['reference_key'].':'.$isin,'family'=>$provider['family'],
-        'row'=>['isin'=>$isin,'provider_key'=>$provider['source_key'],'venue_key'=>$provider['venue_key'],'currency'=>'EUR','quote_variant'=>null,'series'=>'snapshot','observation_kind'=>'market_quote'],
+        'row'=>['isin'=>$isin,'provider_key'=>$provider['source_key'],'venue_key'=>$provider['venue_key'],'currency'=>$currency,'quote_variant'=>null,'series'=>'snapshot','observation_kind'=>'market_quote'],
         'proof'=>['external_identity'=>['isin'=>$isin,'venue'=>$provider['venue_key']],'route_reference'=>$provider['reference'],
             'unit_class'=>'currency_per_instrument']];
     $sources=array_values(array_filter($state['m2_sources'],static fn($r)=>$r['source_key']==='provider:'.$provider['source_key']));
@@ -51,6 +67,7 @@ function quoteManifest(array $state,array $selection,array $provider): array {
     check(in_array($route['decision'],['CREATE_REVISION','EXISTING_MATCH'],true),'scope_route_conflict');
     $m=['policy'=>$route['decision']==='EXISTING_MATCH'?'USE_EXISTING_ROUTE':'ONBOARD_NEW_ROUTE','identity'=>$identity,'route_evidence'=>$evidence,'unit_binding'=>$units,
         'instrument'=>$isin]+array_intersect_key($provider,array_flip(['provider_key','adapter_module','adapter_class']));
+    if(isset($provider['currency'])) $m['archive_mic']=strtoupper($provider['venue_key']);
     if(isset($selection['route_enabled']))$m['route_enabled']=$selection['route_enabled'];
     completePlan($state,$m);return $m;
 }
@@ -68,7 +85,11 @@ function capture(callable $connect,array $contract): array {
 function prepareGettexRoute(callable $connect,array $contract,string $isin): int {
     $sourceValues=['source_key'=>'provider:gettex_mund_delayed','source_type'=>'market_data',
         'display_name'=>'gettex','base_url'=>'https://www.gettex.de/handel/delayed-data/','enabled'=>'1'];
-    $db=$connect();check($db->beginTransaction(),'gettex_route_transaction');
+    return prepareArchiveRoute($connect,$contract,$isin,$sourceValues,'Mosa2\MarketAcceptance\gettexManifest');
+}
+/** Register only a verified native route for an already active ISIN. */
+function prepareArchiveRoute(callable $connect,array $contract,string $isin,array $sourceValues,callable $factory,?string $unit=null): int {
+    $db=$connect();check($db->beginTransaction(),'archive_route_transaction');
     try {
         $before=snapshot($db,$contract);$state=$before;$inserted=[];
         $ids=array_values(array_filter($before['m2_asset_identifiers'],static fn($id)=>
@@ -91,13 +112,39 @@ function prepareGettexRoute(callable $connect,array $contract,string $isin): int
         }else{
             check(\Mosa2\MarketIdentity\matchFields($existing[0],$sourceValues),'gettex_source_drift');
         }
-        $manifest=gettexManifest($state,['isin'=>$isin,'name'=>$assets[0]['display_name']]);
+        if ($unit!==null && !in_array($unit,array_column($state['m2_units'],'unit_key'),true)) {
+            $catalog=json_decode(file_get_contents(dirname(__DIR__,2).'/api/market_core/native_currency_units.json'),true,32,JSON_THROW_ON_ERROR);
+            $definitions=array_column($catalog['definitions'],null,'unit_key');
+            check(isset($definitions[$unit]),'archive_native_unit');
+            $row=$definitions[$unit]+['created_at'=>$now];
+            unset($row['definition_reference']);
+            $fields=array_keys($row);
+            $values=array_map(static fn($key)=>$key==='definition_sha256'?'UNHEX(?)':'?',$fields);
+            $q=$db->prepare('INSERT INTO m2_units ('.implode(',',$fields).') VALUES ('.implode(',',$values).')');
+            $q->execute(array_values($row));same($q->rowCount(),1,'archive_native_unit_insert');
+            $row['definition_sha256']=strtoupper($row['definition_sha256']);
+            $state['m2_units'][]=$row;
+        }
+        $manifest=$factory($state,['isin'=>$isin,'name'=>$assets[0]['display_name']]);
         $plan=completePlan($state,$manifest);
         same($plan['asset']['decision'],'EXISTING_MATCH','gettex_no_asset_insert');
         $route=strings(applyMarketRoutePlan($store,$plan['route'],$assets[0]['entity_id'],$now));
         if($plan['route']['decision']==='CREATE_REVISION')$inserted['m2_asset_source_routes']=[$route];
         $delta=['deltas'=>array_map('count',$inserted)];
-        $after=snapshot($db,$contract);compareDelta($before,$after,$delta,$inserted);
+        $after=snapshot($db,$contract);
+        if (count($state['m2_units'])!==count($before['m2_units'])) {
+            $unitRows=array_values(array_filter($after['m2_units'],static fn($r)=>$r['unit_key']===$unit));
+            $expectedUnit=$state['m2_units'][count($state['m2_units'])-1];
+            same(count($unitRows),1,'archive_native_unit_readback');
+            same($unitRows[0],$expectedUnit,'archive_native_unit_readback');
+            same(array_values(array_filter($after['m2_units'],static fn($r)=>$r['unit_key']!==$unit)),
+                 $before['m2_units'],'archive_protected_units');
+            $before['m2_units']=$after['m2_units'];
+            $delta['deltas']['m2_units']=1;
+        }
+        $routeDelta=$delta;
+        unset($routeDelta['deltas']['m2_units']);
+        compareDelta($before,$after,$routeDelta,$inserted);
         same($db->commit(),true,'gettex_route_commit');
     } finally {
         if($db->inTransaction())$db->rollBack();

@@ -23,7 +23,6 @@ function item(?array $current,?array $origin,array $r,string $isin,string $now,i
 /** The same validated publication boundary is used by both web views. */
 function published(PDO $p,string $now,int $stale): array {
     $scope=$p->prepare(publishedSql());$scope->execute([]);$routes=$scope->fetchAll(PDO::FETCH_ASSOC);
-    checked(count($routes)<=10);
     $current=$p->prepare('SELECT *,HEX(observation_dedupe_key) AS observation_dedupe_key FROM m2_market_current WHERE asset_id=? LIMIT 1');
     $fact=$p->prepare('SELECT id,'.implode(',',\Mosa2\QuoteSelection\FIELDS).',observation_format_version,HEX(dedupe_key) AS dedupe_key FROM m2_market_observations WHERE id=? AND asset_id=? AND source_id=? AND route_id=? LIMIT 1');
     $items=[];$seen=[];

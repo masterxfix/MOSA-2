@@ -33,10 +33,16 @@ def run(data):
             raise ValueError('adapter module')
         adapter = getattr(importlib.import_module(module), manifest['adapter_class'])()
         stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
-        archive = manifest.get('gettex_archive')
+        nordic = manifest.get('nordic_archive')
+        archive = nordic if nordic is not None else manifest.get('gettex_archive')
         if archive is None:
             endpoint = adapter.live_request(manifest['instrument'], stamp,
                 php_cli=data['php_cli'], request_script=data.get('request_script', str(private/'request.php')))
+        elif nordic is not None:
+            if adapter.provider_key != 'nasdaq_nordic_delayed_v1' or 'private_path' not in archive:
+                raise ValueError('archive provider binding')
+            stamp = archive['captured_at']
+            endpoint = adapter.archive_request(manifest['instrument'], stamp, archive['slot'], manifest['archive_mic'])
         else:
             if adapter.provider_key != 'gettex_mund_delayed_v1':
                 raise ValueError('archive provider binding')
@@ -45,7 +51,8 @@ def run(data):
         if archive is not None and 'private_path' in archive:
             source = Path(archive['private_path'])
             parent = private.resolve().parents[2]
-            if source.parent != parent or source.name != 'mosa2-gettex-posttrade.'+archive['slot']+'.mund.csv.gz':
+            name = archive['slot'] + '.csv' if nordic is not None else 'mosa2-gettex-posttrade.' + archive['slot'] + '.mund.csv.gz'
+            if source.parent != parent or source.name != name:
                 raise ValueError('private archive binding')
             with os.fdopen(os.open(source, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
                 info = os.fstat(stream.fileno())
@@ -54,7 +61,7 @@ def run(data):
                 raw = stream.read(endpoint['max_bytes']+1)
             if len(raw) > endpoint['max_bytes']:
                 raise ValueError('private archive size')
-            response = TransportResponse(raw, stamp, 200, 'application/gzip')
+            response = TransportResponse(raw, stamp, 200, 'application/octet-stream' if nordic is not None else 'application/gzip')
             requests, provider_duration_ms = 0, 0
         else:
             http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],

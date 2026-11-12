@@ -38,6 +38,7 @@ try {
             ['PATH'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin','LANG'=>'C.UTF-8']);
         if (!is_resource($worker)) throw new RuntimeException('worker_start');
         $input=json_encode(['periodic'=>$periodic,'project'=>$project,'web'=>$subscription.'/mosa2-test.scharwerk.de',
+            'nasdaq_nordic_private_use'=>getenv('MOSA_MARKET_NASDAQ_NORDIC_PRIVATE_USE')==='1',
             'password'=>$dbConfig['password'],'is_registry'=>$ids,'python'=>$python,'php'=>PHP_BINARY],JSON_THROW_ON_ERROR);
         unset($dbConfig);
         fwrite($pipes[0],$input);
@@ -52,6 +53,6 @@ try {
         $db->query("SELECT RELEASE_LOCK('m2-collector-scheduler')");
     }
 } catch (Throwable) {
-    fwrite(STDERR,"M2 gettex check failed before a confirmed result\n");
+    fwrite(STDERR,"M2 market check failed before a confirmed result\n");
     exit(1);
 }

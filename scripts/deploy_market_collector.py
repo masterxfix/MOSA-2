@@ -23,6 +23,7 @@ PERIODIC = shared.TEST_ROOT.rsplit("/", 1)[0] + "/private/mosa2-collector/period
 EXTRAS = (
     "api/market_core/native_currency_units.json",
     "scripts/market_collector/gettex_delayed.py",
+    "scripts/market_collector/nasdaq_nordic.py",
     "scripts/market_collector/gettex_tick.php",
     "scripts/market_collector/gettex_tick.py",
 )

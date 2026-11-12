@@ -39,6 +39,9 @@ function sourceDetails(string $source): array {
     return match($source){
         'provider:boerse_frankfurt_api'=>['venue'=>'Börse Frankfurt · XFRA','quote_type'=>'Letzter Handel'],
         'provider:tradegate_bsx_mid'=>['venue'=>'Tradegate BSX · XGAT','quote_type'=>'Mid (Geld/Brief)'],
+        'provider:nasdaq_nordic_xsto_delayed'=>['venue'=>'Nasdaq Stockholm · XSTO','quote_type'=>'Letzter Handel (verzögert)'],
+        'provider:nasdaq_nordic_xcse_delayed'=>['venue'=>'Nasdaq Copenhagen · XCSE','quote_type'=>'Letzter Handel (verzögert)'],
+        'provider:nasdaq_nordic_xhel_delayed'=>['venue'=>'Nasdaq Helsinki · XHEL','quote_type'=>'Letzter Handel (verzögert)'],
         'provider:gettex_mund_delayed'=>['venue'=>'gettex · MUND','quote_type'=>'Letzter Handel (verzögert)'],
         default=>['venue'=>'—','quote_type'=>'Gespeicherter Kurs'],
     };
@@ -69,7 +72,7 @@ function publishedSql(): string {
         LEFT JOIN m2_sources s ON s.id=c.source_id
         LEFT JOIN m2_asset_source_routes r ON r.id=c.route_id AND r.asset_id=c.asset_id AND r.source_id=c.source_id
         LEFT JOIN m2_units u ON u.unit_key=r.quote_unit_key AND u.unit_version=r.quote_unit_version AND u.unit_contract_version=r.unit_contract_version
-        ORDER BY c.asset_id LIMIT 11";
+        ORDER BY c.asset_id";
 }
 function readTransaction(\PDO $p,callable $reader): mixed {
     $p->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
