@@ -30,13 +30,14 @@ $transport=static function(array $r)use($fixtures,&$requests):array{
 $result=previewAll($code,static function(array $event)use(&$events):void{$events[]=$event;},$transport,$now);
 assertSameValue($result['isin'],$code,'isin');
 assertSameValue($result['name'],'PNE AG','name');
-assertSameValue($result['request_count'],7,'one shared comparison, seven HTTP GETs');
-assertSameValue($requests,array_keys($fixtures),'request order');
-assertSameValue(count($events),14,'one start+finish per request');
-assertSameValue(count($result['records']),6,'six independent source facts');
+assertSameValue($result['request_count'],5,'one shared comparison, five approved source HTTP GETs');
+assertSameValue($requests,['lang_schwarz_search','lang_schwarz_page','tradegate_quote',
+    'tradegate_trade','boerse_frankfurt_trade'],'approved request order: Yahoo excluded');
+assertSameValue(count($events),10,'one start+finish per five approved requests');
+assertSameValue(count($result['records']),5,'five independent approved source facts');
 $map=array_column($result['records'],null,'provider');
 assertSameValue(array_keys($map),['lang_schwarz_quote','lang_schwarz_trade','tradegate_quote',
-    'tradegate_trade','boerse_frankfurt_trade','yahoo_home_market'],'provider scopes');
+    'tradegate_trade','boerse_frankfurt_trade'],'Yahoo source excluded from provider scopes');
 assertSameValue($map['lang_schwarz_quote']['status'],'ok','ls quote');
 assertSameValue($map['lang_schwarz_trade']['status'],'ok','ls trade');
 assertSameValue($map['lang_schwarz_trade']['market_at'],'2026-11-09T21:47:15.000000Z','late trade actual time');
@@ -45,10 +46,7 @@ assertSameValue(fixlabMosaMarketSourceLabLsDatedQuote('22:47:15',$now),null,'und
 assertSameValue($map['tradegate_quote']['status'],'ok','tradegate quote');
 assertSameValue($map['tradegate_trade']['status'],'ok','tradegate trade');
 assertSameValue($map['boerse_frankfurt_trade']['status'],'ok','frankfurt trade');
-assertSameValue($map['yahoo_home_market']['status'],'ok','yahoo home');
 assertSameValue($map['tradegate_quote']['price'],'5.5','tradegate mid price');
-assertSameValue($map['yahoo_home_market']['currency'],'EUR','yahoo native currency');
-assertSameValue($map['yahoo_home_market']['symbol'],'PNE.DE','yahoo native ticker');
 assertSameValue($map['tradegate_trade']['quote_type'],'Letzter Handel','trade type');
 assertSameValue($map['tradegate_quote']['quote_type'],'Mid (Geld/Brief)','mid type');
 assertSameValue($result['instrument_type'],'stock','L&S exact stock classification');
@@ -64,7 +62,7 @@ $etf=previewAll($etfCode,static function(array $event):void{} ,static function(a
 });
 assertSameValue($etf['instrument_type'],'etf','L&S exact ETF classification');
 assertSameValue($etf['instrument_type_source'],'lang_schwarz','ETF classification source');
-assertSameValue($etf['request_count'],7,'ETF classification reuses the seven existing GETs');
+assertSameValue($etf['request_count'],5,'ETF classification only uses the five approved GETs');
 
 $foreignCode='AU000000DRO2';
 $missingFixtures=$fixtures;
@@ -102,7 +100,7 @@ $partial=previewAll($code,static function(array $event):void{},$transportFault);
 $failed=array_column($partial['records'],null,'provider');
 assertSameValue($failed['tradegate_trade']['status'],'error','tradegate error separate');
 assertSameValue($failed['lang_schwarz_quote']['status'],'ok','other provider succeeds');
-assertSameValue($failed['yahoo_home_market']['status'],'ok','yahoo independently succeeds');
+assertSameValue(false,isset($failed['yahoo_home_market']),'Yahoo never shown in M2 preview');
 $night=new DateTimeImmutable('2026-11-10T02:30:00+01:00');
 foreach(['AUD','HKD','JPY','NOK','GBX'] as $unit){
     $data=sourceRecord('yahoo_home_market',['available'=>true,'price'=>12.5,'currency'=>$unit,
@@ -116,4 +114,4 @@ $future=sourceRecord('yahoo_home_market',['available'=>true,'price'=>1.5,'curren
 assertSameValue($future['code'],'market_time_future','future snapshot rejected');
 $missing=sourceRecord('yahoo_home_market',['error_code'=>'home_market_not_found'],$foreignCode,$night->format(DateTimeInterface::ATOM));
 assertSameValue($missing['status'],'unavailable','missing source distinct from failure');
-echo "PASS all four MOSA providers / six quote types, 7 requests, partial errors\n";
+echo "PASS three approved M2 market providers / five quote types, 5 requests, no Yahoo transport, partial errors\n";
