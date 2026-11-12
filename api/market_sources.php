@@ -39,6 +39,11 @@ function catalog():array {
             // Explicit private entitlement + bounded quota are mandatory.
             'private_entitlement_required'=>true,
         ],
+        'eodhd'=>[
+            'name'=>'EODHD · verzögert','venue'=>'eodhd_physical_exchange','url'=>'https://eodhd.com/api/',
+            'requests'=>['eodhd_search','eodhd_exchange','eodhd_delayed'],'scheduled'=>false,
+            'private_entitlement_required'=>true,
+        ],
     ];
 }
 /** Single-provider aliases derive from the same scheduled-source catalog. */
@@ -52,9 +57,10 @@ function singlePreview():array {
     }
     return $out;
 }
-function scheduled(bool $internationalAuthorized=false):array {
+function scheduled(bool $internationalAuthorized=false,bool $eodhdAuthorized=false):array {
     return array_filter(catalog(),static fn(array $p,string $key):bool=>
-        $p['scheduled']===true||($internationalAuthorized&&$key==='twelve_data'),ARRAY_FILTER_USE_BOTH);
+        $p['scheduled']===true||($internationalAuthorized&&$key==='twelve_data')
+        ||($eodhdAuthorized&&$key==='eodhd'),ARRAY_FILTER_USE_BOTH);
 }
 function providerOf(string $key):?string {
     foreach(catalog() as $name=>$provider)if(in_array($key,$provider['requests'],true))return $name;
@@ -76,6 +82,15 @@ function allowed(array $request,string $isin):bool {
         'tradegate_trade'=>$url==='https://www.tradegatebsx.com/orderbuch_umsaetze.php?isin='.$isin,
         'boerse_frankfurt_trade'=>$url==='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$isin.'&mic=XFRA',
         'twelve_data_quote'=>$url==='https://api.twelvedata.com/quote?isin='.$isin,
+        'eodhd_search','eodhd_exchange','eodhd_delayed'=>
+            $host==='eodhd.com' && preg_match('/^[A-Za-z0-9_-]{4,128}$/D',
+                (string)(parse_str($p['query']??'', $query)===null?($query['api_token']??''):''))===1
+            &&($query['fmt']??null)==='json' && count($query)===($key==='eodhd_search'?3:2)
+            &&match($key) {
+                'eodhd_search'=>$path==='/api/search/'.$isin && ($query['limit']??null)==='100',
+                'eodhd_exchange'=>$path==='/api/exchanges-list/',
+                default=>preg_match('~^/api/real-time/[A-Za-z0-9][A-Za-z0-9._-]{1,40}\.[A-Za-z0-9]{1,10}$~D',$path)===1,
+            },
         'yahoo_home_search'=>$url==='https://query1.finance.yahoo.com/v1/finance/search?q='.$isin.'&quotesCount=10&newsCount=0',
         'yahoo_home_market'=>$host==='query1.finance.yahoo.com'
             &&preg_match('~^/v8/finance/chart/[a-zA-Z0-9._%=-]{1,128}$~D',$path)===1
@@ -197,7 +212,7 @@ function fact(array $source,string $key,string $isin,array $registry,array $capt
         ||!is_string($quoteUnit)||!isset($units[$quoteUnit])
         ||(isset($source['isin'])&&$source['isin']!==$isin))return null;
     // Physical international routing cannot use a synthetic or unknown venue.
-    if($provider==='twelve_data'
+    if(in_array($provider,['twelve_data','eodhd'],true)
         &&(!is_string($source['venue_key']??null)
             ||preg_match('/^[A-Z0-9]{4}$/D',$source['venue_key'])!==1))return null;
     $unit=$units[$quoteUnit];
@@ -241,10 +256,11 @@ function choose(array $lab,string $isin,string $assetType,array $registry,array 
     // prefer that genuine local-market trade over fresher German EUR listings.
     // The existing EUR router remains the fallback when the native quote is
     // unavailable, stale, or has no verified exchange identity.
-    $native=$sources['twelve_data_quote']??null;
-    if(is_array($native)&&is_string($native['venue_key']??null)
-        &&preg_match('/^[A-Z0-9]{4}$/D',$native['venue_key'])===1){
-        $nativeFact=fact($native,'twelve_data_quote',$isin,$registry,$captured,$now,300,$units);
+    foreach(['twelve_data_quote'=>300,'eodhd_delayed'=>1800] as $nativeKey=>$maxNativeAge){
+        $native=$sources[$nativeKey]??null;
+        if(!is_array($native)||!is_string($native['venue_key']??null)
+            ||preg_match('/^[A-Z0-9]{4}$/D',$native['venue_key'])!==1)continue;
+        $nativeFact=fact($native,$nativeKey,$isin,$registry,$captured,$now,$maxNativeAge,$units);
         if($nativeFact!==null)return $nativeFact;
     }
     if($assetType==='etf') {
