@@ -8,8 +8,9 @@ function sameValue(mixed $expected,mixed $actual,string $case):void {
 }
 $n=0;
 $all=catalog();$active=scheduled();
-sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','yahoo_finance_chart'],array_keys($all),'one source catalog');$n++;
+sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','yahoo_finance_chart','twelve_data'],array_keys($all),'one source catalog');$n++;
 sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api'],array_keys($active),'scheduled sources');$n++;
+sameValue(['lang_schwarz','tradegate_bsx','boerse_frankfurt_api','twelve_data'],array_keys(\Mosa2\MarketSources\scheduled(true)),'private entitlement adds generic international source');$n++;
 sameValue(false,$all['yahoo_finance_chart']['scheduled'],'no unauthorized Yahoo automation');$n++;
 sameValue('boerse_frankfurt_api',providerOf('boerse_frankfurt_trade'),'shared Frankfurt key');$n++;
 sameValue(['tradegate_quote','tradegate_trade'],$active['tradegate_bsx']['requests'],'shared Tradegate request keys');$n++;
