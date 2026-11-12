@@ -43,3 +43,5 @@ jobs:
 # Retry after registry-action fixture correction; deploy only when all checks pass.
 
 # Third check: registry-mode action slot in the simulated browser.
+
+# Validate ten-column non-action quote transition before installing.
