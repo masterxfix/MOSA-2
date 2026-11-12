@@ -1,0 +1,33 @@
+name: Verify M2 excluded market providers without deployment
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-provider-exclusion-verify-once.yml']
+permissions: {contents: read}
+jobs:
+  verify-exclusion:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify M2 excluded market providers without deployment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql,curl,dom
+          coverage: none
+          tools: none
+      - name: Validate excluded providers and existing source-collector contract
+        run: |
+          set -euo pipefail
+          php -l api/market_sources.php
+          php -l scripts/market_collector/mosa_tick.php
+          php -d zend.assertions=1 tests/test_m2_excluded_providers.php
+          php -d zend.assertions=1 tests/test_market_tick_sources.php
+          php -d zend.assertions=1 tests/fixtures/isin_quote_all_test.php
+          php -d zend.assertions=1 tests/test_twelve_data_provider.php
+          php -d zend.assertions=1 tests/test_eodhd_provider.php
+          php -d zend.assertions=1 tests/test_m2_native_quote_route.php
+          python3 scripts/build_pages.py --check
+          echo 'M2_MARKET_PROVIDER_EXCLUSION_VERIFIED_3_ACTIVE_2_EXCLUDED'
