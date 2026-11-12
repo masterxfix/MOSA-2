@@ -60,6 +60,8 @@ equalIntl('XTKS',$selected['venue_key']??null,'verified native venue travels wit
 $eurSource=[
     'source_key'=>'tradegate_quote','provider_key'=>'tradegate_bsx',
     'venue_key'=>'tradegate_bsx','available'=>true,'isin'=>$isin,
+    'provider_label'=>'Tradegate BSX','venue_label'=>'Tradegate BSX',
+    'freshness'=>'fresh','age_seconds'=>1,
     'currency'=>'EUR','data_type'=>'quote','mid'=>'100.00',
     'bid'=>'99.90','ask'=>'100.10','quoted_at'=>'2026-11-12T12:04:06+00:00',
 ];
