@@ -16,13 +16,14 @@ require_once __DIR__.'/../market_current/refresh.php';
 
 require_once dirname(__DIR__,2).'/api/market_source_engine.php';
 require_once dirname(__DIR__,2).'/api/isin_quote.php';
+require_once dirname(__DIR__,2).'/api/market_core/twelve_data.php';
 
 // One common provider catalog for every registered ISIN and every object class.
 // No extra provider-specific or security-specific scheduled collectors.
-function sourceRegistry(PDO $db): array {
+function sourceRegistry(PDO $db,bool $internationalAuthorized=false): array {
     $registry=[];
     $read=$db->prepare('SELECT id,enabled,source_type FROM m2_sources WHERE source_key=?');
-    foreach (\Mosa2\MarketSources\scheduled() as $provider=>$source) {
+    foreach (\Mosa2\MarketSources\scheduled($internationalAuthorized) as $provider=>$source) {
         $read->execute(['provider:'.$provider]);
         $row=$read->fetch();
         if ($row===false) {
@@ -71,7 +72,7 @@ function fetchSource(array $request,array &$requests): array {
     return $response;
 }
 
-function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &$requests,array $units): ?array {
+function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &$requests,array $units,?array $international=null): ?array {
     $ready=$db->prepare("SELECT COUNT(*) FROM m2_sync_checkpoints WHERE source_id=?
         AND stream_key='scheduled_market_cooldown' AND watermark_at>UTC_TIMESTAMP(6)");
     $allowed=[];
@@ -102,6 +103,34 @@ function acquire(PDO $db,array $registry,string $isin,string $assetClass,array &
             return $response;
         },now:$requestedAt,assetType:$assetType,lsQuoteClock:static fn(?string $clock,DateTimeImmutable $now)=>
             \fixlabMosaMarketSourceLabLsDatedQuote($clock,$now)??\fixlabMosaMarketSourceLabLocalClock($clock,$now));
+    // Optional international source adapter runs inside the same one M2 job.
+    // A missing private entitlement adds zero requests and zero DB changes.
+    $internationalKey='twelve_data_quote';
+    if($international!==null&&isset($registry['twelve_data'],$allowed[$internationalKey])) {
+        $id=$registry['twelve_data']['id'];
+        $canSend=\Mosa2\MarketInternational\TwelveData\reserve(
+            $db,$id,$international,new DateTimeImmutable('now',new DateTimeZone('UTC'))
+        );
+        if($canSend){
+            $request=\Mosa2\MarketInternational\TwelveData\request($isin,$international['api_key']);
+            if(!sourceAllowed($request,$isin))throw new \RuntimeException('international_source_scope');
+            $response=fetchSource($request,$requests);
+            $captured[$internationalKey]=(new DateTimeImmutable('now',new DateTimeZone('UTC')))
+                ->format('Y-m-d H:i:s.u');
+            $status=$response['http_status']??null;
+            $payload=is_string($response['body']??null)
+                ?json_decode($response['body'],true):null;
+            if(in_array($status,[401,403,429],true)
+                ||($status===200&&is_array($payload)&&($payload['status']??null)==='error'
+                    &&in_array((int)($payload['code']??0),[401,403,429],true))) {
+                deferSource($db,$id,in_array((int)$status,[401,403,429],true)?(int)$status:403,
+                    $response['retry_after']??null);
+            }
+            $lab['sources'][$internationalKey]=\Mosa2\MarketInternational\TwelveData\source(
+                $isin,$status===200?$payload:null,new DateTimeImmutable('now',new DateTimeZone('UTC'))
+            );
+        }
+    }
     // One MOSA router and M2 fact contract for every ISIN/asset class.
     // A last trade is eligible only as a validated same-currency fallback.
     $resolvedType=\Mosa2\MarketSources\resolvedType($assetClass,$lab);
@@ -228,6 +257,7 @@ function main(): void {
         same($credentials['dsn']??null,'mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4','mosa_test_database');
         $password=$credentials['password'];
         unset($credentials);
+        $international=\Mosa2\MarketInternational\TwelveData\authorization($subscription);
         $connect=static fn()=>connection($password);
         $db=$connect();
         if ((int)$db->query("SELECT GET_LOCK('m2-collector-scheduler',0)")->fetchColumn()!==1) return;
@@ -240,7 +270,7 @@ function main(): void {
                 ORDER BY i.normalized_value")->fetchAll(PDO::FETCH_ASSOC);
             $registered=[];
             foreach($rows as $row)$registered[$row['isin']]=['name'=>$row['name'],'class'=>$row['asset_class']];
-            $registry=$registered===[]?[]:sourceRegistry($db);
+            $registry=$registered===[]?[]:sourceRegistry($db,$international!==null);
             $unitRegistry=$registered===[]?[]:\Mosa2\MarketSources\persistedUnitRegistry($db);
             $batches=array_chunk($registered,2,true);
             $due=$batches===[]?[]:$batches[intdiv(time(),60)%count($batches)];
@@ -253,7 +283,7 @@ function main(): void {
             $items=[];$unavailable=[];$requests=[];
             foreach ($due as $isin=>$asset) {
                 try {
-                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests,$unitRegistry);
+                    $acquired=acquire($db,$registry,$isin,$asset['class'],$requests,$unitRegistry,$international);
                     $fact=$acquired['fact']??null;
                     if($fact===null){
                         $unavailable[]=$isin;
