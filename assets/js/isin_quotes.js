@@ -30,10 +30,12 @@
   const marketView=root.querySelector("[data-isin-market-view]");
   const dbRegistry=marketView?.dataset.marketRegistry!==undefined;
   const confirmDialog=root.querySelector("[data-isin-db-confirm]");
+  const countdownLabel=root.querySelector("[data-isin-next-check]");
   let pendingDelete=null;
   const READ_INTERVAL=30000;
   const STORED_URL=marketView?"api/market.php?view=registered":"api/market.php?view=best";
   let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
+  let countdownTimer=null;
   let cancelRead = null;
   function restore() {
     try {
@@ -90,11 +92,37 @@
     return {...retained, unchanged:true};
   }
   const tabActive=()=>!document.hidden && document.hasFocus();
+  // One lightweight display clock. It reads the scheduler's exact monotonic
+  // deadline; it never starts an additional network request.
+  function showCountdown() {
+    if(!countdownLabel || scope.signal.aborted)return;
+    let label;
+    if(storedStopped)label="Automatische Aktualisierung angehalten";
+    else if(storedRead)label="Daten werden aktualisiert …";
+    else if(!tabActive())label="Automatische Aktualisierung pausiert (Tab inaktiv)";
+    else if(busy)label="Automatische Aktualisierung pausiert";
+    else if(nextStoredAt===null)label="Automatische Aktualisierung startet …";
+    else {
+      const remaining=Math.max(0,Math.ceil((nextStoredAt-performance.now())/1000));
+      label=remaining>0?"Nächste automatische Aktualisierung in "+remaining+" s"
+        :"Automatische Aktualisierung startet …";
+    }
+    if(countdownLabel.textContent!==label)countdownLabel.textContent=label;
+  }
+  function tickCountdown() {
+    if(countdownTimer!==null){clearTimeout(countdownTimer);countdownTimer=null;}
+    if(scope.signal.aborted || !marketView || !countdownLabel)return;
+    showCountdown();
+    if(!storedStopped && tabActive() && !busy){
+      countdownTimer=setTimeout(()=>{countdownTimer=null;tickCountdown();},1000);
+    }
+  }
   function scheduleStoredRead() {
     if(storedTimer!==null){clearTimeout(storedTimer);storedTimer=null;}
     if(scope.signal.aborted || !marketView || !storedRoot)return;
     const active=tabActive();
     if(storedRoot.dataset.isinTabActive!==String(active))storedRoot.dataset.isinTabActive=String(active);
+    tickCountdown();
     if(storedStopped || !active || busy || storedRead)return;
     storedTimer=setTimeout(()=>{
       storedTimer=null;
@@ -159,6 +187,7 @@
         }));
       }
     });
+    tickCountdown();
     return storedRead;
   }
   function age(quote) {
@@ -181,18 +210,6 @@
     if(core.length<5 || core===entry.isin)return full;
     return core+variant;
   }
-  // Market registry is not a published quote: wait for an actual Current quote
-  // and resolved DB identity before drawing the ordinary multi-column row.
-  function marketReady(entry,quote) {
-    return validQuote(quote,entry.isin)
-      && typeof entry.name==="string" && entry.name.trim()!=="" && entry.name.trim()!==entry.isin
-      && confirmedTypes.has(entry.instrument_type);
-  }
-  function pendingRow(entry) {
-    return [entry.isin+":pending","pending",[
-      "ISIN "+entry.isin+" registriert · Name, Typ und Kurs stehen noch aus. Automatische Aktualisierung aktiv."
-    ]];
-  }
   const headings=["Wertpapier","Typ","Kurs","Währung / Einheit","Quelle / Handelsplatz","Marktzeit","Abgerufen","Datenalter","ISIN","Status"];
   function reconcileRows(tbody, rows, fullNames) {
     const actions=tbody.dataset.isinActions!==undefined;
@@ -205,12 +222,10 @@
         row=document.createElement("tr");
         row.dataset.isinRow=key;
         if(key==="empty")row.className="market-placeholder";
-        if(status==="pending")row.className="market-pending";
         for(let i=0;i<values.length;i++){
           const cell=document.createElement("td");
-          cell.dataset.label=key==="empty"?"ISIN":status==="pending"?"Registrierung":headings[i];
+          cell.dataset.label=key==="empty"?"ISIN":headings[i];
           if(key==="empty")cell.colSpan=actions?11:10;
-          if(status==="pending")cell.colSpan=actions?10:10;
           if(i===2)cell.className="market-price";
           if(actions && i===headings.length-1)cell.className="isin-quote-status";
           row.append(cell);
@@ -224,7 +239,7 @@
       }
       if(status && row.dataset.status!==status)row.dataset.status=status;
       values.forEach((value,i)=>{if(row.cells[i].textContent!==value)row.cells[i].textContent=value;});
-      if(key!=="empty" && status!=="pending"){
+      if(key!=="empty"){
         const original=fullNames.get(values[8])||"";
         const tooltip=original && original!==values[0]?original:"";
         if(row.cells[0].title!==tooltip)row.cells[0].title=tooltip;
@@ -283,13 +298,8 @@
       for(const entry of displayed){
         const main=entry.isin+":main";
         const first=rows.length;
-        const stored=storedQuotes.get(entry.isin);
-        if(marketView && registeredAssets.has(entry.isin) && !marketReady(entry,stored)){
-          // A confirmed registration is not a quote. Keep deletion available,
-          // but do not publish an ISIN/unknown/empty-price row as a result.
-          rows.push(pendingRow(entry));
-        }else if(!detailsOpen){
-          const latest=(marketView?stored:null) || best(entry);
+        if(!detailsOpen){
+          const latest=(marketView?storedQuotes.get(entry.isin):null) || best(entry);
           rows.push(latest?quoteRow(main,entry,latest,true):missingRow(main,entry));
         }else{
           const quotes=availableQuotes(entry);
@@ -310,12 +320,9 @@
         detailsToggle.setAttribute("aria-expanded",String(detailsOpen));
     }
     const count=marketView?visibleIsins.size:entries.length;
-    const pending=marketView?[...registeredAssets.values()]
-      .filter(entry=>!marketReady(entry,storedQuotes.get(entry.isin))).length:0;
     const summary=count+" ISIN"+(count===1?"":"s")+
       (storedStatus==="loading"?" · Gespeicherte Kurse werden geladen":storedStatus==="error"
-        ?" · Gespeicherte Kurse derzeit nicht verfügbar":pending
-          ?" · "+pending+" noch ohne vollständige Kursdaten":" · Abgefragte und gespeicherte Kurse");
+        ?" · Gespeicherte Kurse derzeit nicht verfügbar":" · Abgefragte und gespeicherte Kurse");
     for(const label of root.querySelectorAll("[data-isin-summary]")){
       if(label.textContent!==summary)label.textContent=summary;
     }
@@ -623,6 +630,7 @@
   return {ready,dispose(){
     scope.abort();
     if(storedTimer!==null)clearTimeout(storedTimer);
+    if(countdownTimer!==null)clearTimeout(countdownTimer);
     cancelRead?.();
     if(currentView===view)currentView=null;
   }};
