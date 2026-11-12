@@ -55,6 +55,8 @@ Nach jedem gemeinsam festgelegten Zwischenziel bewerten wir kurz, was gut funkti
 
 **Live-Erfolg belegen:** Nach Änderungen die ausgelieferte Seite prüfen; nur vollständig geladene Seiten zählen für die 2-Sekunden-Grenze, keine HTTP-401-Antworten.
 
+**Privaten Collector wirklich aktivieren:** Ein erfolgreiches SFTP-Release ist noch keine laufende Änderung. Bei gepinnten Dogado-Minutenjobs den tatsächlich aktiven Cron-/Plesk-Zielpfad nach dem Deployment read-only prüfen, ausschließlich den beauftragten M2-Job kontrolliert auf das verifizierte Release umstellen und den neuen Pfad erneut auslesen. Erst ein echter Collector-Lauf mit Anbieter-HTTP-Nachweis, Observation-/Current-Readback und Anzeige auf der verwendeten M2-Testseite zählt als fertig. Andere Cronjobs und MOSA bleiben unverändert.
+
 **Zeit und Status ehrlich melden:** Unnötige Wartezeiten vermeiden; fehlende Live-Prüfungen als offen kennzeichnen, niemals als Erfolg.
 
 **Automatik zuverlässig entwickeln:** Nur auf der vorgesehenen Seite ausführen, parallele Abrufe verhindern und Zeit-/Feiertagslogik mit simulierter Zeit testen.
