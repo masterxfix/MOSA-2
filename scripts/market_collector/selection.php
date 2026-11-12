@@ -122,17 +122,18 @@ function currentDecision(?array $current, array $observations, array $routeRows,
         'price'=>text($origin,'price'),'currency'=>text($origin,'currency'),'age_seconds'=>$age];
     return ['status' => $age > $staleSeconds ? 'CURRENT_STALE' : 'CURRENT_VALID', 'current' => $view];
 }
-function select(array $assets, array $identifiers, array $routes, array $currents, array $observations, string $now, int $staleSeconds = 1800, int $maxAssets = MAX_ASSETS): array {
+function select(array $assets, array $identifiers, array $routes, array $currents, array $observations, string $now, int $staleSeconds = 1800, int $maxAssets = MAX_ASSETS, bool $includeUnclassified = false): array {
     listInput($assets, 'asset_rows');listInput($identifiers, 'identifier_rows');listInput($routes, 'route_rows');listInput($currents, 'current_rows');listInput($observations, 'observation_rows');
     requireValue(validUtc($now) && $staleSeconds >= 60 && $staleSeconds <= 86400 && $maxAssets >= 1, 'selection_parameters');
     $active = [];$seenAssets = [];
+    $classes=$includeUnclassified?['equity','etf','unknown']:['equity','etf'];
     foreach ($assets as $asset) {
         requireValue(is_array($asset), 'asset_row');$id = text($asset, 'asset_id') ?? text($asset, 'entity_id');
-        if (!positiveId($id) || !in_array(text($asset, 'asset_class'), ['equity', 'etf'], true) || text($asset, 'status') !== 'active') continue;
+        if (!positiveId($id) || !in_array(text($asset, 'asset_class'), $classes, true) || text($asset, 'status') !== 'active') continue;
         requireValue(!isset($seenAssets[$id]), 'duplicate_asset');$seenAssets[$id] = true;$asset['asset_id'] = $id;$active[] = $asset;
     }
     requireValue(count($active) <= $maxAssets, 'selection_scope_overflow');
-    $equities = array_values(array_filter($active, static fn(array $row): bool => text($row, 'asset_class') === 'equity'));
+    $equities = array_values(array_filter($active, static fn(array $row): bool => $includeUnclassified || text($row, 'asset_class') === 'equity'));
     $etfs = count($active) - count($equities);$idsByAsset = [];$isinOwners = [];
     foreach ($identifiers as $identifier) {
         if (!is_array($identifier) || text($identifier, 'identifier_type') !== 'isin' || text($identifier, 'scope_key') !== '' || text($identifier, 'valid_to') !== null || !truthy($identifier['is_primary'] ?? null)) continue;

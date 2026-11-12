@@ -5,7 +5,7 @@ namespace Mosa2\MarketBatchScope;
 use InvalidArgumentException;
 
 /** Join the authenticated physical catalog for the shared qualification rules. */
-function selection(array $state,string $now): array {
+function selection(array $state,string $now,bool $includeUnclassified=false): array {
     require_once __DIR__.'/selection.php';
     $assets=[];$routes=[];
     foreach($state['m2_assets'] as $asset){
@@ -21,7 +21,7 @@ function selection(array $state,string $now): array {
             'unit_status'=>$units[0]['status'],'unit_currency'=>$units[0]['monetary_currency_code']];
     }
     $selected=\Mosa2\MarketSelection\select($assets,$state['m2_asset_identifiers'],$routes,
-        $state['m2_market_current'],$state['m2_market_observations'],$now);
+        $state['m2_market_current'],$state['m2_market_observations'],$now,includeUnclassified:$includeUnclassified);
     // Selection reports multiple valid sources as ambiguous for an unconfigured caller.
     // The batch caller supplies explicit source priorities, so retain all qualified latest options.
     foreach($selected['assets'] as &$asset){

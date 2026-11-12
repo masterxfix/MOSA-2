@@ -59,7 +59,7 @@ function collect(string $root,string $password,array $config,array $scope,?calla
         $manual=$scope['mode']==='manual';
         check(is_int($scope['request_budget']??null)&&$scope['request_budget']>=1&&$scope['request_budget']<=10,'collection_budget');
         $initial=\Mosa2\MarketAcceptance\capture($connect,$config['state_contract']);
-        $selection=\Mosa2\MarketBatchScope\selection($initial,gmdate('Y-m-d H:i:s').'.000000');
+        $selection=\Mosa2\MarketBatchScope\selection($initial,gmdate('Y-m-d H:i:s').'.000000',isset($scope['archive']));
         $plan=\Mosa2\MarketBatchScope\plan($initial,$selection,$scope['source_priority'],providers(),
             'Mosa2\\MarketLive\\completePlan',$manual,10,$scope['expected_isins']??null);
         // Physical IDs and their hashes bind the entire reviewed scope before any GET.
@@ -188,7 +188,7 @@ if(realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){
             $routeWrites=\Mosa2\MarketAcceptance\prepareGettexRoute($connect,$config['state_contract'],$scope['expected_isins'][0]);
         }
         $state=\Mosa2\MarketAcceptance\capture($connect,$config['state_contract']);
-        $selection=\Mosa2\MarketBatchScope\selection($state,gmdate('Y-m-d H:i:s').'.000000');
+        $selection=\Mosa2\MarketBatchScope\selection($state,gmdate('Y-m-d H:i:s').'.000000',isset($scope['archive']));
         $plan=\Mosa2\MarketBatchScope\plan($state,$selection,$scope['source_priority'],providers(),'Mosa2\\MarketLive\\completePlan',true,10,$scope['expected_isins']);
         $actual=array_column($plan['prepared'],'isin');$expected=$scope['expected_isins'];sort($actual);sort($expected);
         same($actual,$expected,'manual_asset_scope');check(count($actual)===count(array_unique($actual)),'manual_duplicate_scope');

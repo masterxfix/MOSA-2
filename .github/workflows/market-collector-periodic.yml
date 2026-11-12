@@ -1,0 +1,46 @@
+name: Private M2 gettex collector
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * 1-5'
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [install, relay]
+        required: true
+      expected_commit:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+concurrency:
+  group: mosa2-private-gettex-collector
+  cancel-in-progress: false
+jobs:
+  collector:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check collector code and install pinned transport
+        run: |
+          python3 -m py_compile scripts/deploy_market_collector.py scripts/market_collector/gettex_tick.py
+          php -l scripts/market_collector/gettex_tick.php
+          python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Install or relay in the private M2 directory
+        env:
+          MODE: ${{ inputs.mode || 'relay' }}
+          MOSA_MARKET_GETTEX_PRIVATE_USE: ${{ vars.MOSA_MARKET_GETTEX_PRIVATE_USE }}
+          M2_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: python3 -B scripts/deploy_market_collector.py "$MODE"
