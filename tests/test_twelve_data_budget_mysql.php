@@ -52,4 +52,4 @@ $bad->execute();
 try{reserve($db,'91',$cfg,$t3);throw new RuntimeException('corrupted budget accepted');}
 catch(InvalidArgumentException){$assert(true,'corrupted counter fails closed');}
 $assert(!$db->inTransaction(),'corruption rolled back SQL transaction');
-echo "PASS 15/15 isolated MySQL daily/minute budget guard checks\n";
+echo "PASS 16/16 isolated MySQL daily/minute budget guard checks\n";
