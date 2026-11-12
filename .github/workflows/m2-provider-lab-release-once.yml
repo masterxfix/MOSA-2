@@ -1,5 +1,5 @@
-name: M2 three-provider read-only data laboratory release
-# Reviewed retry after source-key grouping correction; web-only deployment.
+name: M2 provider laboratory navigation release
+# Reuses existing approved testsite SFTP deployment; HTML-only navigation change.
 on:
   push:
     branches: [main]
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   test-and-deploy:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Test and deploy M2 read-only three-provider data laboratory once'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Deploy M2 provider laboratory navigation in four pages once'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -22,7 +22,7 @@ jobs:
           extensions: dom, curl
           tools: none
           coverage: none
-      - name: PHP and JavaScript syntax and shared M2 source regressions
+      - name: Check generated page links and provider-lab API isolation
         run: |
           set -euo pipefail
           php -l api/market_provider_lab.php
@@ -32,8 +32,20 @@ jobs:
           php tests/fixtures/isin_quote_all_test.php
           python3 scripts/build_pages.py --check
           python3 scripts/deploy_sftp.py validate
+          python3 - <<'PY'
+          from pathlib import Path
+          paths=('index.html','marktdaten.html','fundamentaldaten.html','anbieter-labor.html')
+          for path in paths:
+              content=Path(path).read_text(encoding='utf-8')
+              nav=content.split('<nav class="site-nav wrap"',1)[1].split('</nav>',1)[0]
+              assert nav.count('href="anbieter-labor.html"')==1, path
+              assert nav.count('aria-current="page"')==1, path
+              assert ('href="anbieter-labor.html" aria-current="page"' in nav)==(path=='anbieter-labor.html'), path
+              assert 'href="marktdaten.html"' in nav and 'href="fundamentaldaten.html"' in nav, path
+              print('M2_NAV_TEST_PASS',path)
+          PY
       - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
-      - name: Backup and deploy only six explicit M2 testsite files
+      - name: Backup and deploy only four M2 navigation HTML files
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
@@ -41,13 +53,13 @@ jobs:
           MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
           MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
           MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
-          MOSA_TEST_SFTP_FILES: '["anbieter-labor.html","marktdaten.html","assets/main-market.html","assets/js/provider_lab.js","assets/css/provider_lab.css","api/market_provider_lab.php"]'
+          MOSA_TEST_SFTP_FILES: '["index.html","marktdaten.html","fundamentaldaten.html","anbieter-labor.html"]'
         run: |
           set -euo pipefail
           python3 scripts/deploy_test_sftp.py check-config
           python3 scripts/deploy_test_sftp.py backup
           python3 scripts/deploy_test_sftp.py deploy
-      - name: Live M2-only manual source probe, no database calls
+      - name: Independent M2 navigation readback without extra provider requests
         env:
           MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
           MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
@@ -57,31 +69,18 @@ jobs:
           MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
         run: |
           python3 -B - <<'PY'
-          import json,sys
+          import hashlib,sys
+          from pathlib import Path
           sys.path.insert(0,'scripts')
-          import collector_actions as ssh,collector_db_locality as remote,deploy_test_sftp as dep
+          import collector_actions as ssh, deploy_test_sftp as deploy, deploy_sftp as shared
           import paramiko
-          with ssh.ssh_client(dep.configuration(),{},paramiko) as client:
-              phpbin,_=remote.capability(client)
-              source = r"""require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de/api/market_provider_lab.php';
-              $data=\Mosa2\ProviderLab\inspect('KYG9830T1067');
-              $log=['status'=>$data['status'],'storage'=>$data['storage'],'providers'=>[],
-                  'count'=>$data['request_count']];
-              foreach($data['providers'] as $p){
-                  $log['providers'][]=['key'=>$p['key'],'requests'=>array_map(
-                      static fn($r)=>['key'=>$r['key'],'http_status'=>$r['http_status'],'error'=>$r['error_code']],$p['requests']),
-                      'normalized'=>count($p['fields']),'raw_fields'=>count($p['raw_fields']),
-                      'truncated'=>$p['raw_fields_truncated']];
-              }
-              echo json_encode($log,JSON_THROW_ON_ERROR);"""
-              rc,out,err,_=remote.remote_call(client,remote.command(phpbin,remote.BOOTSTRAP),
-                  json.dumps({'source':source}).encode(),timeout=105)
-              if rc or err:raise RuntimeError('M2_LIVE_LAB_READONLY_FAILED')
-              proof=json.loads(out)
-              if proof['status']!='ok' or proof['storage']!='none' or len(proof['providers'])!=3:
-                  raise RuntimeError('M2_LIVE_LAB_INCOMPLETE')
-              if not 3<=proof['count']<=5:raise RuntimeError('M2_LIVE_LAB_REQUEST_SCOPE')
-              if not any(r['http_status']==200 for p in proof['providers'] for r in p['requests']):
-                  raise RuntimeError('M2_LIVE_LAB_NO_PROVIDER_RESPONSE')
-              print('M2_LIVE_PROVIDER_LAB '+json.dumps(proof,ensure_ascii=False),flush=True)
+          paths=('index.html','marktdaten.html','fundamentaldaten.html','anbieter-labor.html')
+          with ssh.ssh_client(deploy.configuration(),{},paramiko) as client:
+              with client.open_sftp() as sftp:
+                  for path in paths:
+                      expected=Path(path).read_bytes()
+                      with sftp.open(shared.TEST_ROOT+'/'+path,'rb') as handle:
+                          actual=handle.read(len(expected)+1)
+                      if actual!=expected:raise RuntimeError('M2_NAV_REMOTE_FILE_MISMATCH '+path)
+                      print('M2_NAV_REMOTE_PASS '+path+' '+hashlib.sha256(actual).hexdigest(),flush=True)
           PY
