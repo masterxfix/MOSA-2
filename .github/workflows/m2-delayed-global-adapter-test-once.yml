@@ -32,6 +32,7 @@ jobs:
           M2_LOCAL_MYSQL_PASSWORD: local-test-only
         run: |
           php -l api/market_sources.php
+          php -l tests/test_market_tick_sources.php
           php -l api/market_core/eodhd.php
           php -l scripts/market_collector/mosa_tick.php
           php -l tests/test_eodhd_provider.php
