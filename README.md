@@ -6,7 +6,7 @@ MOSA 2 ist der eigenständige Entwicklungsstand für die nächste Generation des
 
 **Aktueller Überblick (12.11.2026):** [M2-Kursanbieter – wer liefert was, wann wird welche Quelle bevorzugt?](docs/M2_MARKTDATEN_ANBIETER.md).
 
-Die eigene Dokumentationsseite beschreibt die **fünf verbliebenen Kursanbieter** und ihre tatsächlichen Aktivierungsbedingungen, die **separate ETF-Auswahl**, die internationale Anbieter-Priorität, Frischegrenzen und offene Abnahmepunkte. **Yahoo Finance ist auf Nutzerentscheidung vom 12.11.2026 aus M2 ausgeschlossen** – auch als manueller Kurslieferant oder Fallback. Der **M2-Minutenjob ist aktiv**; die historischen Angaben vom 31.10.2026 unten sind nicht der heutige Betriebsstatus.
+Die eigene Dokumentationsseite beschreibt die **fünf verbliebenen Kursanbieter** und ihre tatsächlichen Aktivierungsbedingungen, die **für Aktien und ETFs identische Kursauswahl**, die noch vorhandene internationale Anbieter-Priorität, Frischegrenzen und offene Abnahmepunkte. **Yahoo Finance ist auf Nutzerentscheidung vom 12.11.2026 aus M2 ausgeschlossen** – auch als manueller Kurslieferant oder Fallback. Der **M2-Minutenjob ist aktiv**; die historischen Angaben vom 31.10.2026 unten sind nicht der heutige Betriebsstatus.
 
 ## Aktueller Stand und nächster Abschlussabschnitt
 
