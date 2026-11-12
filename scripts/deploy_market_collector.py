@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import sys
 import urllib.request
 import uuid
 from zoneinfo import ZoneInfo
@@ -80,7 +81,8 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def relay(sftp):
-    from market_collector.gettex_delayed import FILE_BASE, FILE_STAMP, MAX_FILE_BYTES, STAMP, file_slot
+    sys.path.insert(0, str(ROOT))
+    from scripts.market_collector.gettex_delayed import FILE_BASE, FILE_STAMP, MAX_FILE_BYTES, STAMP, file_slot
 
     now = datetime.now(timezone.utc)
     local = now.astimezone(ZoneInfo("Europe/Berlin"))
