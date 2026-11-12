@@ -1,4 +1,5 @@
 name: M2 three-provider read-only data laboratory release
+# Reviewed retry after source-key grouping correction; web-only deployment.
 on:
   push:
     branches: [main]
