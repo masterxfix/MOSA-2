@@ -33,16 +33,10 @@ def run(data):
             raise ValueError('adapter module')
         adapter = getattr(importlib.import_module(module), manifest['adapter_class'])()
         stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
-        nordic = manifest.get('nordic_archive')
-        archive = nordic if nordic is not None else manifest.get('gettex_archive')
+        archive = manifest.get('gettex_archive')
         if archive is None:
             endpoint = adapter.live_request(manifest['instrument'], stamp,
                 php_cli=data['php_cli'], request_script=data.get('request_script', str(private/'request.php')))
-        elif nordic is not None:
-            if adapter.provider_key != 'nasdaq_nordic_delayed_v1' or 'private_path' not in archive:
-                raise ValueError('archive provider binding')
-            stamp = archive['captured_at']
-            endpoint = adapter.archive_request(manifest['instrument'], stamp, archive['slot'], manifest['archive_mic'])
         else:
             if adapter.provider_key != 'gettex_mund_delayed_v1':
                 raise ValueError('archive provider binding')
@@ -51,8 +45,7 @@ def run(data):
         if archive is not None and 'private_path' in archive:
             source = Path(archive['private_path'])
             parent = private.resolve().parents[2]
-            name = archive['slot'] + '.csv' if nordic is not None else 'mosa2-gettex-posttrade.' + archive['slot'] + '.mund.csv.gz'
-            if source.parent != parent or source.name != name:
+            if source.parent != parent or source.name != 'mosa2-gettex-posttrade.'+archive['slot']+'.mund.csv.gz':
                 raise ValueError('private archive binding')
             with os.fdopen(os.open(source, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
                 info = os.fstat(stream.fileno())
@@ -61,7 +54,7 @@ def run(data):
                 raw = stream.read(endpoint['max_bytes']+1)
             if len(raw) > endpoint['max_bytes']:
                 raise ValueError('private archive size')
-            response = TransportResponse(raw, stamp, 200, 'application/octet-stream' if nordic is not None else 'application/gzip')
+            response = TransportResponse(raw, stamp, 200, 'application/gzip')
             requests, provider_duration_ms = 0, 0
         else:
             http = ReadOnlyHttpTransport(HttpGet(None, endpoint['url'],
@@ -92,6 +85,18 @@ def run(data):
                     market_at=normalized['market_at'], observed_at=normalized['observed_at'])
     if action == 'plan':
         acquired = data['acquired']
+        if 'mosa_observation' in acquired:
+            binding = data['route']
+            raw = {key: acquired['mosa_observation'][key] for key in
+                   ('currency', 'market_at', 'observed_at', 'price', 'bid', 'ask', 'volume')}
+            raw.update(asset_id=binding['asset_id'], source_id=binding['source_id'], route_id=binding['id'])
+            raw.update({key: binding[key] for key in writer.UNIT_FIELDS})
+            planner = writer.WriterPlanner(writer.observation.catalog_module.runtime_catalog(),
+                [dict(format_version=2, route=binding)], restore(data['existing']))
+            plan = planner.plan(raw, format_version=2, intent='NEW_NATIVE_V2', created_at=data['created_at'])
+            if plan['decision'] not in ('INSERT', 'DUPLICATE_UNCHANGED'):
+                raise ValueError('stored MOSA observation')
+            return dict(ok=True, plan=transport(plan))
         adapter = getattr(importlib.import_module(acquired['adapter_module']), acquired['adapter_class'])()
         binding = data['route']
         request = Request(acquired['provider_key'], binding['source_id'], binding['id'],

@@ -39,9 +39,8 @@ function sourceDetails(string $source): array {
     return match($source){
         'provider:boerse_frankfurt_api'=>['venue'=>'Börse Frankfurt · XFRA','quote_type'=>'Letzter Handel'],
         'provider:tradegate_bsx_mid'=>['venue'=>'Tradegate BSX · XGAT','quote_type'=>'Mid (Geld/Brief)'],
-        'provider:nasdaq_nordic_xsto_delayed'=>['venue'=>'Nasdaq Stockholm · XSTO','quote_type'=>'Letzter Handel (verzögert)'],
-        'provider:nasdaq_nordic_xcse_delayed'=>['venue'=>'Nasdaq Copenhagen · XCSE','quote_type'=>'Letzter Handel (verzögert)'],
-        'provider:nasdaq_nordic_xhel_delayed'=>['venue'=>'Nasdaq Helsinki · XHEL','quote_type'=>'Letzter Handel (verzögert)'],
+        'provider:lang_schwarz'=>['venue'=>'Lang & Schwarz · TradeCenter','quote_type'=>'Mid (Geld/Brief)'],
+        'provider:tradegate_bsx'=>['venue'=>'Tradegate BSX · XGAT','quote_type'=>'Mid (Geld/Brief)'],
         'provider:gettex_mund_delayed'=>['venue'=>'gettex · MUND','quote_type'=>'Letzter Handel (verzögert)'],
         default=>['venue'=>'—','quote_type'=>'Gespeicherter Kurs'],
     };

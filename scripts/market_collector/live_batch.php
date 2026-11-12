@@ -10,15 +10,9 @@ const CONTRACT='mosa2-manual-live-batch-v2';
 function providers(): array {
     require_once __DIR__.'/tradegate_manifest.php';
     require_once __DIR__.'/actions_acceptance.php';
-    $providers=['provider:tradegate_bsx_mid'=>'Mosa2\\TradegateQuote\\manifest',
+    return ['provider:tradegate_bsx_mid'=>'Mosa2\\TradegateQuote\\manifest',
         'provider:boerse_frankfurt_api'=>'Mosa2\\MarketAcceptance\\manifest',
         'provider:gettex_mund_delayed'=>'Mosa2\\MarketAcceptance\\gettexManifest'];
-    foreach (['XSTO','XCSE','XHEL'] as $mic) {
-        $provider=\Mosa2\MarketAcceptance\nordicProvider($mic);
-        $providers['provider:'.$provider['source_key']]=static fn($state,$selection)=>
-            \Mosa2\MarketAcceptance\nordicManifest($state,$selection,$mic);
-    }
-    return $providers;
 }
 /** Registry qualification belongs to the shared planning library. */
 function qualify(array $state,array $selection,callable $manifestFactory): array {
@@ -80,7 +74,6 @@ function collect(string $root,string $password,array $config,array $scope,?calla
                 $previous=array_values(array_filter($initial['m2_asset_source_routes'],static fn($r)=>$r['id']===$old[0]['route_id']));
                 same(count($previous),1,'collection_previous_route');
                 $approval+=['allow_route_transition'=>true,'previous_route_sha256'=>hash('sha256',\Mosa2\Phase3D\json($previous[0]))];
-                if (isset($scope['archive'])) $approval['allow_native_currency_transition']=true;
             }
             $approvals[]=$approval;
         }
@@ -89,10 +82,7 @@ function collect(string $root,string $password,array $config,array $scope,?calla
         $entries=[];
         foreach($plan['prepared'] as $item){
             $manifest=$item['manifest'];
-            if(isset($scope['archive'])){
-                if(isset($manifest['archive_mic']))$manifest['nordic_archive']=$scope['archive'];
-                else $manifest['gettex_archive']=$scope['archive'];
-            }
+            if(isset($scope['archive']))$manifest['gettex_archive']=$scope['archive'];
             $entries[]=['private_root'=>\Mosa2\MarketAcceptance\privateItem($root,'batch',$manifest)];
         }
         $prepared=prepare($root,$config['public_root'],$entries);
@@ -191,22 +181,11 @@ if(realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){
         $connect=static fn()=>\Mosa2\Phase2\connection($password,$config['db_host'],$config['db_port']);
         if(isset($scope['archive'])){
             same($config['private_dogado']??null,true,'archive_private_host');
+            same($scope['source_priority'],['provider:gettex_mund_delayed'],'archive_source');
             same($scope['request_budget'],1,'archive_budget');
             same(count($scope['expected_isins']),1,'archive_isin_count');
             $routeWrites=null;
-            $source=$scope['source_priority'][0]??null;
-            $isin=$scope['expected_isins'][0];
-            if ($scope['source_priority']===['provider:gettex_mund_delayed']) {
-                $routeWrites=\Mosa2\MarketAcceptance\prepareGettexRoute($connect,$config['state_contract'],$isin);
-            } else {
-                check(count($scope['source_priority'])===1 && is_string($source)
-                    && preg_match('/^provider:nasdaq_nordic_(xsto|xcse|xhel)_delayed$/D',$source,$match),'archive_source');
-                $provider=\Mosa2\MarketAcceptance\nordicProvider(strtoupper($match[1]));
-                $routeWrites=\Mosa2\MarketAcceptance\prepareArchiveRoute($connect,$config['state_contract'],$isin,
-                    ['source_key'=>$source,'source_type'=>'market_data','display_name'=>'Nasdaq Nordic',
-                     'base_url'=>'https://tradereports.nasdaq.com/shares/trade-reports/post-trade','enabled'=>'1'],
-                    providers()[$source],$provider['currency']);
-            }
+            $routeWrites=\Mosa2\MarketAcceptance\prepareGettexRoute($connect,$config['state_contract'],$scope['expected_isins'][0]);
         }
         $state=\Mosa2\MarketAcceptance\capture($connect,$config['state_contract']);
         $selection=\Mosa2\MarketBatchScope\selection($state,gmdate('Y-m-d H:i:s').'.000000',isset($scope['archive']));
