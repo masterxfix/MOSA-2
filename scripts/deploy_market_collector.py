@@ -20,6 +20,7 @@ EXTRAS = (
     "api/market_sources.php",
     "api/isin_quote.php",
     "api/market_core/native_currency_units.json",
+    "api/market_core/twelve_data.php",
     "scripts/market_collector/gettex_delayed.py",
     "scripts/market_collector/mosa_tick.php",
 )
