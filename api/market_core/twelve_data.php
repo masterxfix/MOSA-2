@@ -86,6 +86,18 @@ function source(string $isin,mixed $payload,DateTimeImmutable $now):array {
     ]);
 }
 
+/** Return next reserved counter for the UTC window; null means exhausted. */
+function nextBudget(mixed $stored,string $slot,int $limit):?string {
+    if($limit<1)throw new InvalidArgumentException('international_budget_limit');
+    $count=0;
+    if(is_string($stored)&&str_starts_with($stored,$slot.'|')){
+        $number=substr($stored,strlen($slot)+1);
+        if(!ctype_digit($number)||strlen($number)>7)
+            throw new InvalidArgumentException('international_budget_corrupt');
+        $count=(int)$number;
+    }
+    return $count>=$limit?null:($slot.'|'.($count+1));
+}
 /** Reservation counts attempted GETs even on HTTP errors; one shared M2 DB lock. */
 function reserve(PDO $db,string $sourceId,array $cfg,DateTimeImmutable $now):bool {
     if(!ctype_digit($sourceId)||$sourceId==='0')throw new InvalidArgumentException('international_source_id');
@@ -100,22 +112,16 @@ function reserve(PDO $db,string $sourceId,array $cfg,DateTimeImmutable $now):boo
         $read=$db->prepare('SELECT cursor_value FROM m2_sync_checkpoints WHERE source_id=? AND stream_key=? FOR UPDATE');
         foreach($windows as $stream=>[$slot,$max]){
             $read->execute([$sourceId,$stream]);
-            $old=$read->fetchColumn();
-            $count=0;
-            if(is_string($old)&&str_starts_with($old,$slot.'|')){
-                $number=substr($old,strlen($slot)+1);
-                if(!ctype_digit($number)||strlen($number)>7)throw new InvalidArgumentException('international_budget_corrupt');
-                $count=(int)$number;
-            }
-            if($count>=$max){$db->rollBack();return false;}
-            $existing[$stream]=[$slot,$count+1];
+            $reservation=nextBudget($read->fetchColumn(),$slot,$max);
+            if($reservation===null){$db->rollBack();return false;}
+            $existing[$stream]=$reservation;
         }
         $upsert=$db->prepare("INSERT INTO m2_sync_checkpoints
             (source_id,stream_key,cursor_value,watermark_at,updated_at)
             VALUES (?,?,?,NULL,UTC_TIMESTAMP(6))
             ON DUPLICATE KEY UPDATE cursor_value=VALUES(cursor_value),updated_at=UTC_TIMESTAMP(6)");
-        foreach($existing as $stream=>[$slot,$count])
-            $upsert->execute([$sourceId,$stream,$slot.'|'.$count]);
+        foreach($existing as $stream=>$reservation)
+            $upsert->execute([$sourceId,$stream,$reservation]);
         if(!$db->commit())throw new InvalidArgumentException('international_budget_commit_failed');
         return true;
     }finally{if($db->inTransaction())$db->rollBack();}
