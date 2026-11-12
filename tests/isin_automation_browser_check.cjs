@@ -9,13 +9,15 @@ const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Trade
   observed_at:'2026-11-08 11:59:10.000000Z',status:'stored'});
 const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
 const flush=()=>new Promise(setImmediate);
-function harness({market=true,entries=initial,lifecycle=false,actions=false,registered=[],initialItems=stored}={}){
+function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRegistry=false,registered=[],initialItems=stored}={}){
   let ms=0,timerId=0,http=200,items=initialItems,hold=false,release,active=0,maxActive=0,writes=0,focused=true;
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
   const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
   const table=new E('tbody'),details=new E('button'),root=new E('body'),summary=new E('span');
   if(actions)table.dataset.isinActions='';
+  const marketNode=market?new E('section'):null;
+  if(dbRegistry && marketNode)marketNode.dataset.marketRegistry='';
   const error=new E('p');error.hidden=true;
   form.parentElement={querySelector:selector=>selector==='[data-isin-error]'?error:null};
   form.map={'[data-isin-input]':input,'button[type=submit]':submit};
@@ -23,7 +25,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
     '[data-isin-form]':[form],'[data-isin-refresh]':market?[refresh]:[],'[data-isin-table]':market?[table]:[],
     '[data-isin-summary]':market?[summary]:[]
   }[selector]??[]),querySelector:selector=>({
-    '[data-isin-stored-quotes]':root,'[data-isin-market-view]':market?new E('section'):null,
+    '[data-isin-stored-quotes]':root,'[data-isin-market-view]':marketNode,
     '[data-isin-details-toggle]':market?details:null,
     '[data-site-shell]':lifecycle?root:null
   }[selector]??null),createElement:tag=>new E(tag),addEventListener:(name,fn)=>{events[name]=fn;}};
@@ -42,6 +44,15 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   async function fetch(url,opts){
     calls.push({url,at:ms,opts});active++;maxActive=Math.max(maxActive,active);
     try{
+      if(url==='api/market_registry.php') {
+        if(opts.method==='GET')return {ok:true,status:200,json:async()=>({status:'ok',csrf:'test-csrf'})};
+        assert.equal(opts.method,'POST','Registration uses the existing CSRF-protected endpoint');
+        const action=JSON.parse(opts.body);
+        assert.equal(action.action,'register');
+        assert.equal(action.csrf,'test-csrf');
+        registered=[...registered,{isin:action.isin,name:action.isin,asset_class:'unknown'}];
+        return {ok:true,status:200,json:async()=>({status:'registered',isin:action.isin,readback:'passed'})};
+      }
       if(url===(market?'api/market.php?view=registered':'api/market.php?view=best')){
         assert.equal(opts.method,undefined,'The background read is a GET');
         assert.equal(opts.credentials,'same-origin');
@@ -72,7 +83,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
     get writes(){return writes;},get maxActive(){return maxActive;},
     hide(value){document.hidden=value;events.visibilitychange();},
     focus(value){focused=value;windowEvents[value?"focus":"blur"]();},
-    update(value){items=value;},status(value){http=value;},
+    update(value){items=value;},setRegistered(value){registered=value;},status(value){http=value;},
     hold(){hold=true;},release(){hold=false;release();}};
 }
 
@@ -153,6 +164,35 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,regi
   await incompleteWithQuote.advance(30000);
   assert.equal(incompleteWithQuote.table.children[0].dataset.status,'pending',
     'Unverified DB identity cannot be bypassed by a quote');
+  incompleteWithQuote.setRegistered([{isin:a,name:'Fully Verified Corp.',asset_class:'equity'}]);
+  await incompleteWithQuote.advance(30000);
+  assert.equal(incompleteWithQuote.table.children[0].cells[0].textContent,'Fully Verified Corp.',
+    'One new Current/registry read reveals the full verified asset without extra collector');
+  assert.equal(incompleteWithQuote.table.children[0].cells[1].textContent,'Aktie');
+  assert.equal(incompleteWithQuote.table.children[0].dataset.status,'stored');
+  assert.equal(incompleteWithQuote.table.children[0].cells.length,11,'Pending single cell becomes the normal data row');
+  const directlyRegistered=harness({market:true,entries:[],actions:true,dbRegistry:true,registered:[],initialItems:[]});
+  await flush();
+  directlyRegistered.input.value=a;
+  directlyRegistered.form.events.submit({preventDefault(){}});
+  await flush();await flush();await flush();
+  assert.equal(directlyRegistered.table.children[0].dataset.status,'pending',
+    'Immediately after OK no unknown security row with blank quote columns is rendered');
+  assert.equal(directlyRegistered.table.children[0].cells.length,2,
+    'After OK the provisional state consists of one message and its delete control');
+  assert.equal(directlyRegistered.table.children[0].cells[1].firstElementChild.dataset.isinDbDelete,a,
+    'The existing delete control remains available while collecting');
+  assert.equal(directlyRegistered.input.value,'','Form is cleared after a successful independent readback');
+  const verifiedQuote=asset(a,'Fully Verified Corp.','10.00');
+  directlyRegistered.update([verifiedQuote]);
+  directlyRegistered.setRegistered([{isin:a,name:'Fully Verified Corp.',asset_class:'equity'}]);
+  await directlyRegistered.advance(30000);
+  assert.equal(directlyRegistered.table.children[0].cells[0].textContent,'Fully Verified Corp.',
+    'After background collection the existing Current read produces the complete row');
+  assert.equal(directlyRegistered.table.children[0].cells[2].textContent,'10,00 EUR');
+  assert.equal(directlyRegistered.table.children[0].cells[1].textContent,'Aktie');
+  assert.equal(directlyRegistered.table.children[0].cells[10].firstElementChild.dataset.isinDbDelete,a);
+
   assert.equal(registeredOnly.writes,0,'DB registrations never overwrite browser storage');
   const registeredFund=harness({entries:[],initialItems:[],registered:[{isin:a,name:'Portfolio Fonds',asset_class:'fund'}]});
   await flush();
