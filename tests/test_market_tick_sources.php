@@ -84,7 +84,13 @@ $onlyLS=['lang_schwarz'=>$active['lang_schwarz']];
 sameValue(null,choose($lab,$isin,'stock',$onlyLS,$captured,$now),'disabled provider does not leak');$n++;
 $lab['sources']['tradegate_quote']['available']=true;
 $lab['sources']['tradegate_quote']['isin']='NO0010081235';
-sameValue(null,choose($lab,$isin,'etf',$active,$captured,$now),'common exact ISIN guard for ETF');$n++;
+sameValue('boerse_frankfurt_api',choose($lab,$isin,'etf',$active,$captured,$now)['provider']??null,
+    'wrong-ISIN Tradegate does not block valid last trade for ETF');$n++;
+sameValue(choose($lab,$isin,'stock',$active,$captured,$now),
+    choose($lab,$isin,'etf',$active,$captured,$now),'same fallback despite wrong-ISIN quote');$n++;
+$lab['sources']['boerse_frankfurt_trade']['available']=false;
+sameValue(null,choose($lab,$isin,'etf',$active,$captured,$now),'ETF wrong-ISIN quote never accepted');$n++;
+$lab['sources']['boerse_frankfurt_trade']['available']=true;
 $lab['sources']['boerse_frankfurt_trade']['quoted_at']='2026-11-12T12:04:07+00:00';
 sameValue(null,choose($lab,$isin,'stock',$active,$captured,$now),'market timestamp after provider receipt');$n++;
 $engine=file_get_contents(dirname(__DIR__).'/api/market_source_engine.php');
