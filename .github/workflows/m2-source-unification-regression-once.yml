@@ -19,10 +19,15 @@ jobs:
           php -l api/market_sources.php
           php -l api/isin_quote.php
           php -l scripts/market_collector/mosa_tick.php
+          php -l scripts/market_collector/actions_acceptance.php
+          php -l scripts/market_collector/onboarding.php
           php tests/test_market_tick_sources.php
           php tests/fixtures/isin_quote_test.php
           php tests/fixtures/isin_quote_all_test.php
           php tests/test_market_registry_model.php
+          php tests/market_onboarding_fixture.php
+          php tests/market_live_batch_fixture.php
+          php tests/fixtures/quote_selection.php
           node --check assets/js/isin_quotes.js
           node tests/isin_automation_browser_check.cjs
           node tests/isin_refresh_browser_check.cjs
@@ -34,3 +39,5 @@ jobs:
 # Stable provider-derived quote/trade ordering regression retry.
 
 # Include the existing three-page ISIN details browser cache regression.
+
+# Shared native-currency route and full instrument-class regression.
