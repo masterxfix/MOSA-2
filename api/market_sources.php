@@ -234,11 +234,22 @@ function choose(array $lab,string $isin,string $assetType,array $registry,array 
     $units??=defaultUnits();
     $sources=is_array($lab['sources']??null)?$lab['sources']:[];
     if($assetType==='etf') {
+        // Keep the productive MOSA EUR ETF cross-check as first choice.
         $etf=\fixlabMosaMarketEtfShadowSelection($isin,$sources,$now);
-        if(($etf['automatic_release']??false)!==true)return null;
-        $key=$etf['selected_source_key'];
-        return is_string($key)&&isset($sources[$key])
-            ?fact($sources[$key],$key,$isin,$registry,$captured,$now,300,$units):null;
+        if(($etf['automatic_release']??false)===true){
+            $key=$etf['selected_source_key'];
+            if(is_string($key)&&isset($sources[$key])){
+                $selected=fact($sources[$key],$key,$isin,$registry,$captured,$now,300,$units);
+                if($selected!==null)return $selected;
+            }
+        }
+        // The MOSA shadow rule uses Berlin market hours. That cannot prohibit
+        // a genuinely fresh, licensed international ETF quote while Asia trades.
+        $foreign=$sources['twelve_data_quote']??null;
+        if(is_array($foreign)&&is_string($foreign['venue_key']??null)
+            &&preg_match('/^[A-Z0-9]{4}$/D',$foreign['venue_key'])===1)
+            return fact($foreign,'twelve_data_quote',$isin,$registry,$captured,$now,300,$units);
+        return null;
     }
     // Route independent complete quotes per native unit, not by comparing
     // raw prices in mutually inconvertible currencies.
