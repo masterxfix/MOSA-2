@@ -1,4 +1,5 @@
 name: Verify M2 excluded market providers without deployment
+# Retry against updated historical adapter regression expectations.
 on:
   push:
     branches: [main]
