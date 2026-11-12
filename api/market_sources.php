@@ -66,6 +66,23 @@ function providerOf(string $key):?string {
     foreach(catalog() as $name=>$provider)if(in_array($key,$provider['requests'],true))return $name;
     return null;
 }
+/** Private delayed API hosts are fixed; the provider token is only transport
+ * authorization. ISIN identity is confirmed against the search response. */
+function allowedEodhd(array $p,string $key,string $isin):bool {
+    if(($p['host']??null)!=='eodhd.com')return false;
+    $query=[];parse_str((string)($p['query']??''),$query);
+    if(!is_array($query)||($query['fmt']??null)!=='json'
+        ||!is_string($query['api_token']??null)
+        ||preg_match('/^[A-Za-z0-9_-]{4,128}$/D',$query['api_token'])!==1)return false;
+    $path=$p['path']??'';
+    return match($key) {
+        'eodhd_search'=>count($query)===3&&($query['limit']??null)==='100'&&$path==='/api/search/'.$isin,
+        'eodhd_exchange'=>count($query)===2&&$path==='/api/exchanges-list/',
+        'eodhd_delayed'=>count($query)===2
+            &&preg_match('~^/api/real-time/[A-Za-z0-9][A-Za-z0-9._-]{1,40}\\.[A-Za-z0-9]{1,10}$~D',$path)===1,
+        default=>false,
+    };
+}
 /** Exact HTTPS host, path, and ISIN binding: used in both M2 acquisition entrypoints. */
 function allowed(array $request,string $isin):bool {
     $key=$request['request_key']??null;$url=$request['url']??null;
@@ -82,15 +99,7 @@ function allowed(array $request,string $isin):bool {
         'tradegate_trade'=>$url==='https://www.tradegatebsx.com/orderbuch_umsaetze.php?isin='.$isin,
         'boerse_frankfurt_trade'=>$url==='https://api.live.deutsche-boerse.com/v1/data/price_information/single?isin='.$isin.'&mic=XFRA',
         'twelve_data_quote'=>$url==='https://api.twelvedata.com/quote?isin='.$isin,
-        'eodhd_search','eodhd_exchange','eodhd_delayed'=>
-            $host==='eodhd.com' && preg_match('/^[A-Za-z0-9_-]{4,128}$/D',
-                (string)(parse_str($p['query']??'', $query)===null?($query['api_token']??''):''))===1
-            &&($query['fmt']??null)==='json' && count($query)===($key==='eodhd_search'?3:2)
-            &&match($key) {
-                'eodhd_search'=>$path==='/api/search/'.$isin && ($query['limit']??null)==='100',
-                'eodhd_exchange'=>$path==='/api/exchanges-list/',
-                default=>preg_match('~^/api/real-time/[A-Za-z0-9][A-Za-z0-9._-]{1,40}\.[A-Za-z0-9]{1,10}$~D',$path)===1,
-            },
+        'eodhd_search','eodhd_exchange','eodhd_delayed'=>allowedEodhd($p,$key,$isin),
         'yahoo_home_search'=>$url==='https://query1.finance.yahoo.com/v1/finance/search?q='.$isin.'&quotesCount=10&newsCount=0',
         'yahoo_home_market'=>$host==='query1.finance.yahoo.com'
             &&preg_match('~^/v8/finance/chart/[a-zA-Z0-9._%=-]{1,128}$~D',$path)===1
