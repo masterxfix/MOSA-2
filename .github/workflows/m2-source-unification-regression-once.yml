@@ -25,9 +25,9 @@ jobs:
           php tests/fixtures/isin_quote_test.php
           php tests/fixtures/isin_quote_all_test.php
           php tests/test_market_registry_model.php
-          php tests/market_onboarding_fixture.php
-          php tests/market_live_batch_fixture.php
-          php tests/fixtures/quote_selection.php
+          php tests/test_market_batch_scope.php
+          python3 -B -m unittest discover -s tests -p 'test_market_onboarding.py' -v
+          python3 -B -m unittest discover -s tests -p 'test_market_selection.py' -v
           node --check assets/js/isin_quotes.js
           node tests/isin_automation_browser_check.cjs
           node tests/isin_refresh_browser_check.cjs
@@ -41,3 +41,5 @@ jobs:
 # Include the existing three-page ISIN details browser cache regression.
 
 # Shared native-currency route and full instrument-class regression.
+
+# Execute parameterized test fixtures via their proper Python harnesses.
