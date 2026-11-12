@@ -9,8 +9,8 @@ const asset=(isin,name,price)=>({isin,name,price,source:'Tradegate',venue:'Trade
   observed_at:'2026-11-08 11:59:10.000000Z',status:'stored'});
 const stored=[asset(a,'Alpha','10.00'),asset(b,'Beta','20.00')];
 const flush=()=>new Promise(setImmediate);
-function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRegistry=false,registered=[],initialItems=stored,clock=base}={}){
-  let ms=0,timerId=0,http=200,items=initialItems,hold=false,release,active=0,maxActive=0,writes=0,focused=true;
+function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRegistry=false,registered=[],initialItems=stored,clock=base,registerBusy=0,registerConflict=null}={}){
+  let ms=0,timerId=0,http=200,items=initialItems,hold=false,release,active=0,maxActive=0,writes=0,focused=true,registryAttempts=0;
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
   const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
@@ -51,6 +51,9 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
         const action=JSON.parse(opts.body);
         assert.equal(action.action,'register');
         assert.equal(action.csrf,'test-csrf');
+        registryAttempts++;
+        if(registerConflict!==null)return {ok:false,status:409,json:async()=>({status:'error',code:registerConflict})};
+        if(registryAttempts<=registerBusy)return {ok:false,status:409,json:async()=>({status:'error',code:'COLLECTOR_BUSY'})};
         registered=[...registered,{isin:action.isin,name:action.isin,asset_class:'unknown'}];
         return {ok:true,status:200,json:async()=>({status:'registered',isin:action.isin,readback:'passed'})};
       }
@@ -81,7 +84,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   root.querySelectorAll=document.querySelectorAll;
   return {table,input,form,refresh,details,root,summary,countdown,calls,error,storage,advance,
     mount(){return sandbox.MosaIsinLookup.mount(root);},
-    get writes(){return writes;},get maxActive(){return maxActive;},
+    get writes(){return writes;},get maxActive(){return maxActive;},get registryAttempts(){return registryAttempts;},
     hide(value){document.hidden=value;events.visibilitychange();},
     focus(value){focused=value;windowEvents[value?"focus":"blur"]();},
     update(value){items=value;},setRegistered(value){registered=value;},status(value){http=value;},
@@ -227,6 +230,48 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   assert.equal(directlyRegistered.table.children[0].cells[2].textContent,'—');
   assert.match(directlyRegistered.table.children[0].cells[9].textContent,/Kein gespeicherter Kurs/);
   assert.equal(directlyRegistered.table.children[0].cells[10].firstElementChild.dataset.isinDbDelete,a);
+
+  const lockCollision=harness({market:true,entries:[],actions:true,dbRegistry:true,registered:[],initialItems:[],registerBusy:2});
+  await flush();
+  lockCollision.input.value=a;
+  lockCollision.form.events.submit({preventDefault(){}});
+  await flush();await flush();
+  assert.equal(lockCollision.registryAttempts,1,'Initial registration tries once without a waiting lock');
+  assert.match(lockCollision.error.textContent,/Collector arbeitet gerade.*automatisch erneut/,
+    'A locked collector shows a precise, not a generic locked-database explanation');
+  assert.equal(lockCollision.form.map['button[type=submit]'].disabled,true,'Retry keeps duplicate submissions disabled');
+  await lockCollision.advance(2999);
+  assert.equal(lockCollision.registryAttempts,1,'No flood of database writes during lock contention');
+  await lockCollision.advance(1);
+  assert.equal(lockCollision.registryAttempts,2,'Only COLLECTOR_BUSY is automatically retried');
+  await lockCollision.advance(3000);
+  assert.equal(lockCollision.registryAttempts,3,'Register succeeds when the collector releases its lock');
+  assert.equal(lockCollision.calls.filter(call=>call.url==='api/market_registry.php'&&call.opts.method==='GET').length,1,
+    'Same CSRF token reused instead of obtaining one for every retry');
+  assert.equal(lockCollision.table.children[0].cells[8].textContent,a,'One ISIN registered after retry');
+  assert.equal(lockCollision.error.hidden,true,'Temporary busy hint clears after successful independent readback');
+  assert.equal(lockCollision.input.value,'','Input clears only on confirmed registration');
+
+  const inactive=harness({market:true,entries:[],actions:true,dbRegistry:true,registered:[],initialItems:[],registerConflict:'INACTIVE_IDENTITY'});
+  await flush();
+  inactive.input.value=a;inactive.form.events.submit({preventDefault(){}});
+  await flush();await flush();
+  assert.equal(inactive.registryAttempts,1,'An inactive identity is not a transient collector lock');
+  assert.match(inactive.error.textContent,/bereits inaktiv registriert/,'Real registration conflict is identified precisely');
+  await inactive.advance(9000);
+  assert.equal(inactive.registryAttempts,1,'No automatic retries on an inactive identity');
+  assert.equal(inactive.input.value,a,'Failed registration preserves original ISIN input');
+
+  const prolonged=harness({market:true,entries:[],actions:true,dbRegistry:true,registered:[],initialItems:[],registerBusy:100});
+  await flush();
+  prolonged.input.value=a;prolonged.form.events.submit({preventDefault(){}});
+  await flush();await flush();
+  await prolonged.advance(92000);
+  assert.equal(prolonged.registryAttempts,31,'Retries stop after the bounded 90-second period');
+  assert.match(prolonged.error.textContent,/nicht registriert/,'No false confirmation when lock remains busy');
+  assert.equal(prolonged.input.value,a,'Unsuccessful time-limited registration keeps the ISIN for retry');
+  assert.equal(prolonged.form.map['button[type=submit]'].disabled,false,'Controls are restored after timeout');
+
   assert.equal(directlyRegistered.input.value,'','The input resets after registration readback');
   assert.equal(directlyRegistered.countdown.textContent,'Nächste automatische Aktualisierung in 30 s',
     'Visible seconds countdown starts from the real 30-second read deadline');
