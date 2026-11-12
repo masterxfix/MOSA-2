@@ -1,0 +1,86 @@
+name: M2 three-provider read-only data laboratory release
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-provider-lab-release-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+jobs:
+  test-and-deploy:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.event.head_commit.message == 'Test and deploy M2 read-only three-provider data laboratory once'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f
+        with:
+          php-version: '8.4'
+          extensions: dom, curl
+          tools: none
+          coverage: none
+      - name: PHP and JavaScript syntax and shared M2 source regressions
+        run: |
+          set -euo pipefail
+          php -l api/market_provider_lab.php
+          node --check assets/js/provider_lab.js
+          php -d zend.assertions=1 tests/test_provider_lab.php
+          php -d zend.assertions=1 tests/test_market_tick_sources.php
+          php tests/fixtures/isin_quote_all_test.php
+          python3 scripts/build_pages.py --check
+          python3 scripts/deploy_sftp.py validate
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Backup and deploy only six explicit M2 testsite files
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["anbieter-labor.html","marktdaten.html","assets/main-market.html","assets/js/provider_lab.js","assets/css/provider_lab.css","api/market_provider_lab.php"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          python3 scripts/deploy_test_sftp.py backup
+          python3 scripts/deploy_test_sftp.py deploy
+      - name: Live M2-only manual source probe, no database calls
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_test_sftp as dep
+          import paramiko
+          with ssh.ssh_client(dep.configuration(),{},paramiko) as client:
+              phpbin,_=remote.capability(client)
+              source = r"""require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-test.scharwerk.de/api/market_provider_lab.php';
+              $data=\Mosa2\ProviderLab\inspect('KYG9830T1067');
+              $log=['status'=>$data['status'],'storage'=>$data['storage'],'providers'=>[],
+                  'count'=>$data['request_count']];
+              foreach($data['providers'] as $p){
+                  $log['providers'][]=['key'=>$p['key'],'requests'=>array_map(
+                      static fn($r)=>['key'=>$r['key'],'http_status'=>$r['http_status'],'error'=>$r['error_code']],$p['requests']),
+                      'normalized'=>count($p['fields']),'raw_fields'=>count($p['raw_fields']),
+                      'truncated'=>$p['raw_fields_truncated']];
+              }
+              echo json_encode($log,JSON_THROW_ON_ERROR);"""
+              rc,out,err,_=remote.remote_call(client,remote.command(phpbin,remote.BOOTSTRAP),
+                  json.dumps({'source':source}).encode(),timeout=105)
+              if rc or err:raise RuntimeError('M2_LIVE_LAB_READONLY_FAILED')
+              proof=json.loads(out)
+              if proof['status']!='ok' or proof['storage']!='none' or len(proof['providers'])!=3:
+                  raise RuntimeError('M2_LIVE_LAB_INCOMPLETE')
+              if not 3<=proof['count']<=5:raise RuntimeError('M2_LIVE_LAB_REQUEST_SCOPE')
+              if not any(r['http_status']==200 for p in proof['providers'] for r in p['requests']):
+                  raise RuntimeError('M2_LIVE_LAB_NO_PROVIDER_RESPONSE')
+              print('M2_LIVE_PROVIDER_LAB '+json.dumps(proof,ensure_ascii=False),flush=True)
+          PY
