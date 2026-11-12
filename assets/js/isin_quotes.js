@@ -29,6 +29,8 @@
   const storedRoot=root===document ? document.querySelector("[data-isin-stored-quotes]") : root;
   const marketView=root.querySelector("[data-isin-market-view]");
   const dbRegistry=marketView?.dataset.marketRegistry!==undefined;
+  const confirmDialog=root.querySelector("[data-isin-db-confirm]");
+  let pendingDelete=null;
   const READ_INTERVAL=60000;
   const STORED_URL=marketView?"api/market.php?view=registered":"api/market.php?view=best";
   let storedStatus="loading", storedRead=null, nextStoredAt=null, storedTimer=null, storedStopped=false, readCount=0;
@@ -122,7 +124,8 @@
         for(const item of result.items) {
           if(!item || !["stored","stale"].includes(item.status) || !valid(item.isin))continue;
           const utc=value=>typeof value==="string"?value.replace(" ","T"):"";
-          const quote={...item,source:item.source+" · "+item.venue,provider:"stored",captured_at:utc(item.observed_at),market_at:utc(item.market_at)};
+          const source=item.venue?.toLowerCase().startsWith(item.source?.toLowerCase())?item.venue:item.source+" · "+item.venue;
+          const quote={...item,source,provider:"stored",captured_at:utc(item.observed_at),market_at:utc(item.market_at)};
           if(validQuote(quote,item.isin))fresh.set(item.isin,quote);
         }
         registeredAssets.clear();
@@ -358,15 +361,34 @@
       showError(form,"Änderung ausgeführt, aber die unabhängige Datenbankprüfung ist noch offen.");
     else if(action==="register")form.querySelector("[data-isin-input]").value="";
   }
+  function confirmDatabaseDelete(action, code) {
+    if(busy || !dbRegistry || !confirmDialog || confirmDialog.open)return;
+    const bulk=action==="purge_all";
+    pendingDelete={action,code};
+    confirmDialog.returnValue="";
+    confirmDialog.querySelector("[data-isin-db-confirm-message]").textContent=bulk
+      ?"Alle gespeicherten Testkurse und ihre Historie löschen? Die registrierten ISINs bleiben erhalten."
+      :code+" und alle zugehörigen Daten aus der Testdatenbank löschen?";
+    confirmDialog.querySelector("[data-isin-db-confirm-bulk]").hidden=!bulk;
+    confirmDialog.querySelector("[data-isin-db-confirm-input]").value="";
+    confirmDialog.showModal();
+  }
+  confirmDialog?.addEventListener("close",()=>{
+    const request=pendingDelete;
+    pendingDelete=null;
+    if(!request || confirmDialog.returnValue!=="confirm")return;
+    if(request.action==="purge_all" &&
+        confirmDialog.querySelector("[data-isin-db-confirm-input]").value!=="ALLE TEST-MARKTDATEN"){
+      showError(forms[0],"Bestätigung stimmt nicht. Es wurde nichts gelöscht.");
+      return;
+    }
+    changeRegistry(forms[0],request.action,request.code);
+  },listeners);
   function deleteFromDatabase(code) {
-    if(busy || !dbRegistry || !registeredAssets.has(code))return;
-    if(window.confirm(code+" und alle zugehörigen Daten vollständig aus der MOSA-2-Testdatenbank löschen?"))
-      return changeRegistry(forms[0],"purge",code);
+    if(registeredAssets.has(code))confirmDatabaseDelete("purge",code);
   }
   function clearDatabaseMarketData() {
-    if(busy || !dbRegistry)return;
-    if(window.prompt("Alle gespeicherten Testkurse und ihre Historie löschen? Die registrierten ISINs bleiben erhalten. Zur Bestätigung ALLE TEST-MARKTDATEN eingeben.")==="ALLE TEST-MARKTDATEN")
-      return changeRegistry(forms[0],"purge_all","ALLE TEST-MARKTDATEN");
+    confirmDatabaseDelete("purge_all","ALLE TEST-MARKTDATEN");
   }
   function clearEntries() {
     if (busy || !entries.length || !window.confirm("Alle gespeicherten ISINs in diesem Browser löschen?")) return;

@@ -30,6 +30,17 @@
         </table>
       </div>
       <div class="isin-list-actions"><button type="button" class="isin-delete-all" data-isin-clear disabled>Browserliste leeren</button> <button type="button" class="isin-delete-all" data-isin-db-clear disabled>Alle Test-Marktdaten löschen</button></div>
+      <dialog data-isin-db-confirm aria-labelledby="isin-db-confirm-title">
+        <form method="dialog">
+          <h3 id="isin-db-confirm-title">Löschung bestätigen</h3>
+          <p data-isin-db-confirm-message></p>
+          <label data-isin-db-confirm-bulk hidden>Zur Bestätigung ALLE TEST-MARKTDATEN eingeben
+            <input type="text" data-isin-db-confirm-input autocomplete="off">
+          </label>
+          <button value="cancel" autofocus>Abbrechen</button>
+          <button value="confirm">Löschen</button>
+        </form>
+      </dialog>
       <noscript><p>Für die ISIN-Abfrage bitte JavaScript aktivieren.</p></noscript>
     </section>
   </main>
