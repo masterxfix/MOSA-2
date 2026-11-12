@@ -1,6 +1,6 @@
 # MOSA 2 – Kursanbieter: Aufgaben und tatsächliche Auswahlregeln
 
-**Dokumentationsstand:** 12.11.2026; aktualisiert nach Nutzerentscheidung „Yahoo Finance aus M2 entfernen“.  **Geprüfter technischer Ausgangsstand:** main, Commit 2315cff54f3eee6e85a4679e6dbe30cca0375a87. Diese Seite dokumentiert den implementierten **IST-Stand** von MOSA 2, nicht ein noch nicht getestetes Zielbild.
+**Dokumentationsstand:** 12.11.2026. **Kurslogik auf main:** identischer ISIN-Kursauswahlweg für Aktien und ETFs (Codeänderung `580acb0`/`5c46ff9`); Live-Umstellung und Abnahme werden getrennt nachgewiesen. Dies ist die Dokumentation des tatsächlichen Implementierungsstands, keine Zusage universeller internationaler Börsenabdeckung.
 
 > **Wichtig:** „Anbieter erreichbar“ ist nicht dasselbe wie „Kurs gespeichert“. Die internationale Heimatmarktversorgung ist noch nicht vollständig live abgenommen.
 
@@ -8,9 +8,9 @@
 
 | Kursanbieter | Aufgabe in MOSA 2 | Automatische ISIN-Abfrage | Unter welchen Bedingungen wird er bevorzugt? |
 | --- | --- | --- | --- |
-| **Lang & Schwarz (TradeCenter)** | ISIN-Suche, Instrumentendetails/Namensinformation, Geld-/Brief-Offerte und Handelswerte | **Aktiv** | Bei normalen Aktien, wenn seine vollständige Offerte im gemeinsamen EUR-Quotenvergleich gewinnt; bei ETFs vor allem **Ausweichquelle**, falls Tradegate nicht geeignet ist |
-| **Tradegate BSX** | ISIN-bezogene Geld-/Brief-Offerte und letzte Umsätze | **Aktiv** | Bei normalen Aktien **kein pauschaler Vorrang**, sondern Bewertung der Quotenqualität; bei ETFs **erste Wahl** innerhalb der speziellen deutschen EUR-ETF-Regel |
-| **Börse Frankfurt** | Letzter Kurs vom gezielt abgefragten Handelsplatz **XFRA** | **Aktiv** | Bei Nicht-ETFs als gültiger **Last-Trade-Fallback**, wenn keine geeignete vollständige Geld-/Brief-Offerte ausgewählt wird |
+| **Lang & Schwarz (TradeCenter)** | ISIN-Suche, Instrumentendetails/Namensinformation, Geld-/Brief-Offerte und Handelswerte | **Aktiv** | Für Aktien und ETFs identisch: qualifizierter Geld-/Briefkurs kann im gemeinsamen Quotenvergleich gewinnen |
+| **Tradegate BSX** | ISIN-bezogene Geld-/Brief-Offerte und letzte Umsätze | **Aktiv** | Für Aktien und ETFs identisch: kein typabhängiger Vorrang; Bewertung derselben Kursqualität |
+| **Börse Frankfurt** | Letzter Kurs vom gezielt abgefragten Handelsplatz **XFRA** | **Aktiv** | Für Aktien und ETFs identisch: **Last-Trade-Fallback**, wenn keine geeignete vollständige Geld-/Brief-Offerte ausgewählt wird |
 | **Yahoo Finance** | Früher für internationale Kurse (z. B. NEL in NOK) genutzt; heute nur historischer Entwicklungsnachweis | **AUSGESCHLOSSEN** (12.11.2026) | **Keine Nutzung in M2:** weder automatische noch manuelle Kursabfrage; keine Auswahl oder Speicherung |
 | **Twelve Data** | Optionaler internationaler Last-Trade anhand der ISIN, mit Originalwährung und Handelsplatz-MIC | **Deaktiviert**, bis private Rechte und Quoten eingerichtet sind | Nach Aktivierung **vor EODHD und deutschen Quellen**, wenn MIC, Währung und Zeitstempel qualifiziert sind; Marktalter höchstens **5 Minuten** |
 | **EODHD** | Optionale exakte ISIN-Suche, Zuordnung zu Börsenticker und Handelsplatz-MIC, verzögerter letzter Kurs in Originalwährung | **Deaktiviert**, bis private Rechte und Quoten eingerichtet sind | Nach Aktivierung **nach Twelve Data, aber vor deutschen Quellen**, wenn Zuordnung eindeutig und Marktalter höchstens **30 Minuten** ist |
@@ -40,21 +40,14 @@ Der aktuelle Code prüft die beiden internationalen Quellen **in fester Anbieter
 
 ### Priorität 2: Deutsche Quellen, wenn kein internationaler Kandidat qualifiziert ist
 
-**Aktien, Fonds und andere Nicht-ETF-Werte:**
+**Eine gemeinsame Auswahl für Aktien, ETFs, Fonds und andere registrierte Wertpapiere:**
 
 1. Vollständige **Geld-/Brief-Offerten** werden **pro Währungsgruppe** verglichen: zuerst Frischeklasse (fresh vor aging), dann **niedrigerer relativer Spread**, danach **geringeres Datenalter**, bei Gleichstand stabiler Quellenschlüssel.
 2. Gibt es Sieger aus verschiedenen Währungsgruppen, wird derzeit derjenige mit dem **jüngsten Marktzeitpunkt** genommen; nominale Preise verschiedener Währungen werden **nicht** direkt verglichen.
 3. Gibt es keine geeignete vollständige Offerte, werden gültige **Last-Trades/Snapshots** aus den erlaubten Quellen geprüft. **Jüngerer Marktzeitpunkt** entscheidet. Die Kandidatenliste ist **keine feste Priorität Tradegate vor Frankfurt oder umgekehrt**.
 4. Für den Tradegate-Last-Trade muss zusätzlich die zugehörige Tradegate-Quote dieselbe ISIN nachweisen.
 
-**ETFs (eigene generische Assetklassenregel, keine Einzel-ISIN-Ausnahme):**
-
-1. Nach der internationalen Vorprüfung wird die deutsche EUR-ETF-Auswahl geprüft. **Tradegate** ist die erste Wahl; **Lang & Schwarz** ist Ersatz.
-2. Sind beide EUR-Quotes geeignet, wird die Kursabweichung geprüft. Bei **mehr als 0,25 %** wird die automatische Freigabe wegen eines Konflikts unterbunden.
-3. Freigabe nur im im Code hinterlegten **Berliner Zeitfenster 08:00–22:00 Uhr**; die Funktion bildet dabei **keinen vollständigen Feiertags-/Heimatbörsenkalender** ab.
-4. Ohne geeigneten internationalen Kurs und ohne freigegebene EUR-ETF-Quote entsteht **kein erfundener neuer Kurs**.
-
-**Merke:** Dass Tradegate häufig gespeichert wird, heißt **nicht**, dass es bei jeder Aktie als erster Anbieter vorgeschrieben ist. Bei ETFs gibt es dagegen ausdrücklich einen Tradegate-Vorrang innerhalb der EUR-Regel.
+**Wichtig:** Die frühere ETF-Sonderauswahl (Tradegate-Vorrang, feste 0,25-%-Gegenprüfung, Berliner Uhrzeitgrenze 08:00–22:00 Uhr) ist **nicht mehr an den M2-Kurswriter angebunden**. Der ETF-/Aktien-Typ ist nur Klassifikation/Metadatum; der Quote- und Last-Trade-Weg wählt unabhängig davon denselben Anbieter für dieselbe Quelleingabe. Reale Quellenzeiten, Marktzeitstempel und Währungsqualifikation werden weiterhin geprüft. Historische ETF-Shadow-Hilfsfunktionen können noch im übernommenen MOSA-Kern stehen, sind aber nicht Teil der M2-Auswahl.
 
 ## 3. Was bedeutet die Anzeige?
 
@@ -82,7 +75,7 @@ Beim normalen EUR-Vergleich akzeptiert die Auswahl in der Regel höchstens **300
 1. **Kein verifizierter internationaler Livefeed:** Die internationalen Adapter sind programmiert und getestet, derzeit jedoch nicht mit berechtigter realer Originalwährungsquelle abgenommen.
 2. **Feste Anbieterpriorität:** Twelve Data wird vor EODHD geprüft, selbst wenn eine neutrale Qualitätsbewertung anders ausfallen könnte.
 3. **MIC ist nicht automatisch Heimatbörse:** Eine durch den Anbieter belegte Handelsplatzkennung muss zur tatsächlichen Heimatmarktbehauptung zusätzlich fachlich eingeordnet werden.
-4. **Globale Handelszeiten:** Die deutsche ETF-Regel nutzt ein Berliner Zeitfenster; internationale Sitzungen, Handelsunterbrechungen und Feiertage sind noch nicht vollständig live abgenommen.
+4. **Globale Handelszeiten:** Der ETF-spezifische Berliner Ausschluss ist aus der M2-Auswahl entfernt. Handelsunterbrechungen, Feiertage und internationale Sitzungskalender sind trotzdem noch nicht vollständig live abgenommen.
 5. **Abnahme offen:** Erforderlich sind echte internationale Quellenantworten aus mehreren Zeitzonen, M2-eigene Observations/Current, korrektes Kursalter, ISIN/MIC/Originalwährung und **visuelle Browserkontrolle** am tatsächlich genutzten M2-Startweg.
 
 Es gibt **keinen separaten Collector pro Land oder einzelner ISIN**. Die unterschiedlichen Provideradapter sind notwendige Schnittstellen; die darauf aufbauende Auswahl enthält aber **noch anbieterspezifische Prioritäts- und Zeitregeln**.
@@ -91,9 +84,9 @@ Es gibt **keinen separaten Collector pro Land oder einzelner ISIN**. Die untersc
 
 - [Gemeinsamer Quellenkatalog, Freigaben und Auswahl](../api/market_sources.php): **catalog()**, **scheduled()**, **allowed()**, **fact()**, **choose()**.
 - [Zentraler privater M2-Collector](../scripts/market_collector/mosa_tick.php): **sourceRegistry()**, **acquire()**, **syncFact()**, **main()**.
-- [MOSA-Router in M2 übernommen](../api/market_source_engine.php): **fixlabMosaMarketQuoteRouter()**, **fixlabMosaMarketEtfShadowSelection()**.
+- [Gemeinsamer Quotenvergleich](../api/market_source_engine.php): **fixlabMosaMarketQuoteRouter()** und **fixlabMosaMarketSourceLabQuoteCandidate()** für alle Wertpapierklassen; der alte **EtfShadowSelection**-Helper gehört nicht mehr zur M2-Kursauswahl.
 - [Twelve-Data-Adapter](../api/market_core/twelve_data.php), [EODHD-Adapter](../api/market_core/eodhd.php).
 - [Vertiefung: internationale Quellen und Lizenzvoraussetzungen](database/M2_INTERNATIONAL_MARKET_PROVIDER.md).
 - [Tests der gemeinsamen Quellenauswahl](../tests/test_market_tick_sources.php), [Twelve-Data-Tests](../tests/test_twelve_data_provider.php), [EODHD-Tests](../tests/test_eodhd_provider.php), [EODHD-MySQL-Tests](../tests/test_eodhd_mysql.php).
 
-**Pflegeregel:** Bei Änderungen der Quellenaktivierung, Prioritäten, Frische-/ETF-Regeln oder Lizenzfreigaben diese Seite mitaktualisieren. **Diese Markdown-Seite ist nur Dokumentation; die ausführbare zentrale Quellenregistrierung bleibt allein im Code.**
+**Pflegeregel:** Bei Änderungen der Quellenaktivierung, Kursqualitäts-/Frischeregeln oder Lizenzfreigaben diese Seite mitaktualisieren. **Diese Markdown-Seite ist nur Dokumentation; die ausführbare zentrale Quellenregistrierung bleibt allein im Code.**
