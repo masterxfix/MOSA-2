@@ -14,8 +14,14 @@
 | **Yahoo Finance** | Früher für internationale Kurse (z. B. NEL in NOK) genutzt; heute nur historischer Entwicklungsnachweis | **AUSGESCHLOSSEN** (12.11.2026) | **Keine Nutzung in M2:** weder automatische noch manuelle Kursabfrage; keine Auswahl oder Speicherung |
 | **Twelve Data** | Früher vorbereiteter internationaler ISIN-Adapter; kostenfreier Umfang und Konditionen ungeeignet/undurchsichtig für M2 | **AUSGESCHLOSSEN** (12.11.2026) | Keine automatische/manuelle M2-Kursabfrage, Registrierung oder Auswahl |
 | **EODHD** | Früher vorbereiteter internationaler ISIN-Adapter; kostenloses API-Kontingent unzureichend für M2 | **AUSGESCHLOSSEN** (12.11.2026) | Keine automatische/manuelle M2-Kursabfrage, Registrierung oder Auswahl |
+| **Euronext (inkl. Oslo)** | Öffentliche Vor-/Nachhandelsdaten, mögliche NOK-Kurse für NEL | **ZU PRÜFEN · nicht integriert** | ISIN-Zuordnung, NOK/MIC, Datenumfang, Abruf und Speicherrechte einzeln prüfen |
+| **Nasdaq Nordic/Baltic** | Veröffentlichte Vor-/Nachhandelsdaten nordischer und baltischer Börsen | **ZU PRÜFEN · nicht integriert** | ISIN, Börsen-MIC, Originalwährung, Format und Nutzung prüfen |
+| **London Stock Exchange (LSEG)** | Verzögerte Handelsplatz-/Marktdaten des Londoner Markts | **ZU PRÜFEN · nicht integriert** | Quelle, ISIN, Einheit/GBX, Format, Nutzungsbedingungen prüfen |
+| **Deutsche Börse (MiFIR-Dateien)** | Separates offizielles verzögertes Datenprodukt, **nicht** die aktive Frankfurt-API | **ZU PRÜFEN · nicht integriert** | Marktabdeckung, ISIN/MIC, Datei-Format, Lizenz/Automatisierung prüfen |
+| **gettex (Börse München)** | Verzögerte Pre-/Posttrade-Dateien | **ZU PRÜFEN · nicht integriert** | ISIN/MIC, Dateiverfügbarkeit, automatischer Abruf und Speicherung prüfen |
+| **OpenFIGI** | Internationale ISIN-/FIGI-/Ticker-Zuordnung, **keine Kurse** | **ZU PRÜFEN · nicht integriert** | Kennungsqualität, Mehrfachtreffer, Limits und Nutzungsrechte prüfen |
 
-**Klarstellung zur Tabelle:** **Drei Quellen sind tatsächlich aktiv; Yahoo Finance, Twelve Data und EODHD sind ausdrücklich ausgeschlossen.** Historische Adapter/Tests bleiben als Entwicklungsreferenz, keine Betriebsfreigabe. Wiederaufnahme ausschließlich nach neuer ausdrücklicher Nutzerentscheidung, separatem überprüftem Nutzungsrecht und erfolgreicher Live-Abnahme.
+**Klarstellung zur Tabelle:** **Drei Quellen sind tatsächlich aktiv; Yahoo Finance, Twelve Data und EODHD sind ausdrücklich ausgeschlossen. Sechs weitere Kandidaten haben ausschließlich den Status „ZU PRÜFEN“.** Historische Adapter/Tests bleiben als Entwicklungsreferenz, keine Betriebsfreigabe. Wiederaufnahme ausgeschlossener Quellen ausschließlich nach neuer ausdrücklicher Nutzerentscheidung, separatem überprüftem Nutzungsrecht und erfolgreicher Live-Abnahme. Kandidaten im `api/market_sources.php` haben `scheduled=false`, `status=candidate` und `requests=[]`: kein Adapter, keine Provider-GETs, keine DB-Registrierung, keine Schreibfreigabe.
 
 **Aktueller Abnahmenachweis (12.11.2026, 20:21 UTC):** Die aktive private Collector-Version `a82439c0` verarbeitet im selben Minutenjob **Aktien und ETFs** mit **derselben Kursauswahl** und dem gemeinsamen M2-Writer. Nach der Umschaltung wurden sowohl **DroneShield (Aktie, Tradegate BSX, EUR)** als auch **iShares Automation & Robotics (ETF, Lang & Schwarz, EUR)** erneut als Current gespeichert. Der ETF erhielt damit nach dem Entfernen des pauschalen Tradegate-Vorrangs einen tatsächlich anders gewählten Anbieter. Unabhängiger Read-only-DB-Readback: **3 ISINs, 19 Währungseinheiten, 0 Yahoo-Quellen, 0 freigeschaltete internationale Quellen**. Der geöffnete M2-Marktdaten-Tab zeigte beide aktualisierten Werte und **233 ms** angezeigte Seitenladezeit; das war eine **DOM-/Textprüfung, kein visueller Screenshot**. **Internationale native Live-Kurse bleiben ungetestet, weil die Anbieterrechte noch fehlen.**
 
@@ -95,18 +101,31 @@ Es gibt **keinen separaten Collector pro Land oder einzelner ISIN**. Die histori
 
 **Pflegeregel:** Bei Änderungen der Quellenaktivierung, Kursqualitäts-/Frischeregeln oder Lizenzfreigaben diese Seite mitaktualisieren. **Diese Markdown-Seite ist nur Dokumentation; die ausführbare zentrale Quellenregistrierung bleibt allein im Code.**
 
-## 7. Weitere offizielle kostenlose Datenquellen – Kandidaten, noch nicht integriert
+## 7. Quellen-Prüfliste – sechs Kandidaten, noch nicht integriert
 
-Die drei derzeitigen aktiven deutschen Abfrageanbieter sind **nicht** die einzigen kostenfreien Quellen.
-Offizielle Datenbörsen stellen verzögerte, maschinenlesbare regulatorische Vor-/Nachhandelsdaten bereit. Dies sind **Dateidienste** (typisch bis zu 15 Minuten verzögert), keine zugesagten kostenlosen weltweiten Live-APIs.
+**Status 12.11.2026:** Alle sechs auf Wunsch vorgemerkt. **Einzelprüfung noch ausstehend.**
+Die drei derzeitigen aktiven deutschen Abfrageanbieter sind nicht zwingend die einzigen
+kostenfreien Quellen. Ob jede genannte externe Quelle für M2 tatsächlich kostenlos und
+dauerhaft automatisiert verwendbar ist, muss **einzeln** nachgewiesen werden.
+Die genannten Daten-/Dateiformate und Verzögerungen sind Rechercheansätze,
+keine für M2 bestätigten Live-Schnittstellen.
 
-| Kandidat | Märkte | Format / Daten | Zulässigkeit und Status |
+| Kandidat | Erwarteter Prüfgegenstand | Prüfstatus | Originalquelle |
 | --- | --- | --- | --- |
-| [Euronext MiFID delayed](https://www.euronext.com/en/data/pricing-specs-agreements/mifid-ii-compliant-data) | **Oslo**, Paris, Amsterdam, Mailand u. a. | CSV; ISIN, Preis, Stück, Währung, Handel-/Veröffentlichungszeit | Kostenlos veröffentlichte Verzögerungsdaten; Bedingungen für private Verwendung/Weitergabe beachten. **Prüfkandidat für NEL-NOK**, nicht live in M2 getestet. |
-| [Nasdaq Nordic/Baltic](https://tradereports.nasdaq.com/) | Skandinavien und Baltikum | Minütliche 15-min.-verzögerte CSV-Vor-/Nachhandelsdaten | Offiziell kostenfreier Zugriff; keine Behauptung einer universellen ISIN-Live-API. Nicht integriert. |
-| [LSEG Delayed Market Data](https://dmd.lseg.com/) | XLON, Turquoise | Minütliche CSV-Vor-/Nachhandelsdaten mit UTC-Zeiten | 15-min.-verzögert, eigene Nutzung nach Bedingungen, nicht integriert. |
-| [gettex / Börse München](https://www.gettex.de/handel/delayed-data/) | MUND/MUNC | 15-min.-verzögerte CSV-Dateien, Vor-/Nachhandel | Laut BBAG für private nichtkommerzielle Verwendung frei, nicht integriert. |
-| [Deutsche Börse MiFIR](https://www.mds.deutsche-boerse.com/mds-en/real-time-data/Delayed-data) | Xetra, Frankfurt, Tradegate BSX u. a. | GZ-JSON-Pre-/Posttrade minütlich | Offiziell kostenfrei für nichtkommerzielle Verwendung nach jeweiligen Bedingungen, **separates Datenprodukt vom HTML-Scraping**. Nicht integriert. |
-| [OpenFIGI](https://www.openfigi.com/api/documentation) | International | ISIN → FIGI, Börsen-/Ticker-Referenzen | Kostenlose offene Identifikatoren, **keine Kurse**. Nicht integriert. |
+| **Euronext** (inkl. **Oslo**) | ISIN, NOK, Handelsplatz-MIC, verfügbare Prints/Quotes, Verzögerung, Rechte | **ZU PRÜFEN** | [Euronext-Daten](https://www.euronext.com/en/data/pricing-specs-agreements/mifid-ii-compliant-data) |
+| **Nasdaq Nordic/Baltic** | CSV-Datensätze, ISIN, Handelsplatz, Originalwährung, Rechte | **ZU PRÜFEN** | [Nasdaq Trade Reports](https://tradereports.nasdaq.com/) |
+| **London Stock Exchange / LSEG** | UK-/XLON-Handelsdaten, GBX/GBP, ISIN/MIC, Aufbewahrung | **ZU PRÜFEN** | [LSEG Delayed Market Data](https://dmd.lseg.com/) |
+| **Deutsche Börse (MiFIR-Dateien)** | Offizielle Vor-/Nachhandelsveröffentlichungen; keine Verwechslung mit Frankfurt-API | **ZU PRÜFEN** | [Deutsche Börse Delayed Data](https://www.mds.deutsche-boerse.com/mds-en/real-time-data/Delayed-data) |
+| **gettex (Börse München)** | Veröffentlichte Vor-/Nachhandelsdaten, ISIN, MIC, Nutzungsbedingungen | **ZU PRÜFEN** | [gettex Delayed Data](https://www.gettex.de/handel/delayed-data/) |
+| **OpenFIGI** | ISIN → FIGI/Ticker/Handelsplatz-Metadaten, Mehrdeutigkeit/Quoten; **keine Kurse** | **ZU PRÜFEN** | [OpenFIGI API](https://www.openfigi.com/api/documentation) |
+
+**Ablauf jeder Einzelprüfung:** 1. Ohne neue M2-Laufzeitanbindung die Originalquelle
+und kostenlosen Nutzungsumfang prüfen; 2. automatischen Abruf und private
+Speicherung rechtlich klären; 3. echte Beispieldaten und ihre Felder/ISIN/MIC/
+Währung/Zeitstempel belegen; 4. Anfragekosten, Dateigrößen und Verzögerung prüfen;
+5. universelle Einbindung ohne ISIN-Sonderfälle entwerfen; 6. Ergebnis in dieser
+Liste auf **geeignet**, **ungeeignet** oder **weiter offen** setzen. Die
+Freischaltung erfordert eine separate bewusste Entscheidung und Live-Abnahme.
+OpenFIGI wird ausschließlich als Kennungsdienst geprüft, nicht als Kursanbieter.
 
 **Kritisch:** Die Lizenz einer offiziellen verzögerten Datei ist nicht automatisch die Lizenz einer anderen Website oder Echtzeit-API desselben Anbieters. Vor Integration Datenfelder, Aktualität, MIC, ISIN, Nutzungsrechte, Rate-Limits, Host-Erreichbarkeit, unveränderte Originalwährung und korrekten Source-Current/History-Readback prüfen. Keine Anbieter-Sonderkollektoren, keine unbegrenzten Downloads.

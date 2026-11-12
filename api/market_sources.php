@@ -41,13 +41,52 @@ function catalog():array {
             'status'=>'excluded','exclusion_reason'=>'free_quota_insufficient_for_m2',
             'private_entitlement_required'=>true,
         ],
+        // Research backlog only: not provider adapters, not permitted network requests.
+        // Each source needs an individual evidence/rights/ISIN/MIC/unit assessment.
+        'euronext_delayed'=>[
+            'name'=>'Euronext (inkl. Oslo)','venue'=>'euronext_markets',
+            'url'=>'https://www.euronext.com/en/data/pricing-specs-agreements/mifid-ii-compliant-data',
+            'requests'=>[],'scheduled'=>false,'status'=>'candidate',
+            'data_role'=>'delayed_market_data',
+        ],
+        'nasdaq_nordic_delayed'=>[
+            'name'=>'Nasdaq Nordic/Baltic','venue'=>'nasdaq_nordic_baltic',
+            'url'=>'https://tradereports.nasdaq.com/',
+            'requests'=>[],'scheduled'=>false,'status'=>'candidate',
+            'data_role'=>'delayed_market_data',
+        ],
+        'london_stock_exchange_delayed'=>[
+            'name'=>'London Stock Exchange (LSEG)','venue'=>'london_stock_exchange',
+            'url'=>'https://dmd.lseg.com/',
+            'requests'=>[],'scheduled'=>false,'status'=>'candidate',
+            'data_role'=>'delayed_market_data',
+        ],
+        'deutsche_boerse_delayed'=>[
+            'name'=>'Deutsche Börse (MiFIR-Dateidienst)','venue'=>'deutsche_boerse_publication',
+            'url'=>'https://www.mds.deutsche-boerse.com/mds-en/real-time-data/Delayed-data',
+            'requests'=>[],'scheduled'=>false,'status'=>'candidate',
+            'data_role'=>'delayed_market_data',
+        ],
+        'gettex_delayed'=>[
+            'name'=>'gettex (Börse München)','venue'=>'gettex',
+            'url'=>'https://www.gettex.de/handel/delayed-data/',
+            'requests'=>[],'scheduled'=>false,'status'=>'candidate',
+            'data_role'=>'delayed_market_data',
+        ],
+        'openfigi'=>[
+            'name'=>'OpenFIGI','venue'=>'global_identifiers',
+            'url'=>'https://www.openfigi.com/api/documentation',
+            'requests'=>[],'scheduled'=>false,'status'=>'candidate',
+            'data_role'=>'instrument_identifiers',
+        ],
     ];
 }
 /** Single-provider aliases derive from the same scheduled-source catalog. */
 function singlePreview():array {
     $out=[];
     foreach(catalog() as $key=>$provider){
-        if(!isset($provider['preview_alias'],$provider['preview_request'],$provider['preview_label']))continue;
+        if(($provider['status']??'active')!=='active'
+            ||!isset($provider['preview_alias'],$provider['preview_request'],$provider['preview_label']))continue;
         $out[$provider['preview_alias']]=[
             'request_key'=>$provider['preview_request'],'label'=>$provider['preview_label'],'source'=>$key,
         ];
@@ -58,12 +97,13 @@ function scheduled(bool $internationalAuthorized=false,bool $eodhdAuthorized=fal
     // The former authorization flags are kept for compatibility with pinned callers,
     // but cannot override an explicit, source-wide user exclusion.
     return array_filter(catalog(),static fn(array $p):bool=>
-        $p['scheduled']===true && ($p['status']??'active')!=='excluded');
+        $p['scheduled']===true && ($p['status']??'active')==='active');
 }
 function providerOf(string $key):?string {
-    // Deny excluded providers at the shared URL/host request gate as well as the scheduler.
+    // Only explicitly active providers can resolve to a transport request.
+    // Neither excluded sources nor research candidates may send HTTP requests.
     foreach(catalog() as $name=>$provider)
-        if(($provider['status']??'active')!=='excluded'
+        if(($provider['status']??'active')==='active'
             &&in_array($key,$provider['requests'],true))return $name;
     return null;
 }
