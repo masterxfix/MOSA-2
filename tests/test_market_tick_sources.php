@@ -116,4 +116,54 @@ sameValue(false,str_contains(file_get_contents(dirname(__DIR__).'/scripts/market
 
 sameValue(true,str_contains($tick,"check(\$saved!==false,'identity_readback')"),
     'M2 identity writer uses a boolean check instead of mismatched equality arity');$n++;
+// Native currencies are accepted only with a frozen, physically seeded M2 unit.
+// GBX is a quote unit of GBP, never a synthetic ISO currency or FX rate.
+$nativeRows=[
+    ['unit_key'=>'EUR','unit_version'=>1,'status'=>'frozen','monetary_currency_code'=>'EUR'],
+    ['unit_key'=>'GBP','unit_version'=>1,'status'=>'frozen','monetary_currency_code'=>'GBP'],
+    ['unit_key'=>'GBX','unit_version'=>1,'status'=>'frozen','monetary_currency_code'=>'GBP'],
+    ['unit_key'=>'POINT','unit_version'=>1,'status'=>'frozen','monetary_currency_code'=>null],
+    ['unit_key'=>'USD','unit_version'=>1,'status'=>'draft','monetary_currency_code'=>'USD'],
+];
+$native=\Mosa2\MarketSources\unitRegistry($nativeRows);
+sameValue(['EUR','GBP','GBX'],array_keys($native),'only frozen monetary units');$n++;
+sameValue('GBP',$native['GBX']['currency'],'GBX denominated in GBP');$n++;
+$nativeQuote=$quote('tradegate_quote','tradegate_bsx',500.0,504.0);
+$nativeQuote['currency']='GBP';
+$onlyTradegate=['tradegate_bsx'=>$active['tradegate_bsx']];
+$nativeLab=['sources'=>['tradegate_quote'=>$nativeQuote]];
+$nativeFact=choose($nativeLab,$isin,'stock',$onlyTradegate,$captured,$now,$native);
+sameValue('GBP',$nativeFact['currency']??null,'native GBP currency');$n++;
+sameValue('GBP',$nativeFact['quote_unit_key']??null,'native GBP unit route');$n++;
+sameValue('502',$nativeFact['price']??null,'native price preserved without synthetic FX');$n++;
+$nativeQuote['currency']='GBX';$nativeLab['sources']['tradegate_quote']=$nativeQuote;
+$gbxFact=choose($nativeLab,$isin,'stock',$onlyTradegate,$captured,$now,$native);
+sameValue('GBP',$gbxFact['currency']??null,'GBX monetary currency is GBP');$n++;
+sameValue('GBX',$gbxFact['quote_unit_key']??null,'GBX native quote unit remains explicit');$n++;
+sameValue('502',$gbxFact['price']??null,'no silent pence to pounds rewrite');$n++;
+$nativeQuote['currency']='USD';$nativeLab['sources']['tradegate_quote']=$nativeQuote;
+sameValue(null,choose($nativeLab,$isin,'stock',$onlyTradegate,$captured,$now,$native),
+    'unseeded USD is rejected rather than mislabeled EUR');$n++;
+$nativeQuote['currency']='GBp';$nativeLab['sources']['tradegate_quote']=$nativeQuote;
+sameValue(null,choose($nativeLab,$isin,'stock',$onlyTradegate,$captured,$now,$native),
+    'ambiguous pence notation cannot be silently uppercased to GBP');$n++;
+$nativeQuote['currency']='EUR';$nativeLab['sources']['tradegate_quote']=$nativeQuote;
+sameValue('EUR',choose($nativeLab,$isin,'stock',$onlyTradegate,$captured,$now,$native)['currency']??null,
+    'old EUR quote path unchanged');$n++;
+$both=$nativeLab;
+$both['sources']['lang_schwarz_quote']=$quote('lang_schwarz_quote','lang_schwarz',4.0,6.0);
+$both['sources']['tradegate_quote']['currency']='GBP';
+$cross=choose($both,$isin,'stock',$active,$captured,$now,$native);
+sameValue(true,in_array($cross['currency']??null,['EUR','GBP'],true),
+    'independent currency groups are routed without comparing their prices');$n++;
+$unavailableUnitRows=[['unit_key'=>'GBP','unit_version'=>1,'status'=>'draft','monetary_currency_code'=>'GBP']];
+sameValue([], \Mosa2\MarketSources\unitRegistry($unavailableUnitRows),
+    'unfrozen DB units never reach Current');$n++;
+foreach(['fund','other'] as $kind){
+    $q=['canonical_name'=>$isin,'display_name'=>$isin,'asset_class'=>$kind,
+       'identifier_type'=>'isin','identifier_value'=>$isin,'normalized_value'=>$isin,
+       'scope_key'=>'','is_primary'=>1];
+    sameValue($kind,\Mosa2\MarketIdentity\qualifiedIdentity($q)['asset_class'],
+        'general asset identity class '.$kind);$n++;
+}
 echo 'PASS '.$n.'/'.$n." unified M2 market source scenarios\n";
