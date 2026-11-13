@@ -279,7 +279,6 @@
     for (const selector of ["[data-isin-remove]", "[data-isin-db-delete]"]) {
       for (const button of root.querySelectorAll(selector)) button.disabled = busy;
     }
-    for (const button of root.querySelectorAll("[data-isin-clear]")) button.disabled = busy || !entries.length;
     for (const button of root.querySelectorAll("[data-isin-db-clear]")) button.disabled = busy || storedStatus!=="ok";
   }
   function paint() {
@@ -476,10 +475,6 @@
   function clearDatabaseMarketData() {
     confirmDatabaseDelete("purge_all","ALLE TEST-MARKTDATEN");
   }
-  function clearEntries() {
-    if (busy || !entries.length || !window.confirm("Alle gespeicherten ISINs in diesem Browser löschen?")) return;
-    entries=[];save();paint();
-  }
   function showError(form,message="") {
     const error=form.parentElement.querySelector("[data-isin-error]");
     if(!error)return;
@@ -649,7 +644,6 @@
     const remote=event.target.closest("[data-isin-db-delete]");
     if(remote)deleteFromDatabase(remote.dataset.isinDbDelete);
   },listeners);
-  for(const button of root.querySelectorAll("[data-isin-clear]")) button.addEventListener("click",clearEntries,listeners);
   for(const button of root.querySelectorAll("[data-isin-db-clear]")) button.addEventListener("click",clearDatabaseMarketData,listeners);
   if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();},listeners);
   if(marketView){

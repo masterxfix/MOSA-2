@@ -1,21 +1,23 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const cacheVersion='market-registry-live-10';
+const cacheVersion='market-registry-live-11';
 for(const file of ['marktdaten.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
   assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
   assert.doesNotMatch(html,/data-isin-steps|class="isin-steps"/,file+' has no progress list');
+  assert.doesNotMatch(html,/data-isin-clear|Browserliste leeren/,file+' contains no browser clear-all control');
   assert.match(html,/<p[^>]*data-isin-error[^>]*role="status"[^>]*hidden/);
 }
 
 const {E}=require('./fixtures/isin_dom.cjs');
+assert.doesNotMatch(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),/data-isin-clear|clearEntries\(/,'Deprecated browser clear-all handler is removed');
 
-const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),clear=new E('button'),table=new E('tbody');
+const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button'),table=new E('tbody');
 table.dataset.isinActions='';
 const removeButtons=()=>table.children.map(row=>row.cells[10]?.firstElementChild).filter(Boolean);
 submit.type='submit';refresh.type='button';input.value='CNE100000296';
 form.map={'[data-isin-input]':input,'button[type=submit]':submit};
 const document={
-  querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-refresh]'?[refresh]:selector==='[data-isin-clear]'?[clear]:selector==='[data-isin-remove]'?removeButtons():selector==='[data-isin-table]'?[table]:[],
+  querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-refresh]'?[refresh]:selector==='[data-isin-remove]'?removeButtons():selector==='[data-isin-table]'?[table]:[],
   querySelector:()=>null,
   createElement:tag=>new E(tag),
   createDocumentFragment:()=>new E('fragment')
@@ -25,7 +27,6 @@ const oldDroneShield={provider:'tradegate_quote',source:'Tradegate BSX · Geld/B
 const oldEtf={provider:'boerse_frankfurt_trade',source:'Börse Frankfurt · letzter Handel',price:'5.0000000000',currency:'EUR',quote_type:'Letzter Handel',market_at:'2026-11-02T12:02:00Z',captured_at:'2026-11-02T12:03:00Z',isin:'IE00BMYDM794'};
 const initial=[{isin:'AU000000DRO2',name:'DroneShield',quotes:[oldDroneShield],errors:[]},{isin:'IE00BMYDM794',name:'L&G Hydrogen Economy ETF',quotes:[oldEtf],errors:[]}];
 const storage=new Map([['mosa2-isin-lookup-v1',JSON.stringify(initial)],['unrelated-key','keep']]),localStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
-let confirmCalls=0;
 const errorStatus=new E('p');errorStatus.hidden=true;
 form.parentElement={querySelector:selector=>selector==='[data-isin-error]'?errorStatus:null};
 const calls=[];let active=0,maxActive=0;
@@ -37,12 +38,11 @@ async function fetch(url,options){
   assert.equal(options.method,'POST');assert.equal(body.provider,'all');
   assert.equal(refresh.disabled,true,'Refresh is disabled during an update');assert.equal(submit.disabled,true,'OK is disabled during an update');
   assert.ok(removeButtons().length && removeButtons().every(button=>button.disabled),'Single-delete buttons are disabled during an update');
-  assert.equal(clear.disabled,true,'Clear-all is disabled during an update');
   await new Promise(setImmediate);active--;
   return {ok:true,body:null,json:async()=>body.isin==='AU000000DRO2'?successResult(body.isin,'DroneShield'):body.isin==='IE00BMYDM794'?failedResult(body.isin,'L&G Hydrogen Economy ETF'):successResult(body.isin,'BYD')};
 }
 
-const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number,String,Object,Array,Set,Math,Error,setTimeout,clearTimeout,window:{confirm:()=>{confirmCalls++;return true;}}};sandbox.globalThis=sandbox;
+const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number,String,Object,Array,Set,Math,Error,setTimeout,clearTimeout,window:{}};sandbox.globalThis=sandbox;
 (async()=>{
   vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),sandbox);
   assert.equal(calls.length,0,'No provider request is made on page load');
@@ -85,12 +85,13 @@ const sandbox={document,localStorage,fetch,AbortController,Intl,Date,JSON,Number
   vm.runInNewContext(fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8'),sandbox);
   assert.equal(calls.length,3,'Reload does not trigger an automatic provider request');
   assert.equal(JSON.parse(storage.get('mosa2-isin-lookup-v1'))[1].quotes[0].captured_at,persistedAfterReload[1].quotes[0].captured_at,'Stored quotes survive reload');
-  await clear.events.click();
-  assert.equal(confirmCalls,1,'Clear-all asks for exactly one confirmation');
-  assert.equal(calls.length,3,'Clear-all makes no provider request');
-  assert.equal(storage.has('mosa2-isin-lookup-v1'),false,'Clear-all removes only the ISIN LocalStorage key');
-  assert.equal(storage.get('unrelated-key'),'keep','Clear-all leaves other LocalStorage keys untouched');
-  assert.equal(clear.disabled,true,'Clear-all is disabled after the list is empty');
+  while(removeButtons().length){
+    const remove=removeButtons()[0];
+    await table.events.click({target:{closest:()=>remove}});
+  }
+  assert.equal(calls.length,3,'Individual deletion makes no provider request');
+  assert.equal(storage.has('mosa2-isin-lookup-v1'),false,'Individual deletions can empty the ISIN LocalStorage key');
+  assert.equal(storage.get('unrelated-key'),'keep','Individual deletions preserve unrelated LocalStorage keys');
   storage.set('mosa2-isin-lookup-v1','[]');
   await refresh.events.click();
   assert.equal(calls.length,3,'An empty saved list triggers no provider request');
