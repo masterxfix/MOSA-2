@@ -6,6 +6,15 @@ Kontrollierter Dogado-Apply mit unabhängigem Read-only-Postcheck: [Lauf 4339367
 16 neue Tabellen, insgesamt 42, Ledger 1–7, Modul `network=PREPARED` (keine Integrationen/JOBS aktiviert).
 Migration 0007 SHA-256: `2ee91ab2b4b2c490e651990f5b5ce4f34ffd84a4afba5e6c0455740ba7944da7`.
 
+Eigenständige zweite Live-Kontrolle ausschließlich über die existierende
+Read-only-DB-Identität: [Lauf 43394134443](https://github.com/masterxfix/MOSA-2/actions/runs/43394134443),
+13.11.2026 09:33:36 MEZ. Ergebnis: 42 Tabellen, 26 alte, 16 neue und
+vollständig leere Netzwerk-Fachtabellen; Ledger 7 und `network=PREPARED`
+bestätigt. Aktueller Finanzbestand beim Readback: 4 Core-Entities,
+4 Finanz-Assets, 4 Current-Kurse, 318 historische Kursbeobachtungen.
+Die alten Tabellen wurden durch Schema 0007 nicht umgebaut.
+
+
 ## Istzustand, geprüft am 13.11.2026
 
 Der gesicherte read-only Dogado-Prüflauf [43391862338](https://github.com/masterxfix/MOSA-2/actions/runs/43391862338)
