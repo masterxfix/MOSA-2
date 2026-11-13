@@ -1,0 +1,225 @@
+name: M2 network schema v0007 guarded Dogado apply after market-lock conflict
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-network-schema-apply-after-market-lock-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: mosa2-network-schema7-after-lock-once
+  cancel-in-progress: false
+jobs:
+  apply:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.run_number == 1 && github.event.head_commit.message == 'Apply M2 network schema v0007 after blocked collector lock'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Pinned SSH transport
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: One-time additive 0007 apply, full DDL checks and independent read-only postcheck
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,json,hashlib,re
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_test_sftp as dep,paramiko
+          p=Path('docs/database/migrations/0007_network_smart_home_core.sql')
+          sql=p.read_text(encoding='utf-8')
+          if len(sql)>30000 or len(re.findall(r'^CREATE TABLE m2_network_',sql,re.M))!=16:
+              raise RuntimeError('M2_NETWORK_ARTIFACT')
+          files=sorted(Path('docs/database/migrations').glob('000[1-6]_*.sql'))
+          if len(files)!=6:raise RuntimeError('M2_NETWORK_OLD_MIGRATIONS')
+          expected=[{'version':i+1,'key':f.stem,'sha256':hashlib.sha256(f.read_bytes()).hexdigest()} for i,f in enumerate(files)]
+          expected_sha=hashlib.sha256(sql.encode()).hexdigest()
+          source=r'''
+          ini_set('display_errors','0');ini_set('log_errors','0');
+          $stage='START';$ddlStarted=false;$db=null;$reader=null;$held=[];
+          $emit=static function(string $name,array $facts=[]):void {
+              echo json_encode(['stage'=>$name]+$facts,JSON_THROW_ON_ERROR)."\n";flush();
+          };
+          $need=static function(bool $condition,string $tag):void {
+              if(!$condition)throw new RuntimeException($tag);
+          };
+          try {
+              $root='/var/www/vhosts/web213.server10.configcenter.info/';
+              $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+              $sql=$mosa_input['migration']??'';
+              $expected=$mosa_input['ledger']??[];
+              $sha=$mosa_input['checksum']??'';
+              $need(is_string($sql)&&strlen($sql)<30000&&hash('sha256',$sql)===$sha,'ARTIFACT_SHA');
+              $need(count($expected)===6,'LEDGER_ARTIFACT');
+              $need(preg_match_all('/CREATE TABLE (m2_network_[a-z_]+)\s*\(.*?\)\s*ENGINE=InnoDB[^;]*;/s',
+                  $sql,$pieces,PREG_SET_ORDER)===16,'MIGRATION_DDL_COUNT');
+              $names=array_column(array_map(static fn($m)=>[$m[1]],$pieces),0);
+              $need(count(array_unique($names))===16,'DUPLICATE_DDL');
+              $stage='DB_IDENTITY';
+              $config=require $root.'mosa2-market-write-private/access.php';
+              $need(is_array($config)&&($config['dsn']??null)===$dsn
+                  &&($config['user']??null)==='h29077_mosa2_test','WRITER_SCOPE');
+              $db=new PDO($dsn,$config['user'],$config['password'],[
+                  PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+                  PDO::ATTR_EMULATE_PREPARES=>false,
+                  PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+              unset($config);
+              $need($db->query('SELECT DATABASE()')->fetchColumn()==='h29077_mosa2_test','DB_NAME');
+              $need(str_starts_with((string)$db->query('SELECT VERSION()')->fetchColumn(),'8.0.'),'MYSQL_VERSION');
+              $db->exec("SET SESSION time_zone='+00:00'");
+              $db->exec('SET SESSION innodb_lock_wait_timeout=8');
+              $lock=$db->prepare('SELECT GET_LOCK(?,?)');
+              $stage='LOCKS';
+              $lock->execute(['m2-network-schema7-apply',0]);
+              $need((int)$lock->fetchColumn()===1,'NETWORK_APPLY_BUSY');
+              $held[]='m2-network-schema7-apply';
+              $stage='PREFLIGHT';
+              $tables=static function(PDO $p):array{
+                  return $p->query("SELECT TABLE_NAME FROM information_schema.TABLES
+                      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE='BASE TABLE'
+                      ORDER BY TABLE_NAME")->fetchAll(PDO::FETCH_COLUMN);
+              };
+              $getLedger=static function(PDO $p):array{
+                  return $p->query("SELECT version,migration_key,LOWER(HEX(checksum)) AS sha256
+                      FROM m2_schema_migrations ORDER BY version")->fetchAll();
+              };
+              $verifyLedger=static function(array $actual,int $count)use($need,$expected,$sha):void{
+                  $need(count($actual)===$count,'LEDGER_COUNT');
+                  for($i=0;$i<$count;$i++){
+                      $expect=$i<6?$expected[$i]:['version'=>7,'key'=>'0007_network_smart_home_core','sha256'=>$sha];
+                      $row=$actual[$i];
+                      $need((int)$row['version']===$expect['version']
+                          &&$row['migration_key']===$expect['key']
+                          &&$row['sha256']===$expect['sha256'],'LEDGER_HASH');
+                  }
+              };
+              $verifyLedger($getLedger($db),6);
+              $beforeTables=$tables($db);
+              $need(count($beforeTables)===26,'EXPECTED_26_OLD_TABLES');
+              $need(count(array_filter($beforeTables,static fn($t)=>str_starts_with($t,'m2_network_')))===0,
+                  'EXISTING_NETWORK_SCHEMA');
+              $need((int)$db->query("SELECT COUNT(*) FROM m2_module_state WHERE module_key='network'")->fetchColumn()===0,
+                  'EXISTING_NETWORK_STATE');
+              $oldSchema=static function(PDO $p):string {
+                  $cols=$p->query("SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE
+                      FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
+                      AND TABLE_NAME NOT LIKE 'm2\\_network\\_%'
+                      ORDER BY TABLE_NAME,ORDINAL_POSITION")->fetchAll();
+                  return hash('sha256',json_encode($cols,JSON_THROW_ON_ERROR));
+              };
+              $oldSchemaSha=$oldSchema($db);
+              $oldCounts=[];
+              foreach(['m2_entities','m2_assets','m2_market_current','m2_market_observations',
+                  'm2_sources','m2_jobs'] as $t)
+                  $oldCounts[$t]=(int)$db->query('SELECT COUNT(*) FROM '.$t)->fetchColumn();
+              $emit('PREFLIGHT_PASS',['old_tables'=>26,'old_ledger'=>6,'network_tables'=>0]);
+              $stage='DDL';
+              foreach($pieces as $i=>$match){
+                  $stage='DDL_'.sprintf('%02d',$i+1);
+                  $ddlStarted=true;
+                  $db->exec($match[0]);
+                  $emit('DDL_CONFIRMED',['ordinal'=>$i+1,'of'=>16,'table'=>$match[1]]);
+              }
+              $stage='STRUCTURE';
+              $afterTables=$tables($db);
+              $need(count($afterTables)===42,'TABLE_COUNT_42');
+              $newTables=array_values(array_filter($afterTables,static fn($t)=>str_starts_with($t,'m2_network_')));
+              sort($names);
+              $need($newTables===$names,'NETWORK_TABLE_NAMES');
+              foreach($names as $t)
+                  $need((int)$db->query('SELECT COUNT(*) FROM '.$t)->fetchColumn()===0,'NETWORK_NOT_EMPTY');
+              preg_match_all('/CONSTRAINT\s+([a-z_]+)\s+(?:FOREIGN KEY|CHECK)/',$sql,$constraints);
+              $expectedConstraints=$constraints[1];sort($expectedConstraints);
+              $stmt=$db->query("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'm2\\_network\\_%'
+                  AND CONSTRAINT_TYPE IN ('FOREIGN KEY','CHECK')");
+              $actualConstraints=$stmt->fetchAll(PDO::FETCH_COLUMN);sort($actualConstraints);
+              $need($actualConstraints===$expectedConstraints,'CONSTRAINT_MISMATCH');
+              preg_match_all('/(?:UNIQUE\s+)?KEY\s+([a-z_]+)\s*\(/',$sql,$keyMatches);
+              $expectedIndexes=$keyMatches[1];sort($expectedIndexes);
+              $actualIndexes=$db->query("SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+                  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'm2\\_network\\_%'
+                  AND INDEX_NAME<>'PRIMARY'")->fetchAll(PDO::FETCH_COLUMN);
+              sort($actualIndexes);
+              $need($actualIndexes===$expectedIndexes,'INDEX_MISMATCH');
+              $need($oldSchema($db)===$oldSchemaSha,'OLD_SCHEMA_CHANGED');
+              foreach($oldCounts as $t=>$n)
+                  $need((int)$db->query('SELECT COUNT(*) FROM '.$t)->fetchColumn()>=$n,'OLD_ROWS_DECREASED');
+              $stage='LEDGER7';
+              $need($db->beginTransaction(),'BEGIN_LEDGER');
+              $p=$db->prepare("INSERT INTO m2_schema_migrations
+                  (version,migration_key,checksum,applied_at) VALUES
+                  (7,'0007_network_smart_home_core',UNHEX(?),UTC_TIMESTAMP(6))");
+              $need($p->execute([$sha]),'LEDGER_INSERT');
+              $need($db->exec("INSERT INTO m2_module_state
+                  (module_key,schema_version,status,updated_at)
+                  VALUES ('network',7,'PREPARED',UTC_TIMESTAMP(6))")===1,'MODULE_PREPARED');
+              $need($db->commit(),'COMMIT_LEDGER');
+              $emit('LEDGER7_CONFIRMED');
+              $stage='INDEPENDENT_READBACK';
+              $rc=require $root.'mosa2-market-read-private/access.php';
+              $need(is_array($rc)&&($rc['dsn']??null)===$dsn&&($rc['user']??null)==='h29077_mosa2_read',
+                  'READER_SCOPE');
+              $reader=new PDO($dsn,$rc['user'],$rc['password'],[
+                  PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+                  PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+              unset($rc);
+              $reader->exec('SET SESSION TRANSACTION READ ONLY');
+              $need($reader->beginTransaction(),'READ_BEGIN');
+              $need($reader->query('SELECT DATABASE()')->fetchColumn()==='h29077_mosa2_test'
+                  &&(int)$reader->query('SELECT @@session.transaction_read_only')->fetchColumn()===1,
+                  'READER_READONLY');
+              $need(count($tables($reader))===42,'POST_TABLE_COUNT');
+              $verifyLedger($getLedger($reader),7);
+              $state=$reader->query("SELECT schema_version,status FROM m2_module_state
+                  WHERE module_key='network'")->fetch();
+              $need(is_array($state)&&(int)$state['schema_version']===7&&$state['status']==='PREPARED',
+                  'POST_NETWORK_LOCKED');
+              foreach($names as $t)
+                  $need((int)$reader->query('SELECT COUNT(*) FROM '.$t)->fetchColumn()===0,'POST_NONEMPTY');
+              $need($oldSchema($reader)===$oldSchemaSha,'POST_OLD_SCHEMA_CHANGED');
+              foreach($oldCounts as $t=>$n)
+                  $need((int)$reader->query('SELECT COUNT(*) FROM '.$t)->fetchColumn()>=$n,'POST_OLD_ROWS_DECREASED');
+              $need($reader->commit(),'READ_COMMIT');
+              $emit('SUCCESS',['schema'=>7,'mysql'=>'8.0.26-16','table_count'=>42,
+                  'new_tables'=>16,'network_rows'=>0,'old_tables_untouched'=>26,
+                  'old_schema_unchanged'=>true,'old_row_counts_not_decreased'=>true,
+                  'ledger7_sha256'=>$sha,'network_module'=>'PREPARED',
+                  'readback_account'=>'h29077_mosa2_read']);
+          } catch(Throwable $e) {
+              if($db!==null&&$db->inTransaction())$db->rollBack();
+              $emit('STOP',['at'=>$stage,
+                  'outcome'=>$ddlStarted?'PARTIAL_OR_UNKNOWN':'NO_SCHEMA_WRITES']);
+              exit(1);
+          } finally {
+              if($db!==null)foreach(array_reverse($held) as $lockName){
+                  try{$q=$db->prepare('SELECT RELEASE_LOCK(?)');$q->execute([$lockName]);}catch(Throwable $ignored){}
+              }
+          }
+          '''
+          payload={'source':source,'migration':sql,'ledger':expected,'checksum':expected_sha}
+          with ssh.ssh_client(dep.configuration(),{},paramiko) as transport:
+              binary,_=remote.capability(transport)
+              rc,out,err,_=remote.remote_call(transport,
+                  remote.command(binary,remote.BOOTSTRAP),
+                  json.dumps(payload).encode(),timeout=300)
+              report=[]
+              try:
+                  for line in out.decode('utf-8').splitlines():
+                      event=json.loads(line)
+                      if event.get('stage') not in ('PREFLIGHT_PASS','DDL_CONFIRMED',
+                          'LEDGER7_CONFIRMED','SUCCESS','STOP'):
+                          raise ValueError('UNEXPECTED_STATUS')
+                      report.append(event)
+              except (UnicodeDecodeError,ValueError,TypeError):
+                  raise RuntimeError('M2_APPLY_STATUS_INVALID') from None
+              for event in report:
+                  print('M2_NETWORK_APPLY '+json.dumps(event,ensure_ascii=False),flush=True)
+              if rc or err or not report or report[-1].get('stage')!='SUCCESS':
+                  raise RuntimeError('M2_NETWORK_APPLY_NOT_CONFIRMED')
+          PY
