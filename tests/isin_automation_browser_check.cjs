@@ -162,15 +162,15 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
     'Overdue read is performed on tab resume and the timer resets');
   assert.equal(m.calls.length,5,'An overdue read resumes when visible');
   assert.equal(m.root.dataset.isinReadHttp,'503');
-  assert.deepEqual(m.table.children,detailRows);
-  assert.equal(detailRows[0].cells[2].textContent,'11,00 EUR');
-  assert.match(detailRows[0].cells[9].textContent,/Veraltet/);
+  assert.deepEqual(m.table.children,stableRows);
+  assert.equal(stableRows[0].cells[2].textContent,'11,00 EUR');
+  assert.match(stableRows[0].cells[9].textContent,/Veraltet/);
   m.status(200);m.hold();await m.advance(30000);await m.advance(35000);
   assert.equal(m.calls.length,6,'Slow read cannot overlap the next cycle');
   m.release();await flush();await m.advance(0);
   assert.equal(m.calls.length,7);
   assert.equal(m.maxActive,1);
-  assert.equal(detailRows[0].cells[9].textContent,'Gespeichert');
+  assert.equal(stableRows[0].cells[9].textContent,'Gespeichert');
 
   m.focus(false);await m.advance(30000);
   assert.equal(m.calls.length,7,'A visible but unfocused tab makes no new requests');
