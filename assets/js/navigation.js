@@ -38,9 +38,7 @@
     timing.textContent = "— ms";
     timing.setAttribute("aria-label", "Seitenladezeit wird gemessen");
     timing.removeAttribute("title");
-    const modules = current === home ? [] :
-      current.dataset.page === "market" ? [window.MosaIsinLookup, window.MosaMarket] :
-      [window.MosaFundamentals];
+    const modules = current.dataset.page === "market" ? [window.MosaIsinLookup, window.MosaMarket] : [];
     const sessions = modules.filter(module => module?.mount).map(module => module.mount(main));
     dispose = () => sessions.forEach(session => session.dispose());
     Promise.allSettled([documentReady, ...sessions.map(session => session.ready)]).then(async () => {
@@ -93,7 +91,7 @@
     const started = performance.now();
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const version = next.dataset.page === "fundamentals" ? "page-shell-1" : "overview-market-1";
+      const version = "overview-market-1";
       const asset = new URL("assets/main-" + next.dataset.page + ".html?v=" + version, home.href);
       const response = await fetch(asset, {credentials: "same-origin", signal: controller.signal});
       if (!response.ok || response.redirected) throw Error("Main unavailable");
@@ -115,8 +113,7 @@
       description.content = next.dataset.description;
       document.title = "MOSA 2 · " + next.textContent;
       brand.setAttribute("href", next === home ? "#inhalt" : home.getAttribute("href"));
-      timingLabel.textContent = next.dataset.page === "fundamentals"
-        ? "Seitenladezeit inkl. Daten · " : "Seitenladezeit · ";
+      timingLabel.textContent = "Seitenladezeit · ";
       main.replaceWith(replacement);
       main = replacement;
       mount(started);
