@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Audit M2 collector schedule and live quote freshness read-only'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 2 && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect M2 collector cron schedule fields read-only'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
@@ -88,6 +88,7 @@ jobs:
               if state.get('readonly') is not True:raise RuntimeError('M2_READONLY_ASSERT')
               report={'cron_active':True,'cron_unique':True,'active_release':shas[0],
                 'cron_minutely':line.lstrip().startswith(('* * * * *','*/1 * * * *')),
+                'cron_schedule_tokens':line.strip().split()[:5],
                 'release_file_exists':True,'cron_output_discarded':('/dev/null' in line),
                 'db':state}
               print('M2_COLLECTOR_STATUS_AUDIT '+json.dumps(report,ensure_ascii=False),flush=True)
