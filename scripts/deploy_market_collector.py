@@ -22,6 +22,7 @@ EXTRAS = (
     "api/market_core/native_currency_units.json",
     "api/market_core/twelve_data.php",
     "api/market_core/eodhd.php",
+    "docs/database/migrations/0007_network_smart_home_core.sql",
     "scripts/market_collector/gettex_delayed.py",
     "scripts/market_collector/mosa_tick.php",
 )
