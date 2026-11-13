@@ -1,17 +1,17 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-for(const file of ['marktdaten.html','index.html','fundamentaldaten.html']){
-  const cacheVersion=file==='marktdaten.html'?'market-registry-live-10':'market-registry-live-2';
+for(const file of ['marktdaten.html','index.html']){
   const html=fs.readFileSync(__dirname+'/../'+file,'utf8');
-  assert.ok(html.includes('assets/js/isin_quotes.js?v='+cacheVersion),file+' uses the current ISIN script cache version');
+  assert.ok(html.includes('assets/js/isin_quotes.js?v=market-registry-live-12'),file+' uses the current ISIN script cache version');
+  assert.ok(!html.includes('data-isin-details-toggle'),file+' no longer has the details control');
 }
 
 const {E}=require('./fixtures/isin_dom.cjs');
 
-const form=new E('form'),detailsToggle=new E('button'),table=new E('tbody');
+const form=new E('form'),table=new E('tbody');
 table.dataset.isinActions='';
 const document={
   querySelectorAll:selector=>selector==='[data-isin-form]'?[form]:selector==='[data-isin-table]'?[table]:[],
-  querySelector:selector=>selector==='[data-isin-details-toggle]'?detailsToggle:null,
+  querySelector:()=>null,
   createElement:tag=>new E(tag),
   createDocumentFragment:()=>new E('fragment')
 };
@@ -39,19 +39,6 @@ assert.ok(!table.children[0].textContent.includes('12,00'),'Later capture time d
 assert.ok(table.children[1].textContent.includes('Veraltet'),'Old successful course is marked stale');
 assert.ok(!table.textContent.includes('SOURCE_TIMEOUT')&&!table.textContent.includes('NO_QUOTE'),'Provider errors are hidden by default');
 assert.ok(table.children[2].textContent.includes('Kein erfolgreicher Kurs vorhanden'),'Missing successful course is explicit');
-assert.equal(detailsToggle.textContent,'Alle Details anzeigen','Details start closed');
-assert.equal(detailsToggle.attributes['aria-expanded'],'false','Details start collapsed');
-
-detailsToggle.events.click();
-assert.equal(detailsToggle.textContent,'Weniger anzeigen','Details toggle opens');
-assert.equal(detailsToggle.attributes['aria-expanded'],'true','Details report expanded state');
-assert.equal(table.children.length,7,'Detail view renders all quotes, errors and missing-state rows');
-assert.equal(table.children.filter(row=>row.cells[10]?.firstElementChild).length,3,'One removal control per local ISIN even in detail view');
-assert.ok(table.textContent.includes('SOURCE_TIMEOUT')&&table.textContent.includes('NO_QUOTE'),'Provider errors appear only in detail view');
-assert.ok(table.textContent.includes('Later capture only'),'All saved provider results appear in detail view');
-
-detailsToggle.events.click();
-assert.equal(detailsToggle.textContent,'Alle Details anzeigen','Details toggle closes');
-assert.equal(detailsToggle.attributes['aria-expanded'],'false','Details report collapsed state');
-assert.equal(table.children.length,3,'Closing details returns to one row per ISIN');
-console.log('PASS details: one-row L1 selection by market_at, stale/missing states, hidden errors, and toggle');
+assert.ok(!fs.readFileSync(__dirname+'/../assets/js/isin_quotes.js','utf8').includes('data-isin-details-toggle'),'Removed control has no event handler or state');
+assert.equal(table.children.length,3,'One row per ISIN is retained');
+console.log('PASS compact view: market-time quote selection, stale/missing states, no obsolete details toggle');
