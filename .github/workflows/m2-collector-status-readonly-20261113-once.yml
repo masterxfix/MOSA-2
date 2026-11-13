@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 2 && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect M2 collector cron schedule fields read-only'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 3 && github.run_attempt == 1 && github.event.head_commit.message == 'Inspect M2 collector diagnostic log read-only'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
@@ -91,5 +91,36 @@ jobs:
                 'cron_schedule_tokens':line.strip().split()[:5],
                 'release_file_exists':True,'cron_output_discarded':('/dev/null' in line),
                 'db':state}
+              suffix=line.split('mosa_tick.php',1)[1]
+              candidates=re.findall(r'(?:^|\\s)(?:>>?|2>>?)\\s*(/[-\\w./]+)',suffix)
+              report['log_redirect_basenames']=[s.rsplit('/',1)[-1] for s in candidates]
+              safe_root='/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector/'
+              for candidate in candidates:
+                  if not candidate.startswith(safe_root):continue
+                  try:
+                      with paramiko.SFTPClient.from_transport(t) as sf:
+                          stat=sf.stat(candidate)
+                          with sf.open(candidate,'rb') as stream:
+                              stream.seek(max(0,stat.st_size-262144))
+                              content=stream.read(262144).decode('utf-8','replace')
+                      records=[]
+                      errors=[]
+                      for raw in content.splitlines():
+                          try: event=json.loads(raw)
+                          except (ValueError,TypeError):
+                              if re.fullmatch(r'[a-z0-9_]{1,80}',raw.strip()):errors.append(raw.strip())
+                              continue
+                          if not isinstance(event,dict) or 'checked_at' not in event:continue
+                          items=event.get('items',{})
+                          records.append({'at':event.get('checked_at'),
+                             'registered':event.get('registered'),'due':event.get('due'),
+                             'http':event.get('provider_requests'),
+                             'unavailable_count':len(event.get('unavailable',[])),
+                             'writers':{k:v.get('writer',v.get('failure',v.get('quote'))) for k,v in items.items() if isinstance(v,dict)}})
+                      report['cron_log_readback']={'file':candidate.rsplit('/',1)[-1],
+                         'size_bytes':stat.st_size,'recent_entries':records[-8:],
+                         'short_errors':errors[-8:]}
+                  except (OSError,IOError):
+                      report['cron_log_readback']='UNREADABLE'
               print('M2_COLLECTOR_STATUS_AUDIT '+json.dumps(report,ensure_ascii=False),flush=True)
           PY
