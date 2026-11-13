@@ -60,6 +60,7 @@
     </nav>
   </header>
   <main id="inhalt" class="wrap">
+    <link rel="stylesheet" href="assets/css/home-network.css?v=1">
     <section class="hero home-hero m2-home-hero" aria-labelledby="m2-home-title">
       <div class="hero-copy">
         <p class="eyebrow">MOSA 2 · Smart Home</p>
@@ -71,6 +72,147 @@
         <p class="m2-home-state"><span class="m2-home-dot" aria-hidden="true"></span>Nicht verbunden</p>
         <p>Noch keine Geräteanbindung eingerichtet. M2 liest hier derzeit keine Gerätezustände und sendet keine Schaltbefehle.</p>
       </aside>
+    </section>
+
+    <section class="m2-home-section m2-network" aria-labelledby="m2-home-network">
+      <div class="section-heading"><div><p class="eyebrow">Infrastruktur</p><h2 id="m2-home-network">Heimnetz</h2></div></div>
+      <fieldset class="m2-network-modes">
+        <legend>Ansicht</legend>
+        <label><input type="radio" name="m2-network-mode" value="current" checked> Aktueller Status</label>
+        <label><input type="radio" name="m2-network-mode" value="normal"> Normalbetrieb</label>
+        <label><input type="radio" name="m2-network-mode" value="repeater"> Repeater getrennt</label>
+        <label><input type="radio" name="m2-network-mode" value="stale"> Messdaten veraltet</label>
+      </fieldset>
+      <div class="m2-network-overview" role="status">
+        <p class="m2-network-source" data-network-show="current">MOSA 2 hat noch keine Live-Messdaten aus dem Heimnetz.</p>
+        <p class="m2-network-source" data-network-show="normal repeater stale" hidden>Vorschau mit Beispieldaten</p>
+        <dl class="m2-network-summary">
+          <div>
+            <dt>Internet</dt>
+            <dd data-network-show="current stale">Unbekannt</dd>
+            <dd data-network-show="normal repeater" hidden>Online</dd>
+          </div>
+          <div>
+            <dt>Netzwerkgeräte</dt>
+            <dd data-network-show="current stale">Status unbekannt</dd>
+            <dd data-network-show="normal" hidden>8 von 8 verfügbar</dd>
+            <dd data-network-show="repeater" hidden>7 von 8 verfügbar</dd>
+          </div>
+          <div>
+            <dt>Letzter Datenabruf</dt>
+            <dd data-network-show="current">Keine Daten</dd>
+            <dd data-network-show="normal repeater" hidden>Vor 18 Sekunden</dd>
+            <dd data-network-show="stale" hidden>Vor 12 Minuten</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="m2-network-path">
+        <h3>Internet und Hauptnetz</h3>
+        <p class="m2-network-caption">Geplanter Aufbau nach der Umstellung</p>
+        <ol class="m2-network-devices">
+          <li>
+            <details name="m2-network-device">
+              <summary>
+                <strong>FRITZ!Box 5590 Fiber</strong><span>Glasfaseranschluss</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Online</span>
+              </summary>
+              <p>Verbindungsstatus und WAN-Verkehr über TR-064.</p>
+            </details>
+          </li>
+          <li>
+            <details name="m2-network-device">
+              <summary>
+                <strong>UniFi Cloud Gateway Ultra</strong><span>Router und DHCP</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Online</span>
+              </summary>
+              <p>Verbundene Geräte und Netzzuordnung über die UniFi Network API.</p>
+            </details>
+          </li>
+          <li>
+            <details name="m2-network-device">
+              <summary>
+                <strong>Zyxel GS1900-24EP</strong><span>Hauptswitch</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Online</span>
+              </summary>
+              <p>Portstatus und Verkehrszähler über SNMPv3.</p>
+            </details>
+          </li>
+        </ol>
+      </div>
+
+      <div class="m2-network-branches">
+        <div class="m2-network-path">
+          <h3>WLAN am GS1900</h3>
+          <ul class="m2-network-devices">
+            <li>
+              <details name="m2-network-device">
+              <summary>
+                <strong>MikroTik cAP ac</strong><span>Access Point</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Online</span>
+              </summary>
+                <p>WLAN-Anmeldungen und Verbindungsdauer aus RouterOS.</p>
+                <p data-network-show="normal" hidden>2 von 2 Repeatern angemeldet.</p>
+                <p data-network-show="repeater" hidden>1 von 2 Repeatern angemeldet.</p>
+              </details>
+            </li>
+            <li class="m2-network-child">
+              <details name="m2-network-device">
+              <summary>
+                <strong>FRITZ!Repeater 2400</strong><span>Am MikroTik · 2,4 und 5 GHz</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Online</span>
+              </summary>
+                <p>Signalstärke und Anmeldestatus am MikroTik.</p>
+              </details>
+            </li>
+            <li class="m2-network-child">
+              <details name="m2-network-device">
+                <summary>
+                  <strong>FRITZ!Repeater 600</strong>
+                  <span>Am MikroTik · 2,4 GHz</span>
+                  <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                  <span class="m2-network-device-state" data-network-show="normal" hidden>Angemeldet</span>
+                  <span class="m2-network-device-state" data-network-show="repeater" hidden>Vom MikroTik getrennt</span>
+                </summary>
+                <p data-network-show="current">Signalstärke und Anmeldestatus am MikroTik.</p>
+                <p data-network-show="normal" hidden>Signalstärke −48 dBm. Der MikroTik meldet den Repeater als angemeldet.</p>
+                <p data-network-show="repeater" hidden>Der MikroTik meldet den Repeater als getrennt. Das Internet ist weiterhin verfügbar.</p>
+                <p data-network-show="stale" hidden>Die letzte Messung ist 12 Minuten alt. Der Verbindungszustand ist unbekannt.</p>
+              </details>
+            </li>
+          </ul>
+        </div>
+        <div class="m2-network-path">
+          <h3>Weitere Switches am GS1900</h3>
+          <ul class="m2-network-devices">
+            <li>
+              <details name="m2-network-device">
+              <summary>
+                <strong>Zyxel GS1200-8</strong><span>Verteilswitch</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Erreichbar</span>
+              </summary>
+                <p>Erreichbarkeit der Verwaltungsoberfläche.</p>
+              </details>
+            </li>
+            <li>
+              <details name="m2-network-device">
+              <summary>
+                <strong>Netgear GS105Ev2</strong><span>Verteilswitch</span>
+                <span class="m2-network-device-state" data-network-show="current stale">Status unbekannt</span>
+                <span class="m2-network-device-state" data-network-show="normal repeater" hidden>Erreichbar</span>
+              </summary>
+                <p>Erreichbarkeit der Verwaltungsoberfläche.</p>
+              </details>
+            </li>
+          </ul>
+        </div>
+      </div>
     </section>
 
     <section class="m2-home-section" aria-labelledby="m2-home-devices">
@@ -113,15 +255,6 @@
       </div>
     </section>
 
-    <section class="m2-home-section" aria-labelledby="m2-home-network">
-      <div class="section-heading"><div><p class="eyebrow">03 / Infrastruktur</p><h2 id="m2-home-network">Netzwerk und Gateways</h2></div></div>
-      <p class="m2-home-section-copy">Netzwerkkomponenten, Netze und lokale Steuerzentralen erhalten einen gemeinsamen Überblick. Der Zugriff auf das Heimnetz erfolgt später ausschließlich über eine authentifizierte Verbindung.</p>
-      <dl class="m2-home-infrastructure" data-home-infrastructure>
-        <div><dt>Netzwerkgeräte</dt><dd>Keine Live-Verbindung</dd></div>
-        <div><dt>Smart-Home-Zentrale</dt><dd>Keine Live-Verbindung</dd></div>
-        <div><dt>Steuerbefehle</dt><dd>Bis zur sicheren Anbindung deaktiviert</dd></div>
-      </dl>
-    </section>
   </main>
   <footer class="wrap footer">
     <span>MOSA<sup>2</sup> · Auf verlässlichen Grundlagen aufgebaut.</span>
