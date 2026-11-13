@@ -31,7 +31,7 @@
         "api/qualified_scope.php",
         "api/read_model.php"
       ],
-      "source_blob": "5c96780f3ded0a036bb19adaa5230beb57b550f8"
+      "source_blob": "05e1ae4d5341dc34065c49bf6eae1fc08d50026c"
     },
     {
       "path": "api/market_core/primitives.php",
@@ -48,7 +48,7 @@
         "api/market_core/units.json",
         "api/market_core/values.php"
       ],
-      "source_blob": "770757511d0c3c082295ca8918bdaacd9c88e758"
+      "source_blob": "f7d97defb0ed13fa0806139aeb21b1aeedac85b4"
     },
     {
       "path": "api/market_core/units.json",
@@ -75,7 +75,7 @@
         "api/read_model.php",
         "api/current_read.php"
       ],
-      "source_blob": "764e75de2fa97a578d748f4eae048cc5f50c3c92"
+      "source_blob": "06248290dd717e5f4e78bd40f388ca687e206e7e"
     },
     {
       "path": "api/qualified_scope.php",
@@ -84,7 +84,7 @@
       "requires": [
         "api/market_core/selection.php"
       ],
-      "source_blob": "dd86c6e94362dfe3f609142d442b86de8a570ba1"
+      "source_blob": "911e256662ba1274b0ac5ca8c0076395cdefef20"
     },
     {
       "path": "api/read_model.php",
@@ -165,7 +165,7 @@
       "path": "scripts/market_collector/actions_acceptance.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "c70387ec23dccf8c6eb4b96d6f525223dfab7582",
+      "source_blob": "e23617ebb99631ea6dbd221dad5f539c9100694b",
       "requires": [
         "scripts/market_collector/live_batch.php"
       ]
@@ -174,7 +174,7 @@
       "path": "scripts/market_collector/batch_scope.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "08068e582a656911d16a692a675756506ef12726",
+      "source_blob": "200f8f28c80f5a9d5639e596679cea7408ada8fc",
       "requires": [
         "scripts/market_collector/selection.php"
       ]
@@ -218,7 +218,7 @@
       "path": "scripts/market_collector/http_transport.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "f09c748b58dfbdcf12456cd0ef8df42b6cf0e4d2",
+      "source_blob": "23e5f1280831852da7137be45420ee3870a2a42e",
       "requires": [
         "scripts/market_collector/contracts.py"
       ]
@@ -227,7 +227,7 @@
       "path": "scripts/market_collector/live_batch.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "43d5aa3852dfe94544d36584e9068567ef8c613f",
+      "source_blob": "48987e507b7d7432ebc2c885d5bbdcee6621b977",
       "requires": [
         "scripts/market_collector/actions_acceptance.php",
         "scripts/market_collector/batch_scope.php",
@@ -240,7 +240,7 @@
       "path": "scripts/market_collector/live_bridge.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "9262a67a3c03dfb0f8b21345433feeb353fd35c8",
+      "source_blob": "4d87aa2a23fca1fc7519a9b41c21963c8d078981",
       "requires": [
         "scripts/market_collector/boerse_frankfurt.py",
         "scripts/market_collector/collector.py",
@@ -283,7 +283,7 @@
       "path": "scripts/market_collector/onboarding.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "986bf0a782e388a757bce766872614c09748058e",
+      "source_blob": "c2a95da08e7b598fdf4aaccb2dd60c6a605ee076",
       "requires": [
         "scripts/phase2/postcheck.php",
         "scripts/phase3d/dry_run.php"
@@ -293,7 +293,7 @@
       "path": "scripts/market_collector/runtime_persistence.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "1da07aabdb54445d7407c77aed89527c187cb258",
+      "source_blob": "c8e3f7cb5f916b6a82e979deaa7f9a42727d4cf0",
       "requires": [
         "docs/database/migrations/0004_current_observation_provenance.sql",
         "docs/database/seeds/0001_market_units_v1.json",
@@ -345,7 +345,7 @@
       "path": "scripts/market_collector/selection.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "fa0a860cc631119142bc982931ceed16d4eb8e4d",
+      "source_blob": "a1efb5090f0bf556c136bf3b5bf9d0a73dbc8c42",
       "requires": []
     },
     {
@@ -370,7 +370,7 @@
       "path": "scripts/market_collector/yahoo_chart.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "4760249621995b0eff31b437fdd79aa271a2be1d",
+      "source_blob": "4068d10cb8e9f1ecc3a4de232040a5bc0e8db7c1",
       "requires": [
         "scripts/market_collector/contracts.py"
       ]
@@ -414,7 +414,7 @@
         "scripts/market_current/selection.php",
         "scripts/phase3n/writer_plan.py"
       ],
-      "source_blob": "58f1c60a2463882b19b74f35aa88b80ab6eb7874"
+      "source_blob": "4f7dc14ab47a3f08e2e61cfa0d4d43c80b94999a"
     },
     {
       "path": "scripts/market_current/preview.py",
@@ -591,7 +591,7 @@
       "path": "scripts/phase3n/unit_catalog_adapter.py",
       "mode": "0600",
       "role": "module",
-      "source_blob": "77389fc48ea501aed5dcaf1b6958607813c541bd",
+      "source_blob": "d5a4430cd32c144cdc0af860a012176e71788bd3",
       "requires": [
         "scripts/phase3l/unit_seed.py"
       ]
@@ -628,7 +628,7 @@
       "path": "scripts/phase3o/live_writer.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "b4a311694be24d487864646be40575b382e5379e",
+      "source_blob": "ab8c7ff93c726f5832c45e23116b18d8c212fa36",
       "requires": [
         "scripts/phase3o/state_integrity.php"
       ]
