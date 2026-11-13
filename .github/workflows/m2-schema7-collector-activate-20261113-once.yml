@@ -1,0 +1,118 @@
+name: M2 schema7 collector gated minute cron activation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-schema7-collector-activate-20261113-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: m2-schema7-collector-rollout
+  cancel-in-progress: false
+jobs:
+  activate:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Activate proven M2 schema7 collector in existing minute cron'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Pin only existing M2 minute job to proven release and independently verify automatic update
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,re,sys,hashlib,time
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_market_collector as rel,deploy_test_sftp as profile,paramiko
+          OLD='a82439c0ad695e30678af4ca9e34ab98abf634f2'
+          NEW='50eb855ebd0e69bc8e29353239c728d94ae9e678'
+          root=rel.PERIODIC+'/releases/'+NEW+'/'
+          sql=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)
+              throw new RuntimeException('M2_READER');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);$db->exec('SET SESSION TRANSACTION READ ONLY');$db->beginTransaction();
+          if((int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('NOT_READ_ONLY');
+          $data=$db->query("SELECT COUNT(*) AS total,MAX(observed_at) AS newest
+               FROM m2_market_observations")->fetch();
+          $current=$db->query("SELECT i.normalized_value AS isin,s.source_key,c.observed_at,c.market_at
+              FROM m2_market_current c
+              JOIN m2_asset_identifiers i ON i.asset_id=c.asset_id AND i.is_primary=1
+              JOIN m2_sources s ON s.id=c.source_id
+              ORDER BY i.normalized_value")->fetchAll();
+          $db->rollBack();
+          echo json_encode(['readonly'=>true,'checked_utc'=>gmdate('c'),
+               'observations'=>$data,'current'=>$current],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          """
+          def cron(t):
+              rc,out,err,_=remote.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if rc or err or not out or len(out)>32768:raise RuntimeError('M2_CRON_READ_FAILED')
+              return out
+          def snapshot(t,php):
+              rc,out,err,_=remote.remote_call(t,remote.command(php,remote.BOOTSTRAP),
+                   json.dumps({'source':sql}).encode(),timeout=55)
+              if rc or err:raise RuntimeError('M2_READONLY_DB_PROOF_FAILED')
+              x=json.loads(out)
+              if not x.get('readonly'):raise RuntimeError('DB_PROOF_NOT_READONLY')
+              return x
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              with paramiko.SFTPClient.from_transport(t) as sftp:
+                  for name in ['scripts/market_collector/mosa_tick.php',
+                               'scripts/market_collector/live_persistence.php',
+                               'scripts/market_collector/schema_contract.php',
+                               'docs/database/migrations/0007_network_smart_home_core.sql']:
+                      expected=Path(name).read_bytes()
+                      with sftp.open(root+name,'rb') as f:actual=f.read(len(expected)+1)
+                      if actual!=expected:raise RuntimeError('M2_RELEASE_DRIFT_'+name)
+              phpbin,_=remote.capability(t)
+              before=snapshot(t,phpbin)
+              if int(before['observations']['total'])<320:
+                  raise RuntimeError('M2_EARLIER_MANUAL_PROBE_DATA_NOT_FOUND')
+              original=cron(t)
+              chunks=original.splitlines(keepends=True)
+              hits=[i for i,line in enumerate(chunks) if b'/scripts/market_collector/mosa_tick.php' in line and not line.lstrip().startswith(b'#')]
+              if len(hits)!=1 or not chunks[hits[0]].lstrip().startswith(b'* * * * *') or chunks[hits[0]].count(OLD.encode())!=1:
+                  raise RuntimeError('M2_CRON_UNEXPECTED_BEFORE_ACTIVATION')
+              if NEW.encode() in original:raise RuntimeError('M2_ALREADY_ACTIVATED')
+              chunks[hits[0]]=chunks[hits[0]].replace(OLD.encode(),NEW.encode(),1)
+              updated=b''.join(chunks)
+              if updated==original:raise RuntimeError('M2_CRON_NO_CHANGE')
+              rc,out,err,_=remote.remote_call(t,'/usr/bin/crontab -',updated,timeout=30)
+              if rc or err:raise RuntimeError('M2_CRON_WRITE_FAILED')
+              verify=cron(t)
+              if verify!=updated:
+                  remote.remote_call(t,'/usr/bin/crontab -',original,timeout=30)
+                  if cron(t)!=original:raise RuntimeError('M2_CRON_RESTORE_NOT_CONFIRMED')
+                  raise RuntimeError('M2_CRON_READBACK_FAILED_RESTORED')
+              print('M2_COLLECTOR_ACTIVATED '+json.dumps({'active_release':NEW,
+                   'original_cron_sha256':hashlib.sha256(original).hexdigest(),
+                   'new_cron_sha256':hashlib.sha256(updated).hexdigest(),
+                   'other_cron_entries_byte_identical':True,
+                   'market_observations_before':before['observations']},ensure_ascii=False),flush=True)
+              # No manual collector invocation here: only real Plesk minute cron may create the proof.
+              after=None
+              for n in range(7):
+                  time.sleep(25)
+                  current=snapshot(t,phpbin)
+                  if int(current['observations']['total'])>int(before['observations']['total']) and (
+                        str(current['observations']['newest'])>str(before['observations']['newest'])):
+                      after=current
+                      break
+              if after is None:
+                  print('M2_COLLECTOR_AUTOMATIC_NOT_YET_OBSERVED cron_pinned=true',flush=True)
+                  raise RuntimeError('M2_NO_AUTOMATIC_NEW_OBSERVATION')
+              if cron(t)!=updated:raise RuntimeError('M2_CRON_CHANGED_AFTER_ACTIVATION')
+              print('PASS M2_CRON_AUTOMATIC_LIVE_DB_READBACK '+json.dumps({
+                  'active_release':NEW,'observations_before':before['observations'],
+                  'observations_after':after['observations'],'current':after['current'],
+                  'minute_cron_only':True},ensure_ascii=False),flush=True)
+          PY
