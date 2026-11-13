@@ -14,7 +14,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   const timers=new Map(),calls=[],events={},windowEvents={};
   const storage=new Map([[key,JSON.stringify(entries)],['mosa2-isin-automation-v1','{"enabled":false}']]);
   const form=new E('form'),input=new E('input'),submit=new E('button'),refresh=new E('button');
-  const table=new E('tbody'),details=new E('button'),root=new E('body'),summary=new E('span'),countdown=new E('span');
+  const table=new E('tbody'),root=new E('body'),summary=new E('span'),countdown=new E('span');
   if(actions)table.dataset.isinActions='';
   const marketNode=market?new E('section'):null;
   if(dbRegistry && marketNode)marketNode.dataset.marketRegistry='';
@@ -27,7 +27,6 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   }[selector]??[]),querySelector:selector=>({
     '[data-isin-stored-quotes]':root,'[data-isin-market-view]':marketNode,
     '[data-isin-next-check]':market?countdown:null,
-    '[data-isin-details-toggle]':market?details:null,
     '[data-site-shell]':lifecycle?root:null
   }[selector]??null),createElement:tag=>new E(tag),addEventListener:(name,fn)=>{events[name]=fn;}};
   class TestDate extends Date {constructor(...args){super(...(args.length?args:[TestDate.now()]));} static now(){return clock+ms;}}
@@ -82,7 +81,7 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
   vm.runInNewContext(script,sandbox);
   root.querySelector=document.querySelector;
   root.querySelectorAll=document.querySelectorAll;
-  return {table,input,form,refresh,details,root,summary,countdown,calls,error,storage,advance,
+  return {table,input,form,refresh,root,summary,countdown,calls,error,storage,advance,
     mount(){return sandbox.MosaIsinLookup.mount(root);},
     get writes(){return writes;},get maxActive(){return maxActive;},get registryAttempts(){return registryAttempts;},
     hide(value){document.hidden=value;events.visibilitychange();},
@@ -144,13 +143,11 @@ function harness({market=true,entries=initial,lifecycle=false,actions=false,dbRe
     'The deadline restarts after the actual stored GET, not after a made-up collector tick');
   assert.deepEqual(cells.map((cell,i)=>cell.textWrites-before[i]),[0,0,1,0,0,0,0,1,0,0]);
   assert.deepEqual(secondCells.map((cell,i)=>cell.textWrites-secondBefore[i]),[0,0,0,0,0,0,0,1,0,0]);
-  m.details.events.click();
-  const detailRows=[...m.table.children], detailInserts=m.table.insertions;
+  const stableRows=[...m.table.children], stableInserts=m.table.insertions;
   m.input.value='draft ISIN';
   await m.advance(60000);
   assert.deepEqual(m.calls.map(call=>call.at),[0,30000,60000,90000]);
-  assert.deepEqual(m.table.children,detailRows);assert.equal(m.table.insertions,detailInserts);
-  assert.equal(m.details.getAttribute('aria-expanded'),'true');
+  assert.deepEqual(m.table.children,stableRows);assert.equal(m.table.insertions,stableInserts);
   assert.equal(m.input.value,'draft ISIN');
   assert.equal(m.writes,0,'Background data never rewrites the user list');
   assert.equal(m.root.dataset.isinReadCount,'4');
