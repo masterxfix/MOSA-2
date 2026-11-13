@@ -1,5 +1,34 @@
 # Versionierte Migrationen
 
+## Version 0007 – Netzwerk und Smart Home, Dogado-M2-Testdatabase LIVE
+
+Die ausschließlich additive Datei `0007_network_smart_home_core.sql` ergänzt
+16 generische Netzwerk-/Smart-Home-Tabellen für Standorte, Routing-Domains, VLANs,
+IPv4/IPv6-Präfixe und -Zuordnungen, Geräte, Interfaces, Verbindungen, Dienste,
+Integrationen sowie aktuelle und historische Messwerte. Die Migration ändert
+keine vorhandene Tabelle, keine Finanzdaten, keine bestehenden Collector, Jobs
+oder Benutzer. Integrationen bleiben deaktiviert; alle neuen Tabellen sind leer.
+
+MySQL-8.0.36-Isoliertest mit FKs, CHECKs, zwei getrennten IP-Scope-Fällen,
+Observation/Current-Provenienz und vier Indexpfaden: [43392585643](https://github.com/masterxfix/MOSA-2/actions/runs/43392585643).
+Unabhängiger Dogado-Preflight: [43391862338](https://github.com/masterxfix/MOSA-2/actions/runs/43391862338).
+
+Erster One-time-Apply [43393279780](https://github.com/masterxfix/MOSA-2/actions/runs/43393279780)
+stoppt vor jedem DDL an belegtem fachfremdem Scheduler-Lock mit
+`NO_SCHEMA_WRITES`. Der separat einmalig kontrollierte, additive Migrations-Apply
+[43393673529](https://github.com/masterxfix/MOSA-2/actions/runs/43393673529)
+erfolgte anschließend erfolgreich; alle 16 CREATEs, Tabellen-/FK-/Index-Check,
+Ledger 7, `network=PREPARED` und **unabhängiger transaktional read-only
+DB-Postcheck** bestätigt. Endstand: 42 Tabellen (26 alte unverändert,
+16 neue leer), Ledger 1–7, bestehende Zeilenzahlen nicht gesunken. Die sechs
+Alt-Migrationen blieben byte-identisch. SHA-256 der 0007-Datei:
+`2ee91ab2b4b2c490e651990f5b5ce4f34ffd84a4afba5e6c0455740ba7944da7`.
+
+[Tabellenvertrag, Sicherheits- und Integrationsregeln](../NETWORK_SCHEMA_0007.md).
+Keine Web-UI-Seite, kein Geräte-Scan und kein aktiver Netzwerk-Collector wurden
+in dieser Stufe eingerichtet.
+
+
 ## Version 0006 – Fundamentals und Payload-Provenienz, isoliert MySQL 8 qualifiziert
 
 `0006_fundamentals_and_payload_provenance.sql` ergänzt fünf Tabellen: Fetch-
