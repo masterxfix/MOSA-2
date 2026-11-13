@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   activate:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Activate proven M2 schema7 collector in existing minute cron'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 2 && github.run_attempt == 1 && github.event.head_commit.message == 'Activate M2 schema7 cron with whitespace safe schedule verification'
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     steps:
@@ -80,7 +80,10 @@ jobs:
               original=cron(t)
               chunks=original.splitlines(keepends=True)
               hits=[i for i,line in enumerate(chunks) if b'/scripts/market_collector/mosa_tick.php' in line and not line.lstrip().startswith(b'#')]
-              if len(hits)!=1 or not chunks[hits[0]].lstrip().startswith(b'* * * * *') or chunks[hits[0]].count(OLD.encode())!=1:
+              valid_clock=(len(hits)==1 and chunks[hits[0]].strip().split()[:5]==[b'*']*5)
+              old_count=chunks[hits[0]].count(OLD.encode()) if len(hits)==1 else -1
+              print('M2_CRON_PREFLIGHT '+json.dumps({'unique':len(hits)==1,'schedule_minutely':valid_clock,'old_release_count':old_count}),flush=True)
+              if len(hits)!=1 or not valid_clock or old_count!=1:
                   raise RuntimeError('M2_CRON_UNEXPECTED_BEFORE_ACTIVATION')
               if NEW.encode() in original:raise RuntimeError('M2_ALREADY_ACTIVATED')
               chunks[hits[0]]=chunks[hits[0]].replace(OLD.encode(),NEW.encode(),1)
