@@ -335,7 +335,8 @@ function main(): void {
                 'project'=>$project,'python'=>'/opt/alt/python311/bin/python3.11','php'=>PHP_BINARY,
                 'runtime_path'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin','private_root'=>$periodic.'/work',
                 'db_host'=>'127.0.0.1','db_port'=>3307,'allow_duplicate'=>true,
-                'state_contract'=>['schema_version'=>6,'allow_current'=>true],
+                // Schema 7 adds independently verified network tables; market writer stays schema 6.
+                'state_contract'=>['schema_version'=>6,'allow_current'=>true,'additive_schema_7'=>true],
             ];
             $items=[];$unavailable=[];$requests=[];
             foreach ($due as $isin=>$asset) {
