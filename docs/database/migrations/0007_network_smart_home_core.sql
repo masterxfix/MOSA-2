@@ -292,7 +292,7 @@ CREATE TABLE m2_network_metric_observations (
     CONSTRAINT fk_net_metric_obs_entity FOREIGN KEY (subject_entity_id) REFERENCES m2_entities (id) ON DELETE RESTRICT,
     CONSTRAINT fk_net_metric_obs_definition FOREIGN KEY (metric_key, value_type) REFERENCES m2_network_metric_definitions (metric_key, value_type) ON DELETE RESTRICT,
     CONSTRAINT fk_net_metric_obs_source FOREIGN KEY (source_id) REFERENCES m2_sources (id) ON DELETE RESTRICT,
-    CONSTRAINT ck_net_metric_obs_value CHECK ((value_type = 'decimal' AND value_decimal IS NOT NULL AND value_boolean IS NULL AND value_text IS NULL) OR (value_type = 'boolean' AND value_decimal IS NULL AND value_boolean IN (0,1) AND value_text IS NULL) OR (value_type = 'text' AND value_decimal IS NULL AND value_boolean IS NULL AND value_text IS NOT NULL))
+    CONSTRAINT ck_net_metric_obs_value CHECK ((value_type = 'decimal' AND value_decimal IS NOT NULL AND value_boolean IS NULL AND value_text IS NULL) OR (value_type = 'boolean' AND value_decimal IS NULL AND value_boolean IS NOT NULL AND value_boolean IN (0,1) AND value_text IS NULL) OR (value_type = 'text' AND value_decimal IS NULL AND value_boolean IS NULL AND value_text IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE m2_network_metric_current (
@@ -313,5 +313,5 @@ CREATE TABLE m2_network_metric_current (
     CONSTRAINT fk_net_metric_current_entity FOREIGN KEY (subject_entity_id) REFERENCES m2_entities (id) ON DELETE RESTRICT,
     CONSTRAINT fk_net_metric_current_definition FOREIGN KEY (metric_key, value_type) REFERENCES m2_network_metric_definitions (metric_key, value_type) ON DELETE RESTRICT,
     CONSTRAINT fk_net_metric_current_origin FOREIGN KEY (observation_id, subject_entity_id, metric_key, source_id) REFERENCES m2_network_metric_observations (id, subject_entity_id, metric_key, source_id) ON DELETE RESTRICT,
-    CONSTRAINT ck_net_metric_current_value CHECK ((value_type = 'decimal' AND value_decimal IS NOT NULL AND value_boolean IS NULL AND value_text IS NULL) OR (value_type = 'boolean' AND value_decimal IS NULL AND value_boolean IN (0,1) AND value_text IS NULL) OR (value_type = 'text' AND value_decimal IS NULL AND value_boolean IS NULL AND value_text IS NOT NULL))
+    CONSTRAINT ck_net_metric_current_value CHECK ((value_type = 'decimal' AND value_decimal IS NOT NULL AND value_boolean IS NULL AND value_text IS NULL) OR (value_type = 'boolean' AND value_decimal IS NULL AND value_boolean IS NOT NULL AND value_boolean IN (0,1) AND value_text IS NULL) OR (value_type = 'text' AND value_decimal IS NULL AND value_boolean IS NULL AND value_text IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
