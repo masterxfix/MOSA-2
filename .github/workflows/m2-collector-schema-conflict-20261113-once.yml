@@ -1,0 +1,71 @@
+name: M2 collector schema 7 read-only failure proof
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-collector-schema-conflict-20261113-once.yml']
+permissions: {contents: read}
+jobs:
+  proof:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Probe M2 collector schema mismatch with read only DB'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Prove active private release snapshot against schema 7 without any writes
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import json,sys,re
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as rem,deploy_test_sftp as profile,paramiko
+          script=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(!is_array($cfg)||($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)
+              throw new RuntimeException('M2_READER_ONLY');
+          $p=new PDO($dsn,$cfg['user'],$cfg['password'],[
+              PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);$p->exec('SET SESSION TRANSACTION READ ONLY');$p->beginTransaction();
+          if((int)$p->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('NOT_READ_ONLY');
+          $path=$mosa_input['module']??'';
+          if(!is_string($path)||!preg_match('~^/var/www/vhosts/web213\\.server10\\.configcenter\\.info/private/mosa2-collector/periodic/releases/[a-f0-9]{40}/scripts/market_collector/live_persistence\\.php$~D',$path))
+              throw new RuntimeException('MODULE_SCOPE');
+          require_once $path;
+          $result=['db'=> $p->query('SELECT DATABASE()')->fetchColumn(),
+                   'table_count'=>(int)$p->query("SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE()")->fetchColumn(),
+                   'ledger_count'=>(int)$p->query('SELECT COUNT(*) FROM m2_schema_migrations')->fetchColumn(),
+                   'latest_observation'=>$p->query('SELECT MAX(observed_at) FROM m2_market_observations')->fetchColumn()];
+          try{
+              \Mosa2\MarketLive\snapshot($p,['schema_version'=>6,'allow_current'=>true]);
+              $result['snapshot']='PASS';
+          }catch(Throwable $e){$result['snapshot']='FAIL';$result['error_code']=$e->getMessage();}
+          $p->rollBack();
+          echo json_encode($result,JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(profile.configuration(),{},paramiko) as t:
+              rc,out,err,_=rem.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if rc or err: raise RuntimeError('CRON_NOT_READABLE')
+              matches=[x.decode() for x in out.splitlines() if b'/scripts/market_collector/mosa_tick.php' in x and not x.lstrip().startswith(b'#')]
+              if len(matches)!=1:raise RuntimeError('ACTIVE_M2_JOB_NOT_UNIQUE')
+              sha=re.findall(r'/releases/([a-f0-9]{40})/',matches[0])
+              if len(sha)!=1:raise RuntimeError('M2_RELEASE_UNEXPECTED')
+              module='/var/www/vhosts/web213.server10.configcenter.info/private/mosa2-collector/periodic/releases/'+sha[0]+'/scripts/market_collector/live_persistence.php'
+              php,_=rem.capability(t)
+              rc,out,err,_=rem.remote_call(t,rem.command(php,rem.BOOTSTRAP),
+                  json.dumps({'source':script,'module':module}).encode(),timeout=55)
+              if rc or err:raise RuntimeError('M2_PROOF_RUNTIME_FAILED')
+              report=json.loads(out)
+              report['active_release']=sha[0]
+              print('M2_SCHEMA_CONFLICT_PROOF '+json.dumps(report,ensure_ascii=False),flush=True)
+              if report['snapshot']!='FAIL' or report['error_code'] not in ('table_set','ledger_versions','unit_table_set','schema6_ledger_keys'):
+                  raise RuntimeError('M2_ROOT_CAUSE_DIFFERS_FROM_HYPOTHESIS')
+          PY
