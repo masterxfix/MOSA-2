@@ -17,7 +17,6 @@
   if (!forms.length) return {dispose() {}};
   const scope = new AbortController();
   const listeners = {signal:scope.signal};
-  const detailsToggle = root.querySelector("[data-isin-details-toggle]");
   const storedQuotes = new Map();
   const registeredAssets = new Map();
   const storedRoot=root===document ? document.querySelector("[data-isin-stored-quotes]") : root;
@@ -49,7 +48,7 @@
           .slice(0,12).map(e=>({...e,source:typeof e.source==="string"&&e.source.length<=160?e.source:null})):[]}));
     } catch {return [];}
   }
-  let entries = restore(), busy = Boolean(manualOwner), detailsOpen = false;
+  let entries = restore(), busy = Boolean(manualOwner);
   const save = () => {try {
     if (entries.length) localStorage.setItem(KEY, JSON.stringify(entries));
     else localStorage.removeItem(KEY);
@@ -298,26 +297,13 @@
       for(const entry of displayed){
         const main=entry.isin+":main";
         const first=rows.length;
-        if(!detailsOpen){
-          const latest=(marketView?storedQuotes.get(entry.isin):null) || best(entry);
-          rows.push(latest?quoteRow(main,entry,latest,true):missingRow(main,entry));
-        }else{
-          const quotes=availableQuotes(entry);
-          if(!quotes.length)rows.push(missingRow(main,entry));
-          for(const quote of quotes)rows.push(quoteRow(entry.isin+":quote:"+quote.provider,entry,quote,false));
-          for(const error of entry.errors||[])rows.push(errorRow(entry,error));
-        }
+        const latest=(marketView?storedQuotes.get(entry.isin):null) || best(entry);
+        rows.push(latest?quoteRow(main,entry,latest):missingRow(main,entry));
         if(ownIsins.has(entry.isin))rows[first][3]=entry.isin;
         if(dbRegistry && registeredAssets.has(entry.isin))rows[first][4]=entry.isin;
       }
       if(!rows.length)rows.push(["empty",null,["Noch keine ISIN eingegeben."]]);
       reconcileRows(tbody,rows,fullNames);
-    }
-    if(detailsToggle){
-      const text=detailsOpen?"Weniger anzeigen":"Alle Details anzeigen";
-      if(detailsToggle.textContent!==text)detailsToggle.textContent=text;
-      if(detailsToggle.getAttribute("aria-expanded")!==String(detailsOpen))
-        detailsToggle.setAttribute("aria-expanded",String(detailsOpen));
     }
     const count=marketView?visibleIsins.size:entries.length;
     const summary=count+" ISIN"+(count===1?"":"s")+
@@ -328,10 +314,10 @@
     }
     syncDeleteButtons();
   }
-  function quoteRow(key,entry,quote,compact) {
+  function quoteRow(key,entry,quote) {
     const stale=old(quote);
     let status=quote.provider==="stored"?"Gespeichert":quote.unchanged?"Unverändert":"Kurs abgerufen";
-    if(compact && marketView && quote.provider!=="stored" && storedStatus!=="loading")
+    if(marketView && quote.provider!=="stored" && storedStatus!=="loading")
       status+=storedStatus==="ok"?" · Kein neuer gespeicherter Kurs":" · Hintergrundabruf fehlgeschlagen";
     return [key,stale?"stale":"stored",[
       shortName(entry),typeLabel(entry),fmtPrice(quote.price)+" "+(quote.unit||quote.currency),
@@ -342,13 +328,6 @@
   function missingRow(key,entry) {
     const status=registeredAssets.has(entry.isin)?"In DB registriert · Kein gespeicherter Kurs":"Kein erfolgreicher Kurs vorhanden";
     return [key,"missing",[shortName(entry),typeLabel(entry),"—","—","—","—","—","—",entry.isin,status]];
-  }
-  function errorRow(entry,error) {
-    const missing=error.status==="unavailable";
-    return [entry.isin+":error:"+error.provider,missing?"missing":"error",[
-      shortName(entry),typeLabel(entry),"—","—",sourceLabel(error),"—",date(error.captured_at),"—",entry.isin,
-      (missing?"Nicht verfügbar: ":"Fehler: ")+error.code
-    ]];
   }
   function removeEntry(isin) {
     if (busy) return;
@@ -565,7 +544,6 @@
     busy=value;
     for(const form of forms){const button=form.querySelector("button[type=submit]");if(button)button.disabled=value;}
     for(const button of root.querySelectorAll("[data-isin-refresh]"))button.disabled=value;
-    if(detailsToggle) detailsToggle.disabled=value;
     syncDeleteButtons();
     scheduleStoredRead();
   }
@@ -645,7 +623,6 @@
     if(remote)deleteFromDatabase(remote.dataset.isinDbDelete);
   },listeners);
   for(const button of root.querySelectorAll("[data-isin-db-clear]")) button.addEventListener("click",clearDatabaseMarketData,listeners);
-  if(detailsToggle) detailsToggle.addEventListener("click",()=>{if(busy)return;detailsOpen=!detailsOpen;paint();},listeners);
   if(marketView){
     document.addEventListener("visibilitychange",scheduleStoredRead,listeners);
     window.addEventListener("focus",scheduleStoredRead,listeners);
