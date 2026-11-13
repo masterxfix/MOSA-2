@@ -24,12 +24,12 @@ jobs:
       - name: Checkout reviewed source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ebbb14dae5a45513c49fd6d1d0c3a5d0f550f5a0
+          ref: 1520da66d510a39db37d668b3f2e372e16324a43
           persist-credentials: false
       - name: Verify intended frontend change and generated pages
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "ebbb14dae5a45513c49fd6d1d0c3a5d0f550f5a0"
+          test "$(git rev-parse HEAD)" = "1520da66d510a39db37d668b3f2e372e16324a43"
           python3 scripts/build_pages.py --check
           node --check assets/js/isin_quotes.js
           python3 - <<'PY'
@@ -92,4 +92,4 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/deploy_test_sftp.py deploy
-          printf 'Deployed reviewed version ebbb14dae5a45513c49fd6d1d0c3a5d0f550f5a0; obsolete details UI removed.\n' >> "$GITHUB_STEP_SUMMARY"
+          printf 'Deployed reviewed version 1520da66d510a39db37d668b3f2e372e16324a43; obsolete details UI removed.\n' >> "$GITHUB_STEP_SUMMARY"
