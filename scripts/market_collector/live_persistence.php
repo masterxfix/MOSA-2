@@ -12,7 +12,15 @@ function strings(array $row): array {foreach($row as &$v)if($v!==null)$v=(string
 function snapshot(PDO $p,array $contract=[]): array {
     require_once __DIR__.'/schema_contract.php';
     $envelope=\Mosa2\CollectorSchema5\envelope($contract['schema_version']??3);$tables=$envelope['tables'];
-    same(\Mosa2\Phase2\tables($p),$tables,'table_set');$out=[];
+    // Snapshot and writer remain schema-6 scoped; migration 0007 is verified as
+    // an additive, checksum-pinned extension rather than relaxing table integrity.
+    $extra=[];
+    if(($contract['additive_schema_7']??false)===true){
+        check(($contract['schema_version']??null)===6,'schema_extension_contract');
+        $extra=\Mosa2\CollectorSchema5\additiveNetworkTables7();
+    }
+    $expectedTables=array_merge($tables,$extra);sort($expectedTables);
+    same(\Mosa2\Phase2\tables($p),$expectedTables,'table_set');$out=[];
     foreach($tables as $t){
         $cols=$p->query('SHOW COLUMNS FROM '.qi($t))->fetchAll();$select=[];
         foreach($cols as $c)$select[]=(str_starts_with(strtolower($c['Type']),'binary(')?'HEX('.qi($c['Field']).')':qi($c['Field'])).' AS '.qi($c['Field']);
@@ -20,11 +28,19 @@ function snapshot(PDO $p,array $contract=[]): array {
         $out[$t]=array_map(__NAMESPACE__.'\\strings',$p->query('SELECT '.implode(',',$select).' FROM '.qi($t).' ORDER BY '.implode(',',array_map(static fn($k)=>qi($k['Column_name']),$keys)))->fetchAll());
     }
     if(($contract['allow_current']??false)!==true)same($out['m2_market_current'],[],'current_nonempty');
-    same(array_column($out['m2_schema_migrations'],'version'),$envelope['versions'],'ledger_versions');
-    $digests=$envelope['digests'];
+    $versions=$envelope['versions'];$digests=$envelope['digests'];
+    if($extra!==[]){
+        $versions[]='7';$digests[]=\Mosa2\CollectorSchema5\DIGEST7_NETWORK;
+    }
+    same(array_column($out['m2_schema_migrations'],'version'),$versions,'ledger_versions');
     foreach($out['m2_schema_migrations'] as $i=>$row)same(strtolower($row['checksum']),$digests[$i],'ledger_checksum');
     if(($contract['schema_version']??3)>=5){
-        if($contract['schema_version']===6){\Mosa2\CollectorSchema5\ledger6($out['m2_schema_migrations']);require_once __DIR__.'/schema6.php';\Mosa2\CollectorSchema6\database($p);}
+        if($contract['schema_version']===6){
+            if($extra!==[])\Mosa2\CollectorSchema5\ledger7Network($out['m2_schema_migrations']);
+            else \Mosa2\CollectorSchema5\ledger6($out['m2_schema_migrations']);
+            require_once __DIR__.'/schema6.php';
+            \Mosa2\CollectorSchema6\database($p,$extra);
+        }
         else \Mosa2\CollectorSchema5\ledger5($out['m2_schema_migrations']);
         \Mosa2\CollectorSchema5\lockedDatabase($p);
     }
