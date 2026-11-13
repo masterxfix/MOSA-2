@@ -98,15 +98,20 @@ class FundamentalsWebTests(unittest.TestCase):
         self.assertEqual(stored['queries'], 3)
         self.assertTrue(stored['rolled_back'])
 
-    def test_page_and_navigation_expose_the_new_view_without_private_details(self):
-        page = (ROOT / 'fundamentaldaten.html').read_text(encoding='utf-8')
+    def test_removed_page_unlinked_but_data_reader_kept(self):
+        self.assertFalse((ROOT / 'fundamentaldaten.html').exists())
+        self.assertFalse((ROOT / 'assets/main-fundamentals.html').exists())
+        shell = (ROOT / 'scripts/build_pages.py').read_text(encoding='utf-8')
         navigation = (ROOT / 'assets/js/navigation.js').read_text(encoding='utf-8')
-        homepage = (ROOT / 'index.html').read_text(encoding='utf-8')
-        self.assertIn('data-fundamentals-view', page)
-        self.assertIn('href="fundamentaldaten.html"', homepage)
-        self.assertIn('window.MosaFundamentals', navigation)
-        self.assertIn('href="fundamentaldaten.html" data-page="fundamentals"', homepage)
-        self.assertNotRegex(page + navigation + homepage, r'password|secret|token|m2_entities|configcenter|/var/')
+        for filename in ('index.html', 'marktdaten.html', 'anbieter-labor.html'):
+            html = (ROOT / filename).read_text(encoding='utf-8')
+            self.assertNotIn('fundamentaldaten.html', html)
+            self.assertNotIn('data-page="fundamentals"', html)
+            self.assertNotIn('assets/js/fundamentals.js', html)
+        self.assertNotIn('fundamentaldaten.html', shell)
+        self.assertNotIn('window.MosaFundamentals', navigation)
+        self.assertIn('window.MosaIsinLookup', navigation)
+        self.assertTrue((ROOT / 'api/fundamentals.php').is_file())
 
 
 if __name__ == '__main__':

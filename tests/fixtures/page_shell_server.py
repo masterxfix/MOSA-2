@@ -9,8 +9,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 EMPTY = {"status": "ok", "as_of": "2026-11-11 09:00:00.000000",
          "totals": {"assets": 0, "fundamental_observations": 0, "fundamental_current": 0}, "items": []}
-PAGES = {"/": "index.html", "/index.html": "index.html", "/marktdaten.html": "marktdaten.html",
-         "/fundamentaldaten.html": "fundamentaldaten.html"}
+PAGES = {"/": "index.html", "/index.html": "index.html", "/marktdaten.html": "marktdaten.html"}
 
 
 class Handler(BaseHTTPRequestHandler):
