@@ -1,0 +1,82 @@
+name: M2 remove redundant market summary - one-time testsite release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/m2-remove-summary-deploy-once.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'masterxfix/MOSA-2' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'M2 one-time testsite release: remove redundant ISIN summary'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact reviewed web change
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: cc996831a80e2c87115d8d5e0b81f6027baaa4cd
+          persist-credentials: false
+      - name: Verify only requested summary is removed and generated page is current
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "cc996831a80e2c87115d8d5e0b81f6027baaa4cd"
+          python3 scripts/build_pages.py --check
+          python3 - <<'PY'
+          from pathlib import Path
+          for filename in ('assets/main-market.html','marktdaten.html'):
+              content = Path(filename).read_text(encoding='utf-8')
+              assert 'data-isin-summary' not in content, filename
+              assert 'Meine ISIN-Kursabfragen' in content, filename
+              assert 'data-isin-count' in content, filename
+              assert 'data-isin-table' in content, filename
+          print('Redundant status removed; live counter and quote table intact')
+          PY
+      - name: Validate existing testsite deploy safety
+        run: |
+          python3 -m unittest discover -s tests -p 'test_deploy*.py' -v
+          python3 scripts/deploy_sftp.py validate
+      - name: Install pinned SFTP client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Encrypt backup of the single remote HTML file
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          python3 scripts/deploy_test_sftp.py backup
+      - name: Retain encrypted rollback file
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m2-market-summary-one-time-encrypted-backup
+          path: ${{ runner.temp }}/mosa2-web-backup.sealed.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Deploy one file to isolated M2 testsite with independent readback
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py deploy
+          printf 'M2 testsite HTML deployed from reviewed commit cc996831a80e2c87115d8d5e0b81f6027baaa4cd\n' >> "$GITHUB_STEP_SUMMARY"
