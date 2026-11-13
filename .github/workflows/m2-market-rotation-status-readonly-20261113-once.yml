@@ -1,0 +1,68 @@
+name: M2 fair rotation independent live status read-only
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-market-rotation-status-readonly-20261113-once.yml']
+permissions: {contents: read}
+jobs:
+  audit:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Audit active M2 round robin cron and four latest ISINs read only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Read current M2 cron, protected cursor and live DB without any writes
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,json,re,stat
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_market_collector as rel,deploy_test_sftp as cfg,paramiko
+          source=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)throw new RuntimeException('READER');
+          $p=new PDO($dsn,$cfg['user'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);$p->exec('SET SESSION TRANSACTION READ ONLY');$p->beginTransaction();
+          if((int)$p->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)throw new RuntimeException('READONLY');
+          $c=$p->query("SELECT i.normalized_value AS isin,c.observed_at,c.market_at,
+            TIMESTAMPDIFF(MINUTE,c.observed_at,UTC_TIMESTAMP()) AS age_minutes
+            FROM m2_market_current c JOIN m2_asset_identifiers i ON i.asset_id=c.asset_id AND i.is_primary=1
+            ORDER BY i.normalized_value")->fetchAll();
+          $n=$p->query("SELECT COUNT(*) AS count_all,MAX(observed_at) AS newest FROM m2_market_observations")->fetch();
+          $lock=$p->query("SELECT IS_USED_LOCK('m2-collector-scheduler')")->fetchColumn();
+          $p->rollBack();
+          echo json_encode(['readonly'=>true,'checked_utc'=>gmdate('c'),'current'=>$c,'observations'=>$n,
+             'lock_held_now'=>$lock!==false&&$lock!==null],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          """
+          with ssh.ssh_client(cfg.configuration(),{},paramiko) as t:
+              rc,raw,err,_=remote.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if rc or err:raise RuntimeError('CRON_READ')
+              lines=[x for x in raw.splitlines() if b'/scripts/market_collector/mosa_tick.php' in x and not x.lstrip().startswith(b'#')]
+              if len(lines)!=1:raise RuntimeError('CRON_NOT_UNIQUE')
+              shas=re.findall(rb'/releases/([0-9a-f]{40})/',lines[0])
+              if len(shas)!=1:raise RuntimeError('CRON_RELEASE_UNKNOWN')
+              cursor=rel.PERIODIC+'/state/market-scheduler-cursor-v1.txt'
+              cursor_status='absent'
+              with paramiko.SFTPClient.from_transport(t) as sf:
+                  try:
+                      s=sf.stat(cursor)
+                      with sf.open(cursor,'rb') as fp:raw=fp.read(32)
+                      cursor_status={'mode':oct(stat.S_IMODE(s.st_mode)),'content':raw.decode('ascii','replace').strip()}
+                  except FileNotFoundError:pass
+              php,_=remote.capability(t)
+              rc,out,err,_=remote.remote_call(t,remote.command(php,remote.BOOTSTRAP),
+                  json.dumps({'source':source}).encode(),timeout=45)
+              if rc or err:raise RuntimeError('M2_READONLY_DB_QUERY')
+              d=json.loads(out)
+              print('M2_ROUND_ROBIN_INDEPENDENT_STATUS '+json.dumps({'active_release':shas[0].decode(),
+                  'cursor':cursor_status,'db':d},ensure_ascii=False),flush=True)
+          PY
