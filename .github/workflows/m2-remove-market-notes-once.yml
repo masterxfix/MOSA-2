@@ -1,0 +1,84 @@
+name: M2 remove market notes - one-time testsite release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/m2-remove-market-notes-once.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'masterxfix/MOSA-2' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'M2 one-time deploy market notes removal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact reviewed market-page change
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 07bd54d89bb9322cf4a197968bd2a3e2aa82becb
+          persist-credentials: false
+      - name: Verify reviewed revision, source template and generated HTML
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "07bd54d89bb9322cf4a197968bd2a3e2aa82becb"
+          python3 scripts/build_pages.py --check
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in ("assets/main-market.html", "marktdaten.html"):
+              html=Path(path).read_text(encoding="utf-8")
+              assert "Im aktiven Tab prüft die Ansicht" not in html, path
+              assert "Anbieter-Datenlabor öffnen" not in html, path
+              assert "Manuell alle gelieferten Felder der drei Anbieter" not in html, path
+              for required in ("data-isin-form","data-isin-table","data-isin-db-clear"):
+                  assert required in html,(path,required)
+          assert 'href="anbieter-labor.html"' in Path("marktdaten.html").read_text(encoding="utf-8")
+          print("Both requested notes absent; other controls and lab navigation retained: PASS")
+          PY
+      - name: Validate existing testsite SFTP safety
+        run: |
+          python3 -m unittest discover -s tests -p 'test_deploy*.py' -v
+          python3 scripts/deploy_sftp.py validate
+      - name: Install pinned SFTP dependencies
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Back up exact M2 market HTML before upload
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          python3 scripts/deploy_test_sftp.py backup
+      - name: Retain encrypted rollback file
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m2-market-notes-encrypted-backup
+          path: ${{ runner.temp }}/mosa2-web-backup.sealed.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Deploy exact HTML to M2 testsite and independently verify remote SHA-256
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py deploy
+          printf 'Reviewed source commit: 07bd54d89bb9322cf4a197968bd2a3e2aa82becb\nFile: marktdaten.html\n' >> "$GITHUB_STEP_SUMMARY"
