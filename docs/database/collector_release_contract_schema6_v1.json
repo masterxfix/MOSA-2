@@ -256,7 +256,7 @@
       "path": "scripts/market_collector/live_persistence.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "e7ebf06b07c738925ba00275271ac9269d1ac257",
+      "source_blob": "2193202b8dd0eded98cd8555245a375df5072bc8",
       "requires": [
         "docs/database/migrations/0004_current_observation_provenance.sql",
         "docs/database/seeds/0001_market_units_v1.json",
@@ -325,7 +325,7 @@
         "docs/database/migrations/0006_fundamentals_and_payload_provenance.sql",
         "scripts/market_collector/schema5.php"
       ],
-      "source_blob": "a05858329ae41932cbd591559ccd5fe7072a7a55"
+      "source_blob": "d4b9865757db0e4f21837ad6404df7eea3ac1392"
     },
     {
       "path": "scripts/market_collector/schema_contract.php",
@@ -339,7 +339,7 @@
         "docs/database/migrations/0005_collector_reservations.sql",
         "docs/database/migrations/0006_fundamentals_and_payload_provenance.sql"
       ],
-      "source_blob": "bae2c50b8cac0e38cd8855a044840ad8cbd86c9e"
+      "source_blob": "9d86f4b5753c8a6ab69f2283bb19913462d958c1"
     },
     {
       "path": "scripts/market_collector/selection.php",
@@ -544,7 +544,7 @@
       "path": "scripts/phase3k/unit_schema.php",
       "mode": "0600",
       "role": "module",
-      "source_blob": "d2fac746fda5fabcf92a8e76262ab5387cc5eb43",
+      "source_blob": "b2b0f9178b649c30eab9a32d241cbd387a7b167c",
       "requires": [
         "scripts/phase3b/postcheck.php"
       ]
