@@ -1,0 +1,92 @@
+name: M2 remove browser clear button - one-time testsite release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/m2-remove-browser-clear-once.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'masterxfix/MOSA-2' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'M2 deploy one-time browser clear removal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact reviewed removal
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: b80f11093d5732194f68ed08ebfffdffa79a204e
+          persist-credentials: false
+      - name: Verify exact revision and generated HTML
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "b80f11093d5732194f68ed08ebfffdffa79a204e"
+          python3 scripts/build_pages.py --check
+          node --check assets/js/isin_quotes.js
+          python3 - <<'PY'
+          from pathlib import Path
+          for file in ('marktdaten.html','assets/main-market.html'):
+              page=Path(file).read_text(encoding='utf-8')
+              assert 'Browserliste leeren' not in page
+              assert 'data-isin-clear' not in page
+              assert 'data-isin-db-clear' in page
+              assert 'data-isin-table' in page
+          script=Path('assets/js/isin_quotes.js').read_text(encoding='utf-8')
+          assert 'data-isin-clear' not in script and 'function clearEntries' not in script
+          assert 'data-isin-db-clear' in script and 'function clearDatabaseMarketData' in script
+          print('M2 browser clear-all fully removed; DB delete retained: PASS')
+          PY
+      - name: Narrow JavaScript regression tests
+        run: |
+          set -euo pipefail
+          node tests/isin_refresh_browser_check.cjs
+          node tests/isin_automation_browser_check.cjs
+          node tests/isin_browser_check.cjs
+      - name: Validate testsite deployment guardrails
+        run: |
+          python3 -m unittest discover -s tests -p 'test_deploy*.py' -v
+          python3 scripts/deploy_sftp.py validate
+      - name: Install pinned SFTP dependencies
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Back up two explicitly selected M2 testsite files
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html","assets/js/isin_quotes.js"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          python3 scripts/deploy_test_sftp.py backup
+      - name: Save encrypted rollback archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m2-remove-browser-clear-encrypted-backup
+          path: ${{ runner.temp }}/mosa2-web-backup.sealed.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Deploy two M2 web files with SHA-256 server readback
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html","assets/js/isin_quotes.js"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py deploy
+          printf 'Reviewed source commit: b80f11093d5732194f68ed08ebfffdffa79a204e\nFiles: marktdaten.html, assets/js/isin_quotes.js\n' >> "$GITHUB_STEP_SUMMARY"
