@@ -1,0 +1,81 @@
+name: M2 rename ISIN heading - one-time testsite release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/m2-rename-isin-heading-once.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'masterxfix/MOSA-2' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'M2 one-time deploy ISIN heading change'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: da85006a2e6bed883446d617c2fa46b643e926a0
+          persist-credentials: false
+      - name: Verify generated market page and heading
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "da85006a2e6bed883446d617c2fa46b643e926a0"
+          python3 scripts/build_pages.py --check
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ("assets/main-market.html", "marktdaten.html"):
+              text=Path(name).read_text(encoding="utf-8")
+              assert '<h2 id="observations-titel">ISIN-Kursabfragen</h2>' in text, name
+              assert 'Meine ISIN-Kursabfragen' not in text, name
+              assert 'data-isin-form' in text and 'data-isin-table' in text
+          print("Renamed visible heading; ISIN form/table preserved: PASS")
+          PY
+      - name: Validate testsite SFTP deployment safety
+        run: |
+          python3 -m unittest discover -s tests -p 'test_deploy*.py' -v
+          python3 scripts/deploy_sftp.py validate
+      - name: Install pinned SFTP dependencies
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Encrypt existing M2 market HTML before update
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          python3 scripts/deploy_test_sftp.py backup
+      - name: Retain encrypted rollback snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m2-heading-change-encrypted-backup
+          path: ${{ runner.temp }}/mosa2-web-backup.sealed.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Deploy single M2 testsite file with remote SHA-256 readback
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["marktdaten.html"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py deploy
+          printf 'Source commit: da85006a2e6bed883446d617c2fa46b643e926a0\nFile: marktdaten.html\n' >> "$GITHUB_STEP_SUMMARY"
