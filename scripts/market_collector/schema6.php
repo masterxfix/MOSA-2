@@ -49,4 +49,6 @@ function schemas(): array {
     }
 }
 /** Shared exact metadata checker, including every old and new column/index/FK/CHECK. */
-function database(PDO $p): array {return \Mosa2\Phase3K\structure($p,schemas());}
+function database(PDO $p,array $allowedAdditiveTables=[]): array {
+    return \Mosa2\Phase3K\structure($p,schemas(),null,$allowedAdditiveTables);
+}
