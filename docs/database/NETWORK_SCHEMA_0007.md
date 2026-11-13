@@ -1,6 +1,10 @@
 # M2 Netzwerk- und Smart-Home-Datenmodell – Migration 0007
 
-Status: vorbereitet, isolierte Tests und Dogado-Apply jeweils gesondert nachweisen. Diese Datei ist kein Live-Nachweis.
+Status: **Migration 0007 am 13.11.2026 erfolgreich auf der M2-Dogado-Testdatenbank angewendet.**
+Isolierter MySQL-8.0.36-Schema-/Constraint-Test: [Lauf 43392585643](https://github.com/masterxfix/MOSA-2/actions/runs/43392585643).
+Kontrollierter Dogado-Apply mit unabhängigem Read-only-Postcheck: [Lauf 43393673529](https://github.com/masterxfix/MOSA-2/actions/runs/43393673529).
+16 neue Tabellen, insgesamt 42, Ledger 1–7, Modul `network=PREPARED` (keine Integrationen/JOBS aktiviert).
+Migration 0007 SHA-256: `2ee91ab2b4b2c490e651990f5b5ce4f34ffd84a4afba5e6c0455740ba7944da7`.
 
 ## Istzustand, geprüft am 13.11.2026
 
@@ -18,8 +22,8 @@ werden durch Migration 0007 **nicht geändert**. Kein Scan, kein Datenimport, ke
 kein Cron, kein Trigger, keine neue Berechtigung, kein Seed und kein Geräte-Schaltbefehl.
 
 Die Migration enthält ausschließlich 16 `CREATE TABLE`-Anweisungen und erhält 0001–0006
-byte-identisch. Erst der explizite One-time-Apply darf danach einen Schema-Ledgereintrag
-7 und den gesperrten/noch nicht angebundenen Modulzustand `network=PREPARED` setzen.
+byte-identisch. Im erfolgreich protokollierten One-time-Apply wurden der Schema-Ledgereintrag
+7 und der noch nicht angebundene Modulzustand `network=PREPARED` gesetzt.
 
 ## Generisches Modell
 
@@ -107,7 +111,7 @@ Wichtige Indexpfade: `uq_net_ip_domain_address`,
 `ix_net_device_site_kind`, `ix_net_metric_obs_subject`,
 `PRIMARY(subject_entity_id,metric_key)`.
  
-## Prüf- und Apply-Vertrag
+## Abgeschlossene Abnahme und dokumentierter Apply-Vertrag
 
 1. Dogado **read-only**: exakter DB-Name, MySQL-Version, Ledger 1..6,
    Tabelleliste, keine unbekannten `m2_network_*`-Reste, Tabellen-/Asset-Bestand.
