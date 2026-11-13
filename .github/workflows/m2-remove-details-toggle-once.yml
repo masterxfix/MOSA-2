@@ -1,0 +1,95 @@
+name: M2 remove inactive details toggle - guarded one-time testsite deployment
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/m2-remove-details-toggle-once.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosa-2-testsite-sftp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.repository == 'masterxfix/MOSA-2' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'M2 one-time deploy obsolete details removal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout reviewed source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ebbb14dae5a45513c49fd6d1d0c3a5d0f550f5a0
+          persist-credentials: false
+      - name: Verify intended frontend change and generated pages
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "ebbb14dae5a45513c49fd6d1d0c3a5d0f550f5a0"
+          python3 scripts/build_pages.py --check
+          node --check assets/js/isin_quotes.js
+          python3 - <<'PY'
+          from pathlib import Path
+          for page in ('marktdaten.html','assets/main-market.html'):
+              txt=Path(page).read_text(encoding='utf-8')
+              assert 'data-isin-details-toggle' not in txt and 'Alle Details anzeigen' not in txt,page
+              assert 'data-isin-table' in txt and 'data-isin-form' in txt,page
+          script=Path('assets/js/isin_quotes.js').read_text(encoding='utf-8')
+          for removed in ('data-isin-details-toggle','detailsOpen','detailsToggle','function errorRow'):
+              assert removed not in script,removed
+          assert 'READ_INTERVAL=30000' in script and 'data-isin-db-clear' in script
+          for page in ('index.html','marktdaten.html'):
+              txt=Path(page).read_text(encoding='utf-8')
+              assert 'isin_quotes.js?v=market-registry-live-12' in txt,page
+          print('Obsolete detail toggle removed, compact ISIN logic intact: PASS')
+          PY
+      - name: Browser JavaScript and compact-row regressions
+        run: |
+          set -euo pipefail
+          node tests/isin_details_browser_check.cjs
+          node tests/isin_refresh_browser_check.cjs
+          node tests/isin_automation_browser_check.cjs
+          node tests/isin_browser_check.cjs
+      - name: Validate guarded testsite release profile
+        run: |
+          python3 -m unittest discover -s tests -p 'test_deploy*.py' -v
+          python3 scripts/deploy_sftp.py validate
+      - name: Install pinned SFTP client
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Back up exact five M2 testsite files
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["index.html","marktdaten.html","assets/main-market.html","assets/js/isin_quotes.js","assets/css/main.css"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py check-config
+          python3 scripts/deploy_test_sftp.py backup
+      - name: Save encrypted rollback
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m2-removal-of-details-toggle-encrypted-backup
+          path: ${{ runner.temp }}/mosa2-web-backup.sealed.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Deploy only those five web files and verify remote readback
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+          MOSA_TEST_SFTP_FILES: '["index.html","marktdaten.html","assets/main-market.html","assets/js/isin_quotes.js","assets/css/main.css"]'
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy_test_sftp.py deploy
+          printf 'Deployed reviewed version ebbb14dae5a45513c49fd6d1d0c3a5d0f550f5a0; obsolete details UI removed.\n' >> "$GITHUB_STEP_SUMMARY"
