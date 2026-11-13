@@ -1,4 +1,4 @@
-"""Render the two active M2 entry pages from the shared shell and Main fragments."""
+"""Render the three active M2 entry pages from the shared shell and Main fragments."""
 import argparse
 from html import escape
 from pathlib import Path
@@ -9,6 +9,8 @@ PAGES = {
                    "MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Projektziel, geprüfte Ergebnisse und nächste Entwicklungsschritte."),
     "marktdaten.html": ("market", "Marktdaten & Messungen", "Gespeicherte Marktdaten",
                         "MOSA 2: persönliche, finanzorientierte Daten- und KI-Plattform. Gespeicherte Marktdaten, Datenstatus und Messungen der Testumgebung."),
+    "home.html": ("home", "Home", "Smart Home und Netzwerk",
+                  "MOSA 2: zentrale Übersicht für Smart-Home-Geräte, Räume, Szenen und Netzwerkkomponenten. Steuerung erst nach gesicherter Anbindung."),
 }
 
 
@@ -57,7 +59,7 @@ def render(filename):
   <meta name="description" content="{escape(description)}">
   <meta name="color-scheme" content="dark">
   <title>MOSA 2 · {escape(title)}</title>
-  <link rel="stylesheet" href="assets/css/main.css?v=nova-contrast-1">
+  <link rel="stylesheet" href="assets/css/main.css?v=home-ui-1">
 {scripts}
 </head>
 <body{stored} class="{key}-page" data-site-shell>

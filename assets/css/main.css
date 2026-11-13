@@ -369,3 +369,34 @@ body[data-site-shell] > header { position: sticky; top: 0; z-index: 5; backgroun
 .asset-index small { display: block; margin-top: 5px; font-size: .68rem; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
 .asset-index .isin-empty { display: block; color: var(--muted); font-size: .85rem; }
 @media (max-width: 760px) { .isin-form-row { gap: 8px; } .isin-form-row input { width: 100%; } }
+
+
+/* M2 Home: scoped groundwork for future authenticated device controls. */
+.home-page .m2-home-hero { padding-bottom: clamp(42px, 6vw, 76px); }
+.home-page .m2-home-intro { max-width: 620px; color: var(--muted); font-size: .98rem; line-height: 1.8; }
+.home-page .m2-home-connectivity .eyebrow { margin-bottom: 16px; }
+.home-page .m2-home-state { display: flex; align-items: center; gap: 10px; color: var(--text) !important; font-size: 1.18rem !important; font-weight: 500; margin: 0 0 14px; }
+.home-page .m2-home-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); opacity: .8; }
+.home-page .m2-home-section { border-top: 1px solid var(--line); padding-top: 30px; margin-bottom: var(--space-section); }
+.home-page .m2-home-empty { padding: 24px 28px; margin-bottom: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.home-page .m2-home-empty strong { display: block; font-size: 1rem; font-weight: 500; }
+.home-page .m2-home-empty p, .home-page .m2-home-section-copy { max-width: 720px; font-size: .86rem; color: var(--muted); margin: 9px 0 0; }
+.home-page .m2-home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2.6vw, 34px); }
+.home-page .m2-home-panel { display: flex; flex-direction: column; align-items: start; min-width: 0; min-height: 214px; border: 1px solid var(--line); border-radius: 6px; padding: clamp(22px, 3vw, 34px); }
+.home-page .m2-home-panel-number { color: var(--accent); font-size: .67rem; letter-spacing: .14em; margin-bottom: 12px; }
+.home-page .m2-home-panel h3 { font-size: 1.08rem; font-weight: 520; margin: 0 0 12px; }
+.home-page .m2-home-panel p { color: var(--muted); font-size: .85rem; margin: 0 0 24px; max-width: 35ch; }
+.home-page .m2-home-panel-state { margin-top: auto; font-size: .73rem; color: var(--accent); }
+.home-page .m2-home-section-copy { margin: 0 0 26px; }
+.home-page .m2-home-infrastructure { margin: 0; border-top: 1px solid var(--line); }
+.home-page .m2-home-infrastructure > div { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 2fr); gap: 24px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+.home-page .m2-home-infrastructure dt { font-size: .78rem; color: var(--text); }
+.home-page .m2-home-infrastructure dd { font-size: .78rem; color: var(--muted); margin: 0; }
+@media (max-width: 760px) {
+  .home-page .m2-home-hero { gap: 24px; }
+  .home-page .m2-home-connectivity { display: block; }
+  .home-page .m2-home-connectivity .eyebrow { margin-bottom: 12px; }
+  .home-page .m2-home-grid { grid-template-columns: 1fr; }
+  .home-page .m2-home-panel { min-height: 182px; }
+  .home-page .m2-home-infrastructure > div { grid-template-columns: 1fr; gap: 4px; }
+}
