@@ -1,0 +1,66 @@
+name: M2 network schema 0007 baseline read-only
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-network-schema-baseline-readonly-once.yml']
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.run_number == 1 && github.event.head_commit.message == 'Audit M2 network schema baseline read-only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Inspect actual Dogado MySQL using existing restricted reader, no writes
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,json
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_test_sftp as dep,paramiko
+          source=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(!is_array($cfg)||($cfg['dsn']??null)!==$dsn||($cfg['user']??null)!=='h29077_mosa2_read')
+              throw new RuntimeException('WRONG_READER');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[
+              PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');
+          $db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+              ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('READONLY_FAILED');
+          $tables=$db->query("SELECT TABLE_NAME FROM information_schema.TABLES
+              WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME")->fetchAll(PDO::FETCH_COLUMN);
+          $ledger=$db->query("SELECT version,migration_key,LOWER(HEX(checksum)) AS sha256
+              FROM m2_schema_migrations ORDER BY version")->fetchAll();
+          $counts=[];
+          foreach(['m2_entities','m2_assets','m2_network_devices','m2_network_segments'] as $table)
+              if(in_array($table,$tables,true))
+                  $counts[$table]=(int)$db->query("SELECT COUNT(*) FROM ".$table)->fetchColumn();
+          $db->rollBack();
+          $network=array_values(array_filter($tables,static fn($x)=>str_starts_with($x,'m2_network_')));
+          echo json_encode(['readonly'=>true,'db'=>'h29077_mosa2_test','checked_utc'=>gmdate('c'),
+              'mysql_version'=>$db->query('SELECT VERSION()')->fetchColumn(),'table_count'=>count($tables),
+              'network_tables'=>$network,'ledger'=>$ledger,'counts'=>$counts],JSON_THROW_ON_ERROR);
+          """
+          with ssh.ssh_client(dep.configuration(),{},paramiko) as transport:
+              binary,_=remote.capability(transport)
+              code,out,err,_=remote.remote_call(transport,
+                  remote.command(binary,remote.BOOTSTRAP),
+                  json.dumps({'source':source}).encode(),timeout=45)
+              if code or err:raise RuntimeError('M2_DB_READ_ONLY_ERROR')
+              report=json.loads(out)
+              if not report.get('readonly') or report.get('db')!='h29077_mosa2_test':
+                  raise RuntimeError('M2_DB_IDENTITY_ERROR')
+              print('M2_NETWORK_PREFLIGHT '+json.dumps(report,ensure_ascii=False),flush=True)
+          PY
