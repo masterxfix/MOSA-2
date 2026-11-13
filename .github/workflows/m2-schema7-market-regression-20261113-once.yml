@@ -6,7 +6,7 @@ on:
 permissions: {contents: read}
 jobs:
   test:
-    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 2 && github.run_attempt == 1 && github.event.head_commit.message == 'Rerun M2 schema7 market collector compatibility after test harness fix'
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 3 && github.run_attempt == 1 && github.event.head_commit.message == 'Verify M2 schema7 collector and requalified release contract'
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
