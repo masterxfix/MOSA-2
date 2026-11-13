@@ -293,6 +293,49 @@ function syncIdentity(PDO $db,string $isin,array $evidence):array {
     }
 }
 
+/**
+ * Durable, universal rotation for all active ISINs.
+ * The existing DB advisory lock serializes calls. Advance before provider I/O,
+ * so a skipped cron minute or slow batch can never keep selecting one pair.
+ * No market-data or identity records are used as scheduling state.
+ */
+function dueRoundRobin(array $registered,string $cursorFile,int $maxBatchSize=2): array {
+    check($maxBatchSize>=1&&$maxBatchSize<=10,'scheduler_batch_size');
+    if($registered===[])return [];
+    $count=count($registered);
+    $folder=dirname($cursorFile);
+    check(is_dir($folder)&&!is_link($folder),'scheduler_state_dir');
+    check(!is_link($cursorFile),'scheduler_cursor_symlink');
+    $cursor=0;
+    if(file_exists($cursorFile)){
+        check(is_file($cursorFile)&&((fileperms($cursorFile)&0777)===0600),'scheduler_cursor_permissions');
+        $contents=file_get_contents($cursorFile);
+        check(is_string($contents)&&preg_match('/\\A(?:0|[1-9][0-9]{0,11})\\n?\\z/D',$contents)===1,
+            'scheduler_cursor_invalid');
+        $cursor=(int)trim($contents);
+    }
+    $offset=$cursor%$count;
+    $keys=array_keys($registered);
+    $size=min($count,$maxBatchSize);
+    $due=[];
+    for($i=0;$i<$size;$i++){
+        $isin=$keys[($offset+$i)%$count];
+        $due[$isin]=$registered[$isin];
+    }
+    $next=(string)(($offset+$size)%$count)."\\n";
+    $temporary=tempnam($folder,'.m2-market-scheduler-');
+    check(is_string($temporary),'scheduler_cursor_stage');
+    try{
+        check((fileperms($temporary)&0777)===0600,'scheduler_cursor_temp_permissions');
+        same(file_put_contents($temporary,$next,LOCK_EX),strlen($next),'scheduler_cursor_write');
+        check(rename($temporary,$cursorFile),'scheduler_cursor_activate');
+        same(file_get_contents($cursorFile),$next,'scheduler_cursor_readback');
+    }finally{
+        if(is_file($temporary))unlink($temporary);
+    }
+    return $due;
+}
+
 function main(): void {
     if (PHP_SAPI!=='cli'||realpath($_SERVER['SCRIPT_FILENAME']??'')!==__FILE__) exit(1);
     ini_set('display_errors','0');
@@ -329,8 +372,9 @@ function main(): void {
             foreach($rows as $row)$registered[$row['isin']]=['name'=>$row['name'],'class'=>$row['asset_class']];
             $registry=$registered===[]?[]:sourceRegistry($db,$international!==null,$eodhd!==null);
             $unitRegistry=$registered===[]?[]:\Mosa2\MarketSources\persistedUnitRegistry($db);
-            $batches=array_chunk($registered,2,true);
-            $due=$batches===[]?[]:$batches[intdiv(time(),60)%count($batches)];
+            // Persistent rotation survives minute skips and slow source requests.
+            // Protected private state; no dependence on UTC minute parity.
+            $due=dueRoundRobin($registered,$periodic.'/state/market-scheduler-cursor-v1.txt');
             $config=[
                 'project'=>$project,'python'=>'/opt/alt/python311/bin/python3.11','php'=>PHP_BINARY,
                 'runtime_path'=>'/opt/plesk/php/8.4/bin:/usr/bin:/bin','private_root'=>$periodic.'/work',
