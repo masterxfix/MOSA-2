@@ -1,0 +1,91 @@
+name: M2 network schema v0007 independent postapply DB audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-network-schema-postapply-readonly-once.yml']
+permissions: {contents: read}
+jobs:
+  verify:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Verify M2 network schema v0007 independently read-only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Independent restricted-reader schema, ledger, emptiness and old-data readback
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,re,json,hashlib
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_test_sftp as dep,paramiko
+          path=Path('docs/database/migrations/0007_network_smart_home_core.sql')
+          sql=path.read_text('utf-8')
+          sha=hashlib.sha256(path.read_bytes()).hexdigest()
+          expected=sorted(re.findall(r'^CREATE TABLE (m2_network_[a-z_]+)',sql,re.M))
+          if len(expected)!=16 or len(set(expected))!=16: raise RuntimeError('NETWORK_ARTIFACT_MISMATCH')
+          source=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(!is_array($cfg)||($cfg['user']??null)!=='h29077_mosa2_read'
+              ||($cfg['dsn']??null)!==$dsn)
+              throw new RuntimeException('READER_IDENTITY');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[
+              PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');
+          $db->beginTransaction();
+          if($db->query('SELECT DATABASE()')->fetchColumn()!=='h29077_mosa2_test'
+              ||(int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('NOT_READONLY');
+          $tables=$db->query("SELECT TABLE_NAME FROM information_schema.TABLES
+              WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE='BASE TABLE'
+              ORDER BY TABLE_NAME")->fetchAll(PDO::FETCH_COLUMN);
+          if(count($tables)!==42)throw new RuntimeException('TABLE_COUNT');
+          $net=array_values(array_filter($tables,static fn($t)=>str_starts_with($t,'m2_network_')));
+          if($net!==$mosa_input['network_tables'])throw new RuntimeException('NETWORK_TABLE_NAMES');
+          foreach($net as $t)
+              if((int)$db->query('SELECT COUNT(*) FROM '.$t)->fetchColumn()!==0)
+                  throw new RuntimeException('NOT_EMPTY');
+          $ledger=$db->query("SELECT version,migration_key,LOWER(HEX(checksum)) AS sha256
+              FROM m2_schema_migrations ORDER BY version")->fetchAll();
+          if(count($ledger)!==7)throw new RuntimeException('LEDGER_COUNT');
+          foreach($ledger as $i=>$row)
+              if((int)$row['version']!==$i+1)throw new RuntimeException('LEDGER_GAP');
+          if($ledger[6]['migration_key']!=='0007_network_smart_home_core'
+              ||$ledger[6]['sha256']!==$mosa_input['sha256'])
+              throw new RuntimeException('LEDGER7_DIGEST');
+          $mod=$db->query("SELECT module_key,schema_version,status FROM m2_module_state
+              WHERE module_key='network'")->fetch();
+          if(!is_array($mod)||$mod['module_key']!=='network'||(int)$mod['schema_version']!==7
+              ||$mod['status']!=='PREPARED')throw new RuntimeException('MODULE_NOT_PREPARED');
+          $facts=[];
+          foreach(['m2_entities','m2_assets','m2_market_current','m2_market_observations'] as $t)
+              $facts[$t]=(int)$db->query('SELECT COUNT(*) FROM '.$t)->fetchColumn();
+          $db->rollBack();
+          echo json_encode(['readonly'=>true,'db'=>'h29077_mosa2_test',
+              'checked_utc'=>gmdate('c'),'table_count'=>count($tables),'old_tables'=>26,
+              'network_tables'=>count($net),'network_rows'=>0,'ledger_version'=>7,
+              'network_module'=>'PREPARED','finance_counts'=>$facts],
+              JSON_THROW_ON_ERROR);
+          """
+          payload={'source':source,'network_tables':expected,'sha256':sha}
+          with ssh.ssh_client(dep.configuration(),{},paramiko) as transport:
+              binary,_=remote.capability(transport)
+              rc,out,err,_=remote.remote_call(transport,
+                  remote.command(binary,remote.BOOTSTRAP),
+                  json.dumps(payload).encode(),timeout=45)
+              if rc or err:raise RuntimeError('M2_NETWORK_READONLY_DB_FAILURE')
+              report=json.loads(out)
+              if report.get('readonly') is not True or report.get('network_tables')!=16 or report.get('ledger_version')!=7:
+                  raise RuntimeError('M2_NETWORK_READBACK_UNCONFIRMED')
+              print('M2_NETWORK_FINAL_READONLY '+json.dumps(report,ensure_ascii=False),flush=True)
+          PY
