@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once dirname(__DIR__).'/scripts/market_collector/mosa_tick.php';
+require_once dirname(__DIR__).'/scripts/market_collector/schema_contract.php';
 
 use function Mosa2\Phase2\{check,same};
 use function Mosa2\CollectorSchema5\{selected,additiveNetworkTables7,ledger7Network};
