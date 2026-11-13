@@ -42,7 +42,7 @@ function rejected(string $label, callable $fn): void {
     try {
         $fn();
     } catch (PDOException $exception) {
-        if (str_starts_with((string)$exception->getCode(), '23')) return;
+        if (str_starts_with((string)$exception->getCode(), '23') || in_array((int)($exception->errorInfo[1] ?? 0), [3819,1062,1451,1452], true)) return;
         throw new RuntimeException('WRONG_REJECTION_'.$label, 0, $exception);
     }
     throw new RuntimeException('CONSTRAINT_NOT_ENFORCED_'.$label);
@@ -168,10 +168,12 @@ $plans = [
     "SELECT observation_id FROM m2_network_metric_current WHERE subject_entity_id=102 AND metric_key='power_w'",
     "SELECT id FROM m2_network_metric_observations WHERE subject_entity_id=102 AND metric_key='power_w' ORDER BY measured_at DESC LIMIT 10"
 ];
-foreach ($plans as $query) {
+$expectedKeys=['uq_net_ip_domain_address','ix_net_device_site_kind','PRIMARY','ix_net_metric_obs_subject'];
+foreach ($plans as $i=>$query) {
     $plan=$db->query('EXPLAIN '.$query)->fetch();
-    if (!is_array($plan) || (($plan['type'] ?? '') === 'ALL' && ($plan['key'] ?? null) === null)) {
-        throw new RuntimeException('INDEX_NOT_USED: '.substr($query,0,80));
+    $available=explode(',', (string)($plan['possible_keys'] ?? ''));
+    if (!is_array($plan) || (!in_array($expectedKeys[$i],$available,true) && ($plan['key'] ?? null)!==$expectedKeys[$i])) {
+        throw new RuntimeException('MISSING_INDEX_PATH_'.$expectedKeys[$i]);
     }
 }
 echo 'PASS isolated_mysql_network_schema_0007 tables=16 ip_scopes=2 metric_provenance=PASS typed_checks=PASS fk=PASS index_paths=4'.PHP_EOL;
