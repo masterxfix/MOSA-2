@@ -4,6 +4,7 @@ namespace Mosa2\CollectorSchema5;
 use function Mosa2\Phase2\{check,same};
 const DIGEST='2521552c548370806bc311798f12be39f16b102733aeb74ac9c01337e7e46333';
 const DIGEST6='55457063c72d20498a097d273b5465d34cfd8aba5b2c7c229a9673bfc0c4a60c';
+const DIGEST7_NETWORK='2ee91ab2b4b2c490e651990f5b5ce4f34ffd84a4afba5e6c0455740ba7944da7';
 const FUNDAMENTALS=['m2_provider_fetches','m2_fundamental_metrics','m2_fundamental_units','m2_fundamental_observations','m2_fundamental_current'];
 const TABLES=['m2_collector_state','m2_collector_cycles','m2_collector_days','m2_collector_requests'];
 /** No schema discovery: configuration is explicit and type-strict. */
@@ -11,7 +12,33 @@ function selected(array $config,int $default=4): array {
     $contract=array_key_exists('state_contract',$config)?$config['state_contract']:['schema_version'=>$default];
     if(!is_array($contract)||!is_int($contract['schema_version']??null)
         ||!in_array($contract['schema_version'],[4,5,6],true))throw new \RuntimeException('schema_contract');
+    if(array_key_exists('additive_schema_7',$contract)
+        &&($contract['additive_schema_7']!==true||$contract['schema_version']!==6))
+        throw new \RuntimeException('schema_extension_contract');
     return $contract;
+}
+/** Only the known additive network migration may coexist with the immutable schema-6
+ * market contract. This does NOT change historical schema-6 verification or writers.
+ * All additional table names come from the checksum-pinned migration artifact. */
+function additiveNetworkTables7(): array {
+    $path=dirname(__DIR__,2).'/docs/database/migrations/0007_network_smart_home_core.sql';
+    $sql=file_get_contents($path);
+    check(is_string($sql),'schema7_network_artifact');
+    same(hash('sha256',$sql),DIGEST7_NETWORK,'schema7_network_artifact');
+    preg_match_all('/^CREATE TABLE (m2_network_[a-z_]+)\\s*\\(/m',$sql,$matched);
+    $tables=$matched[1];
+    same(count($tables),16,'schema7_network_table_count');
+    same(count(array_unique($tables)),16,'schema7_network_table_unique');
+    sort($tables);
+    return $tables;
+}
+/** The seventh ledger row cannot be inferred solely from an observed table count. */
+function ledger7Network(array $ledger): void {
+    same(count($ledger),7,'schema7_ledger_count');
+    ledger6(array_slice($ledger,0,6));
+    same((string)$ledger[6]['version'],'7','schema7_ledger_version');
+    same($ledger[6]['migration_key'],'0007_network_smart_home_core','schema7_ledger_key');
+    same(strtolower($ledger[6]['checksum']),DIGEST7_NETWORK,'schema7_ledger_digest');
 }
 /** Initial migration5 anchors are compatibility evidence, never an operating grant. */
 function locked(array $jobs,array $modules,array $state,array $activity): void {
