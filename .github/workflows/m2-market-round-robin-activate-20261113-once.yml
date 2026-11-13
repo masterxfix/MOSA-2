@@ -1,0 +1,157 @@
+name: M2 collector persistent round robin guarded cron activation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/m2-market-round-robin-activate-20261113-once.yml']
+permissions: {contents: read}
+concurrency:
+  group: m2-market-rotation-fix-20261113
+  cancel-in-progress: false
+jobs:
+  activate:
+    if: github.repository == 'masterxfix/MOSA-2' && github.ref == 'refs/heads/main' && github.run_number == 1 && github.run_attempt == 1 && github.event.head_commit.message == 'Activate M2 universal fair rotation and prove both groups'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Install pinned SSH transport
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements-deploy.txt
+      - name: Real collector source probe, private state proof, switch one M2 cron and monitor all four ISINs
+        env:
+          MOSA_TEST_SFTP_HOST: ${{ vars.MOSA_TEST_SFTP_HOST }}
+          MOSA_TEST_SFTP_PORT: ${{ vars.MOSA_TEST_SFTP_PORT }}
+          MOSA_TEST_SFTP_USER: ${{ vars.MOSA_TEST_SFTP_USER }}
+          MOSA_TEST_SFTP_PATH: ${{ vars.MOSA_TEST_SFTP_PATH }}
+          MOSA_TEST_SFTP_PASSWORD: ${{ secrets.MOSA_TEST_SFTP_PASSWORD }}
+          MOSA_TEST_SFTP_HOST_KEY_SHA256: ${{ secrets.MOSA_TEST_SFTP_HOST_KEY_SHA256 }}
+        run: |
+          python3 -B - <<'PY'
+          import sys,json,time,shlex,hashlib,stat
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          import collector_actions as ssh,collector_db_locality as remote,deploy_market_collector as release,deploy_test_sftp as cfg,paramiko
+          OLD='50eb855ebd0e69bc8e29353239c728d94ae9e678'
+          NEW='62c348739da1e1b33200c8c50baee63c0b706979'
+          root=release.PERIODIC+'/releases/'+NEW+'/'
+          tick=root+'scripts/market_collector/mosa_tick.php'
+          cursor=release.PERIODIC+'/state/market-scheduler-cursor-v1.txt'
+          php_source=r"""
+          $cfg=require '/var/www/vhosts/web213.server10.configcenter.info/mosa2-market-read-private/access.php';
+          $dsn='mysql:host=127.0.0.1;port=3307;dbname=h29077_mosa2_test;charset=utf8mb4';
+          if(!is_array($cfg)||($cfg['user']??null)!=='h29077_mosa2_read'||($cfg['dsn']??null)!==$dsn)
+              throw new RuntimeException('M2_SCOPE');
+          $db=new PDO($dsn,$cfg['user'],$cfg['password'],[
+              PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+          unset($cfg);
+          $db->exec('SET SESSION TRANSACTION READ ONLY');$db->beginTransaction();
+          if((int)$db->query('SELECT @@session.transaction_read_only')->fetchColumn()!==1)
+              throw new RuntimeException('NOT_READONLY');
+          $rows=$db->query("SELECT i.normalized_value AS isin,c.observed_at,c.market_at,s.source_key,c.currency,c.price
+              FROM m2_market_current c
+              JOIN m2_asset_identifiers i ON i.asset_id=c.asset_id AND i.is_primary=1
+              JOIN m2_sources s ON s.id=c.source_id
+              ORDER BY i.normalized_value")->fetchAll();
+          $totals=$db->query("SELECT COUNT(*) AS count_all,MAX(observed_at) AS newest FROM m2_market_observations")->fetch();
+          $db->rollBack();
+          echo json_encode(['readonly'=>true,'at'=>gmdate('c'),'current'=>$rows,'observations'=>$totals],
+              JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+          """
+          def cron(t):
+              rc,raw,err,_=remote.remote_call(t,'/usr/bin/crontab -l',timeout=25)
+              if rc or err or len(raw)>32768:raise RuntimeError('M2_CRON_NOT_READABLE')
+              return raw
+          def db(t,php):
+              rc,out,err,_=remote.remote_call(t,remote.command(php,remote.BOOTSTRAP),
+                  json.dumps({'source':php_source}).encode(),timeout=50)
+              if rc or err:raise RuntimeError('M2_DB_INDEPENDENT_READBACK_FAILED')
+              d=json.loads(out)
+              if not d.get('readonly') or len(d['current'])!=4:raise RuntimeError('M2_DB_CURRENT_SCOPE_CHANGED')
+              return d
+          def indexed(data):return {item['isin']:item for item in data['current']}
+          def newer(data,old,isin):
+              a=indexed(data).get(isin)
+              b=old.get(isin)
+              return a is not None and b is not None and a['observed_at']>b['observed_at']
+          with ssh.ssh_client(cfg.configuration(),{},paramiko) as t:
+              with paramiko.SFTPClient.from_transport(t) as sf:
+                  src=Path('scripts/market_collector/mosa_tick.php').read_bytes()
+                  with sf.open(tick,'rb') as f:actual=f.read(len(src)+1)
+                  if actual!=src:raise RuntimeError('NEW_M2_COLLECTOR_READBACK_DRIFT')
+                  folder=sf.stat(release.PERIODIC+'/state')
+                  if not stat.S_ISDIR(folder.st_mode) or stat.S_IMODE(folder.st_mode)!=0o700:
+                      raise RuntimeError('NEW_M2_STATE_FOLDER_NOT_PRIVATE')
+                  try:sf.stat(cursor);raise RuntimeError('M2_SCHEDULER_CURSOR_PREEXISTS')
+                  except FileNotFoundError:pass
+              original=cron(t)
+              lines=original.splitlines(keepends=True)
+              hits=[i for i,line in enumerate(lines)
+                    if b'/scripts/market_collector/mosa_tick.php' in line and not line.lstrip().startswith(b'#')]
+              if len(hits)!=1 or lines[hits[0]].count(OLD.encode())!=1 or lines[hits[0]].strip().split()[:5]!=[b'*']*5:
+                  raise RuntimeError('ACTIVE_M2_CRON_RELEASE_CHANGED')
+              php,_=remote.capability(t)
+              before=db(t,php)
+              proof=None
+              for attempt in range(7):
+                  rc,out,err,_=remote.remote_call(t,shlex.join([php,tick]),timeout=210)
+                  if rc or err:
+                      if err:print('M2_ROTATION_MANUAL_ERROR '+err.decode('utf-8','replace').strip()[:150],flush=True)
+                      raise RuntimeError('M2_NEW_RELEASE_EXECUTION_FAILED')
+                  if out.strip():
+                      proof=json.loads(out)
+                      break
+                  time.sleep(10)
+              if not isinstance(proof,dict) or proof.get('registered')!=4 or proof.get('due')!=2:
+                  raise RuntimeError('M2_ROUND_ROBIN_REAL_RUN_NOT_OBSERVED')
+              items=proof.get('items',{})
+              if len(items)!=2 or any(not isinstance(v,dict) or v.get('failure') for v in items.values()):
+                  raise RuntimeError('M2_ROUND_ROBIN_REAL_RUN_HAS_FAILURE')
+              if not any(v.get('readback')=='PASS' or v.get('writer')=='UNCHANGED' for v in items.values()):
+                  raise RuntimeError('M2_NEW_RELEASE_NO_VERIFIED_QUOTE')
+              with paramiko.SFTPClient.from_transport(t) as sf:
+                  mode=sf.stat(cursor).st_mode
+                  with sf.open(cursor,'rb') as fp:contents=fp.read(20)
+                  if stat.S_IMODE(mode)!=0o600 or contents!=b'2\n':
+                      raise RuntimeError('M2_CURSOR_PERSISTENCE_FAILED')
+              manual=db(t,php)
+              if int(manual['observations']['count_all'])<int(before['observations']['count_all']):
+                  raise RuntimeError('M2_MANUAL_PROBE_ROLLED_BACK_FACTS')
+              print('M2_ROTATION_MANUAL_PROOF '+json.dumps({'release':NEW,'selected':list(items.keys()),
+                  'http':proof.get('provider_requests'),
+                  'writers':{k:{'provider':v.get('provider'),'writer':v.get('writer'),'readback':v.get('readback'),'quote':v.get('quote')} for k,v in items.items()},
+                  'cursor_after':2,'before':before['observations'],'after':manual['observations']},ensure_ascii=False),flush=True)
+              # Only the one existing M2 cron entry is changed; no new scheduler or MOSA mutation.
+              if cron(t)!=original:raise RuntimeError('M2_CRON_CHANGED_DURING_PROBE')
+              lines[hits[0]]=lines[hits[0]].replace(OLD.encode(),NEW.encode(),1)
+              updated=b''.join(lines)
+              rc,out,err,_=remote.remote_call(t,'/usr/bin/crontab -',updated,timeout=30)
+              if rc or err:raise RuntimeError('M2_CRON_PIN_WRITE_FAILED')
+              if cron(t)!=updated:
+                  remote.remote_call(t,'/usr/bin/crontab -',original,timeout=30)
+                  if cron(t)!=original:raise RuntimeError('M2_CRON_RESTORE_NOT_CONFIRMED')
+                  raise RuntimeError('M2_CRON_READBACK_FAILED_ROLLED_BACK')
+              print('M2_ROTATION_CRON_ACTIVATED '+json.dumps({'release':NEW,
+                  'original_cron_sha256':hashlib.sha256(original).hexdigest(),
+                  'new_cron_sha256':hashlib.sha256(updated).hexdigest(),
+                  'other_cron_entries_byte_identical':True},ensure_ascii=False),flush=True)
+              after_manual=indexed(manual)
+              manual_isins=set(items.keys())
+              opposite=set(after_manual)-manual_isins
+              auto_result=None
+              for check in range(23):
+                  time.sleep(20)
+                  now=db(t,php)
+                  if all(newer(now,after_manual,isin) for isin in opposite):
+                      auto_result=now
+                      break
+              if auto_result is None:
+                  print('M2_ROTATION_AUTOMATIC_PENDING '+json.dumps({'manual':sorted(manual_isins),
+                      'opposite':sorted(opposite),'final':now['current']},ensure_ascii=False),flush=True)
+                  raise RuntimeError('M2_CRON_OTHER_PAIR_NO_FRESH_OBSERVATION')
+              if cron(t)!=updated:raise RuntimeError('M2_CRON_DRIFT_AFTER_SWITCH')
+              print('PASS M2_ROUND_ROBIN_AUTOMATIC_BOTH_GROUPS '+json.dumps({
+                  'active_release':NEW,'manually_verified_pair':sorted(manual_isins),
+                  'automatically_verified_pair':sorted(opposite),
+                  'current':auto_result['current'],'observations':auto_result['observations']},
+                  ensure_ascii=False),flush=True)
+          PY
