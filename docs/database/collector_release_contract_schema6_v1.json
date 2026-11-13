@@ -167,6 +167,7 @@
       "role": "module",
       "source_blob": "e23617ebb99631ea6dbd221dad5f539c9100694b",
       "requires": [
+        "api/market_core/selection.php",
         "scripts/market_collector/live_batch.php"
       ]
     },
