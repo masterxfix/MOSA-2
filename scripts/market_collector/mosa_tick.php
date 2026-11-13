@@ -322,7 +322,7 @@ function dueRoundRobin(array $registered,string $cursorFile,int $maxBatchSize=2)
         $isin=$keys[($offset+$i)%$count];
         $due[$isin]=$registered[$isin];
     }
-    $next=(string)(($offset+$size)%$count)."\\n";
+    $next=(string)(($offset+$size)%$count).PHP_EOL;
     $temporary=tempnam($folder,'.m2-market-scheduler-');
     check(is_string($temporary),'scheduler_cursor_stage');
     try{
