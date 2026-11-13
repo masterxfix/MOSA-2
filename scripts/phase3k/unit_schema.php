@@ -109,8 +109,18 @@ function compareShowForeignKeys(string $show,array $expected,string $name): void
     same(showForeignKeys($show),$expected,'show_fk:'.$name);
 }
 
-function structure(PDO $p,array $schema,?string $diagnosticsPath=null): array {
-    $names=array_keys($schema);sort($names);same(\Mosa2\Phase2\tables($p),$names,'unit_table_set');$evidence=[];
+function structure(PDO $p,array $schema,?string $diagnosticsPath=null,array $allowedAdditiveTables=[]): array {
+    $names=array_keys($schema);sort($names);
+    // Preserve exact original structural verification. Accept only explicitly
+    // approved additive table names; their ledger and artifact are checked by the caller.
+    $all=$names;
+    foreach($allowedAdditiveTables as $name){
+        check(is_string($name)&&preg_match('/^m2_network_[a-z_]+$/D',$name)===1
+            &&!in_array($name,$all,true),'unit_additive_scope');
+        $all[]=$name;
+    }
+    sort($all);
+    same(\Mosa2\Phase2\tables($p),$all,'unit_table_set');$evidence=[];
     foreach($schema as $name=>$t) {
         $show=$p->query('SHOW CREATE TABLE '.qi($name))->fetch(PDO::FETCH_NUM)[1];
         $meta=rows($p,'SELECT ENGINE,TABLE_COLLATION,TABLE_TYPE,AUTO_INCREMENT FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',$name);
